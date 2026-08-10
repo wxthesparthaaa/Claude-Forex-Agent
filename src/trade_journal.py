@@ -29,6 +29,7 @@ OPEN = "OPEN"
 SUCCESSFUL = "SUCCESSFUL"
 FAILED = "FAILED"
 EXPIRED = "EXPIRED"
+CANCELLED = "CANCELLED"  # manually closed by the user via "Cancel all trades"
 
 
 @dataclass

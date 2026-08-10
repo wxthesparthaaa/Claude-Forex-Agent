@@ -130,3 +130,50 @@ def test_live_trades_view_enriches_with_live_price_and_pnl(tmp_path, monkeypatch
     assert rows[0]["current_price"] == "1.102"
     assert rows[0]["unrealized_pnl"] == 12.5
     assert rows[0]["hours_remaining"] <= 2.0
+
+
+def test_cancel_all_open_trades_noop_when_nothing_open(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    assert trade_monitor.cancel_all_open_trades(FakeClient()) == []
+
+
+@patch("trade_monitor.send_message")
+def test_cancel_all_open_trades_closes_and_marks_cancelled(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    client = FakeClient(close_trade_result={"orderFillTransaction": {"pl": "-5.0", "price": "1.34"}})
+    closed = trade_monitor.cancel_all_open_trades(client)
+
+    assert sorted(client.closed_ids) == ["101", "102"]
+    assert len(closed) == 2
+    assert all(e["status"] == tj.CANCELLED for e in closed)
+    assert all(e["realized_pnl"] == -5.0 for e in closed)
+
+    entries = tj.load_journal()
+    assert all(e["status"] == tj.CANCELLED for e in entries)
+    mock_send.assert_called_once()
+    assert "cancelled manually" in mock_send.call_args[0][0]
+
+
+@patch("trade_monitor.send_message")
+def test_cancel_all_open_trades_skips_ones_already_closed_and_continues(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    class FlakyClient(FakeClient):
+        def close_trade(self, trade_id):
+            if trade_id == "101":
+                raise Exception("ALREADY_CLOSED")
+            return super().close_trade(trade_id)
+
+    client = FlakyClient()
+    closed = trade_monitor.cancel_all_open_trades(client)
+
+    assert len(closed) == 1
+    assert closed[0]["instrument"] == "GBP_USD"
+    entries = tj.load_journal()
+    eur_entry = next(e for e in entries if e["instrument"] == "EUR_USD")
+    assert eur_entry["status"] == tj.OPEN  # untouched since the close call failed

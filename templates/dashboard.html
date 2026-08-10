@@ -30,6 +30,11 @@
       padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;
     }
     .scan-btn:hover { opacity: 0.9; }
+    .cancel-btn {
+      background: var(--red); color: #fff; border: none; border-radius: 8px;
+      padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    }
+    .cancel-btn:hover { opacity: 0.9; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 600; }
@@ -158,6 +163,10 @@
       </tr>
       {% endfor %}
     </table>
+    <form method="post" action="/cancel_all_trades" id="cancelAllForm" style="margin-top:0.75rem;">
+      <button class="cancel-btn" type="submit" data-loading-text="Cancelling..."
+              data-loading-status="Closing every open position.">Cancel all trades</button>
+    </form>
     {% else %}
     <p style="color:var(--muted); font-size:0.9rem;">No trades currently open.</p>
     {% endif %}
@@ -241,6 +250,21 @@
         plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
       }
     });
+
+    // "Cancel all trades" affects every open position at once -- require
+    // an explicit confirmation before it's even allowed to submit.
+    // Registered first and calls stopImmediatePropagation() on cancel so
+    // the generic loading-state handler below never fires for a
+    // submission the user actually backed out of.
+    var cancelAllForm = document.getElementById('cancelAllForm');
+    if (cancelAllForm) {
+      cancelAllForm.addEventListener('submit', function (e) {
+        if (!confirm('Cancel ALL open trades right now? This closes every position immediately, locking in whatever P&L it has this instant.')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+    }
 
     // Generic "this button is working" feedback for every form on the
     // page -- disables the button, swaps its label, and shows an

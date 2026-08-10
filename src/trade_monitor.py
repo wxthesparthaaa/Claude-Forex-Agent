@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from oanda_client import OandaClient
-from trade_journal import load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS, SUCCESSFUL, FAILED, EXPIRED
+from trade_journal import load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS, SUCCESSFUL, FAILED, EXPIRED, CANCELLED
 from telegram_notifier import send_message
 
 
@@ -76,6 +76,50 @@ def check_open_trades(client: OandaClient = None) -> list:
     if changed:
         save_journal(entries)
     return changed
+
+
+def cancel_all_open_trades(client: OandaClient = None) -> list:
+    """Closes every journal-tracked OPEN trade immediately via OANDA,
+    regardless of SL/TP/expiry -- an explicit user-initiated "get me
+    flat now" action, distinct from the other three closure paths, so
+    it gets its own status (CANCELLED) rather than being misread as a
+    stop-loss or a 2-hour timeout in the journal."""
+    entries = load_journal()
+    pending = open_entries(entries)
+    if not pending:
+        return []
+
+    client = client or OandaClient()
+    now = datetime.now(timezone.utc)
+    closed = []
+
+    for entry in entries:
+        if entry["status"] != "OPEN":
+            continue
+        try:
+            result = client.close_trade(entry["trade_id"])
+        except Exception as e:
+            print(f"WARNING: failed to cancel {entry['instrument']} ({entry['trade_id']}): {e}", flush=True)
+            continue
+        fill = result.get("orderFillTransaction", {})
+        pnl = float(fill.get("pl", 0))
+        exit_price = fill.get("price")
+        entry["realized_pnl"] = pnl
+        entry["exit_price"] = float(exit_price) if exit_price is not None else None
+        entry["closed_at"] = now.isoformat()
+        entry["status"] = CANCELLED
+        closed.append(entry)
+
+    if closed:
+        save_journal(entries)
+        total_pnl = sum(e["realized_pnl"] for e in closed)
+        currency = closed[0].get("account_currency", "")
+        lines = "\n".join(f"  {e['instrument']} {e['direction']}: {e['realized_pnl']:+.2f}" for e in closed)
+        send_message(
+            f"🛑 <b>All trades cancelled manually</b> ({len(closed)} closed)\n{lines}\n"
+            f"Total P&L: {total_pnl:+.2f} {currency}"
+        )
+    return closed
 
 
 def live_trades_view(client: OandaClient = None) -> list:

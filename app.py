@@ -51,7 +51,7 @@ from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import record_open_trade, load_journal, push_journal_xlsx_to_github, JOURNAL_XLSX_REPO_PATH
-from trade_monitor import check_open_trades, live_trades_view
+from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
 from news_relevance import currency_news_score
 from journal_export import build_journal_workbook
 
@@ -269,6 +269,27 @@ def execute(instrument):
         flash(f"Order rejected by OANDA: {detail}", "error")
     except Exception as e:
         print(f"WARNING: execute failed: {e}", flush=True)
+        flash(str(e), "error")
+
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/cancel_all_trades", methods=["POST"])
+def cancel_all_trades():
+    """Closes every currently open position immediately, regardless of
+    SL/TP/expiry -- only ever reached by the user's own click (the
+    dashboard requires a JS confirm() first, given this affects every
+    open position at once)."""
+    try:
+        client = OandaClient()
+        closed = cancel_all_open_trades(client)
+        if closed:
+            flash(f"Cancelled {len(closed)} trade(s): " +
+                  ", ".join(f"{e['instrument']} ({e['realized_pnl']:+.2f})" for e in closed), "success")
+        else:
+            flash("No open trades to cancel.", "success")
+    except Exception as e:
+        print(f"WARNING: cancel_all_trades failed: {e}", flush=True)
         flash(str(e), "error")
 
     return redirect(url_for("dashboard"))
