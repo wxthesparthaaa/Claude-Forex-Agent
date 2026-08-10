@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # encoding="utf-8-sig" strips a UTF-8 BOM if present -- Windows tools
 # (PowerShell's `Set-Content -Encoding utf8`, some Notepad saves) write
 # one by default, which otherwise corrupts the first key's name.
-load_dotenv(encoding="utf-8-sig")
+load_dotenv(encoding="utf-8-sig", override=True)  # see app.py -- this project's .env must win over ambient global env vars
 
 from oanda_client import OandaClient
 from instrument_metadata import fetch_instrument_metadata

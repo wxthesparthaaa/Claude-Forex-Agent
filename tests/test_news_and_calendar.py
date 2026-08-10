@@ -10,6 +10,28 @@ from economic_calendar import upcoming_high_impact_events, format_calendar_warni
 from finnhub_adapter import FinnhubClient
 
 
+def test_tag_headline_real_world_examples_that_previously_scored_flat_zero():
+    # Verified live against real Finnhub headlines that all scored 0.00
+    # with the original narrow keyword list -- these are the actual
+    # headlines, used as regression tests for the expanded lists.
+    usd_negative = tag_headline("Dollar drops as weak US jobs data pushes out Fed hike expectations", "")
+    assert "USD" in usd_negative["currencies"]
+    assert usd_negative["polarity"] < 0
+
+    eur_positive = tag_headline("Euro area investor confidence returns to positive territory in August", "")
+    assert "EUR" in eur_positive["currencies"]
+    assert eur_positive["polarity"] > 0
+
+
+def test_tag_headline_generic_cpi_does_not_falsely_match_usd():
+    # Verified live: "China July factory-gate inflation eases... CPI
+    # slows" was wrongly tagged USD-relevant purely because "CPI" is a
+    # generic term every country uses -- bare "cpi" was removed from
+    # USD's keyword list for this reason.
+    tag = tag_headline("China July factory-gate inflation eases to 3-month low, CPI slows", "Reuters")
+    assert "USD" not in tag["currencies"]
+
+
 def test_tag_headline_detects_currency_and_polarity():
     # a rate HIKE / hawkish stance strengthens the currency -- positive
     # polarity here means bullish for USD, not "good news" generically

@@ -32,7 +32,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-load_dotenv(encoding="utf-8-sig")
+# override=True: this project's own .env MUST win over any ambient
+# global env var of the same name. Real incident, found and fixed: a
+# leftover global GITHUB_REPO from a different local project (sibling
+# stock-trading repo) silently took priority over this project's config
+# under python-dotenv's default override=False, causing trade_journal.xlsx
+# to get pushed to the WRONG GitHub repo entirely during local testing.
+load_dotenv(encoding="utf-8-sig", override=True)
 
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from autopilot import PHASE_LABELS
@@ -44,7 +50,7 @@ from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github, github_file_url
-from trade_journal import record_open_trade, load_journal, JOURNAL_XLSX_REPO_PATH
+from trade_journal import record_open_trade, load_journal, push_journal_xlsx_to_github, JOURNAL_XLSX_REPO_PATH
 from trade_monitor import check_open_trades, live_trades_view
 from news_relevance import currency_news_score
 from journal_export import build_journal_workbook
@@ -153,6 +159,15 @@ def dashboard():
 
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
+    try:
+        # Previously only pushed when a trade opened/closed/expired, so
+        # it silently lagged whenever nothing had happened since the
+        # feature was deployed -- the file just never got created.
+        # Pushing on every dashboard load keeps it always in sync
+        # without waiting for a trade event.
+        push_journal_xlsx_to_github(load_journal())
+    except Exception as e:
+        print(f"WARNING: could not sync trade_journal.xlsx to GitHub: {e}", flush=True)
 
     return render_template(
         "dashboard.html",

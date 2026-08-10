@@ -14,7 +14,12 @@ from __future__ import annotations
 import re
 
 CURRENCY_KEYWORDS = {
-    "USD": ["fed", "fomc", "federal reserve", "powell", "us dollar", "nonfarm", "cpi", "treasury"],
+    # "cpi"/"nonfarm" alone removed -- verified live against a real
+    # headline ("China July factory-gate inflation eases... CPI slows")
+    # that got wrongly tagged as USD-relevant purely because "CPI" is a
+    # generic term every country uses, not a US-specific one.
+    "USD": ["fed", "fomc", "federal reserve", "powell", "us dollar", "treasury",
+            "us jobs", "us cpi", "us inflation", "us payrolls", "nonfarm payrolls"],
     "EUR": ["ecb", "eurozone", "lagarde", "euro area"],
     "GBP": ["boe", "bank of england", "sterling", "uk inflation"],
     "JPY": ["boj", "bank of japan", "yen", "ueda"],
@@ -32,9 +37,25 @@ GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "inva
 # "dovish = good news" framing common in equity-market sentiment tools,
 # which would have been wrong here: a "Fed cuts rates" headline should
 # score NEGATIVE for USD, not positive.
-POSITIVE_KEYWORDS = ["hikes rates", "rate hike", "hawkish", "beats expectations", "strong growth"]
-NEGATIVE_KEYWORDS = ["cuts rates", "rate cut", "dovish", "stimulus", "recession", "misses expectations",
-                      "war", "invasion", "sanctions", "tariff", "conflict"]
+#
+# Expanded after verifying live against real Finnhub headlines that were
+# all scoring a flat 0.00 -- the original list only matched rare, exact
+# textbook phrasing ("rate hike", "hawkish") that real financial
+# journalism rarely uses verbatim. Real examples that were missed
+# entirely: "Dollar drops as weak US jobs data pushes out Fed hike
+# expectations", "Euro area investor confidence returns to positive
+# territory".
+POSITIVE_KEYWORDS = [
+    "hikes rates", "rate hike", "hawkish", "beats expectations", "beats forecast",
+    "strong growth", "stronger than expected", "exceeds expectations", "robust growth",
+    "bounces back", "rebounds", "positive territory", "better than expected", "accelerates",
+]
+NEGATIVE_KEYWORDS = [
+    "cuts rates", "rate cut", "dovish", "stimulus", "recession", "misses expectations",
+    "misses forecast", "weaker than expected", "worse than expected", "weak jobs data",
+    "weak us jobs", "soft jobs report", "pushes out hike expectations", "delays rate hike", "disappoints",
+    "war", "invasion", "sanctions", "tariff", "conflict",
+]
 
 
 def _contains_keyword(text: str, keyword: str) -> bool:
