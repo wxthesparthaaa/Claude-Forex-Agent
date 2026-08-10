@@ -23,7 +23,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, render_template, redirect, url_for, request, flash
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -33,7 +33,7 @@ load_dotenv(encoding="utf-8-sig")
 
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from autopilot import PHASE_LABELS
-from market_hours import all_session_statuses
+from market_hours import all_session_statuses, is_forex_market_open
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
 from live_scan import run_live_scan
@@ -43,6 +43,11 @@ from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_
 from github_state_sync import pull_state_from_github
 
 app = Flask(__name__)
+# Only used for flash-message signing (no login, no sensitive session data
+# -- same "no auth, accepted tradeoff for a personal account" posture as
+# the sibling project). A fixed local default is fine for that purpose;
+# set FLASK_SECRET_KEY on Render if that default bothers you.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-dev")
 
 
 def _oanda_time_to_unix(time_str: str) -> int:
@@ -104,7 +109,7 @@ def dashboard():
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         candidates=candidates, wins=0, losses=0, closed_trades=0,
-        sessions=all_session_statuses(),
+        sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity(state), broker_balance=broker_balance, account_currency=account_currency,
     )
 
@@ -114,12 +119,19 @@ def scan():
     state = load_state()
     risk_config = risk_config_from_state(state)
 
-    client = OandaClient()
-    summary = client.get_account_summary()
-    account = _account_state_from_tracked_capital(state)
+    try:
+        client = OandaClient()
+        summary = client.get_account_summary()
+        account = _account_state_from_tracked_capital(state)
+        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
+        save_candidates(candidates)
+    except Exception as e:
+        # Previously a scan failure just silently produced nothing visible
+        # -- likely masking real gunicorn worker timeouts on Render. Now
+        # surfaced on the dashboard instead of failing invisibly.
+        print(f"WARNING: scan failed: {e}", flush=True)
+        flash(str(e))
 
-    candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
-    save_candidates(candidates)
     return redirect(url_for("dashboard"))
 
 

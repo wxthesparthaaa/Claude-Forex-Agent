@@ -114,9 +114,20 @@
     </div>
   </div>
 
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="card" style="border-color: var(--red);">
+      {% for message in messages %}
+        <div><strong style="color: var(--red);">Scan failed:</strong> {{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
   <div class="card">
-    <form method="post" action="/scan">
-      <button class="scan-btn" type="submit">Scan now</button>
+    <form method="post" action="/scan" id="scanForm">
+      <button class="scan-btn" type="submit" id="scanBtn">Scan now</button>
+      <span id="scanStatus" style="margin-left:0.75rem; color:var(--muted); font-size:0.85rem;"></span>
     </form>
   </div>
 
@@ -148,8 +159,11 @@
   {% endif %}
 
   <footer>
+    <span class="{{ 'session-open' if forex_open else 'session-closed' }}">
+      Forex market: {{ 'Open (24/5)' if forex_open else 'Closed (weekend)' }}
+    </span>
     {% for name, open in sessions.items() %}
-      <span class="{{ 'session-open' if open else 'session-closed' }}">{{ name }}: {{ 'Open' if open else 'Closed' }}</span>
+      <span class="{{ 'session-open' if open else 'session-closed' }}">{{ name }}: {{ 'Active' if open else '' }}</span>
     {% endfor %}
   </footer>
 
@@ -163,6 +177,12 @@
       options: {
         plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
       }
+    });
+
+    document.getElementById('scanForm').addEventListener('submit', function () {
+      document.getElementById('scanBtn').disabled = true;
+      document.getElementById('scanBtn').textContent = 'Scanning...';
+      document.getElementById('scanStatus').textContent = 'Checking 11 instruments -- can take up to a minute.';
     });
   </script>
 </body>

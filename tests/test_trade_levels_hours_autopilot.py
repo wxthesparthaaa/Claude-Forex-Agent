@@ -8,7 +8,7 @@ import pytest
 
 from trade_levels import derive_trade_levels
 from pivot_detection import SwingPoint
-from market_hours import is_trading_day, is_session_open, SGT
+from market_hours import is_trading_day, is_session_open, is_forex_market_open, SGT, NY
 from autopilot import (
     PhaseState, can_advance_phase, next_phase, advance_phase,
     is_auto_execute_mode, should_auto_execute, TRADES_REQUIRED_TO_ADVANCE,
@@ -46,14 +46,37 @@ def test_is_trading_day_weekday_vs_weekend():
     assert is_trading_day(saturday) is False
 
 
-def test_us_session_spans_midnight_sgt():
-    # US session 21:30-04:00 SGT -- both sides of midnight should read "open"
+def test_new_york_session_spans_midnight_sgt():
+    # New York session 21:00-06:00 SGT -- both sides of midnight should read "open"
     late_night = datetime(2026, 8, 10, 23, 0, tzinfo=SGT)
     early_morning = datetime(2026, 8, 11, 2, 0, tzinfo=SGT)
     afternoon = datetime(2026, 8, 10, 14, 0, tzinfo=SGT)
-    assert is_session_open("US (NYSE)", late_night) is True
-    assert is_session_open("US (NYSE)", early_morning) is True
-    assert is_session_open("US (NYSE)", afternoon) is False
+    assert is_session_open("New York", late_night) is True
+    assert is_session_open("New York", early_morning) is True
+    assert is_session_open("New York", afternoon) is False
+
+
+def test_forex_market_open_monday_through_thursday():
+    tuesday_3am = datetime(2026, 8, 11, 3, 0, tzinfo=NY)
+    wednesday_11pm = datetime(2026, 8, 12, 23, 0, tzinfo=NY)
+    assert is_forex_market_open(tuesday_3am) is True
+    assert is_forex_market_open(wednesday_11pm) is True
+
+
+def test_forex_market_closed_saturday_all_day():
+    saturday_noon = datetime(2026, 8, 15, 12, 0, tzinfo=NY)
+    assert is_forex_market_open(saturday_noon) is False
+
+
+def test_forex_market_closes_friday_5pm_and_reopens_sunday_5pm_ny():
+    friday_before_close = datetime(2026, 8, 14, 16, 59, tzinfo=NY)
+    friday_after_close = datetime(2026, 8, 14, 17, 1, tzinfo=NY)
+    sunday_before_open = datetime(2026, 8, 16, 16, 59, tzinfo=NY)
+    sunday_after_open = datetime(2026, 8, 16, 17, 1, tzinfo=NY)
+    assert is_forex_market_open(friday_before_close) is True
+    assert is_forex_market_open(friday_after_close) is False
+    assert is_forex_market_open(sunday_before_open) is False
+    assert is_forex_market_open(sunday_after_open) is True
 
 
 def test_phase_advancement_requires_enough_closed_trades():

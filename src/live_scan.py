@@ -4,23 +4,31 @@ whole traded universe -- the live counterpart to what the backtest loop
 will replay over historical candles, sharing the same pure
 generate_candidate() function so live and backtest can never quietly
 diverge in behavior.
+
+Fetches run in parallel (ThreadPoolExecutor) rather than sequentially --
+scanning 11 instruments x 3 timeframes plus the 7-pair strength history
+is 40+ blocking HTTP calls; run one after another that's 30-60+ seconds,
+comfortably past gunicorn's default 30s worker timeout on Render (the
+likely cause of "Scan Now" appearing to do nothing in production). This
+is pure I/O-bound waiting, so threads are a safe, simple fix -- no
+shared mutable state between requests.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from universe import ALL_INSTRUMENTS, MAJOR_PAIRS, ENTRY_TIMEFRAME, HIGHER_TIMEFRAMES, GRANULARITY
 from pivot_detection import find_swing_points
 from indicators import rsi
 from candlestick_patterns import Candle, detect_pattern
-from currency_strength import currency_returns, usd_strength_value, breadth_agreement_fraction, strength_signal
+from currency_strength import currency_returns, usd_strength_value, strength_signal
 from instrument_metadata import fetch_instrument_metadata
-from position_sizing import resolve_conversion_rate
 from scan_workflow import generate_candidate
 
 BARS_FOR_SWINGS = 60
 BARS_FOR_STRENGTH_HISTORY = 130
 STRENGTH_LOOKBACK = 20
+MAX_PARALLEL_REQUESTS = 8
 
 
 def _fetch_closes_highs_lows(client, instrument: str, timeframe: str, count: int):
@@ -43,6 +51,54 @@ def compute_usd_strength_series(closes_by_pair: dict, lookback: int = STRENGTH_L
     return series
 
 
+def _fetch_strength_inputs(client) -> tuple:
+    closes_by_pair = {}
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
+        futures = {
+            pool.submit(_fetch_closes_highs_lows, client, pair, ENTRY_TIMEFRAME, BARS_FOR_STRENGTH_HISTORY): pair
+            for pair in MAJOR_PAIRS
+        }
+        for future in as_completed(futures):
+            pair = futures[future]
+            _, closes, _, _ = future.result()
+            closes_by_pair[pair] = closes
+
+    strength_series = compute_usd_strength_series(closes_by_pair)
+    latest_returns = currency_returns(closes_by_pair, STRENGTH_LOOKBACK)
+    signal = strength_signal(strength_series, latest_returns)
+    return signal["breadth_agreement"], signal["edge_zscore"]
+
+
+def _process_instrument(client, instrument, meta, account_currency, get_price, account, risk_config,
+                         breadth_agreement, edge_zscore):
+    entry_candles, entry_closes, entry_highs, entry_lows = _fetch_closes_highs_lows(
+        client, instrument, ENTRY_TIMEFRAME, BARS_FOR_SWINGS)
+    entry_swings = find_swing_points(entry_highs, entry_lows)
+
+    higher_swings = {}
+    for tf in HIGHER_TIMEFRAMES:
+        _, _, highs, lows = _fetch_closes_highs_lows(client, instrument, tf, BARS_FOR_SWINGS)
+        higher_swings[tf] = find_swing_points(highs, lows)
+
+    rsi_value = rsi(entry_closes)
+    last_candles = [Candle(open=float(c["mid"]["o"]), high=float(c["mid"]["h"]),
+                            low=float(c["mid"]["l"]), close=float(c["mid"]["c"]))
+                     for c in entry_candles[-3:]]
+    pattern = detect_pattern(last_candles)
+
+    entry_price = entry_closes[-1]
+    return generate_candidate(
+        instrument=instrument, entry_price=entry_price,
+        entry_timeframe_swings={ENTRY_TIMEFRAME: entry_swings},
+        higher_timeframe_swings=higher_swings,
+        rsi_value=rsi_value, candlestick_pattern=pattern,
+        breadth_agreement=breadth_agreement, edge_zscore=edge_zscore,
+        news_score=None,  # wired up once a Finnhub API key is available
+        meta=meta[instrument], account_currency=account_currency, get_price=get_price,
+        account=account, risk_config=risk_config, entry_timeframe=ENTRY_TIMEFRAME,
+    )
+
+
 def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None) -> list:
     instruments = instruments or ALL_INSTRUMENTS
     meta = fetch_instrument_metadata(client, instruments)
@@ -62,48 +118,19 @@ def run_live_scan(client, account, risk_config, account_currency: str, instrumen
         price_cache[pair_name] = mid
         return mid
 
-    # Currency strength/breadth is computed once from the entry timeframe
-    # across all 7 majors, shared by every candidate this scan.
-    closes_by_pair = {}
-    for pair in MAJOR_PAIRS:
-        _, closes, _, _ = _fetch_closes_highs_lows(client, pair, ENTRY_TIMEFRAME, BARS_FOR_STRENGTH_HISTORY)
-        closes_by_pair[pair] = closes
-
-    strength_series = compute_usd_strength_series(closes_by_pair)
-    latest_returns = currency_returns(closes_by_pair, STRENGTH_LOOKBACK)
-    signal = strength_signal(strength_series, latest_returns)
-    breadth_agreement = signal["breadth_agreement"]
-    edge_zscore = signal["edge_zscore"]
+    # Currency strength/breadth is computed once, shared by every candidate this scan.
+    breadth_agreement, edge_zscore = _fetch_strength_inputs(client)
 
     candidates = []
-    for instrument in instruments:
-        entry_candles, entry_closes, entry_highs, entry_lows = _fetch_closes_highs_lows(
-            client, instrument, ENTRY_TIMEFRAME, BARS_FOR_SWINGS)
-        entry_swings = find_swing_points(entry_highs, entry_lows)
-
-        higher_swings = {}
-        for tf in HIGHER_TIMEFRAMES:
-            _, _, highs, lows = _fetch_closes_highs_lows(client, instrument, tf, BARS_FOR_SWINGS)
-            higher_swings[tf] = find_swing_points(highs, lows)
-
-        rsi_value = rsi(entry_closes)
-        last_candles = [Candle(open=float(c["mid"]["o"]), high=float(c["mid"]["h"]),
-                                low=float(c["mid"]["l"]), close=float(c["mid"]["c"]))
-                         for c in entry_candles[-3:]]
-        pattern = detect_pattern(last_candles)
-
-        entry_price = entry_closes[-1]
-        candidate = generate_candidate(
-            instrument=instrument, entry_price=entry_price,
-            entry_timeframe_swings={ENTRY_TIMEFRAME: entry_swings},
-            higher_timeframe_swings=higher_swings,
-            rsi_value=rsi_value, candlestick_pattern=pattern,
-            breadth_agreement=breadth_agreement, edge_zscore=edge_zscore,
-            news_score=None,  # wired up once a Finnhub API key is available
-            meta=meta[instrument], account_currency=account_currency, get_price=get_price,
-            account=account, risk_config=risk_config, entry_timeframe=ENTRY_TIMEFRAME,
-        )
-        if candidate is not None:
-            candidates.append(candidate)
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
+        futures = {
+            pool.submit(_process_instrument, client, instrument, meta, account_currency, get_price,
+                        account, risk_config, breadth_agreement, edge_zscore): instrument
+            for instrument in instruments
+        }
+        for future in as_completed(futures):
+            candidate = future.result()
+            if candidate is not None:
+                candidates.append(candidate)
 
     return candidates
