@@ -133,7 +133,10 @@
   {% endwith %}
 
   <div class="card">
-    <h3 style="margin-top:0;">Live trades</h3>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">Live trades</h3>
+      <a class="trade-link" href="/journal.xlsx">Download trade journal (.xlsx) &darr;</a>
+    </div>
     {% if live_trades %}
     <table>
       <tr><th>Pair</th><th>Direction</th><th>Entry</th><th>Current</th><th>Unrealized P&amp;L</th><th>Open for</th><th>Auto-closes in</th></tr>

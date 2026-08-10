@@ -15,6 +15,7 @@ requires OANDA_ENV=live set as a separate credential-level change, not
 just the dashboard's Demo/Actual label -- a UI toggle alone can never
 turn on real-money trading.
 """
+import io
 import json
 import os
 import sys
@@ -25,7 +26,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -43,9 +44,10 @@ from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github
-from trade_journal import record_open_trade
+from trade_journal import record_open_trade, load_journal
 from trade_monitor import check_open_trades, live_trades_view
 from news_relevance import currency_news_score
+from journal_export import build_journal_workbook
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -253,6 +255,23 @@ def execute(instrument):
         flash(str(e), "error")
 
     return redirect(url_for("dashboard"))
+
+
+@app.route("/journal.xlsx")
+def journal_export():
+    """Generated on demand from the current trade journal, not a
+    separately-persisted file -- always reflects the latest data, no
+    second sync path to go stale. For weekend review of closed trades."""
+    entries = load_journal()
+    wb = build_journal_workbook(entries)
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    filename = f"trade_journal_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        buffer, as_attachment=True, download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/settings", methods=["POST"])
