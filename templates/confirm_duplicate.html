@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirm -- {{ candidate.instrument }} &mdash; Claude Forex Agent</title>
+  <style>
+    :root { --bg: #191919; --fg: #e8e6e0; --muted: #999; --border: #333; --card: #232323; --accent: #d97757; --red: #f85149; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); max-width: 560px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.5;
+    }
+    .card { border: 1px solid var(--red); border-radius: 10px; padding: 1.5rem; background: var(--card); }
+    h1 { font-size: 1.2rem; margin-top: 0; }
+    p { color: var(--muted); }
+    .btn-row { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+    .confirm-btn {
+      background: var(--red); color: #fff; border: none; border-radius: 8px;
+      padding: 0.7rem 1.5rem; font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    .cancel-btn {
+      background: transparent; color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.7rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>&#9888; {{ candidate.instrument }} already has an open position</h1>
+    <p>
+      A trade on {{ candidate.instrument }} was already executed and is still open.
+      Executing again will open a <strong>second, separate</strong> position on top of it
+      -- your total exposure on this pair will roughly double.
+    </p>
+    <p>If this was a double-click, choose Cancel. If you deliberately want to add a second position, confirm below.</p>
+    <div class="btn-row">
+      <form method="post" action="/execute/{{ candidate.instrument }}">
+        <input type="hidden" name="confirm_duplicate" value="1">
+        <button class="confirm-btn" type="submit">Yes, execute anyway</button>
+      </form>
+      <a class="cancel-btn" href="/">Cancel</a>
+    </div>
+  </div>
+</body>
+</html>

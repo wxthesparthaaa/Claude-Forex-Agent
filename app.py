@@ -71,6 +71,18 @@ def _account_state_from_tracked_capital(state) -> AccountState:
     )
 
 
+def _instrument_already_open(client, instrument) -> bool:
+    """Server-side guard against duplicate execution -- verified against
+    a real incident: GBP_USD was opened twice 22 seconds apart (24,249
+    units each, netting to the 48,498 the user saw), almost certainly a
+    double-click on a button that gave no feedback. The button-disable
+    JS only guards the same page load; this catches it regardless of
+    how the duplicate request happens (double-click, back-button
+    resubmit, two tabs)."""
+    open_trades = client.get_open_trades()
+    return any(t["instrument"] == instrument for t in open_trades)
+
+
 def _out_of_range_warnings(risk_config) -> list:
     warnings = []
     checks = [
@@ -166,14 +178,25 @@ def execute(instrument):
     if candidate is None or candidate.get("rejected_reason"):
         return redirect(url_for("dashboard"))
 
+    confirmed_duplicate = request.form.get("confirm_duplicate") == "1"
+
     try:
         client = OandaClient()
+        if not confirmed_duplicate and _instrument_already_open(client, instrument):
+            # Not an outright block -- shows a confirmation step so an
+            # intentional add-to-position/re-entry can still go through.
+            return render_template("confirm_duplicate.html", candidate=candidate)
+
         client.place_market_order_with_sltp(
             instrument=instrument,
             units=candidate["units"],
             stop_loss_price=str(candidate["stop_loss"]),
             take_profit_price=str(candidate["take_profit"]),
         )
+        flash(f"Executed: {candidate['direction']} {instrument} -- "
+              f"{candidate['units']} {candidate.get('unit_label', 'units')} "
+              f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']})",
+              "success")
     except requests.exceptions.HTTPError as e:
         # Surface OANDA's own rejection reason (e.g. bad price precision,
         # insufficient margin) instead of a bare 500 -- previously
@@ -183,10 +206,10 @@ def execute(instrument):
         except Exception:
             detail = str(e)
         print(f"WARNING: execute failed: {detail}", flush=True)
-        flash(f"Order rejected by OANDA: {detail}")
+        flash(f"Order rejected by OANDA: {detail}", "error")
     except Exception as e:
         print(f"WARNING: execute failed: {e}", flush=True)
-        flash(str(e))
+        flash(str(e), "error")
 
     return redirect(url_for("dashboard"))
 

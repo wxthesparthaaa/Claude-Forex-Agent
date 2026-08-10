@@ -82,43 +82,51 @@
     </div>
 
     <div class="card settings">
-      <h3 style="margin-top:0;">Settings</h3>
-      <form method="post" action="/settings">
-        <label>Risk per trade: {{ risk_config.risk_per_trade_pct }}%</label>
-        <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1" value="{{ risk_config.risk_per_trade_pct }}">
+      <details>
+        <summary style="cursor:pointer; font-weight:600;">Settings</summary>
+        <form method="post" action="/settings" style="margin-top:0.75rem;">
+          <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
+          <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
+                 value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
-        <label>Trades per day: {{ risk_config.max_trades_per_day }}</label>
-        <input type="range" name="max_trades_per_day" min="1" max="10" step="1" value="{{ risk_config.max_trades_per_day }}">
+          <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
+          <input type="range" name="max_trades_per_day" min="1" max="10" step="1"
+                 value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
 
-        <label>Autopilot confidence threshold: {{ risk_config.autopilot_confidence_threshold_pct }}%</label>
-        <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
-               value="{{ risk_config.autopilot_confidence_threshold_pct }}">
+          <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
+          <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
+                 value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
 
-        <div class="toggle-row">
-          <span>Autopilot</span>
-          <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}
-                 {{ 'disabled' if phase != 'autopilot' else '' }}>
-        </div>
-        <div class="toggle-row">
-          <span>Mode</span>
-          <select name="mode">
-            <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
-            <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
-          </select>
-        </div>
-        {% for warning in out_of_range_warnings %}
-          <p class="out-of-range">&#9888; {{ warning }}</p>
-        {% endfor %}
-        <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
-      </form>
+          <div class="toggle-row">
+            <span>Autopilot</span>
+            <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}
+                   {{ 'disabled' if phase != 'autopilot' else '' }}>
+          </div>
+          <div class="toggle-row">
+            <span>Mode</span>
+            <select name="mode">
+              <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
+              <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
+            </select>
+          </div>
+          {% for warning in out_of_range_warnings %}
+            <p class="out-of-range">&#9888; {{ warning }}</p>
+          {% endfor %}
+          <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
+        </form>
+      </details>
     </div>
   </div>
 
-  {% with messages = get_flashed_messages() %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-    <div class="card" style="border-color: var(--red);">
-      {% for message in messages %}
-        <div><strong style="color: var(--red);">Error:</strong> {{ message }}</div>
+    <div class="card" style="border-color: {{ 'var(--green)' if messages[0][0] == 'success' else 'var(--red)' }};">
+      {% for category, message in messages %}
+        <div>
+          <strong style="color: {{ 'var(--green)' if category == 'success' else 'var(--red)' }};">
+            {{ 'Success:' if category == 'success' else 'Error:' }}
+          </strong> {{ message }}
+        </div>
       {% endfor %}
     </div>
     {% endif %}
