@@ -18,10 +18,10 @@
     "opened_at": "2026-08-10T12:05:32.124723+00:00",
     "account_currency": "SGD",
     "risk_amount": 40.0,
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-08-10T13:57:23.120684452Z",
+    "exit_price": 89.094,
+    "realized_pnl": 78.4385
   },
   {
     "trade_id": "776",
@@ -42,10 +42,10 @@
     "opened_at": "2026-08-10T12:05:36.031736+00:00",
     "account_currency": "SGD",
     "risk_amount": 40.0,
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-08-10T13:57:22.714867207Z",
+    "exit_price": 81.143,
+    "realized_pnl": 78.3954
   },
   {
     "trade_id": "780",
