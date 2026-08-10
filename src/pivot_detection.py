@@ -57,9 +57,17 @@ def classify_structure(swings: list) -> str:
 
 def detect_structure_break(swings: list, latest_close: float) -> str | None:
     """The actual entry trigger: price closing beyond the most recent
-    swing point that's against the prevailing structure signals a
-    turn/continuation. Returns "bullish_break", "bearish_break", or None."""
-    structure = classify_structure(swings)
+    swing high/low. Symmetric by design -- a fresh break above the last
+    swing high is bullish whether the prevailing structure was "down"
+    (a reversal), "range" (a breakout), or "up" (a continuation, a fresh
+    higher high). An earlier version only fired on reversal/breakout,
+    never continuation -- meaning it could never trigger at all whenever
+    the entry timeframe already agreed with the higher-timeframe trend,
+    the most common "everything lines up" case. Caught via a live
+    diagnostic against the real account: 4h trending up on several
+    pairs, 15m already trending up too, zero signals -- because the old
+    logic required 15m's OWN structure to be "down" or "range" to ever
+    return a bullish break at all."""
     highs = [s for s in swings if s.kind == "high"]
     lows = [s for s in swings if s.kind == "low"]
     if not highs or not lows:
@@ -68,13 +76,8 @@ def detect_structure_break(swings: list, latest_close: float) -> str | None:
     last_high = highs[-1]
     last_low = lows[-1]
 
-    if structure == "down" and latest_close > last_high.price:
-        return "bullish_break"  # price broke above the last swing high against a downtrend
-    if structure == "up" and latest_close < last_low.price:
+    if latest_close > last_high.price:
+        return "bullish_break"
+    if latest_close < last_low.price:
         return "bearish_break"
-    if structure == "range":
-        if latest_close > last_high.price:
-            return "bullish_break"
-        if latest_close < last_low.price:
-            return "bearish_break"
     return None

@@ -43,6 +43,20 @@ def test_structure_break_bullish_when_downtrend_breaks_last_high():
     assert detect_structure_break(swings, latest_close=15) is None
 
 
+def test_structure_break_fires_on_continuation_not_just_reversal():
+    # already an UPTREND (higher highs + higher lows) -- a fresh break
+    # above the last swing high must still count as bullish. The old
+    # logic only fired bullish_break out of a "down" or "range" state,
+    # so it could never confirm a trend that was already agreeing with
+    # the higher-timeframe bias -- the most common real-world case.
+    swings = [
+        SwingPoint(0, 10, "low"), SwingPoint(1, 20, "high"),
+        SwingPoint(2, 12, "low"), SwingPoint(3, 25, "high"),
+    ]
+    assert classify_structure(swings) == "up"
+    assert detect_structure_break(swings, latest_close=26) == "bullish_break"
+
+
 def test_rsi_extreme_when_all_gains_or_all_losses():
     rising = [float(i) for i in range(1, 20)]
     falling = [float(i) for i in range(20, 1, -1)]
@@ -66,9 +80,12 @@ def test_hammer_detected():
     assert detect_pattern(candles) == "hammer"
 
 
-def test_higher_timeframe_bias_requires_both_timeframes_to_agree():
+def test_higher_timeframe_bias_uses_4h_alone():
     assert higher_timeframe_bias({"4h": "up", "1h": "up"}) == "up"
-    assert higher_timeframe_bias({"4h": "up", "1h": "down"}) == "range"
+    # 1h disagreeing no longer matters -- 4h is the sole higher-timeframe filter
+    assert higher_timeframe_bias({"4h": "up", "1h": "down"}) == "up"
+    assert higher_timeframe_bias({"4h": "range", "1h": "up"}) == "range"
+    assert higher_timeframe_bias({}) == "range"
 
 
 def test_entry_allowed_only_when_break_agrees_with_higher_bias():

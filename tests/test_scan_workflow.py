@@ -54,9 +54,10 @@ def test_generate_candidate_produces_a_long_on_confirmed_bullish_break():
     assert candidate.rejected_reason is None
 
 
-def test_generate_candidate_none_when_higher_timeframes_disagree():
+def test_generate_candidate_none_when_4h_structure_disagrees():
+    # only 4h is the higher-timeframe filter now -- 1h no longer matters
     higher_swings, entry_swings = bullish_setup()
-    higher_swings["1h"] = [SwingPoint(0, 1.30, "high"), SwingPoint(1, 1.10, "low"),
+    higher_swings["4h"] = [SwingPoint(0, 1.30, "high"), SwingPoint(1, 1.10, "low"),
                             SwingPoint(2, 1.25, "high"), SwingPoint(3, 1.05, "low")]  # downtrend, disagrees
     candidate = generate_candidate(
         instrument="EUR_USD", entry_price=1.25,
@@ -66,6 +67,23 @@ def test_generate_candidate_none_when_higher_timeframes_disagree():
         account=clean_account(), risk_config=RiskConfig(),
     )
     assert candidate is None
+
+
+def test_generate_candidate_still_produced_when_only_1h_disagrees():
+    # 1h is no longer part of the confluence gate -- a disagreeing 1h
+    # must not block a candidate that a clean 4h + entry-tf break supports
+    higher_swings, entry_swings = bullish_setup()
+    higher_swings["1h"] = [SwingPoint(0, 1.30, "high"), SwingPoint(1, 1.10, "low"),
+                            SwingPoint(2, 1.25, "high"), SwingPoint(3, 1.05, "low")]  # downtrend, now irrelevant
+    candidate = generate_candidate(
+        instrument="EUR_USD", entry_price=1.25,
+        entry_timeframe_swings=entry_swings, higher_timeframe_swings=higher_swings,
+        rsi_value=55, candlestick_pattern=None, breadth_agreement=0.9, edge_zscore=0.5, news_score=None,
+        meta=EUR_USD, account_currency="USD", get_price=lambda i: None,
+        account=clean_account(), risk_config=RiskConfig(),
+    )
+    assert candidate is not None
+    assert candidate.direction == "LONG"
 
 
 def test_generate_candidate_flags_rejected_reason_when_risk_engine_blocks_it():

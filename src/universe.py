@@ -8,7 +8,10 @@ ALL_INSTRUMENTS = MAJOR_PAIRS + COMMODITIES
 
 ENTRY_TIMEFRAME = "15m"
 CONFIRM_TIMEFRAME = "30m"
-HIGHER_TIMEFRAMES = ["4h", "1h"]
+# 4h alone is the higher-timeframe confluence filter (see
+# multi_timeframe.py -- requiring 4h AND 1h to independently agree had
+# a real 0/11 hit rate across the universe when checked live).
+HIGHER_TIMEFRAMES = ["4h"]
 ALL_TIMEFRAMES = [ENTRY_TIMEFRAME] + HIGHER_TIMEFRAMES
 
 # OANDA granularity codes for each timeframe label used above.
