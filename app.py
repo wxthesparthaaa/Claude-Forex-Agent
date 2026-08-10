@@ -5,15 +5,19 @@ On Render, gunicorn runs this via `gunicorn --workers 1 --bind 0.0.0.0:$PORT app
 -- workers MUST stay at 1 (same reasoning as the sibling project: a
 second worker would duplicate any scheduled background jobs added later).
 
-Hard boundary (same architecture as the sibling options-agent project):
-/scan computes and proposes candidates but places no order. The only
-route that ever calls OANDA's order-placement API is /execute/<instrument>,
-and it only ever runs as a direct result of a human clicking "Execute
-now" on a specific trade review page -- never triggered by a scheduler
-or any other autonomous code path. True Actual/live trading additionally
-requires OANDA_ENV=live set as a separate credential-level change, not
-just the dashboard's Demo/Actual label -- a UI toggle alone can never
-turn on real-money trading.
+Order-placement boundary: /execute/<instrument> and /cancel_all_trades
+are the human-click paths, same as before. The one deliberate exception
+is Autopilot mode (trade_execution.auto_execute_candidates) -- once the
+user explicitly toggles it on via /settings, /scan and the scheduled
+9:30pm scan are both allowed to place real orders on qualifying
+candidates without a per-trade click. That's the entire point of
+Autopilot; it defaults off, the user has to turn it on themselves, and
+every autopilot trade still passes the same risk_engine.validate_trade()
+gate and duplicate-position guard as a manual execution, re-checked
+against the running state of that batch, not a stale snapshot. True
+Actual/live trading additionally requires OANDA_ENV=live set as a
+separate credential-level change, not just the dashboard's Demo/Actual
+label -- a UI toggle alone can never turn on real-money trading.
 """
 import io
 import json
@@ -50,8 +54,10 @@ from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github, github_file_url
-from trade_journal import record_open_trade, load_journal, JOURNAL_XLSX_REPO_PATH
+from trade_journal import load_journal, trades_opened_today, total_open_risk, JOURNAL_XLSX_REPO_PATH
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
+from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
+from autopilot import PhaseState
 from news_relevance import currency_news_score
 from journal_export import build_journal_workbook
 
@@ -74,24 +80,23 @@ def _account_state_from_tracked_capital(state) -> AccountState:
     """Sizing MUST use the strategy's own tracked capital, never OANDA's
     raw demo NAV -- verified against the real account, the practice
     balance (119,336.26 SGD) is the broker's default demo funding, wildly
-    larger than the $2,000 the strategy actually targets."""
+    larger than the $2,000 the strategy actually targets.
+
+    trades_today/open_risk_amount now come from the real journal instead
+    of being hardcoded to 0 -- that was a harmless simplification while
+    only one manual execution ever happened at a time (with a page
+    reload in between), but a real gap once Autopilot can fire several
+    trades from one scan. currency_net_exposure_pct is still not
+    reconstructed from open positions -- a separate, known gap, not
+    silently pretended away.
+    """
     equity = tracked_equity(state)
+    entries = load_journal()
     return AccountState(
         equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
-        open_risk_amount=0.0, trades_today=0, currency_net_exposure_pct={},
+        open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
+        currency_net_exposure_pct={},
     )
-
-
-def _instrument_already_open(client, instrument) -> bool:
-    """Server-side guard against duplicate execution -- verified against
-    a real incident: GBP_USD was opened twice 22 seconds apart (24,249
-    units each, netting to the 48,498 the user saw), almost certainly a
-    double-click on a button that gave no feedback. The button-disable
-    JS only guards the same page load; this catches it regardless of
-    how the duplicate request happens (double-click, back-button
-    resubmit, two tabs)."""
-    open_trades = client.get_open_trades()
-    return any(t["instrument"] == instrument for t in open_trades)
 
 
 def _news_summary() -> dict:
@@ -184,6 +189,7 @@ def dashboard():
 def scan():
     state = load_state()
     risk_config = risk_config_from_state(state)
+    phase_state = phase_state_from_state(state)
 
     try:
         client = OandaClient()
@@ -191,12 +197,31 @@ def scan():
         account = _account_state_from_tracked_capital(state)
         candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
         save_candidates(candidates)
+
+        qualifying = [c for c in candidates if not c.rejected_reason]
+        if not candidates:
+            # Explicit feedback either way -- previously a 0-result scan
+            # just silently redirected with nothing on the page, which
+            # read as "did this even run?" rather than "ran fine, found
+            # nothing right now".
+            flash("Scan complete: no qualifying setups found right now.", "success")
+        elif phase_state.phase == "autopilot":
+            executed = auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+            if executed:
+                names = ", ".join(f"{c['instrument']} {c['direction']}" for c in executed)
+                flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
+                      f"{len(executed)} auto-executed ({names}).", "success")
+            else:
+                flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
+                      f"none met the autopilot confidence threshold or risk caps.", "success")
+        else:
+            flash(f"Scan complete: {len(qualifying)} candidate(s) found. Review to execute manually.", "success")
     except Exception as e:
         # Previously a scan failure just silently produced nothing visible
         # -- likely masking real gunicorn worker timeouts on Render. Now
         # surfaced on the dashboard instead of failing invisibly.
         print(f"WARNING: scan failed: {e}", flush=True)
-        flash(str(e))
+        flash(str(e), "error")
 
     return redirect(url_for("dashboard"))
 
@@ -234,28 +259,20 @@ def execute(instrument):
 
     try:
         client = OandaClient()
-        if not confirmed_duplicate and _instrument_already_open(client, instrument):
+        if not confirmed_duplicate and instrument_already_open(client, instrument):
             # Not an outright block -- shows a confirmation step so an
             # intentional add-to-position/re-entry can still go through.
             return render_template("confirm_duplicate.html", candidate=candidate)
 
-        result = client.place_market_order_with_sltp(
-            instrument=instrument,
-            units=candidate["units"],
-            stop_loss_price=str(candidate["stop_loss"]),
-            take_profit_price=str(candidate["take_profit"]),
-        )
-        trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
-        if trade_id:
-            record_open_trade(trade_id, candidate)
+        result = place_and_record(client, candidate, allow_duplicate=confirmed_duplicate)
+        if not result["success"]:
+            flash(f"Order did not fill (reason: {result['reason']}) -- nothing recorded.", "error")
         else:
-            print(f"WARNING: order filled but no tradeID in response, journal not recorded: {result}", flush=True)
-
-        flash(f"Executed: {candidate['direction']} {instrument} -- "
-              f"{candidate['units']} {candidate.get('unit_label', 'units')} "
-              f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']}). "
-              f"Will auto-close in 2 hours if SL/TP hasn't hit.",
-              "success")
+            flash(f"Executed: {candidate['direction']} {instrument} -- "
+                  f"{candidate['units']} {candidate.get('unit_label', 'units')} "
+                  f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']}). "
+                  f"Will auto-close in 2 hours if SL/TP hasn't hit.",
+                  "success")
     except requests.exceptions.HTTPError as e:
         # Surface OANDA's own rejection reason (e.g. bad price precision,
         # insufficient margin) instead of a bare 500 -- previously
@@ -315,15 +332,29 @@ def journal_export():
 def settings():
     state = load_state()
     risk_config = risk_config_from_state(state)
+    phase_state = phase_state_from_state(state)
 
     risk_config.risk_per_trade_pct = float(request.form.get("risk_per_trade_pct", risk_config.risk_per_trade_pct))
     risk_config.max_trades_per_day = int(request.form.get("max_trades_per_day", risk_config.max_trades_per_day))
     risk_config.autopilot_confidence_threshold_pct = float(
         request.form.get("autopilot_confidence_threshold_pct", risk_config.autopilot_confidence_threshold_pct))
 
+    # Direct toggle, bypassing the original 30-closed-trades phase gate
+    # (explicit user request) -- checking the box turns autopilot on
+    # immediately, unchecking it reverts to manual approval. Every
+    # autopilot trade still passes the same risk validation and
+    # duplicate guard as a manual one; this only removes the "you must
+    # earn your way there" waiting period, not any of the actual safety
+    # checks.
+    autopilot_on = request.form.get("autopilot") == "on"
+    new_phase = "autopilot" if autopilot_on else "manual_paper"
+    if new_phase != phase_state.phase:
+        state.phase_state = asdict(PhaseState(phase=new_phase, kill_switch_engaged=phase_state.kill_switch_engaged))
+
     state.risk_config = asdict(risk_config)
     state.mode = request.form.get("mode", state.mode)
     save_state(state)
+    flash(f"Autopilot {'enabled' if autopilot_on else 'disabled'}. Settings saved.", "success")
     return redirect(url_for("dashboard"))
 
 

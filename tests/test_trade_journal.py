@@ -66,3 +66,36 @@ def test_is_expired_at_exact_boundary():
     now = datetime.now(timezone.utc)
     exactly_two_hours = {"opened_at": (now - timedelta(hours=2)).isoformat()}
     assert tj.is_expired(exactly_two_hours, now) is True
+
+
+def test_record_open_trade_stores_risk_amount(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(risk_amount=40.0))
+    entries = tj.load_journal()
+    assert entries[0]["risk_amount"] == 40.0
+
+
+def test_trades_opened_today_counts_only_todays_entries():
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    entries = [
+        {"opened_at": now.isoformat()},
+        {"opened_at": (now - timedelta(hours=1)).isoformat()},
+        {"opened_at": (now - timedelta(days=1)).isoformat()},
+    ]
+    assert tj.trades_opened_today(entries, now) == 2
+
+
+def test_trades_opened_today_ignores_malformed_entries():
+    now = datetime.now(timezone.utc)
+    entries = [{"opened_at": "not-a-date"}, {}]
+    assert tj.trades_opened_today(entries, now) == 0
+
+
+def test_total_open_risk_sums_only_open_entries():
+    entries = [
+        {"status": "OPEN", "risk_amount": 40.0},
+        {"status": "OPEN", "risk_amount": 20.0},
+        {"status": "SUCCESSFUL", "risk_amount": 40.0},
+    ]
+    assert tj.total_open_risk(entries) == 60.0

@@ -45,6 +45,7 @@ class JournalEntry:
     rationale: list
     opened_at: str  # ISO 8601 UTC
     account_currency: str = ""
+    risk_amount: float = 0.0  # $ risked at entry -- needed to compute real open portfolio heat
     status: str = OPEN
     closed_at: str | None = None
     exit_price: float | None = None
@@ -96,7 +97,7 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
         units=candidate["units"], entry_price=candidate["entry_price"], stop_loss=candidate["stop_loss"],
         take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
         rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
-        account_currency=candidate.get("account_currency", ""),
+        account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
     )
     entries.append(asdict(entry))
     save_journal(entries)
@@ -104,6 +105,32 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
 
 def open_entries(entries: list) -> list:
     return [e for e in entries if e["status"] == OPEN]
+
+
+def trades_opened_today(entries: list, now: datetime = None) -> int:
+    """Real count of trades opened today, from the journal -- used for
+    the trades/day cap. Previously this was always hardcoded to 0 in
+    AccountState (fine when only one manual execution happened at a
+    time with a page reload in between; not fine once autopilot can
+    fire several in one scan)."""
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    count = 0
+    for e in entries:
+        try:
+            opened = datetime.fromisoformat(e["opened_at"])
+        except (KeyError, ValueError):
+            continue
+        if opened.date() == today:
+            count += 1
+    return count
+
+
+def total_open_risk(entries: list) -> float:
+    """Real sum of $ risk currently open, from the journal -- used for
+    the portfolio-heat cap. Same "was hardcoded to 0" gap as
+    trades_opened_today."""
+    return sum(e.get("risk_amount", 0.0) for e in open_entries(entries))
 
 
 def hours_open(entry: dict, now: datetime = None) -> float:

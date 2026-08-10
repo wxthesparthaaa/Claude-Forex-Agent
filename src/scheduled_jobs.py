@@ -23,6 +23,8 @@ from oanda_client import OandaClient
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from live_scan import run_live_scan
 from scan_results import save_candidates
+from trade_journal import load_journal, trades_opened_today, total_open_risk
+from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
 )
@@ -49,13 +51,17 @@ def _closed_trades_since(client: OandaClient, since_iso: str | None, count: int)
 
 def _account_from_tracked_capital(state) -> AccountState:
     equity = tracked_equity(state)
+    entries = load_journal()
     return AccountState(equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
-                         open_risk_amount=0.0, trades_today=0, currency_net_exposure_pct={})
+                         open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
+                         currency_net_exposure_pct={})
 
 
 def run_evening_scan_and_notify(client: OandaClient = None) -> list:
     """9:30pm SGT: scan the universe, list qualifying setups with the
-    manual/autopilot liner."""
+    manual/autopilot liner -- and if autopilot is on, actually execute
+    the qualifying ones (same risk-gated path as the dashboard's Scan
+    Now, see trade_execution.auto_execute_candidates)."""
     client = client or OandaClient()
     state = load_state()
     risk_config = risk_config_from_state(state)
@@ -69,6 +75,10 @@ def run_evening_scan_and_notify(client: OandaClient = None) -> list:
     save_candidates(candidates)
 
     send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
+
+    if phase_state.phase == "autopilot":
+        auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+
     return candidate_dicts
 
 

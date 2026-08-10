@@ -5,8 +5,13 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import dashboard_state
+import trade_journal as tj
 import scheduled_jobs
-from scheduled_jobs import _closed_trade_to_dict, _closed_trades_since, run_nightly_review, run_friday_reflection
+from scan_workflow import TradeCandidate
+from scheduled_jobs import (
+    _closed_trade_to_dict, _closed_trades_since, run_nightly_review, run_friday_reflection,
+    run_evening_scan_and_notify,
+)
 
 
 class FakeClient:
@@ -26,6 +31,9 @@ def _isolate_state(tmp_path, monkeypatch):
     monkeypatch.setattr(dashboard_state, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
     monkeypatch.setattr(scheduled_jobs, "load_state", dashboard_state.load_state)
     monkeypatch.setattr(scheduled_jobs, "save_state", dashboard_state.save_state)
+    monkeypatch.setattr(tj, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(tj, "JOURNAL_PATH", str(tmp_path / "trade_journal.json"))
+    monkeypatch.setattr(scheduled_jobs, "load_journal", tj.load_journal)
 
 
 def test_closed_trade_to_dict_classifies_win_loss_and_direction():
@@ -132,3 +140,54 @@ def test_run_friday_reflection_identifies_strongest_and_weakest_pair(mock_send, 
 
     updated = dashboard_state.load_state()
     assert updated.week_start_timestamp is not None
+
+
+class ScanFakeClient(FakeClient):
+    def get_pricing(self, instruments):
+        return []
+
+
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_run_evening_scan_auto_executes_when_autopilot_on(mock_send, mock_scan, mock_save, mock_auto_exec,
+                                                            tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    fake_candidates = [TradeCandidate(
+        instrument="EUR_USD", direction="LONG", entry_price=1.10, stop_loss=1.095, take_profit=1.11,
+        confidence_pct=80.0, confidence_components={}, units=8000, unit_label="units", risk_amount=40.0,
+        notional_account_currency=8800.0, account_currency="SGD", rationale=["Bullish break"],
+    )]
+    mock_scan.return_value = fake_candidates
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    mock_auto_exec.assert_called_once()
+    call_args = mock_auto_exec.call_args[0]
+    assert call_args[0] is client
+    assert call_args[1] == fake_candidates
+    assert call_args[2].phase == "autopilot"
+
+
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan, mock_save, mock_auto_exec,
+                                                               tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()  # defaults to manual_paper
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    mock_auto_exec.assert_not_called()
