@@ -1,55 +1,55 @@
 [
   {
-    "instrument": "BCO_USD",
-    "direction": "LONG",
-    "entry_price": 87.794,
-    "stop_loss": 87.148,
-    "take_profit": 89.086,
-    "confidence_pct": 65.0,
+    "instrument": "AUD_USD",
+    "direction": "SHORT",
+    "entry_price": 0.70578,
+    "stop_loss": 0.70743,
+    "take_profit": 0.70248,
+    "confidence_pct": 62.5,
     "confidence_components": {
-      "breadth": 57.14285714285714,
+      "breadth": 85.71428571428571,
       "rsi": 100.0,
       "candlestick": 50.0,
-      "news": 50.0
+      "news": 0.0
     },
-    "units": 48,
-    "unit_label": "barrels",
+    "units": -18939,
+    "unit_label": "units",
     "risk_amount": 40.0,
-    "notional_account_currency": 5393.07,
+    "notional_account_currency": 17109.19,
     "account_currency": "SGD",
     "rationale": [
-      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-      "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-      "RSI is 62 (neutral range).",
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 36 (neutral range).",
       "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      "News sentiment: supportive of this direction."
     ],
     "rejected_reason": null
   },
   {
-    "instrument": "WTICO_USD",
+    "instrument": "GBP_USD",
     "direction": "LONG",
-    "entry_price": 79.866,
-    "stop_loss": 79.229,
-    "take_profit": 81.14,
-    "confidence_pct": 65.0,
+    "entry_price": 1.35046,
+    "stop_loss": 1.34904,
+    "take_profit": 1.3533,
+    "confidence_pct": 75.0,
     "confidence_components": {
-      "breadth": 57.14285714285714,
+      "breadth": 85.71428571428571,
       "rsi": 100.0,
       "candlestick": 50.0,
       "news": 50.0
     },
-    "units": 49,
-    "unit_label": "barrels",
+    "units": 22007,
+    "unit_label": "units",
     "risk_amount": 40.0,
-    "notional_account_currency": 5008.28,
+    "notional_account_currency": 38040.31,
     "account_currency": "SGD",
     "rationale": [
       "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-      "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-      "RSI is 64 (neutral range).",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 60 (neutral range).",
       "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      "News sentiment: no GBP-relevant headlines in the latest fetch (neutral)."
     ],
     "rejected_reason": null
   }
