@@ -114,9 +114,9 @@
     "opened_at": "2026-08-10T14:27:42.841573+00:00",
     "account_currency": "SGD",
     "risk_amount": 40.0,
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-10T16:27:48.233367+00:00",
+    "exit_price": 65.139,
+    "realized_pnl": 22.8749
   }
 ]
