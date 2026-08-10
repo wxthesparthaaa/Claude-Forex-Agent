@@ -19,7 +19,7 @@
     "account_currency": "SGD",
     "status": "FAILED",
     "closed_at": "2026-08-10T09:09:14.993759190Z",
-    "exit_price": "87.214",
+    "exit_price": 87.214,
     "realized_pnl": -7.3255
   }
 ]
