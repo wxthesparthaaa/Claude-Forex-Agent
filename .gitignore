@@ -6,3 +6,4 @@ venv/
 config/*.properties
 config/*.json
 !config/README.md
+data/candle_cache/
