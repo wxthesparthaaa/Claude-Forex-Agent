@@ -315,3 +315,39 @@ def test_evening_scan_stamps_last_autopilot_scan_timestamp(mock_send, tmp_path, 
 
     updated = dashboard_state.load_state()
     assert updated.last_autopilot_scan_timestamp is not None
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_calls_evening_scan_quietly(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 35))
+    mock_run.return_value = []
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_autopilot_interval_scan()
+
+    mock_run.assert_called_once()
+    _, kwargs = mock_run.call_args
+    assert kwargs.get("notify_listing") is False
+
+
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_evening_scan_notify_listing_false_suppresses_potential_trades_message(
+        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client, notify_listing=False)
+
+    mock_send.assert_not_called()  # no candidates -> auto_execute sends nothing either, and the listing is suppressed
+    mock_auto_exec.assert_called_once()

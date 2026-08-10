@@ -58,14 +58,19 @@ def _account_from_tracked_capital(state) -> AccountState:
                          currency_net_exposure_pct={})
 
 
-def run_evening_scan_and_notify(client: OandaClient = None) -> list:
+def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool = True) -> list:
     """9:30pm SGT: scan the universe, list qualifying setups with the
     manual/autopilot liner -- and if autopilot is on, actually execute
     the qualifying ones (same risk-gated path as the dashboard's Scan
     Now, see trade_execution.auto_execute_candidates). Also the function
     run_autopilot_interval_scan re-invokes on its configured cadence
     through the rest of the evening -- both paths share this one
-    implementation so the listing/execution logic can't drift apart."""
+    implementation so the listing/execution logic can't drift apart.
+
+    notify_listing gates the "here's tonight's setups" Telegram message
+    only -- the interval ticker passes False so the repeated scans stay
+    quiet unless a trade actually fires (auto_execute_candidates sends
+    its own per-trade message regardless)."""
     client = client or OandaClient()
     state = load_state()
     risk_config = risk_config_from_state(state)
@@ -78,7 +83,8 @@ def run_evening_scan_and_notify(client: OandaClient = None) -> list:
     candidate_dicts = [asdict(c) for c in candidates]
     save_candidates(candidates)
 
-    send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
+    if notify_listing:
+        send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
 
     if phase_state.phase == "autopilot":
         auto_execute_candidates(client, candidates, phase_state, risk_config, account)
@@ -107,7 +113,8 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     does anything if Autopilot is on, it's currently within the 9:30pm-
     1am window, and enough time has passed since the last scan per the
     user's configured interval (Settings: 15/30/60/240 min). No-ops
-    otherwise -- cheap to call often."""
+    otherwise -- cheap to call often. Runs quietly (no "tonight's setups"
+    Telegram message) -- only an actual auto-executed trade notifies."""
     state = load_state()
     phase_state = phase_state_from_state(state)
     if phase_state.phase != "autopilot":
@@ -123,7 +130,7 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
         if elapsed_minutes < state.autopilot_scan_interval_minutes:
             return None
 
-    return run_evening_scan_and_notify(client)
+    return run_evening_scan_and_notify(client, notify_listing=False)
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
