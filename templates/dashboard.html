@@ -109,7 +109,7 @@
         {% for warning in out_of_range_warnings %}
           <p class="out-of-range">&#9888; {{ warning }}</p>
         {% endfor %}
-        <button class="scan-btn" type="submit" style="margin-top:0.75rem;">Save settings</button>
+        <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
       </form>
     </div>
   </div>
@@ -125,9 +125,9 @@
   {% endwith %}
 
   <div class="card">
-    <form method="post" action="/scan" id="scanForm">
-      <button class="scan-btn" type="submit" id="scanBtn">Scan now</button>
-      <span id="scanStatus" style="margin-left:0.75rem; color:var(--muted); font-size:0.85rem;"></span>
+    <form method="post" action="/scan">
+      <button class="scan-btn" type="submit" data-loading-text="Scanning..."
+              data-loading-status="Checking 11 instruments -- can take up to a minute.">Scan now</button>
     </form>
   </div>
 
@@ -179,10 +179,24 @@
       }
     });
 
-    document.getElementById('scanForm').addEventListener('submit', function () {
-      document.getElementById('scanBtn').disabled = true;
-      document.getElementById('scanBtn').textContent = 'Scanning...';
-      document.getElementById('scanStatus').textContent = 'Checking 11 instruments -- can take up to a minute.';
+    // Generic "this button is working" feedback for every form on the
+    // page -- disables the button, swaps its label, and shows an
+    // optional status line, so pressing anything always visibly
+    // acknowledges the press instead of looking like nothing happened
+    // while the request is in flight.
+    document.querySelectorAll('form').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type=submit]');
+        if (!btn) return;
+        btn.disabled = true;
+        if (btn.dataset.loadingText) btn.textContent = btn.dataset.loadingText;
+        if (btn.dataset.loadingStatus) {
+          var status = document.createElement('span');
+          status.textContent = btn.dataset.loadingStatus;
+          status.style.cssText = 'margin-left:0.75rem; color:var(--muted); font-size:0.85rem;';
+          btn.insertAdjacentElement('afterend', status);
+        }
+      });
     });
   </script>
 </body>

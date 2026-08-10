@@ -61,8 +61,9 @@
   </div>
 
   {% if not candidate.rejected_reason %}
-  <form method="post" action="/execute/{{ candidate.instrument }}">
-    <button class="exec-btn" type="submit">Execute now</button>
+  <form method="post" action="/execute/{{ candidate.instrument }}" id="execForm">
+    <button class="exec-btn" type="submit" data-loading-text="Placing order..."
+            data-loading-status="Sending to OANDA -- do not close this tab.">Execute now</button>
   </form>
   {% endif %}
 
@@ -86,6 +87,21 @@
     dashedLine({{ candidate.entry_price }}, '#e8e6e0');
     dashedLine({{ candidate.take_profit }}, '#3fb950');
     dashedLine({{ candidate.stop_loss }}, '#f85149');
+
+    var execForm = document.getElementById('execForm');
+    if (execForm) {
+      execForm.addEventListener('submit', function () {
+        var btn = execForm.querySelector('button[type=submit]');
+        btn.disabled = true;
+        if (btn.dataset.loadingText) btn.textContent = btn.dataset.loadingText;
+        if (btn.dataset.loadingStatus) {
+          var status = document.createElement('span');
+          status.textContent = btn.dataset.loadingStatus;
+          status.style.cssText = 'margin-left:0.75rem; color:var(--muted); font-size:0.85rem;';
+          btn.insertAdjacentElement('afterend', status);
+        }
+      });
+    }
   </script>
 </body>
 </html>
