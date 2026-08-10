@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manual trade: {{ candidate.instrument }} &mdash; Claude Forex Agent</title>
+  <style>
+    :root { --bg: #191919; --fg: #e8e6e0; --muted: #999; --border: #333; --card: #232323; --accent: #d97757;
+            --green: #3fb950; --red: #f85149; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); max-width: 640px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.1rem; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+    .long { color: var(--green); } .short { color: var(--red); }
+    .card { border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; background: var(--card); margin-bottom: 1rem; }
+    label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.85rem; color: var(--muted); }
+    input[type=number] {
+      width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.5rem; font-size: 1rem;
+    }
+    .amount-value { font-size: 1.4rem; font-weight: 700; }
+    .exec-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 0.8rem 1.75rem; font-size: 1.05rem; font-weight: 700; cursor: pointer; margin-top: 1rem;
+    }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Manual trade: {{ candidate.instrument }} &mdash;
+    <span class="{{ 'long' if candidate.direction == 'LONG' else 'short' }}">{{ candidate.direction }}</span>
+  </h1>
+  <p class="subtitle">Entry (current price): {{ candidate.entry_price }}</p>
+
+  <div class="card">
+    <div>Amount to be traded: <span class="amount-value">{{ "%.2f"|format(candidate.notional_account_currency) }} {{ candidate.account_currency }}</span></div>
+    <div class="hint">{{ candidate.units }} units &middot; risking {{ "%.2f"|format(candidate.risk_amount) }} {{ candidate.account_currency }} at the stop below</div>
+  </div>
+
+  <form method="post" action="/manual/execute/{{ candidate.instrument }}">
+    <input type="hidden" name="direction" value="{{ candidate.direction }}">
+    <div class="card">
+      <label for="stop_loss">Stop loss {{ '(suggested from recent structure)' if not fallback_used else '(no clean structure found -- default estimate, adjust as needed)' }}</label>
+      <input type="number" step="any" name="stop_loss" id="stop_loss" value="{{ candidate.stop_loss }}">
+
+      <label for="take_profit">Take profit</label>
+      <input type="number" step="any" name="take_profit" id="take_profit" value="{{ candidate.take_profit }}">
+      <p class="hint">Editing either value re-sizes the position at execute time so the risk % stays consistent with your settings.</p>
+    </div>
+
+    {% if candidate.rejected_reason %}
+      <p style="color: var(--red);">&#9888; {{ candidate.rejected_reason }}</p>
+    {% else %}
+      <button class="exec-btn" type="submit">Execute now</button>
+    {% endif %}
+  </form>
+</body>
+</html>

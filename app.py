@@ -37,10 +37,13 @@ from market_hours import all_session_statuses, is_forex_market_open
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
 from live_scan import run_live_scan
-from universe import GRANULARITY
+from universe import GRANULARITY, ALL_INSTRUMENTS, ENTRY_TIMEFRAME
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github
+from pivot_detection import find_swing_points
+from instrument_metadata import fetch_instrument_metadata
+from manual_trade import suggest_manual_levels, build_manual_candidate
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -67,6 +70,27 @@ def _account_state_from_tracked_capital(state) -> AccountState:
         equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
         open_risk_amount=0.0, trades_today=0, currency_net_exposure_pct={},
     )
+
+
+def _make_price_lookup(client):
+    """Shared by scan/manual routes -- caches pricing lookups within one
+    request so resolve_conversion_rate doesn't refetch the same pair
+    repeatedly."""
+    cache = {}
+
+    def get_price(pair_name):
+        if pair_name in cache:
+            return cache[pair_name]
+        pricing = client.get_pricing([pair_name])
+        if not pricing:
+            cache[pair_name] = None
+            return None
+        bid = pricing[0]["bids"][0]["price"]
+        ask = pricing[0]["asks"][0]["price"]
+        cache[pair_name] = (float(bid) + float(ask)) / 2
+        return cache[pair_name]
+
+    return get_price
 
 
 def _out_of_range_warnings(risk_config) -> list:
@@ -111,6 +135,7 @@ def dashboard():
         candidates=candidates, wins=0, losses=0, closed_trades=0,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity(state), broker_balance=broker_balance, account_currency=account_currency,
+        instruments=ALL_INSTRUMENTS,
     )
 
 
@@ -171,6 +196,92 @@ def execute(instrument):
         stop_loss_price=str(candidate["stop_loss"]),
         take_profit_price=str(candidate["take_profit"]),
     )
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/manual/preview", methods=["POST"])
+def manual_preview():
+    """User-chosen instrument/direction, not an algo signal -- still
+    runs through the same sizing/risk_engine path as a scanned candidate
+    (see manual_trade.py). Suggests SL/TP from recent structure but
+    nothing is placed here; that's /manual/execute, reached only by the
+    human's own click on this preview."""
+    instrument = request.form["instrument"]
+    direction = request.form["direction"]
+
+    try:
+        state = load_state()
+        risk_config = risk_config_from_state(state)
+        account = _account_state_from_tracked_capital(state)
+
+        client = OandaClient()
+        summary = client.get_account_summary()
+        meta = fetch_instrument_metadata(client, [instrument])[instrument]
+
+        candles = client.get_candles(instrument, GRANULARITY[ENTRY_TIMEFRAME], count=60)
+        closes = [float(c["mid"]["c"]) for c in candles]
+        highs = [float(c["mid"]["h"]) for c in candles]
+        lows = [float(c["mid"]["l"]) for c in candles]
+        swings = find_swing_points(highs, lows)
+        entry_price = closes[-1]
+
+        levels = suggest_manual_levels(entry_price, direction, swings)
+        candidate = build_manual_candidate(
+            instrument=instrument, direction=direction, entry_price=entry_price,
+            stop_loss=levels.stop_loss, take_profit=levels.take_profit,
+            meta=meta, account_currency=summary.get("currency", "USD"), get_price=_make_price_lookup(client),
+            account=account, risk_config=risk_config,
+        )
+        if candidate is None:
+            flash(f"Could not size a trade for {instrument} -- stop distance came out invalid.")
+            return redirect(url_for("dashboard"))
+
+        fallback_used = not bool([s for s in swings])
+        return render_template("manual_trade.html", candidate=candidate, fallback_used=fallback_used)
+    except Exception as e:
+        print(f"WARNING: manual preview failed: {e}", flush=True)
+        flash(str(e))
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/manual/execute/<instrument>", methods=["POST"])
+def manual_execute(instrument):
+    """The manual-mode counterpart to /execute -- same rule: only ever
+    reached by a human's own click, re-validates with fresh price/risk
+    data rather than trusting anything computed at preview time."""
+    direction = request.form["direction"]
+    stop_loss = float(request.form["stop_loss"])
+    take_profit = float(request.form["take_profit"])
+
+    try:
+        state = load_state()
+        risk_config = risk_config_from_state(state)
+        account = _account_state_from_tracked_capital(state)
+
+        client = OandaClient()
+        summary = client.get_account_summary()
+        meta = fetch_instrument_metadata(client, [instrument])[instrument]
+        pricing = client.get_pricing([instrument])
+        entry_price = (float(pricing[0]["bids"][0]["price"]) + float(pricing[0]["asks"][0]["price"])) / 2
+
+        candidate = build_manual_candidate(
+            instrument=instrument, direction=direction, entry_price=entry_price,
+            stop_loss=stop_loss, take_profit=take_profit,
+            meta=meta, account_currency=summary.get("currency", "USD"), get_price=_make_price_lookup(client),
+            account=account, risk_config=risk_config,
+        )
+        if candidate is None or candidate.rejected_reason:
+            flash(candidate.rejected_reason if candidate else "Invalid stop distance.")
+            return redirect(url_for("dashboard"))
+
+        client.place_market_order_with_sltp(
+            instrument=instrument, units=candidate.units,
+            stop_loss_price=str(candidate.stop_loss), take_profit_price=str(candidate.take_profit),
+        )
+    except Exception as e:
+        print(f"WARNING: manual execute failed: {e}", flush=True)
+        flash(str(e))
+
     return redirect(url_for("dashboard"))
 
 

@@ -37,9 +37,9 @@
     .short { color: var(--red); font-weight: 600; }
     .rejected { color: var(--muted); font-style: italic; font-size: 0.8rem; }
     a.trade-link { color: var(--accent); text-decoration: none; font-weight: 600; }
-    .settings label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
+    label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
     .settings input[type=range] { width: 100%; accent-color: var(--accent); }
-    .settings select {
+    select {
       background: var(--bg); color: var(--fg); border: 1px solid var(--border);
       border-radius: 6px; padding: 0.3rem 0.5rem;
     }
@@ -112,6 +112,23 @@
         <button class="scan-btn" type="submit" style="margin-top:0.75rem;">Save settings</button>
       </form>
     </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Manual trade</h3>
+    <form method="post" action="/manual/preview">
+      <label>Pair</label>
+      <select name="instrument" style="width:100%;">
+        {% for instrument in instruments %}
+          <option value="{{ instrument }}">{{ instrument }}</option>
+        {% endfor %}
+      </select>
+      <div class="toggle-row">
+        <label style="margin:0;"><input type="radio" name="direction" value="LONG" checked> Long</label>
+        <label style="margin:0;"><input type="radio" name="direction" value="SHORT"> Short</label>
+      </div>
+      <button class="scan-btn" type="submit" style="margin-top:0.75rem;">Preview trade</button>
+    </form>
   </div>
 
   {% with messages = get_flashed_messages() %}
