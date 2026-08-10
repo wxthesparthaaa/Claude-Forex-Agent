@@ -23,6 +23,8 @@ class DashboardState:
     phase_state: dict
     mode: str = "demo"  # "demo" | "actual" -- Actual requires a separate, explicit later step
     trades_per_day_override: int = 5
+    last_nightly_equity: float | None = None  # for computing tonight's P&L at the 1am review
+    week_start_equity: float | None = None    # for the Friday self-reflection summary
 
 
 def default_state() -> DashboardState:

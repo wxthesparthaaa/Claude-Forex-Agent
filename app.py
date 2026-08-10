@@ -25,6 +25,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from flask import Flask, render_template, redirect, url_for, request
 from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 load_dotenv(encoding="utf-8-sig")
 
@@ -36,6 +38,7 @@ from oanda_client import OandaClient
 from live_scan import run_live_scan
 from universe import GRANULARITY
 from scan_results import save_candidates, load_candidates, find_candidate
+from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 
 app = Flask(__name__)
 
@@ -158,6 +161,25 @@ def settings():
     state.mode = request.form.get("mode", state.mode)
     save_state(state)
     return redirect(url_for("dashboard"))
+
+
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    # 9:30pm SGT Mon-Fri: US market open in Singapore time -- list tonight's setups
+    scheduler.add_job(run_evening_scan_and_notify,
+                       CronTrigger(day_of_week="mon-fri", hour=21, minute=30, timezone="Asia/Singapore"))
+    # 1am SGT: review checkpoint (not a forced close) -- summarize what actually closed tonight
+    scheduler.add_job(run_nightly_review, CronTrigger(hour=1, minute=0, timezone="Asia/Singapore"))
+    # Saturday 1am SGT = right after Friday's session -- week self-reflection
+    scheduler.add_job(run_friday_reflection, CronTrigger(day_of_week="sat", hour=1, minute=0, timezone="Asia/Singapore"))
+    scheduler.start()
+    return scheduler
+
+
+# RUN_SCHEDULER defaults on for Render; set to "false" for local dev/tests
+# to avoid real Telegram sends firing from a laptop.
+if os.environ.get("RUN_SCHEDULER", "false") == "true":
+    start_scheduler()
 
 
 if __name__ == "__main__":

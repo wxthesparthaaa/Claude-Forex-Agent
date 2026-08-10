@@ -65,6 +65,14 @@ class OandaClient:
     def get_open_positions(self) -> list[dict]:
         return self._request("GET", f"/v3/accounts/{self.account_id}/openPositions").get("positions", [])
 
+    def get_closed_trades(self, count: int = 50) -> list[dict]:
+        """Most recently closed trades, ground truth for the nightly
+        review -- read from the broker's own records rather than a
+        hand-maintained local ledger, same reconciliation discipline the
+        sibling project's ledger-integrity incident established."""
+        params = {"state": "CLOSED", "count": count}
+        return self._request("GET", f"/v3/accounts/{self.account_id}/trades", params=params).get("trades", [])
+
     def place_market_order_with_sltp(self, instrument: str, units: int, stop_loss_price: str,
                                        take_profit_price: str) -> dict:
         """units > 0 for LONG, < 0 for SHORT. SL/TP are ALWAYS attached at
