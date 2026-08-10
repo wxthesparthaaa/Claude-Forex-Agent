@@ -77,12 +77,28 @@ def fetch_news_articles() -> list:
     if the Finnhub call itself fails for any reason (quota, network) --
     news is one input among several in the confidence score, so a
     missing/failed fetch degrades to "neutral", it must never break the
-    whole scan."""
+    whole scan.
+
+    Merges the "forex" and "general" categories -- verified live that
+    "forex" alone is thin (often a single article) and central-bank/
+    economic commentary that actually matches our currency keywords
+    routinely lands in "general" instead."""
     api_key = os.environ.get("FINNHUB_API_KEY")
     if not api_key:
         return []
     try:
-        return FinnhubClient(api_key).get_forex_news()
+        client = FinnhubClient(api_key)
+        forex_news = client.get_forex_news()
+        general_news = client.get_general_news()
+        seen_ids = set()
+        merged = []
+        for article in forex_news + general_news:
+            article_id = article.get("id")
+            if article_id in seen_ids:
+                continue
+            seen_ids.add(article_id)
+            merged.append(article)
+        return merged
     except Exception as e:
         print(f"WARNING: Finnhub news fetch failed, continuing without news sentiment: {e}", flush=True)
         return []

@@ -133,6 +133,54 @@
   {% endwith %}
 
   <div class="card">
+    <h3 style="margin-top:0;">Live trades</h3>
+    {% if live_trades %}
+    <table>
+      <tr><th>Pair</th><th>Direction</th><th>Entry</th><th>Current</th><th>Unrealized P&amp;L</th><th>Open for</th><th>Auto-closes in</th></tr>
+      {% for t in live_trades %}
+      <tr>
+        <td>{{ t.instrument }}</td>
+        <td class="{{ 'long' if t.direction == 'LONG' else 'short' }}">{{ t.direction }}</td>
+        <td>{{ t.entry_price }}</td>
+        <td>{{ t.current_price if t.current_price is not none else '—' }}</td>
+        <td class="{{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
+          {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
+        </td>
+        <td>{{ t.hours_open }}h</td>
+        <td>{{ t.hours_remaining }}h</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:var(--muted); font-size:0.9rem;">No trades currently open.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">News sentiment</h3>
+    {% if not news.configured %}
+    <p style="color:var(--muted); font-size:0.9rem;">
+      Not configured yet &mdash; add a free <code>FINNHUB_API_KEY</code> (finnhub.io signup, no card needed)
+      to activate live news sentiment.
+    </p>
+    {% elif not news.currencies %}
+    <p style="color:var(--muted); font-size:0.9rem;">Configured, but no relevant headlines found in the latest fetch.</p>
+    {% else %}
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
+      {% for c in news.currencies %}
+        <span style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.6rem; font-size:0.85rem;">
+          {{ c.currency }}
+          <strong class="{{ 'long' if c.score > 0 else ('short' if c.score < 0 else '') }}">{{ "%+.2f"|format(c.score) }}</strong>
+        </span>
+      {% endfor %}
+    </div>
+    {% for h in news.headlines %}
+      <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">{{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span></p>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <div class="card">
     <form method="post" action="/scan">
       <button class="scan-btn" type="submit" data-loading-text="Scanning..."
               data-loading-status="Checking 11 instruments -- can take up to a minute.">Scan now</button>

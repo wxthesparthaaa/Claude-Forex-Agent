@@ -31,8 +31,17 @@ class FinnhubClient:
 
     def get_forex_news(self, min_id: int = 0) -> list:
         """General market news filtered to the forex category. Each item:
-        {category, datetime, headline, id, related, source, summary, url}."""
+        {category, datetime, headline, id, related, source, summary, url}.
+        Verified live: this category is thin (often 1-2 items), so
+        get_general_news() is the better source for Fed/ECB-type
+        commentary that actually drives currency-keyword matches."""
         news = self._get("/news", {"category": "forex"})
+        return [n for n in news if n.get("id", 0) >= min_id]
+
+    def get_general_news(self, min_id: int = 0) -> list:
+        """Finnhub's broader "general" category -- central bank/economic
+        commentary routinely lands here, not just under "forex"."""
+        news = self._get("/news", {"category": "general"})
         return [n for n in news if n.get("id", 0) >= min_id]
 
     def get_economic_calendar(self, from_date: str, to_date: str) -> list:

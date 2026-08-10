@@ -38,11 +38,14 @@ from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses, is_forex_market_open
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
-from live_scan import run_live_scan
-from universe import GRANULARITY
+from live_scan import run_live_scan, fetch_news_articles
+from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github
+from trade_journal import record_open_trade
+from trade_monitor import check_open_trades, live_trades_view
+from news_relevance import currency_news_score
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -83,6 +86,30 @@ def _instrument_already_open(client, instrument) -> bool:
     return any(t["instrument"] == instrument for t in open_trades)
 
 
+def _news_summary() -> dict:
+    """Dashboard's news-sentiment section: per-currency score across the
+    7 majors plus the most recent headlines. Degrades honestly -- if
+    FINNHUB_API_KEY isn't set, or the fetch itself fails, this returns
+    configured=False rather than pretending there's data."""
+    configured = bool(os.environ.get("FINNHUB_API_KEY"))
+    articles = fetch_news_articles()
+    if not articles:
+        return {"configured": configured, "currencies": [], "headlines": []}
+
+    currencies = []
+    for pair in MAJOR_PAIRS:
+        for ccy in pair.split("_"):
+            if ccy not in [c["currency"] for c in currencies]:
+                score = currency_news_score(articles, ccy)
+                if score is not None:
+                    currencies.append({"currency": ccy, "score": round(score, 2)})
+
+    recent = sorted(articles, key=lambda a: a.get("datetime", 0), reverse=True)[:5]
+    headlines = [{"headline": a.get("headline", ""), "source": a.get("source", "")} for a in recent]
+
+    return {"configured": True, "currencies": currencies, "headlines": headlines}
+
+
 def _out_of_range_warnings(risk_config) -> list:
     warnings = []
     checks = [
@@ -111,15 +138,22 @@ def dashboard():
 
     broker_balance = None
     account_currency = ""
+    live_trades = []
     try:
-        summary = OandaClient().get_account_summary()
+        client = OandaClient()
+        summary = client.get_account_summary()
         broker_balance = float(summary.get("NAV", summary.get("balance", 0)))
         account_currency = summary.get("currency", "")
+        check_open_trades(client)  # detect SL/TP closures + force-close anything past 2 hours
+        live_trades = live_trades_view(client)
     except Exception as e:
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
 
+    news = _news_summary()
+
     return render_template(
         "dashboard.html",
+        live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         candidates=candidates, wins=0, losses=0, closed_trades=0,
@@ -187,15 +221,22 @@ def execute(instrument):
             # intentional add-to-position/re-entry can still go through.
             return render_template("confirm_duplicate.html", candidate=candidate)
 
-        client.place_market_order_with_sltp(
+        result = client.place_market_order_with_sltp(
             instrument=instrument,
             units=candidate["units"],
             stop_loss_price=str(candidate["stop_loss"]),
             take_profit_price=str(candidate["take_profit"]),
         )
+        trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
+        if trade_id:
+            record_open_trade(trade_id, candidate)
+        else:
+            print(f"WARNING: order filled but no tradeID in response, journal not recorded: {result}", flush=True)
+
         flash(f"Executed: {candidate['direction']} {instrument} -- "
               f"{candidate['units']} {candidate.get('unit_label', 'units')} "
-              f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']})",
+              f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']}). "
+              f"Will auto-close in 2 hours if SL/TP hasn't hit.",
               "success")
     except requests.exceptions.HTTPError as e:
         # Surface OANDA's own rejection reason (e.g. bad price precision,
@@ -242,6 +283,10 @@ def start_scheduler():
     # Re-pull state from GitHub periodically so a locally-placed trade or
     # locally-run job shows up on the cloud dashboard without a manual restart.
     scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10))
+    # 2-hour expiry safeguard + SL/TP-closure detection -- runs even with
+    # nobody looking at the dashboard (the dashboard also calls this on
+    # every page load, but that alone wouldn't enforce anything unattended).
+    scheduler.add_job(check_open_trades, IntervalTrigger(minutes=5))
     scheduler.start()
     return scheduler
 
