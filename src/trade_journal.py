@@ -133,6 +133,26 @@ def total_open_risk(entries: list) -> float:
     return sum(e.get("risk_amount", 0.0) for e in open_entries(entries))
 
 
+def realized_pnl_since(entries: list, since_iso: str | None) -> float:
+    """Sum of realized P&L for journal entries that closed after
+    since_iso (None means "everything") -- used to preview tonight's
+    trades that have already settled but haven't been folded into
+    dashboard_state.strategy_realized_pnl by the 1am review yet, so the
+    dashboard's Strategy capital figure updates the moment a trade
+    actually closes instead of sitting stale until the next review."""
+    total = 0.0
+    for e in entries:
+        if e["status"] == OPEN:
+            continue
+        closed_at = e.get("closed_at")
+        if not closed_at:
+            continue
+        if since_iso is not None and closed_at <= since_iso:
+            continue
+        total += e.get("realized_pnl") or 0.0
+    return total
+
+
 def hours_open(entry: dict, now: datetime = None) -> float:
     now = now or datetime.now(timezone.utc)
     opened = datetime.fromisoformat(entry["opened_at"])

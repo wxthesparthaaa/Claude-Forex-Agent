@@ -44,7 +44,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 # to get pushed to the WRONG GitHub repo entirely during local testing.
 load_dotenv(encoding="utf-8-sig", override=True)
 
-from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
+from dashboard_state import (
+    load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
+    DEFAULT_STRATEGY_CAPITAL,
+)
 from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses, is_forex_market_open
 from risk_engine import is_out_of_recommended_range, AccountState
@@ -184,7 +187,8 @@ def dashboard():
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes,
         candidates=candidates, wins=0, losses=0, closed_trades=0,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
-        strategy_capital=tracked_equity(state), broker_balance=broker_balance, account_currency=account_currency,
+        strategy_capital=tracked_equity_live(state), broker_balance=broker_balance, account_currency=account_currency,
+        default_strategy_capital=DEFAULT_STRATEGY_CAPITAL,
     )
 
 
@@ -357,6 +361,23 @@ def settings():
     interval = request.form.get("autopilot_scan_interval_minutes")
     if interval is not None and int(interval) in (15, 30, 60, 240):
         state.autopilot_scan_interval_minutes = int(interval)
+
+    # Strategy capital: either an explicit override or a reset back to
+    # the original $2,000 target. Both re-baseline strategy_realized_pnl
+    # to 0 -- the new number IS the capital going forward, not "the old
+    # capital plus whatever P&L happened to be sitting on top of it".
+    if request.form.get("reset_capital"):
+        state.strategy_starting_capital = DEFAULT_STRATEGY_CAPITAL
+        state.strategy_realized_pnl = 0.0
+        flash(f"Strategy capital reset to {DEFAULT_STRATEGY_CAPITAL:.2f}.", "success")
+    else:
+        new_capital = request.form.get("strategy_capital")
+        if new_capital not in (None, ""):
+            new_capital = float(new_capital)
+            if abs(new_capital - tracked_equity_live(state)) > 0.01:
+                state.strategy_starting_capital = new_capital
+                state.strategy_realized_pnl = 0.0
+                flash(f"Strategy capital set to {new_capital:.2f}.", "success")
 
     state.risk_config = asdict(risk_config)
     state.mode = request.form.get("mode", state.mode)

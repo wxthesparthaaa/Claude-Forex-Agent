@@ -121,10 +121,27 @@
               <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
             </select>
           </div>
+
+          <label>Strategy capital
+            <input type="number" step="0.01" min="0" name="strategy_capital"
+                   value="{{ '%.2f'|format(strategy_capital) }}">
+          </label>
+          <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+            Updates live as Autopilot's trades close. Saving a different amount here
+            re-baselines it -- that becomes the new starting capital, P&amp;L tracking
+            restarts from zero.
+          </p>
+
           {% for warning in out_of_range_warnings %}
             <p class="out-of-range">&#9888; {{ warning }}</p>
           {% endfor %}
-          <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
+          <div class="toggle-row" style="gap:0.5rem;">
+            <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
+            <button class="scan-btn" type="submit" name="reset_capital" value="1"
+                    style="margin-top:0.75rem;" data-loading-text="Resetting...">
+              Reset capital to {{ '%.0f'|format(default_strategy_capital) }}
+            </button>
+          </div>
         </form>
       </details>
     </div>

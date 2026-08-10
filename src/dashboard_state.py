@@ -16,6 +16,11 @@ from risk_engine import RiskConfig
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 STATE_PATH = os.path.join(STATE_DIR, "dashboard_state.json")
 
+# The "org value" Settings' Reset button restores -- the strategy's
+# original target capital, independent of whatever the user later edits
+# strategy_starting_capital to.
+DEFAULT_STRATEGY_CAPITAL = 2000.0
+
 
 @dataclass
 class DashboardState:
@@ -43,11 +48,25 @@ class DashboardState:
 
 
 def default_state() -> DashboardState:
-    return DashboardState(risk_config=asdict(RiskConfig()), phase_state=asdict(PhaseState()))
+    return DashboardState(risk_config=asdict(RiskConfig()), phase_state=asdict(PhaseState()),
+                           strategy_starting_capital=DEFAULT_STRATEGY_CAPITAL)
 
 
 def tracked_equity(state: DashboardState) -> float:
+    """The officially-settled figure as of the last 1am review -- what
+    scheduled_jobs uses for position sizing and reporting."""
     return state.strategy_starting_capital + state.strategy_realized_pnl
+
+
+def tracked_equity_live(state: DashboardState, entries: list | None = None) -> float:
+    """tracked_equity() plus any trades that have already closed tonight
+    but haven't been folded into strategy_realized_pnl by the 1am review
+    yet -- what the dashboard displays, so Strategy capital moves the
+    moment an Autopilot trade closes rather than sitting frozen until
+    the next review."""
+    from trade_journal import load_journal, realized_pnl_since
+    entries = entries if entries is not None else load_journal()
+    return tracked_equity(state) + realized_pnl_since(entries, state.last_review_timestamp)
 
 
 def load_state() -> DashboardState:

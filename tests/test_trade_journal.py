@@ -99,3 +99,26 @@ def test_total_open_risk_sums_only_open_entries():
         {"status": "SUCCESSFUL", "risk_amount": 40.0},
     ]
     assert tj.total_open_risk(entries) == 60.0
+
+
+def test_realized_pnl_since_sums_only_closed_entries_after_cutoff():
+    entries = [
+        {"status": "SUCCESSFUL", "closed_at": "2026-08-10T20:00:00Z", "realized_pnl": 30.0},
+        {"status": "FAILED", "closed_at": "2026-08-10T22:00:00Z", "realized_pnl": -10.0},
+        {"status": "OPEN"},
+    ]
+    assert tj.realized_pnl_since(entries, "2026-08-10T21:00:00Z") == -10.0
+
+
+def test_realized_pnl_since_none_cutoff_includes_everything_closed():
+    entries = [
+        {"status": "SUCCESSFUL", "closed_at": "2026-08-10T20:00:00Z", "realized_pnl": 30.0},
+        {"status": "EXPIRED", "closed_at": "2026-08-10T22:00:00Z", "realized_pnl": -5.0},
+        {"status": "OPEN"},
+    ]
+    assert tj.realized_pnl_since(entries, None) == 25.0
+
+
+def test_realized_pnl_since_ignores_entries_missing_closed_at():
+    entries = [{"status": "CANCELLED", "realized_pnl": 15.0}]  # malformed/incomplete entry
+    assert tj.realized_pnl_since(entries, None) == 0.0
