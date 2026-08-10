@@ -5,15 +5,26 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from news_relevance import tag_headline, relevant_headlines_for_currency, currency_news_score
+from news_relevance import tag_headline, relevant_headlines_for_currency, currency_news_score, news_score_for_instrument
 from economic_calendar import upcoming_high_impact_events, format_calendar_warning
 from finnhub_adapter import FinnhubClient
 
 
 def test_tag_headline_detects_currency_and_polarity():
-    tag = tag_headline("Fed signals rate cut as inflation cools", "Dovish tone from Powell")
+    # a rate HIKE / hawkish stance strengthens the currency -- positive
+    # polarity here means bullish for USD, not "good news" generically
+    tag = tag_headline("Fed signals rate hike as inflation persists", "Hawkish tone from Powell")
     assert "USD" in tag["currencies"]
     assert tag["polarity"] > 0
+
+
+def test_tag_headline_rate_cut_is_negative_for_the_currency():
+    # the opposite case -- a cut/dovish stance weakens the currency,
+    # so this must score negative even though it might read as "good
+    # news" in an equity-market sentiment tool
+    tag = tag_headline("Fed signals rate cut as inflation cools", "Dovish tone from Powell")
+    assert "USD" in tag["currencies"]
+    assert tag["polarity"] < 0
 
 
 def test_tag_headline_detects_geopolitical_and_negative_polarity():
@@ -51,6 +62,18 @@ def test_currency_news_score_averages_polarity():
     ]
     score = currency_news_score(articles, "USD")
     assert score == 0.0  # one positive, one negative -> nets out
+
+
+def test_news_score_for_instrument_uses_base_currency():
+    articles = [{"headline": "ECB signals rate hike", "summary": "Hawkish", "datetime": 100}]
+    # EUR_USD's base currency is EUR -- bullish EUR news should score positive
+    score = news_score_for_instrument(articles, "EUR_USD")
+    assert score is not None and score > 0
+
+
+def test_news_score_for_instrument_none_for_commodities():
+    articles = [{"headline": "Fed hikes rates", "summary": "Hawkish", "datetime": 100}]
+    assert news_score_for_instrument(articles, "XAU_USD") is None
 
 
 def test_upcoming_high_impact_events_within_window():

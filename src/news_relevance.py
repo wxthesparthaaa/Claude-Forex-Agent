@@ -26,8 +26,14 @@ CURRENCY_KEYWORDS = {
 
 GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "invasion", "ceasefire", "geopolit"]
 
-POSITIVE_KEYWORDS = ["cuts rates", "rate cut", "dovish", "stimulus", "beats expectations", "strong growth", "ceasefire"]
-NEGATIVE_KEYWORDS = ["hikes rates", "rate hike", "hawkish", "recession", "misses expectations",
+# Polarity is scored for the currency's own VALUE, not general market/risk
+# sentiment -- a hike/hawkish stance strengthens a currency (higher
+# yield), a cut/dovish stance weakens it. That's the opposite of the
+# "dovish = good news" framing common in equity-market sentiment tools,
+# which would have been wrong here: a "Fed cuts rates" headline should
+# score NEGATIVE for USD, not positive.
+POSITIVE_KEYWORDS = ["hikes rates", "rate hike", "hawkish", "beats expectations", "strong growth"]
+NEGATIVE_KEYWORDS = ["cuts rates", "rate cut", "dovish", "stimulus", "recession", "misses expectations",
                       "war", "invasion", "sanctions", "tariff", "conflict"]
 
 
@@ -74,3 +80,16 @@ def currency_news_score(articles: list, currency: str) -> float | None:
     if not relevant:
         return None
     return sum(a["polarity"] for a in relevant) / len(relevant)
+
+
+def news_score_for_instrument(articles: list, instrument: str) -> float | None:
+    """Uses the traded instrument's BASE currency's own news score
+    directly -- LONG means buying the base currency, so bullish news for
+    that currency supports a LONG (confidence_score handles the sign
+    flip for SHORT). No cross-currency blending in this first pass:
+    commodities (XAU/XAG/WTICO/BCO) aren't in CURRENCY_KEYWORDS, so this
+    honestly returns None for them rather than guessing."""
+    base_currency = instrument.split("_")[0]
+    if base_currency not in CURRENCY_KEYWORDS:
+        return None
+    return currency_news_score(articles, base_currency)
