@@ -29,5 +29,7 @@
   "strategy_starting_capital": 2000.0,
   "strategy_realized_pnl": 0.0,
   "last_review_timestamp": null,
-  "week_start_timestamp": null
+  "week_start_timestamp": null,
+  "autopilot_scan_interval_minutes": 30,
+  "last_autopilot_scan_timestamp": null
 }
