@@ -1,0 +1,26 @@
+[
+  {
+    "trade_id": "772",
+    "instrument": "BCO_USD",
+    "direction": "LONG",
+    "units": 48,
+    "entry_price": 87.794,
+    "stop_loss": 87.148,
+    "take_profit": 89.086,
+    "confidence_pct": 65.0,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+      "RSI is 62 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-10T12:05:32.124723+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.0,
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
+  }
+]
