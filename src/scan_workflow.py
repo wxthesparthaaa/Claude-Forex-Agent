@@ -20,6 +20,17 @@ from confidence_score import SignalInputs, compute_confidence
 from position_sizing import calculate_units, resolve_conversion_rate, InstrumentMeta
 from risk_engine import ProposedTrade, RiskConfig, AccountState, validate_trade, RiskViolation
 from currency_exposure import currency_deltas_for_trade
+from rationale import build_rationale
+
+# OANDA's own unit for each instrument -- there's no "lot" concept in
+# OANDA's API (that's an MT4/MT5 convention); "units" of XAU_USD are
+# literally troy ounces, WTICO_USD units are literally barrels. Labeled
+# here so the dashboard reads "1 oz" instead of an unexplained "1 units".
+UNIT_LABELS = {"XAU": "oz", "XAG": "oz", "WTICO": "barrels", "BCO": "barrels"}
+
+
+def unit_label_for(instrument: str) -> str:
+    return UNIT_LABELS.get(instrument.split("_")[0], "units")
 
 
 @dataclass
@@ -32,9 +43,11 @@ class TradeCandidate:
     confidence_pct: float
     confidence_components: dict
     units: int
+    unit_label: str
     risk_amount: float
     notional_account_currency: float  # the actual $ size of the position being traded
     account_currency: str
+    rationale: list
     rejected_reason: str | None = None
 
 
@@ -99,8 +112,10 @@ def generate_candidate(
         instrument=instrument, direction=direction, entry_price=entry_price,
         stop_loss=levels.stop_loss, take_profit=levels.take_profit,
         confidence_pct=confidence["confidence_pct"], confidence_components=confidence.get("components", {}),
-        units=units, risk_amount=risk_amount,
+        units=units, unit_label=unit_label_for(instrument), risk_amount=risk_amount,
         notional_account_currency=round(notional_account_currency, 2), account_currency=account_currency,
+        rationale=build_rationale(direction, breadth_agreement, rsi_value, candlestick_pattern,
+                                   edge_zscore, news_score),
     )
 
     proposed = ProposedTrade(

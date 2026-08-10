@@ -15,7 +15,7 @@ class TradeLevels:
     risk_distance: float
 
 
-def derive_trade_levels(swings: list, direction: str, entry_price: float, min_rr: float = 1.8) -> TradeLevels | None:
+def derive_trade_levels(swings: list, direction: str, entry_price: float, min_rr: float = 2.0) -> TradeLevels | None:
     lows = [s for s in swings if s.kind == "low"]
     highs = [s for s in swings if s.kind == "high"]
 

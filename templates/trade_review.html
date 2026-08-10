@@ -26,8 +26,9 @@
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 0.8rem 1.75rem; font-size: 1.05rem; font-weight: 700; cursor: pointer;
     }
-    .rationale { font-size: 0.9rem; }
-    .rationale div { margin: 0.15rem 0; }
+    .rationale ul { margin: 0.25rem 0 0; padding-left: 1.25rem; }
+    .rationale li { margin: 0.35rem 0; font-size: 0.92rem; }
+    .rr-badge { color: var(--muted); font-size: 0.85rem; }
   </style>
 </head>
 <body>
@@ -39,7 +40,11 @@
   <div class="card" style="display:inline-block;">
     <div class="amount-label">Amount being traded</div>
     <div class="amount-value">{{ "%.2f"|format(candidate.notional_account_currency) }} {{ candidate.account_currency }}</div>
-    <div class="amount-label">{{ candidate.units }} units &middot; risking {{ "%.2f"|format(candidate.risk_amount) }} {{ candidate.account_currency }}</div>
+    <div class="amount-label">{{ candidate.units }} {{ candidate.unit_label }} &middot; risking {{ "%.2f"|format(candidate.risk_amount) }} {{ candidate.account_currency }}</div>
+    <div class="amount-label rr-badge">
+      Risk {{ "%.1f"|format((candidate.entry_price - candidate.stop_loss)|abs) }} / Reward {{ "%.1f"|format((candidate.take_profit - candidate.entry_price)|abs) }}
+      ({{ "%.1f"|format((candidate.take_profit - candidate.entry_price)|abs / (candidate.entry_price - candidate.stop_loss)|abs) }}:1)
+    </div>
   </div>
 
   <div class="legend">
@@ -51,10 +56,12 @@
   <div id="chart"></div>
 
   <div class="card rationale">
-    <h3 style="margin-top:0;">Rationale</h3>
-    {% for key, value in candidate.confidence_components.items() %}
-      <div>{{ key }}: {{ value }}</div>
-    {% endfor %}
+    <h3 style="margin-top:0;">Why this trade</h3>
+    <ul>
+      {% for line in candidate.rationale %}
+        <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
     {% if candidate.rejected_reason %}
       <p style="color:var(--red);">&#9888; {{ candidate.rejected_reason }}</p>
     {% endif %}
