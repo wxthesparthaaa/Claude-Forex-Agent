@@ -50,7 +50,7 @@ from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
 from github_state_sync import pull_state_from_github, github_file_url
-from trade_journal import record_open_trade, load_journal, push_journal_xlsx_to_github, JOURNAL_XLSX_REPO_PATH
+from trade_journal import record_open_trade, load_journal, JOURNAL_XLSX_REPO_PATH
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
 from news_relevance import currency_news_score
 from journal_export import build_journal_workbook
@@ -159,15 +159,14 @@ def dashboard():
 
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
-    try:
-        # Previously only pushed when a trade opened/closed/expired, so
-        # it silently lagged whenever nothing had happened since the
-        # feature was deployed -- the file just never got created.
-        # Pushing on every dashboard load keeps it always in sync
-        # without waiting for a trade event.
-        push_journal_xlsx_to_github(load_journal())
-    except Exception as e:
-        print(f"WARNING: could not sync trade_journal.xlsx to GitHub: {e}", flush=True)
+    # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
+    # whenever a trade actually opens/closes/expires/cancels -- not from
+    # here. An earlier version also pushed unconditionally on every
+    # dashboard page load as a safety net (the file hadn't existed yet
+    # at the time), but that produced dozens of near-identical commits
+    # in a short window once the real event-driven path was confirmed
+    # working. Removed once the underlying mechanism was proven to fire
+    # correctly on its own.
 
     return render_template(
         "dashboard.html",
