@@ -148,12 +148,56 @@ existing account-currency-aware sizing logic needed no code changes —
 only the runtime account-currency value, now read dynamically from the
 live account rather than assumed.
 
-**Phase 9 — Backtest engine (in progress).** Verified real OANDA history
-depth before committing to a design (daily candles available back past
-2010; 15-minute candles return ~5,000 bars — about 2.5 months — per
-request, so a multi-year intraday backtest needs pagination). Backtests
-run as an offline/local process, never on Render, since Render only
-needs to host the lightweight live-scanning service.
+**Phase 9 — Backtest engine.** Verified real OANDA history depth before
+committing to a design (daily candles available back past 2010;
+15-minute candles return ~5,000 bars — about 2.5 months — per request,
+so a multi-year intraday backtest needs pagination). Built a paginated
+fetch/cache layer (verified against 144 real H1 candles, not just a
+mocked client), a bar-by-bar SL/TP trade simulator, and a stats
+summarizer (win rate, true peak-to-trough drawdown, profit factor).
+The simulator is deliberately conservative: a single bar touching both
+SL and TP resolves as the loss, since OHLC data alone can't prove which
+was actually hit first, and assuming the best case would flatter every
+backtest that hits it.
+
+**Phase 10 — Scan workflow and dashboard, verified live end-to-end
+(2026-08-10).** `scan_workflow.py` is the one function shared by the
+live "Scan Now" button, the scheduled scan, and (eventually) the
+backtest replay loop — same principle as the sibling project's
+`run_scan()`: whichever caller runs it, behavior can't quietly diverge.
+Wired real OANDA candles through the full signal pipeline into a live
+Flask dashboard (win-rate pie chart, settings sliders with a red
+out-of-range disclaimer, US/HK/SG session footer, candidate table) and
+a trade-review page (candlestick chart with current-price/TP/SL as
+black/green/red dashed lines). **Tested against the live account in an
+actual browser, not just unit tests**: Scan Now surfaced a real
+USD_CAD SHORT candidate at 66.7% confidence with correctly-sized 1.8
+R:R levels, and the review chart rendered cleanly with no console
+errors. Along the way, a live diagnostic run against three real pairs
+confirmed the multi-timeframe veto was correctly rejecting mixed/
+disagreeing setups rather than silently always passing or always
+failing — the kind of check that's easy to skip and easy to regret
+skipping on a real-money-shaped system.
+
+**Phase 11 — Telegram notification schedule.** Four touchpoints agreed
+on early in the design conversation, now wired up: 9:30pm SGT (US
+market open in SGT) lists qualifying setups with a manual/autopilot
+liner; 1am SGT is a review checkpoint — not a forced close, consistent
+with the earlier swing-trade decision — summarizing only trades that
+actually closed, since anything still open stays open and broker-
+protected; Saturday 1am SGT (right after Friday's session) sends a
+week self-reflection identifying the strongest/weakest pair. Reuses the
+sibling project's existing bot rather than creating a new one.
+**Deliberately shipped with the scheduler defaulting off**
+(`RUN_SCHEDULER`) — unlike the sibling project's default-on — so real
+notifications don't start firing on Render until explicitly turned on
+once the rest of the system has been verified end-to-end.
+
+**Phase 12 — GitHub state sync.** Ported the sibling project's
+GitHub-Contents-API state-persistence layer near-verbatim (same
+`GITHUB_TOKEN`/`GITHUB_REPO` already configured on this account) so
+Render's free-tier disk wipe on every redeploy doesn't lose dashboard
+settings or the last scan's results.
 
 ## Bugs found and fixed (real, verified — not hypothetical)
 
@@ -176,9 +220,22 @@ needs to host the lightweight live-scanning service.
    with `encoding="utf-8-sig"`.
 
 ## Status
-As of this log: skeleton deployed and live on Render/UptimeRobot, OANDA
-practice connectivity verified against the real account, 55 tests
-passing across position sizing, risk engine, currency strength, pivot
-detection, confidence scoring, and news/calendar modules. Backtest
-engine, scan/approval workflow, dashboard UI, and the Telegram
-notification schedule are still in progress.
+All 12 build-plan tasks complete as of this log: deployable skeleton
+live on Render/UptimeRobot, OANDA practice connectivity verified against
+the real account, the full signal pipeline (currency strength, pivot/
+structure detection, RSI, candlestick annotation, MTF confluence,
+confidence scoring, news/economic-calendar) wired into a live dashboard
+and verified end-to-end in a real browser against real market data, the
+backtest engine's core mechanics built and tested, the Telegram
+notification schedule wired (scheduler intentionally off by default
+until explicitly enabled), and GitHub state sync protecting Render's
+free-tier redeploys. **107 tests passing.**
+
+**Deliberately not yet done, by design, not oversight:** no autopilot
+phase has advanced past Phase 0 (manual approval, paper) — that
+requires 30 real closed trades of evidence, which doesn't exist yet.
+Actual (live-money) trading requires a separate `OANDA_ENV=live`
+credential change, never just a dashboard toggle. A full multi-year,
+multi-instrument backtest run (as opposed to the engine's tested
+mechanics) hasn't been executed yet — that's the natural next step
+before trusting this with real capital.
