@@ -1,21 +1,56 @@
 [
   {
-    "instrument": "XAU_USD",
+    "instrument": "BCO_USD",
     "direction": "LONG",
-    "entry_price": 4357.09,
-    "stop_loss": 4331.74,
-    "take_profit": 4402.720000000001,
-    "confidence_pct": 61.7,
+    "entry_price": 87.246,
+    "stop_loss": 86.071,
+    "take_profit": 89.596,
+    "confidence_pct": 75.0,
     "confidence_components": {
-      "breadth": 57.14285714285714,
-      "rsi": 86.85200912156269,
+      "breadth": 85.71428571428571,
+      "rsi": 100.0,
       "candlestick": 50.0,
       "news": 50.0
     },
-    "units": 1,
+    "units": 26,
+    "unit_label": "barrels",
     "risk_amount": 40.0,
-    "notional_account_currency": 5573.76,
+    "notional_account_currency": 2901.83,
     "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 58 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "rejected_reason": null
+  },
+  {
+    "instrument": "WTICO_USD",
+    "direction": "LONG",
+    "entry_price": 79.262,
+    "stop_loss": 78.079,
+    "take_profit": 81.628,
+    "confidence_pct": 75.0,
+    "confidence_components": {
+      "breadth": 85.71428571428571,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "units": 26,
+    "unit_label": "barrels",
+    "risk_amount": 40.0,
+    "notional_account_currency": 2636.28,
+    "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 60 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
     "rejected_reason": null
   }
 ]
