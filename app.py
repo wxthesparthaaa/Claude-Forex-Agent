@@ -21,6 +21,8 @@ import sys
 from dataclasses import asdict
 from datetime import datetime
 
+import requests
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from flask import Flask, render_template, redirect, url_for, request, flash
@@ -164,13 +166,28 @@ def execute(instrument):
     if candidate is None or candidate.get("rejected_reason"):
         return redirect(url_for("dashboard"))
 
-    client = OandaClient()
-    client.place_market_order_with_sltp(
-        instrument=instrument,
-        units=candidate["units"],
-        stop_loss_price=str(candidate["stop_loss"]),
-        take_profit_price=str(candidate["take_profit"]),
-    )
+    try:
+        client = OandaClient()
+        client.place_market_order_with_sltp(
+            instrument=instrument,
+            units=candidate["units"],
+            stop_loss_price=str(candidate["stop_loss"]),
+            take_profit_price=str(candidate["take_profit"]),
+        )
+    except requests.exceptions.HTTPError as e:
+        # Surface OANDA's own rejection reason (e.g. bad price precision,
+        # insufficient margin) instead of a bare 500 -- previously
+        # unhandled entirely.
+        try:
+            detail = e.response.json().get("errorMessage", e.response.text)
+        except Exception:
+            detail = str(e)
+        print(f"WARNING: execute failed: {detail}", flush=True)
+        flash(f"Order rejected by OANDA: {detail}")
+    except Exception as e:
+        print(f"WARNING: execute failed: {e}", flush=True)
+        flash(str(e))
+
     return redirect(url_for("dashboard"))
 
 

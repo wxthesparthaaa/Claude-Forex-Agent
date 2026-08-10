@@ -9,6 +9,7 @@ from instrument_metadata import InstrumentMeta
 from risk_engine import AccountState, RiskConfig
 
 EUR_USD = InstrumentMeta("EUR_USD", display_precision=5, pip_location=-4, margin_rate=0.03)
+XAU_USD = InstrumentMeta("XAU_USD", display_precision=3, pip_location=-1, margin_rate=0.05)
 
 
 def clean_account(**overrides):
@@ -84,6 +85,28 @@ def test_generate_candidate_still_produced_when_only_1h_disagrees():
     )
     assert candidate is not None
     assert candidate.direction == "LONG"
+
+
+def test_generate_candidate_rounds_sl_tp_to_instrument_precision():
+    # regression test for the Execute 500 error: unrounded prices (e.g.
+    # 4400.785000000001 from raw float math on a 2.0 R:R multiple) get
+    # rejected by OANDA's order API since XAU_USD only allows 3 decimals.
+    higher_swings, entry_swings = bullish_setup()
+    candidate = generate_candidate(
+        instrument="XAU_USD", entry_price=1.25,
+        entry_timeframe_swings=entry_swings, higher_timeframe_swings=higher_swings,
+        rsi_value=55, candlestick_pattern=None, breadth_agreement=0.9, edge_zscore=0.5, news_score=None,
+        meta=XAU_USD, account_currency="USD", get_price=lambda i: None,
+        account=clean_account(), risk_config=RiskConfig(),
+    )
+    assert candidate is not None
+
+    def decimal_places(value: float) -> int:
+        return len(str(value).split(".")[-1]) if "." in str(value) else 0
+
+    assert decimal_places(candidate.stop_loss) <= 3
+    assert decimal_places(candidate.take_profit) <= 3
+    assert decimal_places(candidate.entry_price) <= 3
 
 
 def test_generate_candidate_flags_rejected_reason_when_risk_engine_blocks_it():

@@ -18,6 +18,7 @@ from multi_timeframe import higher_timeframe_bias, entry_allowed
 from trade_levels import derive_trade_levels
 from confidence_score import SignalInputs, compute_confidence
 from position_sizing import calculate_units, resolve_conversion_rate, InstrumentMeta
+from instrument_metadata import round_price
 from risk_engine import ProposedTrade, RiskConfig, AccountState, validate_trade, RiskViolation
 from currency_exposure import currency_deltas_for_trade
 from rationale import build_rationale
@@ -83,6 +84,16 @@ def generate_candidate(
     if levels is None:
         return None
 
+    # Round to the instrument's real precision BEFORE sizing/submitting --
+    # OANDA rejects prices with more decimals than an instrument allows
+    # (e.g. XAU_USD's 3), and raw float math easily produces noise like
+    # 4400.785000000001. This was never rounded anywhere before, which
+    # is why Execute produced an unhandled 500: the unrounded price was
+    # sent straight to OANDA's order API and rejected.
+    stop_loss = float(round_price(meta, levels.stop_loss))
+    take_profit = float(round_price(meta, levels.take_profit))
+    entry_price = float(round_price(meta, entry_price))
+
     signal_inputs = SignalInputs(
         entry_allowed=True,
         direction=direction,
@@ -98,7 +109,7 @@ def generate_candidate(
     conversion_rate = resolve_conversion_rate(quote_currency, account_currency, get_price)
 
     risk_amount = account.equity * (risk_config.risk_per_trade_pct / 100)
-    units = calculate_units(meta, direction, entry_price, levels.stop_loss, risk_amount, conversion_rate)
+    units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return None
 
@@ -110,7 +121,7 @@ def generate_candidate(
 
     candidate = TradeCandidate(
         instrument=instrument, direction=direction, entry_price=entry_price,
-        stop_loss=levels.stop_loss, take_profit=levels.take_profit,
+        stop_loss=stop_loss, take_profit=take_profit,
         confidence_pct=confidence["confidence_pct"], confidence_components=confidence.get("components", {}),
         units=units, unit_label=unit_label_for(instrument), risk_amount=risk_amount,
         notional_account_currency=round(notional_account_currency, 2), account_currency=account_currency,
