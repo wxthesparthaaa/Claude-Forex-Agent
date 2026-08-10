@@ -27,6 +27,7 @@ from flask import Flask, render_template, redirect, url_for, request
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 load_dotenv(encoding="utf-8-sig")
 
@@ -39,6 +40,7 @@ from live_scan import run_live_scan
 from universe import GRANULARITY
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
+from github_state_sync import pull_state_from_github
 
 app = Flask(__name__)
 
@@ -172,12 +174,21 @@ def start_scheduler():
     scheduler.add_job(run_nightly_review, CronTrigger(hour=1, minute=0, timezone="Asia/Singapore"))
     # Saturday 1am SGT = right after Friday's session -- week self-reflection
     scheduler.add_job(run_friday_reflection, CronTrigger(day_of_week="sat", hour=1, minute=0, timezone="Asia/Singapore"))
+    # Re-pull state from GitHub periodically so a locally-placed trade or
+    # locally-run job shows up on the cloud dashboard without a manual restart.
+    scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10))
     scheduler.start()
     return scheduler
 
 
-# RUN_SCHEDULER defaults on for Render; set to "false" for local dev/tests
-# to avoid real Telegram sends firing from a laptop.
+# Pull whatever state already exists in GitHub before anything else reads
+# local files -- Render's free tier starts with an empty disk on every
+# deploy. A no-op if GITHUB_TOKEN/GITHUB_REPO aren't set (local dev).
+pull_state_from_github()
+
+# RUN_SCHEDULER defaults off; set to "true" on Render once the rest of
+# the system is verified, so real Telegram notifications don't start
+# firing before that's deliberately turned on.
 if os.environ.get("RUN_SCHEDULER", "false") == "true":
     start_scheduler()
 

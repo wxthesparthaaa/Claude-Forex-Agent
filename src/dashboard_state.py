@@ -43,6 +43,11 @@ def save_state(state: DashboardState) -> None:
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(STATE_PATH, "w") as f:
         json.dump(asdict(state), f, indent=2)
+    try:
+        from github_state_sync import push_state_to_github
+        push_state_to_github(STATE_PATH)
+    except Exception as e:
+        print(f"WARNING: failed to push dashboard_state.json to GitHub: {e}", flush=True)
 
 
 def risk_config_from_state(state: DashboardState) -> RiskConfig:

@@ -14,6 +14,11 @@ def save_candidates(candidates: list) -> None:
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(RESULTS_PATH, "w") as f:
         json.dump([asdict(c) for c in candidates], f, indent=2)
+    try:
+        from github_state_sync import push_state_to_github
+        push_state_to_github(RESULTS_PATH)
+    except Exception as e:
+        print(f"WARNING: failed to push scan_results.json to GitHub: {e}", flush=True)
 
 
 def load_candidates() -> list:
