@@ -47,7 +47,13 @@ def check_open_trades(client: OandaClient = None) -> list:
                 continue  # not in our recent-closed window yet; check again next pass
             pnl = float(closed.get("realizedPL", 0))
             entry["realized_pnl"] = pnl
-            entry["exit_price"] = closed.get("averageClosePrice")
+            # OANDA returns all price fields as strings -- verified live:
+            # storing this unconverted produced a real bug (journal_export's
+            # R-multiple calc crashed with "str - float" on the first real
+            # closed trade). Every other numeric field already gets cast;
+            # this one was missed.
+            close_price = closed.get("averageClosePrice")
+            entry["exit_price"] = float(close_price) if close_price is not None else None
             entry["closed_at"] = closed.get("closeTime")
             entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
             changed.append(entry)
@@ -57,7 +63,8 @@ def check_open_trades(client: OandaClient = None) -> list:
             fill = result.get("orderFillTransaction", {})
             pnl = float(fill.get("pl", 0))
             entry["realized_pnl"] = pnl
-            entry["exit_price"] = fill.get("price")
+            fill_price = fill.get("price")
+            entry["exit_price"] = float(fill_price) if fill_price is not None else None
             entry["closed_at"] = now.isoformat()
             entry["status"] = EXPIRED
             changed.append(entry)

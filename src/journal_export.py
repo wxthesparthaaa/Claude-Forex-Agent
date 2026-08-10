@@ -20,25 +20,35 @@ COLUMNS = [
 ]
 
 
+def _parse_iso(ts: str) -> datetime:
+    """Handles both our own opened_at format (isoformat(), 6-digit
+    microseconds) and OANDA's closed_at format (9-digit nanoseconds +
+    trailing "Z", e.g. from the 2-hour expiry safeguard), which
+    datetime.fromisoformat() can't parse directly."""
+    if ts.endswith("Z"):
+        ts = ts[:26] + "+00:00"  # trim to microsecond precision, same fix as app.py's _oanda_time_to_unix
+    return datetime.fromisoformat(ts)
+
+
 def _r_multiple(entry: dict) -> float | None:
     """P&L expressed in units of the original risk (R) -- lets you
     compare trade quality independent of position size, the same metric
     the backtest engine uses."""
     if entry.get("exit_price") is None:
         return None
-    risk = abs(entry["entry_price"] - entry["stop_loss"])
+    risk = abs(float(entry["entry_price"]) - float(entry["stop_loss"]))
     if risk == 0:
         return None
     direction_sign = 1 if entry["direction"] == "LONG" else -1
-    return round(direction_sign * (entry["exit_price"] - entry["entry_price"]) / risk, 2)
+    return round(direction_sign * (float(entry["exit_price"]) - float(entry["entry_price"])) / risk, 2)
 
 
 def _hours_held(entry: dict) -> float | None:
     if not entry.get("closed_at"):
         return None
     try:
-        opened = datetime.fromisoformat(entry["opened_at"])
-        closed = datetime.fromisoformat(entry["closed_at"])
+        opened = _parse_iso(entry["opened_at"])
+        closed = _parse_iso(entry["closed_at"])
         return round((closed - opened).total_seconds() / 3600, 2)
     except (KeyError, ValueError):
         return None

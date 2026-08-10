@@ -49,3 +49,19 @@ def test_build_journal_workbook_handles_empty_journal():
     wb = build_journal_workbook([])
     ws = wb.active
     assert ws.max_row == 1  # header only
+
+
+def test_r_multiple_handles_string_prices_from_oanda():
+    # Real bug: OANDA returns exit_price as a string; trade_monitor.py
+    # was storing it unconverted, crashing this on the first real
+    # closed trade with "unsupported operand type(s) for -: 'str' and 'float'"
+    entry = closed_entry(exit_price="1.11")
+    assert _r_multiple(entry) == 2.0
+
+
+def test_hours_held_parses_oanda_nanosecond_timestamp_format():
+    # OANDA's closeTime uses 9-digit nanosecond precision + trailing "Z"
+    # (e.g. from the 2-hour expiry safeguard's own close_trade() call),
+    # which datetime.fromisoformat() can't parse directly.
+    entry = closed_entry(closed_at="2026-08-10T11:30:00.123456789Z")
+    assert _hours_held(entry) == 1.5
