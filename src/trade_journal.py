@@ -107,6 +107,29 @@ def open_entries(entries: list) -> list:
     return [e for e in entries if e["status"] == OPEN]
 
 
+def closed_entries(entries: list) -> list:
+    return [e for e in entries if e["status"] != OPEN]
+
+
+def win_loss_counts(entries: list) -> tuple[int, int]:
+    """(wins, losses) among closed entries, by realized P&L sign rather
+    than status -- an EXPIRED or CANCELLED trade can still have closed
+    in profit, so status alone (SUCCESSFUL/FAILED) undercounts wins.
+    Breakeven (pnl == 0) and entries missing realized_pnl count toward
+    neither, matching scheduled_jobs._closed_trade_to_dict's BREAKEVEN
+    handling for the same data."""
+    wins = losses = 0
+    for e in closed_entries(entries):
+        pnl = e.get("realized_pnl")
+        if pnl is None:
+            continue
+        if pnl > 0:
+            wins += 1
+        elif pnl < 0:
+            losses += 1
+    return wins, losses
+
+
 def trades_opened_today(entries: list, now: datetime = None) -> int:
     """Real count of trades opened today, from the journal -- used for
     the trades/day cap. Previously this was always hardcoded to 0 in

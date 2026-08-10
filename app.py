@@ -59,7 +59,9 @@ from scheduled_jobs import (
     run_evening_scan_and_notify, run_nightly_review, run_friday_reflection, run_autopilot_interval_scan,
 )
 from github_state_sync import pull_state_from_github, github_file_url
-from trade_journal import load_journal, trades_opened_today, total_open_risk, JOURNAL_XLSX_REPO_PATH
+from trade_journal import (
+    load_journal, trades_opened_today, total_open_risk, win_loss_counts, closed_entries, JOURNAL_XLSX_REPO_PATH,
+)
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
 from autopilot import PhaseState
@@ -167,6 +169,12 @@ def dashboard():
     except Exception as e:
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
 
+    # Loaded after check_open_trades() above so a trade that just closed
+    # this request shows up immediately, not on the next page load.
+    journal = load_journal()
+    wins, losses = win_loss_counts(journal)
+    closed_trades = len(closed_entries(journal))
+
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
     # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
@@ -185,9 +193,9 @@ def dashboard():
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes,
-        candidates=candidates, wins=0, losses=0, closed_trades=0,
+        candidates=candidates, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
-        strategy_capital=tracked_equity_live(state), broker_balance=broker_balance, account_currency=account_currency,
+        strategy_capital=tracked_equity_live(state, journal), broker_balance=broker_balance, account_currency=account_currency,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL,
     )
 

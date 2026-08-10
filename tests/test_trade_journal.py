@@ -122,3 +122,31 @@ def test_realized_pnl_since_none_cutoff_includes_everything_closed():
 def test_realized_pnl_since_ignores_entries_missing_closed_at():
     entries = [{"status": "CANCELLED", "realized_pnl": 15.0}]  # malformed/incomplete entry
     assert tj.realized_pnl_since(entries, None) == 0.0
+
+
+def test_closed_entries_excludes_open():
+    entries = [
+        {"status": "OPEN"},
+        {"status": "SUCCESSFUL", "realized_pnl": 10.0},
+        {"status": "EXPIRED", "realized_pnl": -5.0},
+    ]
+    assert len(tj.closed_entries(entries)) == 2
+
+
+def test_win_loss_counts_classifies_by_pnl_sign_not_status():
+    entries = [
+        {"status": "SUCCESSFUL", "realized_pnl": 10.0},
+        {"status": "FAILED", "realized_pnl": -5.0},
+        {"status": "EXPIRED", "realized_pnl": 3.0},   # closed positive despite the EXPIRED status
+        {"status": "CANCELLED", "realized_pnl": -1.0},
+        {"status": "CANCELLED", "realized_pnl": 0.0},  # breakeven -- counts toward neither
+        {"status": "OPEN"},
+    ]
+    wins, losses = tj.win_loss_counts(entries)
+    assert wins == 2
+    assert losses == 2
+
+
+def test_win_loss_counts_ignores_entries_missing_realized_pnl():
+    entries = [{"status": "SUCCESSFUL"}]  # malformed/incomplete entry
+    assert tj.win_loss_counts(entries) == (0, 0)
