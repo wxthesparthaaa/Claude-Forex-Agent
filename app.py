@@ -52,7 +52,9 @@ from oanda_client import OandaClient
 from live_scan import run_live_scan, fetch_news_articles
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
-from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
+from scheduled_jobs import (
+    run_evening_scan_and_notify, run_nightly_review, run_friday_reflection, run_autopilot_interval_scan,
+)
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import load_journal, trades_opened_today, total_open_risk, JOURNAL_XLSX_REPO_PATH
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
@@ -179,6 +181,7 @@ def dashboard():
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
+        autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes,
         candidates=candidates, wins=0, losses=0, closed_trades=0,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity(state), broker_balance=broker_balance, account_currency=account_currency,
@@ -351,6 +354,10 @@ def settings():
     if new_phase != phase_state.phase:
         state.phase_state = asdict(PhaseState(phase=new_phase, kill_switch_engaged=phase_state.kill_switch_engaged))
 
+    interval = request.form.get("autopilot_scan_interval_minutes")
+    if interval is not None and int(interval) in (15, 30, 60, 240):
+        state.autopilot_scan_interval_minutes = int(interval)
+
     state.risk_config = asdict(risk_config)
     state.mode = request.form.get("mode", state.mode)
     save_state(state)
@@ -363,6 +370,11 @@ def start_scheduler():
     # 9:30pm SGT Mon-Fri: US market open in Singapore time -- list tonight's setups
     scheduler.add_job(run_evening_scan_and_notify,
                        CronTrigger(day_of_week="mon-fri", hour=21, minute=30, timezone="Asia/Singapore"))
+    # Ticks every 5 min; only actually re-scans once Autopilot's configured
+    # interval (15/30/60/240 min, Settings) has elapsed since the last scan,
+    # and only within the 9:30pm-1am window above -- keeps Autopilot checking
+    # for fresh setups through the evening instead of the single 21:30 shot.
+    scheduler.add_job(run_autopilot_interval_scan, IntervalTrigger(minutes=5))
     # 1am SGT: review checkpoint (not a forced close) -- summarize what actually closed tonight
     scheduler.add_job(run_nightly_review, CronTrigger(hour=1, minute=0, timezone="Asia/Singapore"))
     # Saturday 1am SGT = right after Friday's session -- week self-reflection

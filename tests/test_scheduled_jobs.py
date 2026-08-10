@@ -191,3 +191,127 @@ def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan
     run_evening_scan_and_notify(client)
 
     mock_auto_exec.assert_not_called()
+
+
+from datetime import datetime as _real_datetime
+from zoneinfo import ZoneInfo
+
+_SGT = ZoneInfo("Asia/Singapore")
+
+
+def _sgt(h, m, day=10):
+    return _real_datetime(2026, 8, day, h, m, tzinfo=_SGT)
+
+
+def test_within_autopilot_scan_window_covers_930pm_to_1am():
+    within = scheduled_jobs._within_autopilot_scan_window
+    assert within(_sgt(21, 30)) is True
+    assert within(_sgt(23, 0)) is True
+    assert within(_sgt(0, 30)) is True
+    assert within(_sgt(1, 0)) is True
+    assert within(_sgt(21, 29)) is False
+    assert within(_sgt(1, 1)) is False
+    assert within(_sgt(12, 0)) is False
+
+
+class _FrozenDatetime(_real_datetime):
+    frozen_now = None
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls.frozen_now
+
+
+def _freeze_at(monkeypatch, sgt_dt):
+    _FrozenDatetime.frozen_now = sgt_dt
+    monkeypatch.setattr(scheduled_jobs, "datetime", _FrozenDatetime)
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_when_not_autopilot(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(22, 0))
+    state = dashboard_state.default_state()  # manual_paper by default
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result is None
+    mock_run.assert_not_called()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_outside_window(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(15, 0))  # mid-afternoon, well outside 9:30pm-1am
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result is None
+    mock_run.assert_not_called()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_when_interval_not_yet_elapsed(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(22, 0))
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.autopilot_scan_interval_minutes = 30
+    state.last_autopilot_scan_timestamp = _sgt(21, 45).isoformat()  # only 15 min ago
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result is None
+    mock_run.assert_not_called()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_runs_once_interval_has_elapsed(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(22, 0))
+    mock_run.return_value = ["ran"]
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.autopilot_scan_interval_minutes = 30
+    state.last_autopilot_scan_timestamp = _sgt(21, 30).isoformat()  # exactly 30 min ago
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result == ["ran"]
+    mock_run.assert_called_once()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_runs_immediately_when_no_prior_timestamp(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 35))
+    mock_run.return_value = ["ran"]
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result == ["ran"]
+    mock_run.assert_called_once()
+
+
+@patch("scheduled_jobs.send_message")
+def test_evening_scan_stamps_last_autopilot_scan_timestamp(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    with patch("scheduled_jobs.run_live_scan", return_value=[]), \
+         patch("scheduled_jobs.save_candidates"):
+        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+        run_evening_scan_and_notify(client)
+
+    updated = dashboard_state.load_state()
+    assert updated.last_autopilot_scan_timestamp is not None

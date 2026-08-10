@@ -35,6 +35,11 @@ class DashboardState:
     strategy_realized_pnl: float = 0.0
     last_review_timestamp: str | None = None  # filters get_closed_trades to "since last night's review"
     week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
+    # How often Autopilot re-scans between the 9:30pm kickoff and the 1am
+    # review cutoff (see scheduled_jobs.run_autopilot_interval_scan).
+    # Minutes; one of 15/30/60/240.
+    autopilot_scan_interval_minutes: int = 30
+    last_autopilot_scan_timestamp: str | None = None  # throttles the interval scan above
 
 
 def default_state() -> DashboardState:

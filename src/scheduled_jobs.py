@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from oanda_client import OandaClient
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from live_scan import run_live_scan
+from market_hours import SGT
 from scan_results import save_candidates
 from trade_journal import load_journal, trades_opened_today, total_open_risk
 from trade_execution import auto_execute_candidates
@@ -61,7 +62,10 @@ def run_evening_scan_and_notify(client: OandaClient = None) -> list:
     """9:30pm SGT: scan the universe, list qualifying setups with the
     manual/autopilot liner -- and if autopilot is on, actually execute
     the qualifying ones (same risk-gated path as the dashboard's Scan
-    Now, see trade_execution.auto_execute_candidates)."""
+    Now, see trade_execution.auto_execute_candidates). Also the function
+    run_autopilot_interval_scan re-invokes on its configured cadence
+    through the rest of the evening -- both paths share this one
+    implementation so the listing/execution logic can't drift apart."""
     client = client or OandaClient()
     state = load_state()
     risk_config = risk_config_from_state(state)
@@ -79,7 +83,47 @@ def run_evening_scan_and_notify(client: OandaClient = None) -> list:
     if phase_state.phase == "autopilot":
         auto_execute_candidates(client, candidates, phase_state, risk_config, account)
 
+    # Stamps every evening scan (whichever job triggered it) so the interval
+    # ticker below knows when the last one happened, regardless of phase --
+    # if Autopilot gets turned on mid-evening the stamp is already stale
+    # enough to trigger an immediate scan on the next tick.
+    state.last_autopilot_scan_timestamp = datetime.now(SGT).isoformat()
+    save_state(state)
+
     return candidate_dicts
+
+
+def _within_autopilot_scan_window(now_sgt: datetime) -> bool:
+    """9:30pm to 1am SGT, the same window the evening scan (21:30) and
+    nightly review (01:00) already bracket."""
+    minutes = now_sgt.hour * 60 + now_sgt.minute
+    if now_sgt.hour < 21:
+        minutes += 24 * 60  # fold post-midnight hours (0:xx, 1:00) onto the same scale
+    return 21 * 60 + 30 <= minutes <= 25 * 60  # 21:30 .. 1:00 (next day)
+
+
+def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
+    """Ticks every few minutes (see app.py's scheduler); only actually
+    does anything if Autopilot is on, it's currently within the 9:30pm-
+    1am window, and enough time has passed since the last scan per the
+    user's configured interval (Settings: 15/30/60/240 min). No-ops
+    otherwise -- cheap to call often."""
+    state = load_state()
+    phase_state = phase_state_from_state(state)
+    if phase_state.phase != "autopilot":
+        return None
+
+    now = datetime.now(SGT)
+    if not _within_autopilot_scan_window(now):
+        return None
+
+    if state.last_autopilot_scan_timestamp:
+        last = datetime.fromisoformat(state.last_autopilot_scan_timestamp)
+        elapsed_minutes = (now - last).total_seconds() / 60
+        if elapsed_minutes < state.autopilot_scan_interval_minutes:
+            return None
+
+    return run_evening_scan_and_notify(client)
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
