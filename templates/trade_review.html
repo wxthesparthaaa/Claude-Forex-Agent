@@ -6,26 +6,28 @@
   <title>{{ candidate.instrument }} &mdash; Claude Forex Agent</title>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    :root { --bg: #faf9f5; --fg: #1a1a1a; --muted: #666; --border: #e5e3da; --card: #fff; --accent: #c96442; }
+    :root { --bg: #191919; --fg: #e8e6e0; --muted: #999; --border: #333; --card: #232323; --accent: #d97757;
+            --green: #3fb950; --red: #f85149; --price-line: #e8e6e0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
       background: var(--bg); color: var(--fg); max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.5;
     }
     h1 { font-size: 1.4rem; margin-bottom: 0.1rem; }
     .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
-    .long { color: #1a7f37; } .short { color: #c0392b; }
+    .long { color: var(--green); } .short { color: var(--red); }
     #chart { border: 1px solid var(--border); border-radius: 8px; margin: 1rem 0; }
-    .legend { display: flex; gap: 1.5rem; font-size: 0.85rem; margin-bottom: 1rem; }
+    .legend { display: flex; gap: 1.5rem; font-size: 0.85rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .legend span { display: flex; align-items: center; gap: 0.35rem; }
     .swatch { width: 14px; height: 2px; display: inline-block; }
     .card { border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; background: var(--card); margin-bottom: 1rem; }
+    .amount-value { font-size: 1.6rem; font-weight: 700; }
+    .amount-label { color: var(--muted); font-size: 0.85rem; }
     .exec-btn {
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 0.8rem 1.75rem; font-size: 1.05rem; font-weight: 700; cursor: pointer;
     }
     .rationale { font-size: 0.9rem; }
     .rationale div { margin: 0.15rem 0; }
-    .headline { font-size: 0.85rem; color: var(--muted); margin: 0.2rem 0; }
   </style>
 </head>
 <body>
@@ -34,21 +36,27 @@
   </h1>
   <p class="subtitle">Confidence: {{ candidate.confidence_pct }}%</p>
 
+  <div class="card" style="display:inline-block;">
+    <div class="amount-label">Amount being traded</div>
+    <div class="amount-value">{{ "%.2f"|format(candidate.notional_account_currency) }} {{ candidate.account_currency }}</div>
+    <div class="amount-label">{{ candidate.units }} units &middot; risking {{ "%.2f"|format(candidate.risk_amount) }} {{ candidate.account_currency }}</div>
+  </div>
+
   <div class="legend">
-    <span><span class="swatch" style="background:#000; border-top:2px dashed #000;"></span> Current price</span>
-    <span><span class="swatch" style="background:#1a7f37; border-top:2px dashed #1a7f37;"></span> Take profit</span>
-    <span><span class="swatch" style="background:#c0392b; border-top:2px dashed #c0392b;"></span> Stop loss</span>
+    <span><span class="swatch" style="border-top:2px dashed var(--price-line);"></span> Current price</span>
+    <span><span class="swatch" style="border-top:2px dashed var(--green);"></span> Take profit</span>
+    <span><span class="swatch" style="border-top:2px dashed var(--red);"></span> Stop loss</span>
   </div>
 
   <div id="chart"></div>
 
   <div class="card rationale">
-    <h3>Rationale</h3>
+    <h3 style="margin-top:0;">Rationale</h3>
     {% for key, value in candidate.confidence_components.items() %}
       <div>{{ key }}: {{ value }}</div>
     {% endfor %}
     {% if candidate.rejected_reason %}
-      <p style="color:#c0392b;">&#9888; {{ candidate.rejected_reason }}</p>
+      <p style="color:var(--red);">&#9888; {{ candidate.rejected_reason }}</p>
     {% endif %}
   </div>
 
@@ -61,18 +69,23 @@
   <script>
     const chart = LightweightCharts.createChart(document.getElementById('chart'), {
       width: 860, height: 420,
-      layout: { background: { color: '#fff' }, textColor: '#1a1a1a' },
-      grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+      layout: { background: { color: '#191919' }, textColor: '#e8e6e0' },
+      grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+      rightPriceScale: { borderColor: '#333' },
+      timeScale: { borderColor: '#333' },
     });
-    const series = chart.addCandlestickSeries();
+    const series = chart.addCandlestickSeries({
+      upColor: '#3fb950', downColor: '#f85149', borderVisible: false,
+      wickUpColor: '#3fb950', wickDownColor: '#f85149',
+    });
     series.setData({{ candles_json|safe }});
 
     function dashedLine(price, color) {
       series.createPriceLine({ price: price, color: color, lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed });
     }
-    dashedLine({{ candidate.entry_price }}, '#000000');
-    dashedLine({{ candidate.take_profit }}, '#1a7f37');
-    dashedLine({{ candidate.stop_loss }}, '#c0392b');
+    dashedLine({{ candidate.entry_price }}, '#e8e6e0');
+    dashedLine({{ candidate.take_profit }}, '#3fb950');
+    dashedLine({{ candidate.stop_loss }}, '#f85149');
   </script>
 </body>
 </html>

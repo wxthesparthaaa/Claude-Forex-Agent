@@ -25,10 +25,24 @@ class DashboardState:
     trades_per_day_override: int = 5
     last_nightly_equity: float | None = None  # for computing tonight's P&L at the 1am review
     week_start_equity: float | None = None    # for the Friday self-reflection summary
+    # The strategy's OWN tracked capital -- separate from OANDA's demo
+    # account NAV, which is the broker's default demo funding (verified
+    # against the real account: 119,336.26 SGD, nowhere near the $2,000
+    # target) and must never drive position sizing. Same separation the
+    # sibling project makes between its own $1,000 strategy_ledger and
+    # Tiger's default $1,000,000 paper balance.
+    strategy_starting_capital: float = 2000.0
+    strategy_realized_pnl: float = 0.0
+    last_review_timestamp: str | None = None  # filters get_closed_trades to "since last night's review"
+    week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
 
 
 def default_state() -> DashboardState:
     return DashboardState(risk_config=asdict(RiskConfig()), phase_state=asdict(PhaseState()))
+
+
+def tracked_equity(state: DashboardState) -> float:
+    return state.strategy_starting_capital + state.strategy_realized_pnl
 
 
 def load_state() -> DashboardState:

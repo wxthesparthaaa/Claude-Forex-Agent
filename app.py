@@ -31,7 +31,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 load_dotenv(encoding="utf-8-sig")
 
-from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state
+from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses
 from risk_engine import is_out_of_recommended_range, AccountState
@@ -52,8 +52,12 @@ def _oanda_time_to_unix(time_str: str) -> int:
     return int(datetime.fromisoformat(trimmed).timestamp())
 
 
-def _account_state_from_summary(summary: dict, risk_config, phase_state) -> AccountState:
-    equity = float(summary.get("NAV", summary.get("balance", 0)))
+def _account_state_from_tracked_capital(state) -> AccountState:
+    """Sizing MUST use the strategy's own tracked capital, never OANDA's
+    raw demo NAV -- verified against the real account, the practice
+    balance (119,336.26 SGD) is the broker's default demo funding, wildly
+    larger than the $2,000 the strategy actually targets."""
+    equity = tracked_equity(state)
     return AccountState(
         equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
         open_risk_amount=0.0, trades_today=0, currency_net_exposure_pct={},
@@ -86,12 +90,22 @@ def dashboard():
     phase_state = phase_state_from_state(state)
     candidates = load_candidates()
 
+    broker_balance = None
+    account_currency = ""
+    try:
+        summary = OandaClient().get_account_summary()
+        broker_balance = float(summary.get("NAV", summary.get("balance", 0)))
+        account_currency = summary.get("currency", "")
+    except Exception as e:
+        print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
+
     return render_template(
         "dashboard.html",
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         candidates=candidates, wins=0, losses=0, closed_trades=0,
         sessions=all_session_statuses(),
+        strategy_capital=tracked_equity(state), broker_balance=broker_balance, account_currency=account_currency,
     )
 
 
@@ -99,11 +113,10 @@ def dashboard():
 def scan():
     state = load_state()
     risk_config = risk_config_from_state(state)
-    phase_state = phase_state_from_state(state)
 
     client = OandaClient()
     summary = client.get_account_summary()
-    account = _account_state_from_summary(summary, risk_config, phase_state)
+    account = _account_state_from_tracked_capital(state)
 
     candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
     save_candidates(candidates)

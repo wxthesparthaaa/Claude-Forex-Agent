@@ -33,6 +33,8 @@ class TradeCandidate:
     confidence_components: dict
     units: int
     risk_amount: float
+    notional_account_currency: float  # the actual $ size of the position being traded
+    account_currency: str
     rejected_reason: str | None = None
 
 
@@ -87,11 +89,18 @@ def generate_candidate(
     if units == 0:
         return None
 
+    # The actual size of the position being traded, in account-currency
+    # terms -- units (base currency) * price (quote per base) * the same
+    # conversion rate used for risk sizing, so this is consistent with
+    # the $ risk figure, not a separate/different calculation.
+    notional_account_currency = abs(units) * entry_price * float(conversion_rate)
+
     candidate = TradeCandidate(
         instrument=instrument, direction=direction, entry_price=entry_price,
         stop_loss=levels.stop_loss, take_profit=levels.take_profit,
         confidence_pct=confidence["confidence_pct"], confidence_components=confidence.get("components", {}),
         units=units, risk_amount=risk_amount,
+        notional_account_currency=round(notional_account_currency, 2), account_currency=account_currency,
     )
 
     proposed = ProposedTrade(

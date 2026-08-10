@@ -7,8 +7,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     :root {
-      --bg: #faf9f5; --fg: #1a1a1a; --muted: #666; --border: #e5e3da; --card: #fff;
-      --green: #1a7f37; --red: #c0392b; --accent: #c96442;
+      --bg: #191919; --fg: #e8e6e0; --muted: #999; --border: #333; --card: #232323;
+      --green: #3fb950; --red: #f85149; --accent: #d97757;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -22,6 +22,9 @@
       border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;
       background: var(--card); margin-bottom: 1.25rem; flex: 1; min-width: 260px;
     }
+    .balance-value { font-size: 2rem; font-weight: 700; margin: 0.25rem 0; }
+    .balance-currency { font-size: 1rem; color: var(--muted); font-weight: 400; }
+    .balance-label { color: var(--muted); font-size: 0.85rem; }
     .scan-btn {
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;
@@ -29,12 +32,17 @@
     .scan-btn:hover { opacity: 0.9; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
     .long { color: var(--green); font-weight: 600; }
     .short { color: var(--red); font-weight: 600; }
     .rejected { color: var(--muted); font-style: italic; font-size: 0.8rem; }
     a.trade-link { color: var(--accent); text-decoration: none; font-weight: 600; }
     .settings label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
-    .settings input[type=range] { width: 100%; }
+    .settings input[type=range] { width: 100%; accent-color: var(--accent); }
+    .settings select {
+      background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.3rem 0.5rem;
+    }
     .out-of-range { color: var(--red); font-size: 0.78rem; margin-top: 0.15rem; }
     .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 0.75rem 0; }
     footer {
@@ -52,7 +60,21 @@
 
   <div class="row">
     <div class="card">
-      <h3>Win rate</h3>
+      <div class="balance-label">Strategy capital ({{ mode|upper }})</div>
+      <div class="balance-value">
+        {{ "%.2f"|format(strategy_capital) }} <span class="balance-currency">{{ account_currency }}</span>
+      </div>
+      <div class="balance-label" style="margin-top:0.5rem;">
+        {% if broker_balance is not none %}
+          OANDA demo NAV: {{ "%.2f"|format(broker_balance) }} {{ account_currency }} (broker's default demo funding &mdash; not used for position sizing)
+        {% else %}
+          OANDA demo NAV unavailable
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Win rate</h3>
       <canvas id="winRateChart" width="220" height="220"></canvas>
       <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
         {{ closed_trades }} closed trade{{ '' if closed_trades == 1 else 's' }}
@@ -60,7 +82,7 @@
     </div>
 
     <div class="card settings">
-      <h3>Settings</h3>
+      <h3 style="margin-top:0;">Settings</h3>
       <form method="post" action="/settings">
         <label>Risk per trade: {{ risk_config.risk_per_trade_pct }}%</label>
         <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1" value="{{ risk_config.risk_per_trade_pct }}">
@@ -100,9 +122,9 @@
 
   {% if candidates %}
   <div class="card">
-    <h3>Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
+    <h3 style="margin-top:0;">Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
     <table>
-      <tr><th>Pair</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>SL</th><th>TP</th><th></th></tr>
+      <tr><th>Pair</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>SL</th><th>TP</th><th>Amount traded</th><th></th></tr>
       {% for c in candidates %}
       <tr>
         <td>{{ c.instrument }}</td>
@@ -111,6 +133,7 @@
         <td>{{ c.entry_price }}</td>
         <td>{{ c.stop_loss }}</td>
         <td>{{ c.take_profit }}</td>
+        <td>{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
         <td>
           {% if c.rejected_reason %}
             <span class="rejected">{{ c.rejected_reason }}</span>
@@ -135,9 +158,11 @@
       type: 'pie',
       data: {
         labels: ['Wins', 'Losses'],
-        datasets: [{ data: [{{ wins }}, {{ losses }}], backgroundColor: ['#1a7f37', '#c0392b'] }]
+        datasets: [{ data: [{{ wins }}, {{ losses }}], backgroundColor: ['#3fb950', '#f85149'] }]
       },
-      options: { plugins: { legend: { position: 'bottom' } } }
+      options: {
+        plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
+      }
     });
   </script>
 </body>
