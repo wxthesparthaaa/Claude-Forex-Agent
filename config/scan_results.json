@@ -1,28 +1,82 @@
 [
   {
-    "instrument": "GBP_USD",
+    "instrument": "NZD_USD",
     "direction": "LONG",
-    "entry_price": 1.35143,
-    "stop_loss": 1.34985,
-    "take_profit": 1.35459,
-    "confidence_pct": 72.7,
+    "entry_price": 0.58904,
+    "stop_loss": 0.58791,
+    "take_profit": 0.5913,
+    "confidence_pct": 75.0,
     "confidence_components": {
       "breadth": 85.71428571428571,
-      "rsi": 90.87334859035074,
+      "rsi": 100.0,
       "candlestick": 50.0,
       "news": 50.0
     },
-    "units": 19776,
+    "units": 27653,
     "unit_label": "units",
     "risk_amount": 40.0,
-    "notional_account_currency": 34212.6,
+    "notional_account_currency": 20850.3,
     "account_currency": "SGD",
     "rationale": [
       "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
       "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-      "RSI is 67 (neutral range).",
+      "RSI is 53 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
+    ],
+    "rejected_reason": null
+  },
+  {
+    "instrument": "GBP_USD",
+    "direction": "LONG",
+    "entry_price": 1.3516,
+    "stop_loss": 1.34985,
+    "take_profit": 1.3551,
+    "confidence_pct": 69.2,
+    "confidence_components": {
+      "breadth": 85.71428571428571,
+      "rsi": 76.90377301264526,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "units": 17856,
+    "unit_label": "units",
+    "risk_amount": 40.0,
+    "notional_account_currency": 30892.82,
+    "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 70 (neutral range).",
       "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
       "News sentiment: no GBP-relevant headlines in the latest fetch (neutral)."
+    ],
+    "rejected_reason": null
+  },
+  {
+    "instrument": "XAG_USD",
+    "direction": "LONG",
+    "entry_price": 64.584,
+    "stop_loss": 63.6435,
+    "take_profit": 66.465,
+    "confidence_pct": 74.7,
+    "confidence_components": {
+      "breadth": 85.71428571428571,
+      "rsi": 98.94148926290299,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "units": 33,
+    "unit_label": "oz",
+    "risk_amount": 40.0,
+    "notional_account_currency": 2728.12,
+    "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 65 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
     ],
     "rejected_reason": null
   }
