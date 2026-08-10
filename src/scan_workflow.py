@@ -68,6 +68,7 @@ def generate_candidate(
     account: AccountState,
     risk_config: RiskConfig,
     entry_timeframe: str = "15m",
+    news_configured: bool = False,
 ) -> TradeCandidate | None:
     higher_structures = {tf: classify_structure(swings) for tf, swings in higher_timeframe_swings.items()}
     higher_bias = higher_timeframe_bias(higher_structures)
@@ -126,7 +127,7 @@ def generate_candidate(
         units=units, unit_label=unit_label_for(instrument), risk_amount=risk_amount,
         notional_account_currency=round(notional_account_currency, 2), account_currency=account_currency,
         rationale=build_rationale(direction, breadth_agreement, rsi_value, candlestick_pattern,
-                                   edge_zscore, news_score),
+                                   edge_zscore, news_score, instrument=instrument, news_configured=news_configured),
     )
 
     proposed = ProposedTrade(

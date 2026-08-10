@@ -92,3 +92,40 @@ def push_state_to_github(local_path: str) -> bool:
 
     status, _ = _github_request("PUT", url, config["token"], body=body)
     return status in (200, 201)
+
+
+def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:
+    """Like push_state_to_github, but for arbitrary binary content (an
+    .xlsx, not JSON text) at any repo path -- not restricted to
+    state_paths.STATE_FILES, since this isn't local-disk app state,
+    it's a standalone deliverable meant to be opened directly on
+    GitHub, independent of the app's own runtime/redeploys."""
+    config = get_github_config()
+    if config is None:
+        return False
+
+    url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}"
+    get_status, existing = _github_request("GET", f"{url}?ref={config['branch']}", config["token"])
+    sha = existing["sha"] if get_status == 200 and existing else None
+
+    body = {
+        "message": f"Update {repo_path}",
+        "content": base64.b64encode(local_bytes).decode("ascii"),
+        "branch": config["branch"],
+    }
+    if sha:
+        body["sha"] = sha
+
+    status, _ = _github_request("PUT", url, config["token"], body=body)
+    return status in (200, 201)
+
+
+def github_file_url(repo_path: str) -> Optional[str]:
+    """The browsable GitHub URL for a file pushed via push_binary_file --
+    works whether or not the app/Render is even running, which is the
+    point: a link that survives redeploys because it isn't served by
+    the app at all."""
+    config = get_github_config()
+    if config is None:
+        return None
+    return f"https://github.com/{config['repo']}/blob/{config['branch']}/{repo_path}"

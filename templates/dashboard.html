@@ -135,7 +135,11 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin:0;">Live trades</h3>
-      <a class="trade-link" href="/journal.xlsx">Download trade journal (.xlsx) &darr;</a>
+      {% if journal_url %}
+        <a class="trade-link" href="{{ journal_url }}" target="_blank" rel="noopener">Trade journal (GitHub) &#8599;</a>
+      {% else %}
+        <span style="color:var(--muted); font-size:0.8rem;">Journal sync not configured</span>
+      {% endif %}
     </div>
     {% if live_trades %}
     <table>

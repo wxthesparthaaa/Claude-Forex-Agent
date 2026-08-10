@@ -16,6 +16,13 @@ from datetime import datetime, timezone
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 JOURNAL_PATH = os.path.join(STATE_DIR, "trade_journal.json")
 
+# Committed straight to the repo root (not config/, not served by the
+# app) -- a real, standalone .xlsx you can open directly on GitHub,
+# independent of whether Render is even running. This is the answer to
+# "I don't want it tied to the interface": the file exists in the repo
+# regardless of app state or redeploys.
+JOURNAL_XLSX_REPO_PATH = "trade_journal.xlsx"
+
 EXPIRY_HOURS = 2.0
 
 OPEN = "OPEN"
@@ -59,6 +66,26 @@ def save_journal(entries: list) -> None:
         push_state_to_github(JOURNAL_PATH)
     except Exception as e:
         print(f"WARNING: failed to push trade_journal.json to GitHub: {e}", flush=True)
+
+    push_journal_xlsx_to_github(entries)
+
+
+def push_journal_xlsx_to_github(entries: list) -> bool:
+    """Regenerates the .xlsx from the current entries and commits it to
+    GitHub at JOURNAL_XLSX_REPO_PATH -- a real standalone file, not
+    something the app serves on demand."""
+    try:
+        import io
+        from journal_export import build_journal_workbook
+        from github_state_sync import push_binary_file
+
+        wb = build_journal_workbook(entries)
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        return push_binary_file(buffer.getvalue(), JOURNAL_XLSX_REPO_PATH)
+    except Exception as e:
+        print(f"WARNING: failed to push trade_journal.xlsx to GitHub: {e}", flush=True)
+        return False
 
 
 def record_open_trade(trade_id: str, candidate: dict) -> None:

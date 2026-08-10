@@ -102,3 +102,37 @@ def test_push_state_to_github_includes_sha_when_file_exists_remotely(mock_reques
     put_call = mock_request.call_args_list[1]
     assert put_call[0][0] == "PUT"
     assert put_call[1]["body"]["sha"] == "existing-sha"
+
+
+def test_push_binary_file_false_without_config(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_REPO", raising=False)
+    assert gss.push_binary_file(b"data", "trade_journal.xlsx") is False
+
+
+@patch("github_state_sync._github_request")
+def test_push_binary_file_base64_encodes_raw_bytes(mock_request, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "user/repo")
+    mock_request.side_effect = [(404, None), (201, {})]  # not yet on GitHub, then created
+
+    result = gss.push_binary_file(b"\x00\x01binarydata", "trade_journal.xlsx")
+
+    assert result is True
+    put_call = mock_request.call_args_list[1]
+    assert put_call[0][0] == "PUT"
+    assert base64.b64decode(put_call[1]["body"]["content"]) == b"\x00\x01binarydata"
+    assert "sha" not in put_call[1]["body"]  # new file, no existing sha
+
+
+def test_github_file_url_none_without_config(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_REPO", raising=False)
+    assert gss.github_file_url("trade_journal.xlsx") is None
+
+
+def test_github_file_url_builds_blob_link(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "wxthesparthaaa/Claude-Forex-Agent")
+    url = gss.github_file_url("trade_journal.xlsx")
+    assert url == "https://github.com/wxthesparthaaa/Claude-Forex-Agent/blob/main/trade_journal.xlsx"

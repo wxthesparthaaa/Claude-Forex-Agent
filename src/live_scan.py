@@ -122,6 +122,7 @@ def _process_instrument(client, instrument, meta, account_currency, get_price, a
     pattern = detect_pattern(last_candles)
 
     news_score = news_score_for_instrument(news_articles, instrument) if news_articles else None
+    news_configured = bool(os.environ.get("FINNHUB_API_KEY"))
 
     entry_price = entry_closes[-1]
     return generate_candidate(
@@ -133,6 +134,7 @@ def _process_instrument(client, instrument, meta, account_currency, get_price, a
         news_score=news_score,
         meta=meta[instrument], account_currency=account_currency, get_price=get_price,
         account=account, risk_config=risk_config, entry_timeframe=ENTRY_TIMEFRAME,
+        news_configured=news_configured,
     )
 
 

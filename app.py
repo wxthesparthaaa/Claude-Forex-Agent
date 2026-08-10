@@ -43,8 +43,8 @@ from live_scan import run_live_scan, fetch_news_articles
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_evening_scan_and_notify, run_nightly_review, run_friday_reflection
-from github_state_sync import pull_state_from_github
-from trade_journal import record_open_trade, load_journal
+from github_state_sync import pull_state_from_github, github_file_url
+from trade_journal import record_open_trade, load_journal, JOURNAL_XLSX_REPO_PATH
 from trade_monitor import check_open_trades, live_trades_view
 from news_relevance import currency_news_score
 from journal_export import build_journal_workbook
@@ -152,9 +152,11 @@ def dashboard():
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
 
     news = _news_summary()
+    journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
 
     return render_template(
         "dashboard.html",
+        journal_url=journal_url,
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),

@@ -38,11 +38,16 @@ def test_rationale_includes_candlestick_pattern_readably():
     assert any("bullish engulfing" in l for l in lines)
 
 
-def test_rationale_notes_no_pattern_and_ignores_doji():
+def test_rationale_notes_no_pattern_is_not_required_and_ignores_doji():
     no_pattern = build_rationale("LONG", 0.8, 55, None, None, None)
     doji = build_rationale("LONG", 0.8, 55, "doji", None, None)
-    assert any("No notable candlestick pattern" in l for l in no_pattern)
-    assert any("No notable candlestick pattern" in l for l in doji)
+    assert any("No candlestick pattern" in l and "not required" in l for l in no_pattern)
+    assert any("No candlestick pattern" in l for l in doji)
+
+
+def test_rationale_candlestick_pattern_present_notes_it_adds_confidence():
+    lines = build_rationale("LONG", 0.8, 55, "bullish_engulfing", None, None)
+    assert any("bullish engulfing" in l and "adds confidence" in l for l in lines)
 
 
 def test_rationale_flags_stretched_edge_zscore():
@@ -54,8 +59,29 @@ def test_rationale_news_sentiment_states():
     supportive = build_rationale("LONG", 0.8, 55, None, None, news_score=0.5)
     against = build_rationale("LONG", 0.8, 55, None, None, news_score=-0.5)
     neutral = build_rationale("LONG", 0.8, 55, None, None, news_score=0.0)
-    missing = build_rationale("LONG", 0.8, 55, None, None, news_score=None)
     assert any("supportive" in l for l in supportive)
     assert any("works against" in l for l in against)
     assert any("neutral" in l for l in neutral)
-    assert any("not available yet" in l for l in missing)
+
+
+def test_rationale_news_not_configured_for_a_forex_pair():
+    lines = build_rationale("LONG", 0.8, 55, None, None, news_score=None,
+                             instrument="EUR_USD", news_configured=False)
+    assert any("not available yet" in l and "Finnhub" in l for l in lines)
+
+
+def test_rationale_news_configured_but_no_matching_headlines():
+    lines = build_rationale("LONG", 0.8, 55, None, None, news_score=None,
+                             instrument="EUR_USD", news_configured=True)
+    assert any("no EUR-relevant headlines" in l for l in lines)
+
+
+def test_rationale_news_not_tracked_for_commodities_even_when_configured():
+    # gold has no currency to attach headlines to -- must say so distinctly,
+    # not claim an API key would fix it (verified live: this was the actual
+    # bug report -- XAU_USD said "needs a Finnhub API key" when a key was
+    # already configured and working on the main dashboard)
+    lines = build_rationale("LONG", 0.8, 55, None, None, news_score=None,
+                             instrument="XAU_USD", news_configured=True)
+    assert any("not tracked for this instrument" in l for l in lines)
+    assert not any("Finnhub API key" in l for l in lines)
