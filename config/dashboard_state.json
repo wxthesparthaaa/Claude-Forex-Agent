@@ -15,7 +15,7 @@
     "max_trades_per_day": 5,
     "max_trades_per_day_min": 1,
     "max_trades_per_day_max": 10,
-    "autopilot_confidence_threshold_pct": 65.0
+    "autopilot_confidence_threshold_pct": 60.0
   },
   "phase_state": {
     "phase": "autopilot",
@@ -28,8 +28,8 @@
   "week_start_equity": null,
   "strategy_starting_capital": 2000.0,
   "strategy_realized_pnl": 0.0,
-  "last_review_timestamp": null,
+  "last_review_timestamp": "2026-08-10T17:00:01.172176+00:00",
   "week_start_timestamp": null,
   "autopilot_scan_interval_minutes": 30,
-  "last_autopilot_scan_timestamp": "2026-08-10T21:30:24.632063+08:00"
+  "last_autopilot_scan_timestamp": "2026-08-11T23:04:43.224725+08:00"
 }
