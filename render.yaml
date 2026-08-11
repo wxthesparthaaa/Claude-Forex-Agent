@@ -5,6 +5,22 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    # github_state_sync.py commits config/*.json and trade_journal.xlsx
+    # straight to this same branch on every scan, trade open/close, and
+    # settings save -- that's how state survives Render's ephemeral disk
+    # across restarts. Without this filter, every one of those commits
+    # was also a push to main, and Render auto-deploys on every push:
+    # a full rebuild + restart on every Scan Now click, which is also
+    # what produced the 502s (the old worker gets killed mid-request
+    # while the new instance boots). Only paths outside ignoredPaths can
+    # still trigger a deploy -- i.e. actual code changes.
+    buildFilter:
+      ignoredPaths:
+        - config/**
+        - trade_journal.xlsx
+        - README.md
+        - PROJECT_LOG.md
+        - "*.docx"
     envVars:
       - key: GITHUB_TOKEN
         sync: false
