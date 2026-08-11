@@ -16,6 +16,7 @@ shared mutable state between requests.
 from __future__ import annotations
 
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from universe import ALL_INSTRUMENTS, MAJOR_PAIRS, ENTRY_TIMEFRAME, HIGHER_TIMEFRAMES, GRANULARITY
@@ -32,6 +33,20 @@ BARS_FOR_SWINGS = 60
 BARS_FOR_STRENGTH_HISTORY = 130
 STRENGTH_LOOKBACK = 20
 MAX_PARALLEL_REQUESTS = 8
+
+# fetch_news_articles() is called on every dashboard page load (app.py's
+# _news_summary(), including automated health-check pings) as well as
+# every scan -- without a cache, a slow/unresponsive Finnhub period turns
+# into every single request blocking for up to 40s (two sequential
+# 20s-timeout calls). With gunicorn's single worker on Render's free
+# tier, that's enough to starve the whole app: confirmed live, a run of
+# repeated Finnhub timeouts a few seconds apart piled up into a request
+# backlog that surfaced as Render 502s, even though each individual
+# timeout was itself already degrading gracefully to "no news
+# sentiment". Caching the outcome (including failures) means Finnhub
+# gets hit at most once per TTL, no matter how many requests arrive.
+NEWS_CACHE_TTL_SECONDS = 300
+_news_cache = {"articles": [], "fetched_at": None}
 
 
 def _fetch_closes_highs_lows(client, instrument: str, timeframe: str, count: int):
@@ -82,9 +97,19 @@ def fetch_news_articles() -> list:
     Merges the "forex" and "general" categories -- verified live that
     "forex" alone is thin (often a single article) and central-bank/
     economic commentary that actually matches our currency keywords
-    routinely lands in "general" instead."""
+    routinely lands in "general" instead.
+
+    Cached for NEWS_CACHE_TTL_SECONDS, including a failed fetch -- see
+    the module docstring above for why this matters (repeated
+    dashboard/health-check hits during a Finnhub outage must not each
+    re-pay the full timeout)."""
+    now = time.monotonic()
+    if _news_cache["fetched_at"] is not None and (now - _news_cache["fetched_at"]) < NEWS_CACHE_TTL_SECONDS:
+        return _news_cache["articles"]
+
     api_key = os.environ.get("FINNHUB_API_KEY")
     if not api_key:
+        _news_cache["articles"], _news_cache["fetched_at"] = [], now
         return []
     try:
         client = FinnhubClient(api_key)
@@ -98,9 +123,11 @@ def fetch_news_articles() -> list:
                 continue
             seen_ids.add(article_id)
             merged.append(article)
+        _news_cache["articles"], _news_cache["fetched_at"] = merged, now
         return merged
     except Exception as e:
         print(f"WARNING: Finnhub news fetch failed, continuing without news sentiment: {e}", flush=True)
+        _news_cache["articles"], _news_cache["fetched_at"] = [], now
         return []
 
 
