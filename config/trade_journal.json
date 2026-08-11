@@ -142,5 +142,29 @@
     "closed_at": "2026-08-11T10:59:23.962839+00:00",
     "exit_price": 65.055,
     "realized_pnl": 178.3631
+  },
+  {
+    "trade_id": "816",
+    "instrument": "XAU_USD",
+    "direction": "LONG",
+    "units": 1,
+    "entry_price": 4394.815,
+    "stop_loss": 4367.675,
+    "take_profit": 4449.095,
+    "confidence_pct": 70.0,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 63 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-11T12:08:44.982932+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.0,
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
