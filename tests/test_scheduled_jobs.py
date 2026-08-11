@@ -8,10 +8,7 @@ import dashboard_state
 import trade_journal as tj
 import scheduled_jobs
 from scan_workflow import TradeCandidate
-from scheduled_jobs import (
-    _closed_trade_to_dict, _closed_trades_since, run_nightly_review, run_friday_reflection,
-    run_evening_scan_and_notify,
-)
+from scheduled_jobs import run_nightly_review, run_friday_reflection, run_evening_scan_and_notify
 
 
 class FakeClient:
@@ -36,30 +33,62 @@ def _isolate_state(tmp_path, monkeypatch):
     monkeypatch.setattr(scheduled_jobs, "load_journal", tj.load_journal)
 
 
-def test_closed_trade_to_dict_classifies_win_loss_and_direction():
-    win = _closed_trade_to_dict({"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "15.5",
-                                  "closeTime": "2026-08-10T21:00:00Z"})
-    loss = _closed_trade_to_dict({"instrument": "USD_JPY", "initialUnits": "-2000", "realizedPL": "-8.0",
-                                   "closeTime": "2026-08-10T22:00:00Z"})
-    assert win == {"instrument": "EUR_USD", "direction": "LONG", "outcome": "WIN",
-                    "pnl": 15.5, "close_time": "2026-08-10T21:00:00Z"}
-    assert loss["outcome"] == "LOSS" and loss["direction"] == "SHORT"
+def _closed_entry(**overrides):
+    defaults = dict(status="SUCCESSFUL", instrument="EUR_USD", direction="LONG",
+                     realized_pnl=10.0, closed_at="2026-08-10T20:00:00Z")
+    defaults.update(overrides)
+    return defaults
 
 
-def test_closed_trades_since_none_returns_everything_as_a_clean_baseline():
-    trades = [{"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "10", "closeTime": "2026-08-10T20:00:00Z"}]
-    result = _closed_trades_since(FakeClient({}, trades), since_iso=None, count=50)
+def test_closed_trades_since_none_returns_everything_as_a_clean_baseline(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    tj.save_journal([_closed_entry(closed_at="2026-08-10T20:00:00Z")])
+    result = scheduled_jobs._closed_trades_since(since_iso=None)
     assert len(result) == 1
 
 
-def test_closed_trades_since_filters_out_earlier_trades():
-    trades = [
-        {"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "10", "closeTime": "2026-08-10T19:00:00Z"},
-        {"instrument": "GBP_USD", "initialUnits": "1000", "realizedPL": "20", "closeTime": "2026-08-10T22:00:00Z"},
-    ]
-    result = _closed_trades_since(FakeClient({}, trades), since_iso="2026-08-10T21:00:00Z", count=50)
+def test_closed_trades_since_filters_out_earlier_trades(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    tj.save_journal([
+        _closed_entry(instrument="EUR_USD", closed_at="2026-08-10T19:00:00Z"),
+        _closed_entry(instrument="GBP_USD", closed_at="2026-08-10T22:00:00Z"),
+    ])
+    result = scheduled_jobs._closed_trades_since(since_iso="2026-08-10T21:00:00Z")
     assert len(result) == 1
     assert result[0]["instrument"] == "GBP_USD"
+
+
+def test_closed_trades_since_ignores_still_open_entries(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    tj.save_journal([{"status": "OPEN", "instrument": "EUR_USD"}])
+    assert scheduled_jobs._closed_trades_since(since_iso=None) == []
+
+
+@patch("scheduled_jobs.send_message")
+def test_run_nightly_review_ignores_broker_wide_closed_trades_not_in_our_journal(mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: a shared demo/practice OANDA
+    # account can carry closed trades unrelated to this app (other
+    # testing, default demo history). A nightly review once reported 50
+    # closed trades and +452% P&L in one night when Autopilot had only
+    # placed 5 -- the review must only ever count trades this app itself
+    # placed and journaled, never whatever a broker-wide call returns.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.strategy_realized_pnl = 0.0
+    dashboard_state.save_state(state)
+
+    tj.save_journal([_closed_entry(instrument="EUR_USD", realized_pnl=10.0, closed_at="2026-08-10T22:00:00Z")])
+
+    noisy_client = FakeClient(
+        summary={"NAV": "119336.26", "currency": "SGD"},
+        closed_trades=[{"instrument": f"PAIR_{i}", "initialUnits": "1000", "realizedPL": "1000.0",
+                         "closeTime": "2026-08-10T23:00:00Z"} for i in range(50)],
+    )
+
+    closed = run_nightly_review(noisy_client)
+
+    assert len(closed) == 1  # only the one journal-tracked trade, none of the 50 broker-side ones
+    assert closed[0]["pnl"] == 10.0
 
 
 @patch("scheduled_jobs.send_message")
@@ -70,21 +99,15 @@ def test_run_nightly_review_accumulates_into_tracked_capital_not_raw_nav(mock_se
     state.strategy_realized_pnl = 0.0
     dashboard_state.save_state(state)
 
-    # broker NAV is huge (demo funding) -- must NOT leak into the review's numbers
-    client = FakeClient(
-        summary={"NAV": "119336.26", "currency": "SGD"},
-        closed_trades=[{"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "30.0",
-                         "closeTime": "2026-08-10T22:00:00Z"}],
-    )
+    tj.save_journal([_closed_entry(instrument="EUR_USD", realized_pnl=30.0, closed_at="2026-08-10T22:00:00Z")])
 
-    closed = run_nightly_review(client)
+    closed = run_nightly_review()  # no client needed at all now -- purely journal-driven
 
     assert len(closed) == 1
     mock_send.assert_called_once()
     sent_text = mock_send.call_args[0][0]
     assert "+30.00" in sent_text
     assert "+1.50%" in sent_text  # 30/2000, not 30/119336
-    assert "119336" not in sent_text
 
     updated = dashboard_state.load_state()
     assert updated.strategy_realized_pnl == 30.0
@@ -99,15 +122,12 @@ def test_run_nightly_review_does_not_double_count_previously_reviewed_trades(moc
     state.last_review_timestamp = "2026-08-10T21:00:00Z"
     dashboard_state.save_state(state)
 
-    client = FakeClient(
-        summary={"NAV": "119336.26", "currency": "SGD"},
-        closed_trades=[
-            {"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "30.0", "closeTime": "2026-08-10T20:00:00Z"},  # already reviewed
-            {"instrument": "GBP_USD", "initialUnits": "1000", "realizedPL": "10.0", "closeTime": "2026-08-10T23:00:00Z"},  # new
-        ],
-    )
+    tj.save_journal([
+        _closed_entry(instrument="EUR_USD", realized_pnl=30.0, closed_at="2026-08-10T20:00:00Z"),  # already reviewed
+        _closed_entry(instrument="GBP_USD", realized_pnl=10.0, closed_at="2026-08-10T23:00:00Z"),  # new
+    ])
 
-    closed = run_nightly_review(client)
+    closed = run_nightly_review()
 
     assert len(closed) == 1
     assert closed[0]["instrument"] == "GBP_USD"
@@ -123,15 +143,12 @@ def test_run_friday_reflection_identifies_strongest_and_weakest_pair(mock_send, 
     state.strategy_realized_pnl = 100.0  # week's cumulative result already tracked
     dashboard_state.save_state(state)
 
-    client = FakeClient(
-        summary={"NAV": "119336.26", "currency": "SGD"},
-        closed_trades=[
-            {"instrument": "EUR_USD", "initialUnits": "1000", "realizedPL": "80.0", "closeTime": "2026-08-14T20:00:00Z"},
-            {"instrument": "USD_CHF", "initialUnits": "-1000", "realizedPL": "-20.0", "closeTime": "2026-08-14T21:00:00Z"},
-        ],
-    )
+    tj.save_journal([
+        _closed_entry(instrument="EUR_USD", realized_pnl=80.0, closed_at="2026-08-14T20:00:00Z"),
+        _closed_entry(instrument="USD_CHF", direction="SHORT", realized_pnl=-20.0, closed_at="2026-08-14T21:00:00Z"),
+    ])
 
-    stats = run_friday_reflection(client)
+    stats = run_friday_reflection()
 
     assert stats["strongest_pair"] == "EUR_USD"
     assert stats["weakest_pair"] == "USD_CHF"
@@ -351,3 +368,125 @@ def test_evening_scan_notify_listing_false_suppresses_potential_trades_message(
 
     mock_send.assert_not_called()  # no candidates -> auto_execute sends nothing either, and the listing is suppressed
     mock_auto_exec.assert_called_once()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_evening_listing_once_due_on_a_weekday(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 35, day=10))  # Monday, past 21:30
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-10"  # already handled today, isolate the listing behavior
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_evening.assert_called_once()
+    mock_reflection.assert_not_called()
+    updated = dashboard_state.load_state()
+    assert updated.last_evening_listing_date == "2026-08-10"
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_does_not_rerun_evening_listing_already_done_today(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(22, 0, day=10))
+    state = dashboard_state.default_state()
+    state.last_evening_listing_date = "2026-08-10"
+    state.last_review_date = "2026-08-10"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_evening.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_nightly_review_once_due_any_day(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # well past 1am, before tonight's 21:30
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_called_once()
+    mock_evening.assert_not_called()  # not yet 21:30
+    updated = dashboard_state.load_state()
+    assert updated.last_review_date == "2026-08-10"
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_does_not_run_nightly_review_before_1am(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(0, 30, day=10))
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_friday_reflection_only_on_saturday(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-15"  # isolate reflection behavior
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_called_once()
+    updated = dashboard_state.load_state()
+    assert updated.last_reflection_date == "2026-08-15"
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_skips_friday_reflection_on_a_weekday(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # Monday
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_catches_up_after_a_long_sleep_gap(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Simulates Render's free tier being asleep straight through the
+    # exact 21:30/01:00 firing moments -- the app only wakes up hours
+    # later (e.g. an UptimeRobot ping at 23:00), and the dispatcher must
+    # still catch both of today's touchpoints up in that single tick.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(23, 0, day=10))
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_evening.assert_called_once()
+    mock_review.assert_called_once()

@@ -140,7 +140,21 @@ def _process_instrument(client, instrument, meta, account_currency, get_price, a
 
 def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None) -> list:
     instruments = instruments or ALL_INSTRUMENTS
-    meta = fetch_instrument_metadata(client, instruments)
+
+    # Metadata, currency-strength inputs, and news are independent of
+    # each other -- run all three concurrently rather than one after
+    # another. Each is individually fast, but stacked sequentially they
+    # routinely pushed total scan time close to (and past, given any
+    # OANDA/Finnhub latency) gunicorn's worker timeout on Render,
+    # producing a 502 on Scan Now instead of a result.
+    with ThreadPoolExecutor(max_workers=3) as setup_pool:
+        meta_future = setup_pool.submit(fetch_instrument_metadata, client, instruments)
+        strength_future = setup_pool.submit(_fetch_strength_inputs, client)
+        news_future = setup_pool.submit(fetch_news_articles)
+
+        meta = meta_future.result()
+        breadth_agreement, edge_zscore = strength_future.result()
+        news_articles = news_future.result()
 
     price_cache = {}
 
@@ -156,11 +170,6 @@ def run_live_scan(client, account, risk_config, account_currency: str, instrumen
         mid = (float(bid) + float(ask)) / 2
         price_cache[pair_name] = mid
         return mid
-
-    # Currency strength/breadth and news are both computed once, shared
-    # by every candidate this scan (not re-fetched per instrument).
-    breadth_agreement, edge_zscore = _fetch_strength_inputs(client)
-    news_articles = fetch_news_articles()
 
     candidates = []
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:

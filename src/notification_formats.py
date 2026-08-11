@@ -80,6 +80,8 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
 
 
 def format_friday_reflection_message(week_stats: dict) -> str:
+    from market_hours import BEST_SESSION_SGT, OUTSIDE_AUTOPILOT_WINDOW
+
     lines = [
         "<b>Friday self-reflection</b>",
         f"Week P&L: {week_stats['pnl']:+.2f} ({week_stats['pnl_pct']:+.2f}%)",
@@ -89,5 +91,15 @@ def format_friday_reflection_message(week_stats: dict) -> str:
         lines.append(f"Weakest pair this week: {week_stats['weakest_pair']} -- consider reducing focus next week")
     if week_stats.get("strongest_pair"):
         lines.append(f"Strongest pair this week: {week_stats['strongest_pair']}")
-    lines.append("Preparing for Monday.")
+
+    # Suitable trading windows per pair, so ad-hoc/manual scans outside
+    # the fixed 9:30pm-1am Autopilot window know when each pair actually
+    # trades best -- AUD/NZD/JPY get little benefit from that window
+    # since it's built around the London-New York overlap.
+    lines.append("\n<b>Suggested trading windows (SGT)</b>")
+    for instrument, window in BEST_SESSION_SGT.items():
+        flag = " (outside Autopilot's 21:30-01:00 window)" if instrument in OUTSIDE_AUTOPILOT_WINDOW else ""
+        lines.append(f"  {instrument}: {window}{flag}")
+
+    lines.append("\nPreparing for Monday.")
     return "\n".join(lines)

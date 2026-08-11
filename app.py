@@ -33,7 +33,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 # override=True: this project's own .env MUST win over any ambient
@@ -55,9 +54,7 @@ from oanda_client import OandaClient
 from live_scan import run_live_scan, fetch_news_articles
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
-from scheduled_jobs import (
-    run_evening_scan_and_notify, run_nightly_review, run_friday_reflection, run_autopilot_interval_scan,
-)
+from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import (
     load_journal, trades_opened_today, total_open_risk, win_loss_counts, closed_entries, JOURNAL_XLSX_REPO_PATH,
@@ -396,18 +393,20 @@ def settings():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # 9:30pm SGT Mon-Fri: US market open in Singapore time -- list tonight's setups
-    scheduler.add_job(run_evening_scan_and_notify,
-                       CronTrigger(day_of_week="mon-fri", hour=21, minute=30, timezone="Asia/Singapore"))
+    # Catches up on the evening listing (21:30), nightly review (01:00),
+    # and Friday reflection (Sat 01:00) -- ticks every 5 min and runs
+    # whichever of those is already due but hasn't fired today, rather
+    # than a fixed CronTrigger per job. Necessary because Render's free
+    # tier puts the whole process to sleep after ~15 min idle and only
+    # wakes it on an incoming HTTP request: a plain CronTrigger firing
+    # at exactly 21:30/01:00 silently never runs if the process happens
+    # to be asleep at that exact minute, with no way to catch up later.
+    scheduler.add_job(run_daily_dispatcher, IntervalTrigger(minutes=5))
     # Ticks every 5 min; only actually re-scans once Autopilot's configured
     # interval (15/30/60/240 min, Settings) has elapsed since the last scan,
     # and only within the 9:30pm-1am window above -- keeps Autopilot checking
     # for fresh setups through the evening instead of the single 21:30 shot.
     scheduler.add_job(run_autopilot_interval_scan, IntervalTrigger(minutes=5))
-    # 1am SGT: review checkpoint (not a forced close) -- summarize what actually closed tonight
-    scheduler.add_job(run_nightly_review, CronTrigger(hour=1, minute=0, timezone="Asia/Singapore"))
-    # Saturday 1am SGT = right after Friday's session -- week self-reflection
-    scheduler.add_job(run_friday_reflection, CronTrigger(day_of_week="sat", hour=1, minute=0, timezone="Asia/Singapore"))
     # Re-pull state from GitHub periodically so a locally-placed trade or
     # locally-run job shows up on the cloud dashboard without a manual restart.
     scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10))

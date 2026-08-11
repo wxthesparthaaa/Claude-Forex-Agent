@@ -62,3 +62,31 @@ def is_session_open(session: str, now: datetime = None) -> bool:
 def all_session_statuses(now: datetime = None) -> dict:
     now = now or datetime.now(SGT)
     return {name: is_session_open(name, now) for name in SESSIONS_SGT}
+
+
+# Which session each traded instrument is conventionally most liquid
+# in, converted to SGT -- static reference data (not live-computed),
+# used by the Friday reflection to suggest suitable trading windows per
+# pair. Autopilot's own scan window (21:30-01:00 SGT, the London-New
+# York overlap) only covers the pairs most active in that slot -- AUD,
+# NZD, and JPY crosses peak hours earlier in the SGT day and get little
+# benefit from that window, which is exactly the gap a "scan beyond
+# 9:30pm-1am" request is pointing at.
+BEST_SESSION_SGT = {
+    "EUR_USD": "London / London-NY overlap, 16:00-01:00 SGT",
+    "GBP_USD": "London / London-NY overlap, 16:00-01:00 SGT",
+    "USD_CHF": "London, 16:00-01:00 SGT",
+    "USD_JPY": "Tokyo / Tokyo-London overlap, 08:00-17:00 SGT",
+    "AUD_USD": "Sydney / Tokyo, 05:00-14:00 SGT",
+    "NZD_USD": "Sydney / Tokyo, 05:00-14:00 SGT",
+    "USD_CAD": "New York, 21:00-06:00 SGT",
+    "XAU_USD": "London-NY overlap, 21:00-01:00 SGT",
+    "XAG_USD": "London-NY overlap, 21:00-01:00 SGT",
+    "WTICO_USD": "New York, 21:00-06:00 SGT",
+    "BCO_USD": "London-NY overlap, 21:00-01:00 SGT",
+}
+
+# Instruments whose best session falls outside Autopilot's current
+# 21:30-01:00 SGT scan window -- surfaced explicitly in the Friday
+# reflection rather than left implicit in the table above.
+OUTSIDE_AUTOPILOT_WINDOW = {"USD_JPY", "AUD_USD", "NZD_USD"}

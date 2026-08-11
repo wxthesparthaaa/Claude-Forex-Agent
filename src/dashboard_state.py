@@ -38,13 +38,24 @@ class DashboardState:
     # Tiger's default $1,000,000 paper balance.
     strategy_starting_capital: float = 2000.0
     strategy_realized_pnl: float = 0.0
-    last_review_timestamp: str | None = None  # filters get_closed_trades to "since last night's review"
+    last_review_timestamp: str | None = None  # filters our own journal to "since last night's review"
     week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
     # How often Autopilot re-scans between the 9:30pm kickoff and the 1am
     # review cutoff (see scheduled_jobs.run_autopilot_interval_scan).
     # Minutes; one of 15/30/60/240.
     autopilot_scan_interval_minutes: int = 30
     last_autopilot_scan_timestamp: str | None = None  # throttles the interval scan above
+    # Date-stamps (SGT, YYYY-MM-DD) marking the last calendar day each
+    # touchpoint actually ran -- lets scheduled_jobs.run_daily_dispatcher
+    # catch a touchpoint up whenever the process next wakes, rather than
+    # requiring it to be alive at the exact scheduled minute. Render's
+    # free tier puts the whole process to sleep after ~15 min idle and
+    # only wakes it on an incoming HTTP request, so a plain APScheduler
+    # CronTrigger firing at exactly 21:30/01:00 has no way to catch up a
+    # job it missed because nothing was running at that moment.
+    last_evening_listing_date: str | None = None
+    last_review_date: str | None = None
+    last_reflection_date: str | None = None
 
 
 def default_state() -> DashboardState:

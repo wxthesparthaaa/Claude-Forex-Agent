@@ -82,6 +82,17 @@ def test_friday_reflection_message_includes_weak_and_strong_pairs():
     assert "Preparing for Monday." in msg
 
 
+def test_friday_reflection_message_suggests_trading_windows_per_pair():
+    stats = {"pnl": 0.0, "pnl_pct": 0.0, "total_trades": 0, "win_rate_pct": None,
+              "weakest_pair": None, "strongest_pair": None}
+    msg = format_friday_reflection_message(stats)
+    assert "Suggested trading windows" in msg
+    assert "EUR_USD: London" in msg
+    # AUD/NZD/JPY peak outside Autopilot's fixed 21:30-01:00 window -- flagged explicitly
+    assert "AUD_USD" in msg and "outside Autopilot" in msg
+    assert "USD_JPY" in msg and "Tokyo" in msg
+
+
 def test_get_telegram_config_prefers_env_vars(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "abc")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")

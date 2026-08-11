@@ -24,7 +24,7 @@ from dashboard_state import load_state, save_state, risk_config_from_state, phas
 from live_scan import run_live_scan
 from market_hours import SGT
 from scan_results import save_candidates
-from trade_journal import load_journal, trades_opened_today, total_open_risk
+from trade_journal import load_journal, trades_opened_today, total_open_risk, closed_entries
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
@@ -33,21 +33,35 @@ from telegram_notifier import send_message
 from risk_engine import AccountState
 
 
-def _closed_trade_to_dict(trade: dict) -> dict:
-    realized_pl = float(trade.get("realizedPL", 0))
-    outcome = "WIN" if realized_pl > 0 else ("LOSS" if realized_pl < 0 else "BREAKEVEN")
-    direction = "LONG" if float(trade.get("initialUnits", 0)) > 0 else "SHORT"
-    return {
-        "instrument": trade["instrument"], "direction": direction, "outcome": outcome,
-        "pnl": realized_pl, "close_time": trade.get("closeTime", ""),
-    }
-
-
-def _closed_trades_since(client: OandaClient, since_iso: str | None, count: int) -> list:
-    trades = [_closed_trade_to_dict(t) for t in client.get_closed_trades(count=count)]
-    if since_iso is None:
-        return trades  # first run ever -- nothing to compare against yet, treat as a clean baseline
-    return [t for t in trades if t["close_time"] > since_iso]
+def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> list:
+    """Only trades THIS APP actually placed (from the journal) -- not
+    every trade ever closed on the OANDA account. This used to read
+    client.get_closed_trades() (broker-wide), which on a shared demo/
+    practice account silently swept in closed trades from unrelated
+    activity: a real nightly review reported 50 closed trades and
+    +452% P&L in one night when Autopilot had only placed 5. Outcome is
+    classified by realized_pnl sign, the same convention
+    trade_journal.win_loss_counts and the dashboard's Win rate box
+    already use, so the Telegram summary and the dashboard can't
+    disagree about what actually happened."""
+    entries = load_journal()
+    result = []
+    for e in closed_entries(entries):
+        closed_at = e.get("closed_at")
+        if not closed_at:
+            continue
+        if since_iso is not None and closed_at <= since_iso:
+            continue
+        pnl = e.get("realized_pnl") or 0.0
+        outcome = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
+        result.append({
+            "instrument": e["instrument"], "direction": e["direction"], "outcome": outcome,
+            "pnl": pnl, "close_time": closed_at,
+        })
+    result.sort(key=lambda t: t["close_time"])
+    if limit is not None:
+        result = result[-limit:]
+    return result
 
 
 def _account_from_tracked_capital(state) -> AccountState:
@@ -138,12 +152,15 @@ def run_nightly_review(client: OandaClient = None) -> list:
     trades that actually closed tonight (since the last review, not just
     "the last 20 ever"); anything still open stays open, broker-protected
     by its own SL/TP. Realized P&L accumulates into the strategy's own
-    tracked ledger, not OANDA's raw NAV."""
-    client = client or OandaClient()
+    tracked ledger, not OANDA's raw NAV.
+
+    client is accepted (unused) to keep the same call signature as the
+    other scheduled jobs -- closed trades now come from our own journal,
+    not a broker call, see _closed_trades_since."""
     state = load_state()
 
     starting_equity = tracked_equity(state)
-    closed = _closed_trades_since(client, state.last_review_timestamp, count=50)
+    closed = _closed_trades_since(state.last_review_timestamp, limit=50)
 
     state.strategy_realized_pnl += sum(t["pnl"] for t in closed)
     ending_equity = tracked_equity(state)
@@ -157,11 +174,12 @@ def run_nightly_review(client: OandaClient = None) -> list:
 
 def run_friday_reflection(client: OandaClient = None) -> dict:
     """After Friday's session: week P&L (against tracked capital) + which
-    pairs performed best/worst, to inform focus going into Monday."""
-    client = client or OandaClient()
+    pairs performed best/worst, to inform focus going into Monday.
+    client is accepted (unused) for signature symmetry -- see
+    run_nightly_review."""
     state = load_state()
 
-    closed = _closed_trades_since(client, state.week_start_timestamp, count=200)
+    closed = _closed_trades_since(state.week_start_timestamp, limit=200)
     week_pnl = sum(t["pnl"] for t in closed)
 
     ending_equity = tracked_equity(state)
@@ -186,3 +204,43 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)
     return stats
+
+
+def run_daily_dispatcher(client: OandaClient = None) -> None:
+    """Ticks every 5 min (see app.py's scheduler) -- catches up on any of
+    the day's fixed-time touchpoints (evening listing 21:30, nightly
+    review 01:00, Friday reflection Sat 01:00) that are already due but
+    haven't fired yet today.
+
+    Replaces three plain CronTriggers that fired only at an exact
+    minute: Render's free tier puts the whole process to sleep after
+    ~15 min idle and only wakes it on an incoming HTTP request (e.g. an
+    UptimeRobot ping), so a CronTrigger has no way to catch up a job
+    that was due while the process wasn't even running -- it just gets
+    silently skipped for the day. This checks against a persisted
+    per-touchpoint date-stamp instead of an exact clock tick, so
+    whichever 5-minute tick happens to be the first one after the app
+    wakes back up runs it."""
+    now = datetime.now(SGT)
+    today = now.date().isoformat()
+    minutes = now.hour * 60 + now.minute
+
+    state = load_state()
+
+    if now.weekday() < 5 and minutes >= 21 * 60 + 30 and state.last_evening_listing_date != today:
+        run_evening_scan_and_notify(client)
+        state = load_state()
+        state.last_evening_listing_date = today
+        save_state(state)
+
+    if minutes >= 60 and state.last_review_date != today:
+        run_nightly_review(client)
+        state = load_state()
+        state.last_review_date = today
+        save_state(state)
+
+    if now.weekday() == 5 and minutes >= 60 and state.last_reflection_date != today:
+        run_friday_reflection(client)
+        state = load_state()
+        state.last_reflection_date = today
+        save_state(state)
