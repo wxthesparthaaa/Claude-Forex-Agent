@@ -15,7 +15,7 @@
     "max_trades_per_day": 5,
     "max_trades_per_day_min": 1,
     "max_trades_per_day_max": 10,
-    "autopilot_confidence_threshold_pct": 60.0
+    "autopilot_confidence_threshold_pct": 65.0
   },
   "phase_state": {
     "phase": "autopilot",
