@@ -15,7 +15,7 @@
     "max_trades_per_day": 5,
     "max_trades_per_day_min": 1,
     "max_trades_per_day_max": 10,
-    "autopilot_confidence_threshold_pct": 60.0
+    "autopilot_confidence_threshold_pct": 65.0
   },
   "phase_state": {
     "phase": "autopilot",
@@ -31,7 +31,7 @@
   "last_review_timestamp": "2026-08-10T17:00:01.172176+00:00",
   "week_start_timestamp": null,
   "autopilot_scan_interval_minutes": 30,
-  "last_autopilot_scan_timestamp": "2026-08-12T00:05:03.677324+08:00",
+  "last_autopilot_scan_timestamp": "2026-08-12T00:35:26.977177+08:00",
   "last_evening_listing_date": null,
   "last_review_date": null,
   "last_reflection_date": null
