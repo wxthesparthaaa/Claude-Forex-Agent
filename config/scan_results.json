@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "instrument": "WTICO_USD",
+    "direction": "LONG",
+    "entry_price": 84.763,
+    "stop_loss": 82.41,
+    "take_profit": 89.469,
+    "confidence_pct": 59.9,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 19.457007759776772,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "units": 73,
+    "unit_label": "barrels",
+    "risk_amount": 221.191934,
+    "notional_account_currency": 7927.22,
+    "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 81 (overbought -- some chase risk).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "rejected_reason": null
+  },
+  {
+    "instrument": "XAG_USD",
+    "direction": "LONG",
+    "entry_price": 64.716,
+    "stop_loss": 64.3251,
+    "take_profit": 65.4978,
+    "confidence_pct": 76.5,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 86.11714813449692,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "units": 441,
+    "unit_label": "oz",
+    "risk_amount": 221.191934,
+    "notional_account_currency": 36562.99,
+    "account_currency": "SGD",
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 42 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "rejected_reason": null
+  }
+]
