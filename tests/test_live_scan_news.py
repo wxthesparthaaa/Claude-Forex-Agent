@@ -145,3 +145,56 @@ def test_fetch_economic_calendar_events_serves_cached_result_within_ttl(mock_cli
 
     assert first == second
     mock_client_cls.assert_called_once()
+
+
+class _FakePricingClient:
+    def __init__(self, pricing=None, error=None):
+        self._pricing = pricing
+        self._error = error
+
+    def get_pricing(self, instruments):
+        if self._error:
+            raise self._error
+        return self._pricing
+
+
+def test_fetch_mid_price_returns_none_and_does_not_raise_on_unlisted_pair():
+    # Real incident: OANDA 400s for a pair it doesn't list (e.g. JPY_SGD)
+    # -- this must degrade to None like any other "no price found" case,
+    # not propagate and crash the whole scan.
+    client = _FakePricingClient(error=Exception("400 Client Error: Bad Request"))
+    assert live_scan.fetch_mid_price(client, "JPY_SGD") is None
+
+
+def test_fetch_mid_price_returns_none_on_empty_pricing():
+    client = _FakePricingClient(pricing=[])
+    assert live_scan.fetch_mid_price(client, "GBP_USD") is None
+
+
+def test_fetch_mid_price_averages_bid_ask():
+    client = _FakePricingClient(pricing=[{"bids": [{"price": "1.10"}], "asks": [{"price": "1.12"}]}])
+    assert live_scan.fetch_mid_price(client, "EUR_USD") == 1.11
+
+
+@patch("live_scan._process_instrument_unsafe")
+def test_process_instrument_returns_none_instead_of_raising_on_failure(mock_unsafe):
+    # Real incident: an unhandled error for ONE instrument (bad candle
+    # data, no currency-conversion path, etc.) used to propagate through
+    # ThreadPoolExecutor's future.result(), crashing run_live_scan()
+    # entirely instead of just skipping that one instrument.
+    mock_unsafe.side_effect = Exception("boom")
+    result = live_scan._process_instrument(
+        client=None, instrument="USD_JPY", meta={}, account_currency="SGD", get_price=lambda i: None,
+        account=None, risk_config=None, breadth_agreement=None, edge_zscore=None, news_articles=[],
+    )
+    assert result is None
+
+
+@patch("live_scan._process_instrument_unsafe")
+def test_process_instrument_passes_through_result_on_success(mock_unsafe):
+    mock_unsafe.return_value = "a_candidate"
+    result = live_scan._process_instrument(
+        client=None, instrument="EUR_USD", meta={}, account_currency="SGD", get_price=lambda i: None,
+        account=None, risk_config=None, breadth_agreement=None, edge_zscore=None, news_articles=[],
+    )
+    assert result == "a_candidate"

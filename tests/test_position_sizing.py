@@ -36,6 +36,36 @@ def test_conversion_rate_raises_when_no_path_exists():
         pass
 
 
+def test_conversion_rate_triangulates_through_usd_when_no_direct_sgd_pair():
+    # Real incident: OANDA has no JPY_SGD or SGD_JPY pair at all (account
+    # currency SGD), even though USD_JPY and USD_SGD both exist. This
+    # used to raise ValueError -- and worse, live_scan.get_price()
+    # crashed on the underlying 400 before ever reaching that fallback,
+    # taking down the whole scan.
+    prices = {"USD_JPY": 150.25, "USD_SGD": 1.35}
+    rate = resolve_conversion_rate("JPY", "SGD", lambda i: prices.get(i))
+    # 1 JPY -> USD (1/150.25) -> SGD (* 1.35)
+    expected = (Decimal("1") / Decimal("150.25")) * Decimal("1.35")
+    assert abs(rate - expected) < Decimal("0.00001")
+
+
+def test_conversion_rate_prefers_direct_pair_over_triangulating():
+    # if a direct/inverse pair IS available, use it -- don't triangulate
+    # unnecessarily even when a (possibly stale/different) USD path also exists
+    prices = {"GBP_USD": 1.27, "USD_SGD": 1.35}
+    rate = resolve_conversion_rate("GBP", "USD", lambda i: prices.get(i))
+    assert rate == Decimal("1.27")
+
+
+def test_conversion_rate_still_raises_when_no_path_exists_even_via_usd():
+    prices = {}  # nothing available at all
+    try:
+        resolve_conversion_rate("JPY", "SGD", lambda i: prices.get(i))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
 def test_eur_usd_sizing_needs_no_conversion():
     # entry 1.1000, sl 1.0975 -> 25 pip stop, risking $20
     conversion = resolve_conversion_rate("USD", "USD", lambda i: None)

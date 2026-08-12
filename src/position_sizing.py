@@ -22,29 +22,47 @@ from typing import Callable, Optional
 from instrument_metadata import InstrumentMeta
 
 
+def _direct_or_inverse_rate(from_currency: str, to_currency: str,
+                             get_price: Callable[[str], Optional[float]]) -> Optional[Decimal]:
+    """1 unit of from_currency in to_currency terms, trying the direct
+    pair first (e.g. GBP_USD -> multiply), then the inverse (e.g.
+    USD_JPY -> divide), since OANDA only lists one direction per pair.
+    None if neither pair exists/prices."""
+    if from_currency == to_currency:
+        return Decimal("1")
+    price = get_price(f"{from_currency}_{to_currency}")
+    if price is not None:
+        return Decimal(str(price))
+    price = get_price(f"{to_currency}_{from_currency}")
+    if price is not None:
+        return Decimal("1") / Decimal(str(price))
+    return None
+
+
 def resolve_conversion_rate(quote_currency: str, account_currency: str,
                              get_price: Callable[[str], Optional[float]]) -> Decimal:
     """How many units of account_currency is 1 unit of quote_currency worth.
 
-    Tries the direct pair first (e.g. GBP_USD -> multiply), then the
-    inverse (e.g. USD_JPY -> divide), since OANDA only lists one
-    direction per pair."""
-    if quote_currency == account_currency:
-        return Decimal("1")
+    Tries the direct/inverse pair first, then triangulates through USD
+    if neither exists -- real gap found live: an account currency like
+    SGD has a direct pair against some quote currencies (USD_SGD) but
+    not others (no JPY_SGD/SGD_JPY at all on OANDA), even though both
+    legs exist against USD. Every currency OANDA lists trades against
+    USD, so this covers every practical case rather than failing
+    outright on the first missing cross pair."""
+    rate = _direct_or_inverse_rate(quote_currency, account_currency, get_price)
+    if rate is not None:
+        return rate
 
-    direct = f"{quote_currency}_{account_currency}"
-    price = get_price(direct)
-    if price is not None:
-        return Decimal(str(price))
-
-    inverse = f"{account_currency}_{quote_currency}"
-    price = get_price(inverse)
-    if price is not None:
-        return Decimal("1") / Decimal(str(price))
+    if quote_currency != "USD" and account_currency != "USD":
+        quote_to_usd = _direct_or_inverse_rate(quote_currency, "USD", get_price)
+        usd_to_account = _direct_or_inverse_rate("USD", account_currency, get_price)
+        if quote_to_usd is not None and usd_to_account is not None:
+            return quote_to_usd * usd_to_account
 
     raise ValueError(
         f"No conversion path found from {quote_currency} to {account_currency} "
-        f"(tried {direct} and {inverse})"
+        f"(tried direct/inverse and triangulating through USD)"
     )
 
 

@@ -173,6 +173,23 @@ def fetch_economic_calendar_events() -> list:
 
 def _process_instrument(client, instrument, meta, account_currency, get_price, account, risk_config,
                          breadth_agreement, edge_zscore, news_articles):
+    """None on ANY failure for this one instrument (bad/missing candle
+    data, no currency-conversion path found, etc.) -- real incident: an
+    unhandled currency-conversion error for one instrument (JPY_SGD
+    wasn't a listed OANDA pair) crashed run_live_scan() entirely via
+    ThreadPoolExecutor's future.result() re-raising it, taking down the
+    whole "Scan Now" request instead of just skipping that instrument.
+    Every other instrument's candidate must not depend on this one."""
+    try:
+        return _process_instrument_unsafe(client, instrument, meta, account_currency, get_price, account,
+                                           risk_config, breadth_agreement, edge_zscore, news_articles)
+    except Exception as e:
+        print(f"WARNING: scan failed for {instrument}, skipping it: {e}", flush=True)
+        return None
+
+
+def _process_instrument_unsafe(client, instrument, meta, account_currency, get_price, account, risk_config,
+                                breadth_agreement, edge_zscore, news_articles):
     entry_candles, entry_closes, entry_highs, entry_lows = _fetch_closes_highs_lows(
         client, instrument, ENTRY_TIMEFRAME, BARS_FOR_SWINGS)
     entry_swings = find_swing_points(entry_highs, entry_lows)
@@ -205,6 +222,27 @@ def _process_instrument(client, instrument, meta, account_currency, get_price, a
     )
 
 
+def fetch_mid_price(client, pair_name: str) -> float | None:
+    """Current mid price for pair_name, or None if OANDA doesn't list it
+    or the pricing call otherwise fails -- never raises. Real incident:
+    OANDA 400s outright for a pair it doesn't list (e.g. JPY_SGD -- an
+    SGD account currency has no direct pair against several quote
+    currencies), and that used to propagate uncaught, crashing the
+    entire scan instead of letting resolve_conversion_rate's fallback
+    chain (direct pair -> inverse -> triangulate through USD) handle a
+    missing price the same as any other "try the next path" case."""
+    try:
+        pricing = client.get_pricing([pair_name])
+    except Exception as e:
+        print(f"WARNING: pricing lookup failed for {pair_name}: {e}", flush=True)
+        return None
+    if not pricing:
+        return None
+    bid = pricing[0]["bids"][0]["price"]
+    ask = pricing[0]["asks"][0]["price"]
+    return (float(bid) + float(ask)) / 2
+
+
 def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None) -> list:
     instruments = instruments or ALL_INSTRUMENTS
 
@@ -226,17 +264,9 @@ def run_live_scan(client, account, risk_config, account_currency: str, instrumen
     price_cache = {}
 
     def get_price(pair_name):
-        if pair_name in price_cache:
-            return price_cache[pair_name]
-        pricing = client.get_pricing([pair_name])
-        if not pricing:
-            price_cache[pair_name] = None
-            return None
-        bid = pricing[0]["bids"][0]["price"]
-        ask = pricing[0]["asks"][0]["price"]
-        mid = (float(bid) + float(ask)) / 2
-        price_cache[pair_name] = mid
-        return mid
+        if pair_name not in price_cache:
+            price_cache[pair_name] = fetch_mid_price(client, pair_name)
+        return price_cache[pair_name]
 
     candidates = []
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
