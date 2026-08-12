@@ -2,9 +2,9 @@
   {
     "instrument": "USD_JPY",
     "direction": "LONG",
-    "entry_price": 159.281,
+    "entry_price": 159.241,
     "stop_loss": 158.658,
-    "take_profit": 160.527,
+    "take_profit": 160.407,
     "confidence_pct": 65.5,
     "confidence_components": {
       "breadth": 71.42857142857143,
@@ -12,16 +12,16 @@
       "candlestick": 20.0,
       "news": 50.0
     },
-    "units": 7990,
+    "units": 8537,
     "unit_label": "units",
     "risk_amount": 40.0,
-    "notional_account_currency": 10225.66,
+    "notional_account_currency": 10924.68,
     "account_currency": "SGD",
     "rationale": [
       "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
       "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-      "RSI is 62 (neutral range).",
-      "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
+      "RSI is 58 (neutral range).",
+      "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
       "News sentiment: neutral."
     ],
     "rejected_reason": null
