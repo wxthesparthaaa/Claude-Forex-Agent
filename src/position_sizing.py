@@ -52,7 +52,18 @@ def calculate_units(meta: InstrumentMeta, direction: str, entry: float, stop_los
                      risk_amount: float, conversion_rate: Decimal,
                      max_units: int = 200_000) -> int:
     """risk_amount is in ACCOUNT currency (e.g. USD). conversion_rate is
-    quote_currency -> account_currency, from resolve_conversion_rate()."""
+    quote_currency -> account_currency, from resolve_conversion_rate().
+
+    Rejects (returns 0) rather than clamps when the risk-correct size
+    would exceed max_units. Real incident: a near-zero stop distance (a
+    couple of pips, from a shallow/degenerate swing pivot) computed a
+    position far larger than max_units, got silently clamped down to
+    exactly 200,000 units, and was submitted as a normal-looking trade
+    with ~$117k notional exposure on a $2,000 account -- entirely
+    dependent on the stop filling at the exact requested price, since a
+    few pips of slippage on 200k units is real money. Clamping treats a
+    broken setup as a smaller version of a valid one; it should never
+    have been tradeable at all."""
     sl_distance = abs(Decimal(str(entry)) - Decimal(str(stop_loss)))
     if sl_distance <= 0 or conversion_rate <= 0:
         return 0
@@ -65,7 +76,7 @@ def calculate_units(meta: InstrumentMeta, direction: str, entry: float, stop_los
     if units < 1:
         units = 1
     if units > max_units:
-        units = max_units
+        return 0
     return -units if direction.upper() == "SHORT" else units
 
 

@@ -29,6 +29,14 @@ from rationale import build_rationale
 # here so the dashboard reads "1 oz" instead of an unexplained "1 units".
 UNIT_LABELS = {"XAU": "oz", "XAG": "oz", "WTICO": "barrels", "BCO": "barrels"}
 
+# derive_trade_levels() places the stop at the most recent swing pivot
+# with no floor -- a shallow/choppy pivot can end up just 1-2 pips from
+# entry. Real incident: a 2-3 pip stop on NZD_USD sized to 200,000 units
+# (position_sizing's own cap) before this existed, live on the account.
+# A stop this tight isn't a smaller version of a valid setup, it's not a
+# real setup -- ordinary spread/slippage would clip it almost on entry.
+MIN_STOP_DISTANCE_PIPS = 5
+
 
 def unit_label_for(instrument: str) -> str:
     return UNIT_LABELS.get(instrument.split("_")[0], "units")
@@ -84,6 +92,8 @@ def generate_candidate(
     levels = derive_trade_levels(entry_swings, direction, entry_price)
     if levels is None:
         return None
+    if levels.risk_distance < MIN_STOP_DISTANCE_PIPS * float(meta.pip_size):
+        return None  # stop too tight to be a real setup, not just a smaller valid one
 
     # Round to the instrument's real precision BEFORE sizing/submitting --
     # OANDA rejects prices with more decimals than an instrument allows

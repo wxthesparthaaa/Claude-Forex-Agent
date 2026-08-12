@@ -81,6 +81,21 @@ def test_short_direction_produces_negative_units():
     assert units < 0
 
 
+def test_calculate_units_rejects_rather_than_clamps_when_over_max_units():
+    # Real incident: a near-zero stop distance (a couple of pips) drove
+    # the risk-correct unit count far past max_units, which used to get
+    # silently clamped down to exactly 200,000 and submitted as a real
+    # trade with ~$117k notional on a $2,000 account. Rejecting (0) is
+    # the safe behavior -- a setup that only "fits" by getting clamped
+    # was never a valid setup to begin with.
+    conversion = resolve_conversion_rate("USD", "USD", lambda i: None)
+    # $40 risk / a 2-pip (0.0002) EUR_USD stop = 200,000 units uncapped already;
+    # a slightly tighter stop pushes the risk-correct size past the cap.
+    units = calculate_units(EUR_USD, "LONG", entry=1.1000, stop_loss=1.09985,
+                             risk_amount=40.0, conversion_rate=conversion, max_units=200_000)
+    assert units == 0
+
+
 def test_commodity_sizing_no_special_casing_needed():
     # XAU_USD quote currency is already USD -- same formula, no per-asset branch
     conversion = resolve_conversion_rate("USD", "USD", lambda i: None)
