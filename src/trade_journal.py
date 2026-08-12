@@ -30,6 +30,11 @@ SUCCESSFUL = "SUCCESSFUL"
 FAILED = "FAILED"
 EXPIRED = "EXPIRED"
 CANCELLED = "CANCELLED"  # manually closed by the user via "Cancel all trades"
+# OANDA has no record of this trade at all (404 on a direct by-ID lookup)
+# -- not "still open", not "closed with a known P&L", genuinely gone.
+# realized_pnl is recorded as 0.0 since there's no way to recover the
+# real figure, not because it was actually a breakeven trade.
+LOST = "LOST"
 
 
 @dataclass

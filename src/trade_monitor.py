@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import requests
+
 from oanda_client import OandaClient
-from trade_journal import load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS, SUCCESSFUL, FAILED, EXPIRED, CANCELLED
+from trade_journal import load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS, SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST
 from telegram_notifier import send_message
 
 
@@ -46,6 +48,26 @@ def check_open_trades(client: OandaClient = None) -> list:
             # off the requested SL/TP level.
             try:
                 closed = client.get_trade(trade_id)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    # OANDA has no record of this trade ID at all -- not
+                    # "still settling", genuinely gone (a demo account
+                    # reset, or an ID that never resolved). Retrying
+                    # forever would never succeed and the phantom entry
+                    # keeps inflating the portfolio-heat calculation, so
+                    # mark it LOST rather than leaving it stuck OPEN
+                    # indefinitely. There's no way to recover its real
+                    # P&L, so it's recorded as 0.0, not guessed at.
+                    entry["realized_pnl"] = 0.0
+                    entry["exit_price"] = None
+                    entry["closed_at"] = now.isoformat()
+                    entry["status"] = LOST
+                    changed.append(entry)
+                    print(f"WARNING: trade {trade_id} not found on OANDA (404) -- "
+                          f"marking LOST, real P&L unrecoverable", flush=True)
+                else:
+                    print(f"WARNING: could not look up trade {trade_id}: {e}", flush=True)
+                continue
             except Exception as e:
                 print(f"WARNING: could not look up trade {trade_id}: {e}", flush=True)
                 continue

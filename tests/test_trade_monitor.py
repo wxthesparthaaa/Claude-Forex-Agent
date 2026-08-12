@@ -1,7 +1,9 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+
+import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -14,17 +16,26 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(tj, "JOURNAL_PATH", str(tmp_path / "trade_journal.json"))
 
 
+def _http_error(status_code):
+    resp = MagicMock()
+    resp.status_code = status_code
+    return requests.exceptions.HTTPError(response=resp)
+
+
 class FakeClient:
-    def __init__(self, open_trades=None, closed_trades=None, close_trade_result=None):
+    def __init__(self, open_trades=None, closed_trades=None, close_trade_result=None, not_found_ids=None):
         self._open = open_trades or []
         self._closed_by_id = {t["id"]: t for t in (closed_trades or [])}
         self._close_result = close_trade_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
+        self._not_found_ids = set(not_found_ids or [])
         self.closed_ids = []
 
     def get_open_trades(self):
         return self._open
 
     def get_trade(self, trade_id):
+        if trade_id in self._not_found_ids:
+            raise _http_error(404)
         return self._closed_by_id.get(trade_id, {})
 
     def close_trade(self, trade_id):
@@ -121,6 +132,49 @@ def test_check_open_trades_finds_trade_by_id_regardless_of_how_long_ago_it_close
     assert changed[0]["realized_pnl"] == -46.54
     entries = tj.load_journal()
     assert entries[0]["status"] == tj.FAILED  # no longer stuck OPEN
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_marks_lost_when_oanda_has_no_record_of_the_trade(mock_send, tmp_path, monkeypatch):
+    # Live incident: get_trade() 404'd for a specific trade ID -- OANDA
+    # genuinely had no record of it (not "still settling"). The old
+    # code just `continue`d forever on any lookup failure, so this
+    # entry stayed stuck OPEN indefinitely, endlessly re-attempting a
+    # lookup that could never succeed, still counting toward open risk
+    # the whole time. A 404 specifically must resolve the entry (as
+    # LOST, since the real P&L is unrecoverable), not retry forever.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("832", candidate())
+
+    client = FakeClient(open_trades=[], not_found_ids=["832"])
+    changed = trade_monitor.check_open_trades(client)
+
+    assert len(changed) == 1
+    assert changed[0]["status"] == tj.LOST
+    assert changed[0]["realized_pnl"] == 0.0
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.LOST  # no longer stuck OPEN
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_leaves_entry_open_on_a_non_404_lookup_error(mock_send, tmp_path, monkeypatch):
+    # A transient/other error (network blip, 500, etc.) should NOT be
+    # treated the same as "OANDA has no record of this" -- only a
+    # confirmed 404 is a genuine "this trade is gone" signal; anything
+    # else should be retried on the next pass, not given up on.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    class FlakyClient(FakeClient):
+        def get_trade(self, trade_id):
+            raise _http_error(500)
+
+    client = FlakyClient(open_trades=[])
+    changed = trade_monitor.check_open_trades(client)
+
+    assert changed == []
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.OPEN
 
 
 @patch("trade_monitor.send_message")
