@@ -234,10 +234,10 @@
     "opened_at": "2026-08-12T13:39:22.363652+00:00",
     "account_currency": "SGD",
     "risk_amount": 40.0,
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-12T15:42:53.528989+00:00",
+    "exit_price": 1.39235,
+    "realized_pnl": -22.7519
   },
   {
     "trade_id": "842",
