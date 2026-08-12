@@ -286,5 +286,29 @@
     "closed_at": null,
     "exit_price": null,
     "realized_pnl": null
+  },
+  {
+    "trade_id": "854",
+    "instrument": "USD_CHF",
+    "direction": "LONG",
+    "units": 19533,
+    "entry_price": 0.8129,
+    "stop_loss": 0.8116,
+    "take_profit": 0.8155,
+    "confidence_pct": 84.2,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 64 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: supportive of this direction."
+    ],
+    "opened_at": "2026-08-12T16:57:39.957150+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.0,
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
