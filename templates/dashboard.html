@@ -80,7 +80,9 @@
 
     <div class="card">
       <h3 style="margin-top:0;">Win rate</h3>
-      <canvas id="winRateChart" width="220" height="220"></canvas>
+      <div style="max-width:220px; margin:0 auto;">
+        <canvas id="winRateChart" width="220" height="220"></canvas>
+      </div>
       <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
         {{ closed_trades }} closed trade{{ '' if closed_trades == 1 else 's' }}
       </p>
@@ -217,6 +219,17 @@
     {% for h in news.headlines %}
       <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">{{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span></p>
     {% endfor %}
+    {% endif %}
+
+    {% if news.upcoming_events %}
+    <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+      <strong style="font-size:0.85rem;">Upcoming high-impact events</strong>
+      {% for e in news.upcoming_events %}
+        <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">
+          {{ e.event }} ({{ e.country }}) &mdash; {{ 'today' if e.days_away == 0 else ('in ' ~ e.days_away ~ 'd') }}
+        </p>
+      {% endfor %}
+    </div>
     {% endif %}
   </div>
 

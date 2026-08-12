@@ -45,11 +45,17 @@ def get_telegram_config() -> TelegramConfig:
     return TelegramConfig(bot_token=values["bot_token"], chat_id=values["chat_id"])
 
 
+# Same bot as the sibling stock-trading project (see the module
+# docstring) -- both post into the same Telegram chat, so every message
+# this app sends is prefixed to identify the source at a glance.
+SOURCE_HEADER = "\U0001F310 <b>Claude Forex Agent</b>"
+
+
 def send_message(text: str, config: TelegramConfig = None) -> dict:
     config = config or get_telegram_config()
     url = f"https://api.telegram.org/bot{config.bot_token}/sendMessage"
     data = urllib.parse.urlencode({
-        "chat_id": config.chat_id, "text": text, "parse_mode": "HTML",
+        "chat_id": config.chat_id, "text": f"{SOURCE_HEADER}\n{text}", "parse_mode": "HTML",
         "disable_web_page_preview": "true",
     }).encode()
     req = urllib.request.Request(url, data=data, method="POST")

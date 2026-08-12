@@ -16,6 +16,8 @@ def _reset_news_cache():
     # the previous test left cached instead of a clean cache miss.
     live_scan._news_cache["articles"] = []
     live_scan._news_cache["fetched_at"] = None
+    live_scan._calendar_cache["events"] = []
+    live_scan._calendar_cache["fetched_at"] = None
     yield
 
 
@@ -99,4 +101,47 @@ def test_fetch_news_articles_caches_a_failure_too(mock_client_cls, mock_time, mo
     second = live_scan.fetch_news_articles()
 
     assert first == [] and second == []
+    mock_client_cls.assert_called_once()
+
+
+def test_fetch_economic_calendar_events_empty_without_api_key(monkeypatch):
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+    assert live_scan.fetch_economic_calendar_events() == []
+
+
+@patch("live_scan.FinnhubClient")
+def test_fetch_economic_calendar_events_returns_finnhub_data(mock_client_cls, monkeypatch):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy")
+    mock_client = MagicMock()
+    mock_client.get_economic_calendar.return_value = [
+        {"event": "CPI", "country": "US", "impact": "3", "time": "2026-08-12 14:00:00"},
+    ]
+    mock_client_cls.return_value = mock_client
+
+    events = live_scan.fetch_economic_calendar_events()
+
+    assert len(events) == 1
+    assert events[0]["event"] == "CPI"
+
+
+@patch("live_scan.FinnhubClient")
+def test_fetch_economic_calendar_events_returns_empty_on_failure(mock_client_cls, monkeypatch):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy")
+    mock_client_cls.side_effect = Exception("quota exceeded")
+    assert live_scan.fetch_economic_calendar_events() == []
+
+
+@patch("live_scan.time")
+@patch("live_scan.FinnhubClient")
+def test_fetch_economic_calendar_events_serves_cached_result_within_ttl(mock_client_cls, mock_time, monkeypatch):
+    monkeypatch.setenv("FINNHUB_API_KEY", "dummy")
+    mock_time.monotonic.side_effect = [0.0, 100.0]  # second call well inside the 1hr TTL
+    mock_client = MagicMock()
+    mock_client.get_economic_calendar.return_value = [{"event": "CPI", "country": "US", "impact": "3"}]
+    mock_client_cls.return_value = mock_client
+
+    first = live_scan.fetch_economic_calendar_events()
+    second = live_scan.fetch_economic_calendar_events()
+
+    assert first == second
     mock_client_cls.assert_called_once()

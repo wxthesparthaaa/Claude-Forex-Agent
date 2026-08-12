@@ -24,7 +24,7 @@ import json
 import os
 import sys
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 
 import requests
 
@@ -51,7 +51,7 @@ from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses, is_forex_market_open
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
-from live_scan import run_live_scan, fetch_news_articles
+from live_scan import run_live_scan, fetch_news_articles, fetch_economic_calendar_events
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, find_candidate
 from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher
@@ -63,6 +63,7 @@ from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_t
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
 from autopilot import PhaseState
 from news_relevance import currency_news_score
+from economic_calendar import upcoming_high_impact_events, format_calendar_warning
 from journal_export import build_journal_workbook
 
 app = Flask(__name__)
@@ -105,13 +106,19 @@ def _account_state_from_tracked_capital(state) -> AccountState:
 
 def _news_summary() -> dict:
     """Dashboard's news-sentiment section: per-currency score across the
-    7 majors plus the most recent headlines. Degrades honestly -- if
-    FINNHUB_API_KEY isn't set, or the fetch itself fails, this returns
-    configured=False rather than pretending there's data."""
+    7 majors, the most recent headlines, and upcoming high-impact
+    economic events (CPI, NFP, FOMC-style releases -- economic_calendar
+    was built and tested but never actually wired up anywhere until
+    now). Degrades honestly -- if FINNHUB_API_KEY isn't set, or a fetch
+    itself fails, this returns configured=False / an empty events list
+    rather than pretending there's data."""
     configured = bool(os.environ.get("FINNHUB_API_KEY"))
+    events = fetch_economic_calendar_events()
+    upcoming_events = upcoming_high_impact_events(events, today=date.today(), within_days=3)
+
     articles = fetch_news_articles()
     if not articles:
-        return {"configured": configured, "currencies": [], "headlines": []}
+        return {"configured": configured, "currencies": [], "headlines": [], "upcoming_events": upcoming_events}
 
     currencies = []
     for pair in MAJOR_PAIRS:
@@ -124,7 +131,7 @@ def _news_summary() -> dict:
     recent = sorted(articles, key=lambda a: a.get("datetime", 0), reverse=True)[:5]
     headlines = [{"headline": a.get("headline", ""), "source": a.get("source", "")} for a in recent]
 
-    return {"configured": True, "currencies": currencies, "headlines": headlines}
+    return {"configured": True, "currencies": currencies, "headlines": headlines, "upcoming_events": upcoming_events}
 
 
 def _out_of_range_warnings(risk_config) -> list:

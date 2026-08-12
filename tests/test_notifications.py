@@ -1,5 +1,6 @@
 import os
 import sys
+import urllib.parse
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -112,3 +113,18 @@ def test_send_message_posts_to_telegram_api(mock_urlopen):
     assert result == {"ok": True}
     called_req = mock_urlopen.call_args[0][0]
     assert "bottok/sendMessage" in called_req.full_url
+
+
+@patch("telegram_notifier.urllib.request.urlopen")
+def test_send_message_prefixes_the_source_header(mock_urlopen):
+    # Same Telegram bot/chat as the sibling stock-trading project -- the
+    # header is how the user tells which app a message came from.
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = b'{"ok": true}'
+    mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+    send_message("hello", config=TelegramConfig(bot_token="tok", chat_id="42"))
+
+    called_req = mock_urlopen.call_args[0][0]
+    sent_body = urllib.parse.parse_qs(called_req.data.decode())
+    assert sent_body["text"][0] == "\U0001F310 <b>Claude Forex Agent</b>\nhello"
