@@ -2,26 +2,26 @@
   {
     "instrument": "USD_CAD",
     "direction": "SHORT",
-    "entry_price": 1.39134,
+    "entry_price": 1.39132,
     "stop_loss": 1.39213,
-    "take_profit": 1.38976,
-    "confidence_pct": 71.1,
+    "take_profit": 1.3897,
+    "confidence_pct": 71.9,
     "confidence_components": {
-      "breadth": 100.0,
-      "rsi": 95.06870943230389,
-      "candlestick": 20.0,
+      "breadth": 85.71428571428571,
+      "rsi": 100.0,
+      "candlestick": 50.0,
       "news": 37.5
     },
-    "units": -55100,
+    "units": -53735,
     "unit_label": "units",
     "risk_amount": 40.0,
-    "notional_account_currency": 70447.39,
+    "notional_account_currency": 68706.81,
     "account_currency": "SGD",
     "rationale": [
       "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-      "RSI is 34 (neutral range).",
-      "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 35 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
       "News sentiment: supportive of this direction."
     ],
     "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 6.2% > 6.0%"
