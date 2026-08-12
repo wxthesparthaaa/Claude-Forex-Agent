@@ -17,15 +17,15 @@ def _isolate(tmp_path, monkeypatch):
 class FakeClient:
     def __init__(self, open_trades=None, closed_trades=None, close_trade_result=None):
         self._open = open_trades or []
-        self._closed = closed_trades or []
+        self._closed_by_id = {t["id"]: t for t in (closed_trades or [])}
         self._close_result = close_trade_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
         self.closed_ids = []
 
     def get_open_trades(self):
         return self._open
 
-    def get_closed_trades(self, count=50):
-        return self._closed
+    def get_trade(self, trade_id):
+        return self._closed_by_id.get(trade_id, {})
 
     def close_trade(self, trade_id):
         self.closed_ids.append(trade_id)
@@ -53,7 +53,8 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
 
     client = FakeClient(
         open_trades=[],  # already closed on OANDA's side
-        closed_trades=[{"id": "101", "realizedPL": "35.0", "averageClosePrice": "1.11", "closeTime": "t"}],
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "35.0",
+                         "averageClosePrice": "1.11", "closeTime": "t"}],
     )
     changed = trade_monitor.check_open_trades(client)
 
@@ -70,12 +71,56 @@ def test_check_open_trades_classifies_failed_on_negative_pnl(mock_send, tmp_path
 
     client = FakeClient(
         open_trades=[],
-        closed_trades=[{"id": "101", "realizedPL": "-20.0", "averageClosePrice": "1.095", "closeTime": "t"}],
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "-20.0",
+                         "averageClosePrice": "1.095", "closeTime": "t"}],
     )
     changed = trade_monitor.check_open_trades(client)
 
     assert changed[0]["status"] == tj.FAILED
     assert changed[0]["realized_pnl"] == -20.0
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_leaves_entry_open_when_lookup_not_yet_closed(mock_send, tmp_path, monkeypatch):
+    # get_trade() can return a trade that's technically not OPEN
+    # (e.g. still settling) without being CLOSED yet either -- must not
+    # be misclassified as a win/loss on incomplete data.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    client = FakeClient(open_trades=[], closed_trades=[{"id": "101", "state": "PENDING"}])
+    changed = trade_monitor.check_open_trades(client)
+
+    assert changed == []
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.OPEN
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_finds_trade_by_id_regardless_of_how_long_ago_it_closed(mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: get_closed_trades(count=50)
+    # is a bounded "most recent N" window -- a trade that closed a
+    # while ago (relative to how many others had closed since) can
+    # scroll out of that window and stay stuck OPEN in the journal
+    # forever, still shown as a live trade on the dashboard and still
+    # inflating the portfolio-heat calculation. get_trade() looks up
+    # the specific ID directly, so this can't happen regardless of how
+    # much other account activity happened since.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    client = FakeClient(
+        open_trades=[],
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "-46.54",
+                         "averageClosePrice": "0.58618", "closeTime": "2026-08-12T05:11:57Z"}],
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    assert len(changed) == 1
+    assert changed[0]["status"] == tj.FAILED
+    assert changed[0]["realized_pnl"] == -46.54
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.FAILED  # no longer stuck OPEN
 
 
 @patch("trade_monitor.send_message")

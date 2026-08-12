@@ -73,6 +73,19 @@ class OandaClient:
         params = {"state": "CLOSED", "count": count}
         return self._request("GET", f"/v3/accounts/{self.account_id}/trades", params=params).get("trades", [])
 
+    def get_trade(self, trade_id: str) -> dict:
+        """Full current details for ONE specific trade by ID, regardless
+        of how long ago it closed -- unlike get_closed_trades()'s
+        bounded recent-N list, a trade can never "scroll out of view"
+        before trade_monitor gets a chance to reclassify it. Real
+        incident: a trade that closed a while ago (relative to how many
+        others had closed since) fell outside get_closed_trades(count=50)
+        and stayed stuck OPEN in the journal indefinitely -- still shown
+        as a live trade on the dashboard, and its risk_amount kept
+        inflating the portfolio-heat calculation even though the
+        position no longer existed on OANDA."""
+        return self._request("GET", f"/v3/accounts/{self.account_id}/trades/{trade_id}").get("trade", {})
+
     def place_market_order_with_sltp(self, instrument: str, units: int, stop_loss_price: str,
                                        take_profit_price: str) -> dict:
         """units > 0 for LONG, < 0 for SHORT. SL/TP are ALWAYS attached at

@@ -27,7 +27,6 @@ def check_open_trades(client: OandaClient = None) -> list:
 
     client = client or OandaClient()
     open_on_oanda = {t["id"] for t in client.get_open_trades()}
-    closed_by_id = {t["id"]: t for t in client.get_closed_trades(count=50)}
 
     now = datetime.now(timezone.utc)
     changed = []
@@ -38,13 +37,20 @@ def check_open_trades(client: OandaClient = None) -> list:
         trade_id = entry["trade_id"]
 
         if trade_id not in open_on_oanda:
-            # OANDA already closed it -- SL or TP fired. Classify by
+            # OANDA already closed it -- SL or TP fired. Look it up by
+            # ID directly (not a bounded "recent closed" list, which a
+            # trade can scroll out of before we get a chance to
+            # reclassify it -- see OandaClient.get_trade). Classify by
             # realized P&L rather than trying to match the exact exit
             # price, since spread/slippage can move the fill slightly
             # off the requested SL/TP level.
-            closed = closed_by_id.get(trade_id)
-            if closed is None:
-                continue  # not in our recent-closed window yet; check again next pass
+            try:
+                closed = client.get_trade(trade_id)
+            except Exception as e:
+                print(f"WARNING: could not look up trade {trade_id}: {e}", flush=True)
+                continue
+            if closed.get("state") != "CLOSED":
+                continue  # not actually closed yet (or lookup came back empty) -- check again next pass
             pnl = float(closed.get("realizedPL", 0))
             entry["realized_pnl"] = pnl
             # OANDA returns all price fields as strings -- verified live:
