@@ -56,6 +56,7 @@ class DashboardState:
     last_evening_listing_date: str | None = None
     last_review_date: str | None = None
     last_reflection_date: str | None = None
+    last_health_check_date: str | None = None  # 21:00 SGT pre-evening OANDA/GitHub connectivity check
 
 
 def default_state() -> DashboardState:

@@ -30,6 +30,7 @@ from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
 )
 from economic_calendar import upcoming_high_impact_events, format_calendar_warning
+from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
 from risk_engine import AccountState
 
@@ -213,11 +214,49 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     return stats
 
 
+def run_pre_evening_health_check(client: OandaClient = None) -> list:
+    """~30 min before the evening scan window opens (21:00 SGT) --
+    verifies OANDA and GitHub connectivity are actually working right
+    now, using the same calls the evening scan itself depends on. Sends
+    a Telegram alert ONLY if something's broken; stays completely quiet
+    otherwise, by explicit request -- this is a tripwire, not a nightly
+    all-clear ping.
+
+    This can't prove the process itself will still be running at 21:30
+    (if the scheduler thread were dead, this job wouldn't have fired
+    either) -- what it catches is the class of failure that would
+    otherwise only surface silently mid-scan, like an expired OANDA
+    token (a real incident: get_account_summary() started 401ing with
+    no code change on our end), with enough lead time to fix it before
+    the window opens instead of finding out from a failed scan at
+    9:30pm. Returns the list of problems found (empty if all clear)."""
+    problems = []
+
+    client = client or OandaClient()
+    try:
+        client.get_account_summary()
+    except Exception as e:
+        problems.append(f"OANDA connectivity: {e}")
+
+    if get_github_config() is not None:
+        try:
+            pull_state_from_github()
+        except Exception as e:
+            problems.append(f"GitHub state sync: {e}")
+
+    if problems:
+        lines = ["<b>Pre-evening health check failed</b>", "Tonight's scan may not run correctly:"]
+        lines += [f"- {p}" for p in problems]
+        send_message("\n".join(lines))
+
+    return problems
+
+
 def run_daily_dispatcher(client: OandaClient = None) -> None:
     """Ticks every 5 min (see app.py's scheduler) -- catches up on any of
-    the day's fixed-time touchpoints (evening listing 21:30, nightly
-    review 01:00, Friday reflection Sat 01:00) that are already due but
-    haven't fired yet today.
+    the day's fixed-time touchpoints (21:00 health check, evening
+    listing 21:30, nightly review 01:00, Friday reflection Sat 01:00)
+    that are already due but haven't fired yet today.
 
     Replaces three plain CronTriggers that fired only at an exact
     minute: Render's free tier puts the whole process to sleep after
@@ -233,6 +272,12 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     minutes = now.hour * 60 + now.minute
 
     state = load_state()
+
+    if now.weekday() < 5 and minutes >= 21 * 60 and state.last_health_check_date != today:
+        run_pre_evening_health_check(client)
+        state = load_state()
+        state.last_health_check_date = today
+        save_state(state)
 
     if now.weekday() < 5 and minutes >= 21 * 60 + 30 and state.last_evening_listing_date != today:
         run_evening_scan_and_notify(client)

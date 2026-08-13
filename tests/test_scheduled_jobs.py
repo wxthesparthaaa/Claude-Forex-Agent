@@ -425,6 +425,7 @@ def test_dispatcher_runs_evening_listing_once_due_on_a_weekday(
     _freeze_at(monkeypatch, _sgt(21, 35, day=10))  # Monday, past 21:30
     state = dashboard_state.default_state()
     state.last_review_date = "2026-08-10"  # already handled today, isolate the listing behavior
+    state.last_health_check_date = "2026-08-10"
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
@@ -445,6 +446,7 @@ def test_dispatcher_does_not_rerun_evening_listing_already_done_today(
     state = dashboard_state.default_state()
     state.last_evening_listing_date = "2026-08-10"
     state.last_review_date = "2026-08-10"
+    state.last_health_check_date = "2026-08-10"
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
@@ -530,9 +532,104 @@ def test_dispatcher_catches_up_after_a_long_sleep_gap(
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(23, 0, day=10))
     state = dashboard_state.default_state()
+    state.last_health_check_date = "2026-08-10"  # isolate the listing/review catch-up behavior
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
 
     mock_evening.assert_called_once()
     mock_review.assert_called_once()
+
+
+@patch("scheduled_jobs.pull_state_from_github")
+@patch("scheduled_jobs.get_github_config")
+@patch("scheduled_jobs.send_message")
+def test_health_check_stays_quiet_when_everything_is_fine(mock_send, mock_gh_config, mock_pull):
+    mock_gh_config.return_value = {"token": "t", "repo": "r", "branch": "main"}
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    problems = scheduled_jobs.run_pre_evening_health_check(client)
+
+    assert problems == []
+    mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.get_github_config")
+@patch("scheduled_jobs.send_message")
+def test_health_check_alerts_on_oanda_failure(mock_send, mock_gh_config):
+    mock_gh_config.return_value = None  # GitHub not configured -- only checking OANDA here
+
+    class FailingOandaClient(ScanFakeClient):
+        def get_account_summary(self):
+            raise Exception("401 Unauthorized")
+
+    client = FailingOandaClient(summary={}, closed_trades=[])
+    problems = scheduled_jobs.run_pre_evening_health_check(client)
+
+    assert len(problems) == 1
+    assert "OANDA" in problems[0]
+    mock_send.assert_called_once()
+    assert "health check failed" in mock_send.call_args[0][0]
+
+
+@patch("scheduled_jobs.pull_state_from_github")
+@patch("scheduled_jobs.get_github_config")
+@patch("scheduled_jobs.send_message")
+def test_health_check_alerts_on_github_failure(mock_send, mock_gh_config, mock_pull):
+    mock_gh_config.return_value = {"token": "t", "repo": "r", "branch": "main"}
+    mock_pull.side_effect = Exception("HTTP Error 409: Conflict")
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    problems = scheduled_jobs.run_pre_evening_health_check(client)
+
+    assert len(problems) == 1
+    assert "GitHub" in problems[0]
+    mock_send.assert_called_once()
+
+
+@patch("scheduled_jobs.run_pre_evening_health_check")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_health_check_at_21_00_not_before(mock_evening, mock_health, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(20, 59, day=10))  # Monday, one minute before 21:00
+    state = dashboard_state.default_state()
+    state.last_evening_listing_date = "2026-08-10"  # isolate the health-check behavior
+    state.last_review_date = "2026-08-10"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_health.assert_not_called()
+
+
+@patch("scheduled_jobs.run_pre_evening_health_check")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_health_check_once_due(mock_evening, mock_health, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 5, day=10))  # Monday, just past 21:00
+    state = dashboard_state.default_state()
+    state.last_evening_listing_date = "2026-08-10"  # isolate the health-check behavior
+    state.last_review_date = "2026-08-10"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_health.assert_called_once()
+    updated = dashboard_state.load_state()
+    assert updated.last_health_check_date == "2026-08-10"
+
+
+@patch("scheduled_jobs.run_pre_evening_health_check")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_does_not_rerun_health_check_already_done_today(mock_evening, mock_health, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(22, 0, day=10))
+    state = dashboard_state.default_state()
+    state.last_health_check_date = "2026-08-10"
+    state.last_evening_listing_date = "2026-08-10"
+    state.last_review_date = "2026-08-10"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_health.assert_not_called()
