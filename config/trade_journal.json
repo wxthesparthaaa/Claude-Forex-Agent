@@ -310,5 +310,29 @@
     "closed_at": "2026-08-12T18:58:49.757098+00:00",
     "exit_price": 0.81375,
     "realized_pnl": 25.563
+  },
+  {
+    "trade_id": "870",
+    "instrument": "EUR_USD",
+    "direction": "LONG",
+    "units": 22222,
+    "entry_price": 1.15371,
+    "stop_loss": 1.15232,
+    "take_profit": 1.15649,
+    "confidence_pct": 70.9,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 72 (overbought -- some chase risk).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: no EUR-relevant headlines in the latest fetch (neutral)."
+    ],
+    "opened_at": "2026-08-13T10:28:09.270806+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 39.530892,
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
