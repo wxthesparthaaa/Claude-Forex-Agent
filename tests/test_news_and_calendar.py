@@ -1,12 +1,10 @@
 import os
 import sys
-from datetime import date
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from news_relevance import tag_headline, relevant_headlines_for_currency, currency_news_score, news_score_for_instrument
-from economic_calendar import upcoming_high_impact_events, format_calendar_warning
 from finnhub_adapter import FinnhubClient
 
 
@@ -96,27 +94,6 @@ def test_news_score_for_instrument_uses_base_currency():
 def test_news_score_for_instrument_none_for_commodities():
     articles = [{"headline": "Fed hikes rates", "summary": "Hawkish", "datetime": 100}]
     assert news_score_for_instrument(articles, "XAU_USD") is None
-
-
-def test_upcoming_high_impact_events_within_window():
-    events = [
-        {"event": "FOMC Statement", "country": "US", "impact": "3", "time": "2026-08-12 14:00:00"},
-        {"event": "Minor release", "country": "US", "impact": "1", "time": "2026-08-11 09:00:00"},
-        {"event": "Too far out", "country": "US", "impact": "3", "time": "2026-08-20 14:00:00"},
-    ]
-    upcoming = upcoming_high_impact_events(events, today=date(2026, 8, 10), within_days=3)
-    assert len(upcoming) == 1
-    assert upcoming[0]["event"] == "FOMC Statement"
-
-
-def test_format_calendar_warning_none_when_empty():
-    assert format_calendar_warning([]) is None
-
-
-def test_format_calendar_warning_lists_events():
-    upcoming = [{"event": "FOMC Statement", "country": "US", "days_away": 2}]
-    warning = format_calendar_warning(upcoming)
-    assert "FOMC Statement" in warning
 
 
 @patch("finnhub_adapter.requests.get")

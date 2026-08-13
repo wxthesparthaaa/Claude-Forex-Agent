@@ -1,10 +1,13 @@
 """
-Finnhub free tier (60 calls/min) for forex-category news and a real,
-structured economic calendar (FOMC/CPI/NFP-style events) -- chosen over
+Finnhub free tier (60 calls/min) for forex-category news -- chosen over
 scraping ForexFactory (no official API, ToS-ambiguous for automated use)
 and over Alpha Vantage as primary (25 requests/day is too tight). Alpha
 Vantage stays available as a manual backup if Finnhub's quota runs out
 on a given day.
+
+Finnhub's economic-calendar endpoint (FOMC/CPI/NFP-style events) is not
+included on the free tier (403 Forbidden, confirmed live) -- removed
+rather than left as unreachable dead code.
 
 Deliberately thin: this module only fetches and returns raw structured
 data. Relevance tagging and polarity scoring live in news_relevance.py
@@ -43,9 +46,3 @@ class FinnhubClient:
         commentary routinely lands here, not just under "forex"."""
         news = self._get("/news", {"category": "general"})
         return [n for n in news if n.get("id", 0) >= min_id]
-
-    def get_economic_calendar(self, from_date: str, to_date: str) -> list:
-        """from_date/to_date: 'YYYY-MM-DD'. Each event:
-        {country, event, impact, actual, estimate, prev, time, unit}."""
-        data = self._get("/calendar/economic", {"from": from_date, "to": to_date})
-        return data.get("economicCalendar", [])

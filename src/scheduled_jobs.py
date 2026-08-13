@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 from oanda_client import OandaClient
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
-from live_scan import run_live_scan, fetch_economic_calendar_events
+from live_scan import run_live_scan
 from market_hours import SGT
 from scan_results import save_candidates
 from trade_journal import load_journal, trades_opened_today, total_open_risk, closed_entries
@@ -29,7 +29,6 @@ from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
 )
-from economic_calendar import upcoming_high_impact_events, format_calendar_warning
 from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
 from risk_engine import AccountState
@@ -100,13 +99,7 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
     save_candidates(candidates)
 
     if notify_listing:
-        message = format_potential_trades_message(candidate_dicts, mode=phase_state.phase)
-        events = fetch_economic_calendar_events()
-        upcoming = upcoming_high_impact_events(events, today=datetime.now(SGT).date(), within_days=1)
-        warning = format_calendar_warning(upcoming)
-        if warning:
-            message = f"{message}\n\n{warning}"
-        send_message(message)
+        send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
 
     if phase_state.phase == "autopilot":
         auto_execute_candidates(client, candidates, phase_state, risk_config, account)

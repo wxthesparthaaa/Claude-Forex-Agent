@@ -220,17 +220,6 @@
       <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">{{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span></p>
     {% endfor %}
     {% endif %}
-
-    {% if news.upcoming_events %}
-    <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border);">
-      <strong style="font-size:0.85rem;">Upcoming high-impact events</strong>
-      {% for e in news.upcoming_events %}
-        <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">
-          {{ e.event }} ({{ e.country }}) &mdash; {{ 'today' if e.days_away == 0 else ('in ' ~ e.days_away ~ 'd') }}
-        </p>
-      {% endfor %}
-    </div>
-    {% endif %}
   </div>
 
   <div class="card">

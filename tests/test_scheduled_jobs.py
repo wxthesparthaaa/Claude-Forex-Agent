@@ -211,49 +211,6 @@ def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan
     mock_auto_exec.assert_not_called()
 
 
-@patch("scheduled_jobs.fetch_economic_calendar_events")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_appends_high_impact_calendar_warning(mock_send, mock_scan, mock_save, mock_calendar,
-                                                                tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    from market_hours import SGT
-    mock_scan.return_value = []
-    mock_calendar.return_value = [
-        {"event": "US CPI", "country": "US", "impact": "3",
-         "time": datetime.now(SGT).strftime("%Y-%m-%d 14:00:00")},
-    ]
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    sent_text = mock_send.call_args[0][0]
-    assert "US CPI" in sent_text
-    assert "High-impact events ahead" in sent_text
-
-
-@patch("scheduled_jobs.fetch_economic_calendar_events")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_omits_calendar_section_when_nothing_upcoming(mock_send, mock_scan, mock_save, mock_calendar,
-                                                                        tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    mock_calendar.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    sent_text = mock_send.call_args[0][0]
-    assert "High-impact events ahead" not in sent_text
 
 
 from datetime import datetime as _real_datetime

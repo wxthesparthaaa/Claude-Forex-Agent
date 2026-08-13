@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
 
 from universe import ALL_INSTRUMENTS, MAJOR_PAIRS, ENTRY_TIMEFRAME, HIGHER_TIMEFRAMES, GRANULARITY
 from pivot_detection import find_swing_points
@@ -48,14 +47,6 @@ MAX_PARALLEL_REQUESTS = 8
 # gets hit at most once per TTL, no matter how many requests arrive.
 NEWS_CACHE_TTL_SECONDS = 300
 _news_cache = {"articles": [], "fetched_at": None}
-
-# Economic calendar events (CPI, NFP, FOMC-style releases) change far
-# less often than headlines within a day, so a longer TTL is fine --
-# same caching reasoning as news above (called from the dashboard's hot
-# path via app.py's _news_summary()).
-CALENDAR_CACHE_TTL_SECONDS = 3600
-CALENDAR_LOOKAHEAD_DAYS = 7
-_calendar_cache = {"events": [], "fetched_at": None}
 
 
 def _fetch_closes_highs_lows(client, instrument: str, timeframe: str, count: int):
@@ -137,37 +128,6 @@ def fetch_news_articles() -> list:
     except Exception as e:
         print(f"WARNING: Finnhub news fetch failed, continuing without news sentiment: {e}", flush=True)
         _news_cache["articles"], _news_cache["fetched_at"] = [], now
-        return []
-
-
-def fetch_economic_calendar_events() -> list:
-    """Raw Finnhub economic-calendar events (CPI, NFP, FOMC-style
-    releases, per-country) from today through CALENDAR_LOOKAHEAD_DAYS
-    out. Feeds economic_calendar.upcoming_high_impact_events(), which
-    was built and tested but never actually wired up anywhere until now
-    -- the dashboard's News sentiment section only ever showed headline-
-    based sentiment, not the structured "what's scheduled" calendar a
-    trader would actually check before entering a position around a CPI
-    print. Same empty-list-on-failure and TTL-cached behavior as
-    fetch_news_articles() above, for the same reason."""
-    now = time.monotonic()
-    if _calendar_cache["fetched_at"] is not None and (now - _calendar_cache["fetched_at"]) < CALENDAR_CACHE_TTL_SECONDS:
-        return _calendar_cache["events"]
-
-    api_key = os.environ.get("FINNHUB_API_KEY")
-    if not api_key:
-        _calendar_cache["events"], _calendar_cache["fetched_at"] = [], now
-        return []
-    try:
-        client = FinnhubClient(api_key)
-        today = date.today()
-        events = client.get_economic_calendar(
-            from_date=today.isoformat(), to_date=(today + timedelta(days=CALENDAR_LOOKAHEAD_DAYS)).isoformat())
-        _calendar_cache["events"], _calendar_cache["fetched_at"] = events, now
-        return events
-    except Exception as e:
-        print(f"WARNING: Finnhub economic calendar fetch failed, continuing without it: {e}", flush=True)
-        _calendar_cache["events"], _calendar_cache["fetched_at"] = [], now
         return []
 
 
