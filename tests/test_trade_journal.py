@@ -75,6 +75,25 @@ def test_record_open_trade_stores_risk_amount(tmp_path, monkeypatch):
     assert entries[0]["risk_amount"] == 40.0
 
 
+def test_record_open_trade_stores_confidence_components(tmp_path, monkeypatch):
+    # Previously discarded at journal-write time -- with no way to ever
+    # ask "did trades where breadth scored low underperform?" after the
+    # fact, since the per-signal breakdown that fed confidence_pct was
+    # gone the moment the trade was journaled.
+    _isolate(tmp_path, monkeypatch)
+    components = {"breadth": 71.4, "rsi": 63.0, "candlestick": 50.0, "news": 50.0}
+    tj.record_open_trade("101", candidate(confidence_components=components))
+    entries = tj.load_journal()
+    assert entries[0]["confidence_components"] == components
+
+
+def test_record_open_trade_defaults_confidence_components_to_empty_dict(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())  # no confidence_components in the candidate dict
+    entries = tj.load_journal()
+    assert entries[0]["confidence_components"] == {}
+
+
 def test_trades_opened_today_counts_only_todays_entries():
     from datetime import timedelta
     now = datetime.now(timezone.utc)

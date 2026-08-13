@@ -83,7 +83,8 @@ def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch
     client = FakeClient()
     cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
           "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
-          "account_currency": "SGD", "risk_amount": 40.0}
+          "account_currency": "SGD", "risk_amount": 40.0,
+          "confidence_components": {"breadth": 71.4, "rsi": 63.0, "candlestick": 50.0, "news": 50.0}}
     result = trade_execution.place_and_record(client, cd)
     assert result["success"] is True
     assert result["trade_id"] == "999"
@@ -91,6 +92,7 @@ def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch
     entries = tj.load_journal()
     assert len(entries) == 1
     assert entries[0]["trade_id"] == "999"
+    assert entries[0]["confidence_components"] == cd["confidence_components"]
 
 
 @patch("trade_execution.send_message")

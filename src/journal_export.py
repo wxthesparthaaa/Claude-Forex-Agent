@@ -15,8 +15,8 @@ from openpyxl.utils import get_column_letter
 
 COLUMNS = [
     "Trade ID", "Instrument", "Direction", "Units", "Entry Price", "Stop Loss", "Take Profit",
-    "Confidence %", "Status", "R Multiple", "Opened At", "Closed At", "Hours Held",
-    "Exit Price", "Realized P&L", "Currency", "Rationale",
+    "Confidence %", "Breadth", "RSI", "Candlestick", "News", "Status", "R Multiple",
+    "Opened At", "Closed At", "Hours Held", "Exit Price", "Realized P&L", "Currency", "Rationale",
 ]
 
 
@@ -64,10 +64,13 @@ def build_journal_workbook(entries: list) -> Workbook:
         cell.font = Font(bold=True)
 
     for entry in entries:
+        components = entry.get("confidence_components") or {}
         ws.append([
             entry.get("trade_id"), entry.get("instrument"), entry.get("direction"), entry.get("units"),
             entry.get("entry_price"), entry.get("stop_loss"), entry.get("take_profit"),
-            entry.get("confidence_pct"), entry.get("status"), _r_multiple(entry),
+            entry.get("confidence_pct"),
+            components.get("breadth"), components.get("rsi"), components.get("candlestick"), components.get("news"),
+            entry.get("status"), _r_multiple(entry),
             entry.get("opened_at"), entry.get("closed_at"), _hours_held(entry),
             entry.get("exit_price"), entry.get("realized_pnl"), entry.get("account_currency"),
             " | ".join(entry.get("rationale", [])),

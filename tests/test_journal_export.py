@@ -65,3 +65,23 @@ def test_hours_held_parses_oanda_nanosecond_timestamp_format():
     # which datetime.fromisoformat() can't parse directly.
     entry = closed_entry(closed_at="2026-08-10T11:30:00.123456789Z")
     assert _hours_held(entry) == 1.5
+
+
+def test_build_journal_workbook_includes_confidence_components():
+    components = {"breadth": 71.4, "rsi": 63.0, "candlestick": 50.0, "news": 50.0}
+    wb = build_journal_workbook([closed_entry(confidence_components=components)])
+    ws = wb.active
+    header = [c.value for c in ws[1]]
+    row = {header[i]: cell.value for i, cell in enumerate(ws[2])}
+    assert row["Breadth"] == 71.4
+    assert row["RSI"] == 63.0
+    assert row["Candlestick"] == 50.0
+    assert row["News"] == 50.0
+
+
+def test_build_journal_workbook_handles_missing_confidence_components():
+    wb = build_journal_workbook([closed_entry()])  # no confidence_components key at all
+    ws = wb.active
+    header = [c.value for c in ws[1]]
+    row = {header[i]: cell.value for i, cell in enumerate(ws[2])}
+    assert row["Breadth"] is None

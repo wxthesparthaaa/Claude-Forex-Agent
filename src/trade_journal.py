@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
@@ -51,6 +51,14 @@ class JournalEntry:
     opened_at: str  # ISO 8601 UTC
     account_currency: str = ""
     risk_amount: float = 0.0  # $ risked at entry -- needed to compute real open portfolio heat
+    # Per-signal breakdown (breadth/rsi/candlestick/news, each 0-100)
+    # that confidence_pct was blended from -- previously computed at
+    # scan time and then discarded before the journal write, so there
+    # was no way to ever ask "did trades where breadth scored low
+    # underperform?" after the fact. confidence_score.py's own
+    # docstring says weights were meant to be "tunable via the Friday
+    # self-reflection process"; that can't happen without this.
+    confidence_components: dict = field(default_factory=dict)
     status: str = OPEN
     closed_at: str | None = None
     exit_price: float | None = None
@@ -103,6 +111,7 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
         take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
         rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
         account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
+        confidence_components=candidate.get("confidence_components", {}),
     )
     entries.append(asdict(entry))
     save_journal(entries)
