@@ -31,9 +31,9 @@
   "last_review_timestamp": "2026-08-12T17:10:07.039905+00:00",
   "week_start_timestamp": null,
   "autopilot_scan_interval_minutes": 30,
-  "last_autopilot_scan_timestamp": "2026-08-13T22:34:21.668652+08:00",
+  "last_autopilot_scan_timestamp": "2026-08-13T23:06:38.344534+08:00",
   "last_evening_listing_date": "2026-08-13",
   "last_review_date": "2026-08-13",
   "last_reflection_date": null,
-  "last_health_check_date": "2026-08-13"
+  "last_health_check_date": null
 }
