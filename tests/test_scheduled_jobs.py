@@ -211,6 +211,35 @@ def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan
     mock_auto_exec.assert_not_called()
 
 
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_evening_listing_reflects_phase_change_made_during_the_scan(mock_send, mock_scan, mock_save,
+                                                                      tmp_path, monkeypatch):
+    # Real incident: the Telegram listing said "Manual mode on" while the
+    # dashboard already showed Autopilot on. Phase was snapshotted once
+    # at the top of the function, before the scan itself (which can take
+    # several seconds) ran -- if the user toggles Autopilot in Settings
+    # while a scan is in flight, the notification text must reflect what
+    # they just set, not what it was when the scan started.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()  # starts manual_paper
+    dashboard_state.save_state(state)
+
+    def _flip_to_autopilot_mid_scan(*args, **kwargs):
+        mid_state = dashboard_state.load_state()
+        mid_state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+        dashboard_state.save_state(mid_state)
+        return []
+
+    mock_scan.side_effect = _flip_to_autopilot_mid_scan
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    sent_text = mock_send.call_args[0][0]
+    assert "Auto pilot mode on" in sent_text
+    assert "Manual mode on" not in sent_text
 
 
 from datetime import datetime as _real_datetime

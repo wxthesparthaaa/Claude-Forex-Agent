@@ -126,7 +126,17 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         save_candidates(candidates)
 
         if notify_listing:
-            send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
+            # Re-reads the phase fresh right before sending, rather than
+            # reusing the snapshot from the top of this function -- a
+            # full scan can take several seconds, and if the user
+            # toggles Autopilot in Settings while one is in flight, the
+            # notification text would otherwise describe the mode from
+            # before their change instead of the one they just made.
+            # (Execution itself still uses the scan-start snapshot
+            # deliberately -- switching risk_config/phase mid-scan would
+            # be its own, worse inconsistency.)
+            current_mode = phase_state_from_state(load_state()).phase
+            send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
 
         if phase_state.phase == "autopilot":
             auto_execute_candidates(client, candidates, phase_state, risk_config, account)
