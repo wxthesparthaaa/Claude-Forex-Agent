@@ -16,6 +16,7 @@ if used directly.
 """
 from __future__ import annotations
 
+import threading
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -73,6 +74,21 @@ def _account_from_tracked_capital(state) -> AccountState:
                          currency_net_exposure_pct={})
 
 
+# run_daily_dispatcher's evening-listing branch and run_autopilot_interval_scan
+# are both registered as separate IntervalTrigger(minutes=5) jobs, added
+# back-to-back at scheduler startup -- their next-run times land within
+# milliseconds of each other. On the first tick past 21:30 SGT, both can
+# independently decide the evening scan is due and both call
+# run_evening_scan_and_notify() concurrently (APScheduler runs different
+# jobs on separate threads). That's not just a benign race on
+# dashboard_state.json (confirmed live: "409 Conflict" pushing it) --
+# each concurrent call's duplicate-trade guard only checks OANDA's open-
+# trades snapshot at that instant, so two overlapping calls could both
+# pass the check and both place the same trade. A non-blocking lock
+# means the loser skips entirely rather than racing.
+_evening_scan_lock = threading.Lock()
+
+
 def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool = True) -> list:
     """9:30pm SGT: scan the universe, list qualifying setups with the
     manual/autopilot liner -- and if autopilot is on, actually execute
@@ -85,33 +101,46 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
     notify_listing gates the "here's tonight's setups" Telegram message
     only -- the interval ticker passes False so the repeated scans stay
     quiet unless a trade actually fires (auto_execute_candidates sends
-    its own per-trade message regardless)."""
-    client = client or OandaClient()
-    state = load_state()
-    risk_config = risk_config_from_state(state)
-    phase_state = phase_state_from_state(state)
+    its own per-trade message regardless).
 
-    summary = client.get_account_summary()
-    account = _account_from_tracked_capital(state)
+    Guarded by _evening_scan_lock (non-blocking) -- see that lock's own
+    comment for why: run_daily_dispatcher and run_autopilot_interval_scan
+    can both decide this is due on the same 5-minute tick and both call
+    this concurrently. A losing concurrent call returns [] immediately
+    rather than racing the winner."""
+    if not _evening_scan_lock.acquire(blocking=False):
+        print("WARNING: run_evening_scan_and_notify already in progress on another thread -- skipping", flush=True)
+        return []
 
-    candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
-    candidate_dicts = [asdict(c) for c in candidates]
-    save_candidates(candidates)
+    try:
+        client = client or OandaClient()
+        state = load_state()
+        risk_config = risk_config_from_state(state)
+        phase_state = phase_state_from_state(state)
 
-    if notify_listing:
-        send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
+        summary = client.get_account_summary()
+        account = _account_from_tracked_capital(state)
 
-    if phase_state.phase == "autopilot":
-        auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
+        candidate_dicts = [asdict(c) for c in candidates]
+        save_candidates(candidates)
 
-    # Stamps every evening scan (whichever job triggered it) so the interval
-    # ticker below knows when the last one happened, regardless of phase --
-    # if Autopilot gets turned on mid-evening the stamp is already stale
-    # enough to trigger an immediate scan on the next tick.
-    state.last_autopilot_scan_timestamp = datetime.now(SGT).isoformat()
-    save_state(state)
+        if notify_listing:
+            send_message(format_potential_trades_message(candidate_dicts, mode=phase_state.phase))
 
-    return candidate_dicts
+        if phase_state.phase == "autopilot":
+            auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+
+        # Stamps every evening scan (whichever job triggered it) so the interval
+        # ticker below knows when the last one happened, regardless of phase --
+        # if Autopilot gets turned on mid-evening the stamp is already stale
+        # enough to trigger an immediate scan on the next tick.
+        state.last_autopilot_scan_timestamp = datetime.now(SGT).isoformat()
+        save_state(state)
+
+        return candidate_dicts
+    finally:
+        _evening_scan_lock.release()
 
 
 def _within_autopilot_scan_window(now_sgt: datetime) -> bool:

@@ -64,6 +64,38 @@ def pull_state_from_github() -> int:
     return pulled
 
 
+def _push_with_retry(repo_path: str, content_bytes: bytes, config: dict, max_retries: int = 3) -> bool:
+    """PUTs content_bytes to repo_path via GitHub's Contents API,
+    retrying on a 409 Conflict by re-fetching the current sha and trying
+    again. GitHub's Contents API uses optimistic concurrency (the PUT
+    must include the sha it read the file at; a 409 means something else
+    wrote to it in between our read and our write) -- confirmed live,
+    two scheduled jobs racing to save dashboard_state.json around the
+    same 5-minute tick. Without a retry, the loser's update was just
+    silently dropped (logged as a warning, never actually applied)."""
+    url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}"
+    for attempt in range(max_retries):
+        get_status, existing = _github_request("GET", f"{url}?ref={config['branch']}", config["token"])
+        sha = existing["sha"] if get_status == 200 and existing else None
+
+        body = {
+            "message": f"Update {repo_path}",
+            "content": base64.b64encode(content_bytes).decode("ascii"),
+            "branch": config["branch"],
+        }
+        if sha:
+            body["sha"] = sha
+
+        try:
+            status, _ = _github_request("PUT", url, config["token"], body=body)
+            return status in (200, 201)
+        except urllib.error.HTTPError as e:
+            if e.code == 409 and attempt < max_retries - 1:
+                continue  # sha went stale between our GET and PUT -- re-fetch and retry
+            raise
+    return False
+
+
 def push_state_to_github(local_path: str) -> bool:
     config = get_github_config()
     if config is None:
@@ -78,20 +110,7 @@ def push_state_to_github(local_path: str) -> bool:
     with open(local_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}"
-    get_status, existing = _github_request("GET", f"{url}?ref={config['branch']}", config["token"])
-    sha = existing["sha"] if get_status == 200 and existing else None
-
-    body = {
-        "message": f"Update {repo_path}",
-        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-        "branch": config["branch"],
-    }
-    if sha:
-        body["sha"] = sha
-
-    status, _ = _github_request("PUT", url, config["token"], body=body)
-    return status in (200, 201)
+    return _push_with_retry(repo_path, content.encode("utf-8"), config)
 
 
 def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:
@@ -104,20 +123,7 @@ def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:
     if config is None:
         return False
 
-    url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}"
-    get_status, existing = _github_request("GET", f"{url}?ref={config['branch']}", config["token"])
-    sha = existing["sha"] if get_status == 200 and existing else None
-
-    body = {
-        "message": f"Update {repo_path}",
-        "content": base64.b64encode(local_bytes).decode("ascii"),
-        "branch": config["branch"],
-    }
-    if sha:
-        body["sha"] = sha
-
-    status, _ = _github_request("PUT", url, config["token"], body=body)
-    return status in (200, 201)
+    return _push_with_retry(repo_path, local_bytes, config)
 
 
 def github_file_url(repo_path: str) -> Optional[str]:

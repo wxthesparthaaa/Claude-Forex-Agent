@@ -337,6 +337,46 @@ def test_evening_scan_stamps_last_autopilot_scan_timestamp(mock_send, tmp_path, 
     assert updated.last_autopilot_scan_timestamp is not None
 
 
+def test_evening_scan_skips_when_already_in_progress_on_another_thread(tmp_path, monkeypatch):
+    # Real incident: run_daily_dispatcher's evening-listing branch and
+    # run_autopilot_interval_scan are both IntervalTrigger(minutes=5)
+    # jobs registered back-to-back, so their next-run times land within
+    # milliseconds of each other -- on the first tick past 21:30 SGT
+    # both can decide the scan is due and both call this concurrently.
+    # Simulates that by holding the lock before calling, the same state
+    # a genuinely concurrent second thread would find it in.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs._evening_scan_lock.acquire()
+    try:
+        with patch("scheduled_jobs.run_live_scan") as mock_scan:
+            client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+            result = run_evening_scan_and_notify(client)
+        assert result == []
+        mock_scan.assert_not_called()  # the losing call must never even start scanning
+    finally:
+        scheduled_jobs._evening_scan_lock.release()
+
+
+def test_evening_scan_lock_releases_so_a_later_call_still_works(tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    with patch("scheduled_jobs.run_live_scan", return_value=[]), \
+         patch("scheduled_jobs.save_candidates"):
+        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+        run_evening_scan_and_notify(client)  # first call acquires and releases the lock
+
+        with patch("scheduled_jobs.run_live_scan") as mock_scan:
+            mock_scan.return_value = []
+            result = run_evening_scan_and_notify(client)  # must not be blocked by the first call
+        assert result == []
+        mock_scan.assert_called_once()
+
+
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_calls_evening_scan_quietly(mock_run, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
