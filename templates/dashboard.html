@@ -217,7 +217,15 @@
       {% endfor %}
     </div>
     {% for h in news.headlines %}
-      <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">{{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span></p>
+      <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">
+        {% if h.currencies %}
+          <strong class="{{ 'long' if h.polarity > 0 else ('short' if h.polarity < 0 else '') }}"
+                  style="font-size:0.75rem;">[{{ h.currencies|join(', ') }} {{ '%+.1f'|format(h.polarity) }}]</strong>
+        {% else %}
+          <span style="font-size:0.75rem; opacity:0.5;">[not currency-tagged]</span>
+        {% endif %}
+        {{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span>
+      </p>
     {% endfor %}
     {% endif %}
   </div>

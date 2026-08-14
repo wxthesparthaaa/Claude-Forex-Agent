@@ -18,15 +18,26 @@ CURRENCY_KEYWORDS = {
     # headline ("China July factory-gate inflation eases... CPI slows")
     # that got wrongly tagged as USD-relevant purely because "CPI" is a
     # generic term every country uses, not a US-specific one.
+    #
+    # ISO codes and country/demonym names added on top of the original
+    # central-bank/jargon terms -- a headline like "Canada Manufacturing
+    # Sales for June +0.1% vs -0.1% estimate" mentions neither "BOC" nor
+    # "loonie", so it was previously invisible to this scorer entirely
+    # (tag_headline returned currencies=[] for it). Bare "dollar" is
+    # deliberately NOT added for USD ("us dollar" already covers it) --
+    # "Australian dollar"/"Canadian dollar"/etc. all contain "dollar" too
+    # and would falsely tag USD on every other currency's own headlines.
     "USD": ["fed", "fomc", "federal reserve", "powell", "us dollar", "treasury",
-            "us jobs", "us cpi", "us inflation", "us payrolls", "nonfarm payrolls"],
-    "EUR": ["ecb", "eurozone", "lagarde", "euro area"],
-    "GBP": ["boe", "bank of england", "sterling", "uk inflation"],
-    "JPY": ["boj", "bank of japan", "yen", "ueda"],
-    "CHF": ["snb", "swiss national bank", "franc"],
-    "AUD": ["rba", "reserve bank of australia", "aussie"],
-    "NZD": ["rbnz", "reserve bank of new zealand", "kiwi dollar"],
-    "CAD": ["boc", "bank of canada", "loonie"],
+            "us jobs", "us cpi", "us inflation", "us payrolls", "nonfarm payrolls",
+            "usd", "united states"],
+    "EUR": ["ecb", "eurozone", "lagarde", "euro area", "eur"],
+    "GBP": ["boe", "bank of england", "sterling", "uk inflation",
+            "gbp", "united kingdom", "britain", "british"],
+    "JPY": ["boj", "bank of japan", "yen", "ueda", "jpy", "japan", "japanese"],
+    "CHF": ["snb", "swiss national bank", "franc", "chf", "switzerland", "swiss"],
+    "AUD": ["rba", "reserve bank of australia", "aussie", "aud", "australia", "australian"],
+    "NZD": ["rbnz", "reserve bank of new zealand", "kiwi dollar", "nzd", "new zealand"],
+    "CAD": ["boc", "bank of canada", "loonie", "cad", "canada", "canadian"],
 }
 
 GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "invasion", "ceasefire", "geopolit"]
@@ -46,15 +57,24 @@ GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "inva
 # expectations", "Euro area investor confidence returns to positive
 # territory".
 POSITIVE_KEYWORDS = [
-    "hikes rates", "rate hike", "hawkish", "beats expectations", "beats forecast",
-    "strong growth", "stronger than expected", "exceeds expectations", "robust growth",
-    "bounces back", "rebounds", "positive territory", "better than expected", "accelerates",
+    "hikes rates", "rate hike", "hawkish", "beats expectations", "beats forecast", "beats estimates",
+    "tops estimates", "tops forecasts", "strong growth", "stronger than expected", "exceeds expectations",
+    "robust growth", "bounces back", "rebounds", "positive territory", "better than expected", "accelerates",
+    # Broadened further -- more of the everyday financial-journalism
+    # vocabulary for "this currency/economy is doing well", not just the
+    # original narrow textbook phrasing.
+    "surges", "jumps", "climbs", "rallies", "strengthens", "gains ground", "outperforms",
+    "unexpectedly rises", "unexpectedly grows", "faster than expected", "solid gains",
+    "surprise gain", "upbeat", "improves more than expected", "tops forecast",
 ]
 NEGATIVE_KEYWORDS = [
     "cuts rates", "rate cut", "dovish", "stimulus", "recession", "misses expectations",
-    "misses forecast", "weaker than expected", "worse than expected", "weak jobs data",
+    "misses forecast", "misses estimates", "weaker than expected", "worse than expected", "weak jobs data",
     "weak us jobs", "soft jobs report", "pushes out hike expectations", "delays rate hike", "disappoints",
     "war", "invasion", "sanctions", "tariff", "conflict",
+    "plunges", "slumps", "tumbles", "weakens", "slides", "underperforms",
+    "unexpectedly falls", "unexpectedly contracts", "slower than expected", "misses",
+    "downbeat", "worsens more than expected", "shrinks", "contracts",
 ]
 
 
@@ -62,6 +82,63 @@ def _contains_keyword(text: str, keyword: str) -> bool:
     """Word-boundary match, not plain substring -- a naive `in` check
     matches "war" inside "award", "aud" inside "fraud", etc."""
     return re.search(r"\b" + re.escape(keyword) + r"\b", text) is not None
+
+
+# Indicator types whose actual-vs-forecast direction has an unambiguous
+# read on currency strength -- a beat means "the economy is doing better
+# than expected", full stop, for these. Deliberately scoped to just
+# these: CPI/inflation is excluded on purpose, since a beat there can
+# read either hawkish-positive (rate-hike expectations) or inflation-
+# erosion-negative depending on the macro regime, and guessing wrong
+# would be worse than staying neutral. (indicator_pattern, higher_is_better)
+_INDICATOR_PATTERNS = [
+    (re.compile(r"\bunemployment rate\b"), False),   # lower is better
+    (re.compile(r"\bjobless claims\b"), False),       # lower is better
+    (re.compile(r"\binitial claims\b"), False),       # lower is better
+    (re.compile(r"\b(nonfarm )?payrolls\b"), True),
+    (re.compile(r"\bemployment change\b"), True),
+    (re.compile(r"\bretail sales\b"), True),
+    (re.compile(r"\bmanufacturing (sales|production|pmi)\b"), True),
+    (re.compile(r"\bindustrial production\b"), True),
+    (re.compile(r"\bgdp\b"), True),
+    (re.compile(r"\btrade balance\b"), True),
+]
+
+# Matches Finnhub headlines that state the actual-vs-forecast figures
+# directly, e.g. "Canada Manufacturing Sales for June +0.1% vs -0.1%
+# estimate" -- this is the same data ForexFactory's calendar shows
+# (actual/forecast/impact), just already embedded in headline text
+# Finnhub already provides, so no separate calendar API/data source is
+# needed to read it. The optional K/M/B/T unit suffix (e.g. "250K vs
+# 220K") is matched but not captured -- both sides of a beat/miss
+# comparison are always in the same unit, so comparing the bare numbers
+# is valid without actually converting the magnitude.
+_NUMBER = r"[+-]?\d+\.?\d*"
+_UNIT_SUFFIX = r"[KMBTkmbt]?"
+_BEAT_MISS_PATTERN = re.compile(
+    rf"({_NUMBER}){_UNIT_SUFFIX}%?\s*(?:vs\.?|versus)\s*({_NUMBER}){_UNIT_SUFFIX}%?\s*"
+    rf"(?:estimate|estimates|expected|exp\.?|forecast)",
+    re.IGNORECASE,
+)
+
+
+def _indicator_beat_miss(text: str) -> float | None:
+    """+1.0 (beat, currency-positive), -1.0 (miss, currency-negative),
+    0.0 (met forecast exactly), or None if no recognized unambiguous
+    indicator type or no parseable actual-vs-forecast figure pair was
+    found in the text."""
+    for pattern, higher_is_better in _INDICATOR_PATTERNS:
+        if not pattern.search(text):
+            continue
+        match = _BEAT_MISS_PATTERN.search(text)
+        if match is None:
+            return None
+        actual, estimate = float(match.group(1)), float(match.group(2))
+        if actual == estimate:
+            return 0.0
+        beat = actual > estimate
+        return (1.0 if beat else -1.0) if higher_is_better else (-1.0 if beat else 1.0)
+    return None
 
 
 def tag_headline(headline: str, summary: str = "") -> dict:
@@ -74,6 +151,13 @@ def tag_headline(headline: str, summary: str = "") -> dict:
 
     positive_hits = sum(1 for k in POSITIVE_KEYWORDS if _contains_keyword(text, k))
     negative_hits = sum(1 for k in NEGATIVE_KEYWORDS if _contains_keyword(text, k))
+
+    beat_miss = _indicator_beat_miss(text)
+    if beat_miss == 1.0:
+        positive_hits += 1
+    elif beat_miss == -1.0:
+        negative_hits += 1
+
     total_hits = positive_hits + negative_hits
     polarity = 0.0 if total_hits == 0 else (positive_hits - negative_hits) / total_hits
 

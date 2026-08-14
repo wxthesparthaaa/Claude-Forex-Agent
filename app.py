@@ -62,7 +62,7 @@ from trade_journal import (
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
 from autopilot import PhaseState
-from news_relevance import currency_news_score
+from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
 
 app = Flask(__name__)
@@ -105,9 +105,9 @@ def _account_state_from_tracked_capital(state) -> AccountState:
 
 def _news_summary() -> dict:
     """Dashboard's news-sentiment section: per-currency score across the
-    7 majors plus the most recent headlines. Degrades honestly -- if
-    FINNHUB_API_KEY isn't set, or the fetch itself fails, this returns
-    configured=False rather than pretending there's data.
+    7 majors plus the most relevant recent headlines. Degrades honestly
+    -- if FINNHUB_API_KEY isn't set, or the fetch itself fails, this
+    returns configured=False rather than pretending there's data.
 
     No economic-calendar section here -- Finnhub's /calendar/economic
     endpoint is not included on the free tier (403 Forbidden, confirmed
@@ -126,8 +126,24 @@ def _news_summary() -> dict:
                 if score is not None:
                     currencies.append({"currency": ccy, "score": round(score, 2)})
 
-    recent = sorted(articles, key=lambda a: a.get("datetime", 0), reverse=True)[:5]
-    headlines = [{"headline": a.get("headline", ""), "source": a.get("source", "")} for a in recent]
+    # Tags every article so the dashboard shows WHICH currency (if any)
+    # each headline actually feeds a score for, instead of just listing
+    # "5 most recent" with no indication of relevance -- real confusion
+    # otherwise: general market/geopolitical headlines (oil, Iran,
+    # equities) show up in Finnhub's feed constantly and previously
+    # looked indistinguishable from headlines the algorithm actually
+    # used. Currency-tagged headlines are shown first (most recent
+    # within that group); untagged ones only fill remaining slots.
+    tagged = []
+    for a in articles:
+        tag = tag_headline(a.get("headline", ""), a.get("summary", ""))
+        tagged.append({
+            "headline": a.get("headline", ""), "source": a.get("source", ""),
+            "datetime": a.get("datetime", 0),
+            "currencies": tag["currencies"], "polarity": round(tag["polarity"], 2),
+        })
+    tagged.sort(key=lambda h: (not h["currencies"], -h["datetime"]))
+    headlines = tagged[:5]
 
     return {"configured": True, "currencies": currencies, "headlines": headlines}
 

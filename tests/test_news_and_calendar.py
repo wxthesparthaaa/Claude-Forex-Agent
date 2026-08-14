@@ -96,6 +96,79 @@ def test_news_score_for_instrument_none_for_commodities():
     assert news_score_for_instrument(articles, "XAU_USD") is None
 
 
+# --- widened currency-code/country-name coverage ---
+
+def test_tag_headline_matches_iso_currency_code():
+    tag = tag_headline("USD/CAD rises as oil prices climb")
+    assert "CAD" in tag["currencies"] and "USD" in tag["currencies"]
+
+
+def test_tag_headline_matches_country_name_without_central_bank_jargon():
+    # Real gap found live: "Canada Manufacturing Sales" mentions neither
+    # "BOC" nor "loonie" -- previously invisible to this scorer entirely.
+    tag = tag_headline("Canada Manufacturing Sales for June rose more than expected")
+    assert "CAD" in tag["currencies"]
+
+
+def test_tag_headline_country_name_does_not_false_positive_on_similar_words():
+    # "audit"/"audio"/"applaud" must not match AUD; "cadence"/"decade"
+    # must not match CAD -- word-boundary matching, not substring.
+    tag = tag_headline("The auditor applauded the audio quality of the broadcast")
+    assert "AUD" not in tag["currencies"]
+    tag2 = tag_headline("The cadence of the decade's biggest album drops next week")
+    assert "CAD" not in tag2["currencies"]
+
+
+# --- actual-vs-forecast beat/miss inference (unambiguous indicator types only) ---
+
+def test_tag_headline_infers_positive_from_retail_sales_beat():
+    # The user's own example: a beat on a "higher is better" indicator,
+    # stated directly in the headline text as figures, no editorializing
+    # phrase like "beats expectations" needed.
+    tag = tag_headline("Canada Manufacturing Sales for June +0.1% vs -0.1% estimate")
+    assert "CAD" in tag["currencies"]
+    assert tag["polarity"] > 0
+
+
+def test_tag_headline_infers_negative_from_retail_sales_miss():
+    tag = tag_headline("Canada Retail Sales -0.5% vs 0.2% estimate")
+    assert tag["polarity"] < 0
+
+
+def test_tag_headline_unemployment_rate_beat_is_inverted():
+    # A LOWER unemployment rate than forecast is the "beat" (economy
+    # doing better), the opposite direction from retail sales/GDP-style
+    # indicators where higher is better.
+    tag = tag_headline("US Unemployment Rate 3.8% vs 4.0% estimate")
+    assert tag["polarity"] > 0  # actual came in lower than forecast -- a beat, currency-positive
+
+
+def test_tag_headline_jobless_claims_higher_than_forecast_is_negative():
+    tag = tag_headline("US Initial Jobless Claims 250K vs 220K estimate")
+    assert tag["polarity"] < 0
+
+
+def test_tag_headline_gdp_and_trade_balance_beats_are_positive():
+    assert tag_headline("UK GDP q/q 0.5% vs 0.2% estimate")["polarity"] > 0
+    assert tag_headline("Japan Trade Balance 1.2T vs 0.8T estimate")["polarity"] > 0
+
+
+def test_tag_headline_cpi_beat_stays_neutral_deliberately():
+    # CPI/inflation is deliberately excluded from the beat/miss inference
+    # -- a beat can read either hawkish-positive or inflation-erosion-
+    # negative depending on regime, and guessing wrong would be worse
+    # than staying neutral. Confirms it's still not in the indicator list.
+    tag = tag_headline("US CPI y/y 3.5% vs 3.2% estimate")
+    assert tag["polarity"] == 0.0
+
+
+def test_tag_headline_beat_miss_requires_a_recognized_indicator_type():
+    # A bare "X vs Y estimate" figure pair with no recognized indicator
+    # name attached must not be guessed at.
+    tag = tag_headline("Some Random Metric 3.5 vs 3.2 estimate")
+    assert tag["polarity"] == 0.0
+
+
 @patch("finnhub_adapter.requests.get")
 def test_finnhub_client_includes_token_and_category(mock_get):
     mock_response = MagicMock()
