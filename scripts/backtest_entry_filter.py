@@ -37,6 +37,19 @@ from instrument_metadata import fetch_instrument_metadata
 from scan_workflow import MIN_STOP_DISTANCE_PIPS
 from trade_simulator import simulate_trade
 from backtest_stats import summarize_backtest, ClosedTrade
+from market_hours import SGT
+
+BREAKEVEN_WIN_RATE = 1 / (1 + 2.0)  # 2:1 R:R -- min_rr=2.0 in trade_levels.derive_trade_levels
+
+
+def _within_autopilot_window(now_sgt: datetime) -> bool:
+    """Same 21:30-01:00 SGT window scheduled_jobs._within_autopilot_scan_window
+    uses live -- duplicated here rather than imported so this script has
+    no dependency on Flask-adjacent modules."""
+    minutes = now_sgt.hour * 60 + now_sgt.minute
+    if now_sgt.hour < 21:
+        minutes += 24 * 60
+    return 21 * 60 + 30 <= minutes <= 25 * 60
 
 ENTRY_COUNT = 5000   # ~52 days of 15m bars, one call (OANDA's per-request cap)
 HIGHER_COUNT = 1000  # ~166 days of 4h bars -- generous warmup + full test coverage
@@ -111,7 +124,7 @@ def backtest_instrument(client, instrument, meta):
 
         stats["signals"] += 1
         result = simulate_trade(entry_candles, i, direction, entry_price, levels.stop_loss, levels.take_profit)
-        trades.append(result)
+        trades.append((entry_times[i], result))
 
         if result.outcome == "OPEN_AT_END":
             break  # ran out of data with this trade still open -- nothing more to test for this instrument
@@ -120,36 +133,96 @@ def backtest_instrument(client, instrument, meta):
     return stats, trades
 
 
+def summarize(label, trades):
+    """trades: list of (instrument, entry_time_utc, SimulatedTrade)."""
+    resolved = [t for _, _, t in trades if t.outcome in ("WIN", "LOSS")]
+    wins = [t for t in resolved if t.outcome == "WIN"]
+    if not resolved:
+        print(f"  {label:30s} 0 resolved trades")
+        return None
+    win_rate = 100 * len(wins) / len(resolved)
+    expectancy = sum(t.r_multiple for t in resolved) / len(resolved)
+    print(f"  {label:30s} {len(resolved):4d} trades  win_rate={win_rate:5.1f}%  expectancy={expectancy:+.3f}R")
+    return {"trades": len(resolved), "win_rate_pct": win_rate, "expectancy": expectancy}
+
+
 def main():
     client = OandaClient()
     meta = fetch_instrument_metadata(client, ALL_INSTRUMENTS)
 
-    all_trades = []
+    all_trades = []  # (instrument, entry_time_utc, SimulatedTrade)
     print(f"{'Instrument':10s} {'checks':>7s} {'blk_MTF':>8s} {'blk_lvl':>8s} {'blk_stop':>9s} {'signals':>8s}")
     for instrument in ALL_INSTRUMENTS:
         stats, trades = backtest_instrument(client, instrument, meta[instrument])
-        all_trades.extend((instrument, t) for t in trades)
+        all_trades.extend((instrument, entry_time, t) for entry_time, t in trades)
         print(f"{instrument:10s} {stats['bar_checks']:7d} {stats['blocked_entry_allowed']:8d} "
               f"{stats['blocked_levels']:8d} {stats['blocked_min_stop']:9d} {stats['signals']:8d}")
 
     print(f"\n{len(all_trades)} total signals generated across the universe over ~52 days of 15m history\n")
 
-    closed = [ClosedTrade(instrument=ins, outcome=t.outcome, pnl_account_currency=t.r_multiple)
-              for ins, t in all_trades]
-    summary = summarize_backtest(closed, starting_equity=0)  # R-multiples, not dollars -- starting_equity unused here
-    for k, v in summary.items():
-        print(f"  {k}: {v}")
+    print("=== Overall (all instruments, all hours) ===")
+    summarize("all trades", all_trades)
 
-    wins = [t for ins, t in all_trades if t.outcome == "WIN"]
-    losses = [t for ins, t in all_trades if t.outcome == "LOSS"]
-    if wins:
-        print(f"\n  avg R on wins:  {sum(t.r_multiple for t in wins) / len(wins):.2f}")
-    if losses:
-        print(f"  avg R on losses: {sum(t.r_multiple for t in losses) / len(losses):.2f}")
-    resolved = [t for ins, t in all_trades if t.outcome in ("WIN", "LOSS")]
-    if resolved:
-        expectancy = sum(t.r_multiple for t in resolved) / len(resolved)
-        print(f"  expectancy (avg R per trade): {expectancy:.2f}")
+    # --- Experiment 1: restrict to instruments that actually clear the
+    # 2:1 R:R breakeven win rate (33.3%) in THIS run, recomputed here
+    # rather than hardcoded so it's self-consistent with whatever data
+    # this run actually pulled. ---
+    print("\n=== Per-instrument (sorted by win rate) ===")
+    by_instrument = {}
+    for ins, _, t in all_trades:
+        by_instrument.setdefault(ins, []).append(t)
+    ranked = []
+    for ins, trades in by_instrument.items():
+        resolved = [t for t in trades if t.outcome in ("WIN", "LOSS")]
+        if not resolved:
+            continue
+        win_rate = sum(1 for t in resolved if t.outcome == "WIN") / len(resolved)
+        ranked.append((ins, win_rate, len(resolved)))
+    ranked.sort(key=lambda r: -r[1])
+    good_instruments = set()
+    for ins, win_rate, n in ranked:
+        clears = win_rate > BREAKEVEN_WIN_RATE
+        if clears:
+            good_instruments.add(ins)
+        print(f"  {ins:10s} win_rate={100*win_rate:5.1f}%  n={n:3d}  {'CLEARS breakeven' if clears else ''}")
+
+    print(f"\n=== Experiment 1: restricted to instruments clearing breakeven ({', '.join(sorted(good_instruments))}) ===")
+    good_trades = [(ins, et, t) for ins, et, t in all_trades if ins in good_instruments]
+    summarize("good instruments only", good_trades)
+
+    # --- Experiment 2: does the 21:30-01:00 SGT Autopilot window
+    # actually capture the better trades, or would a wider window help? ---
+    print("\n=== Experiment 2: 21:30-01:00 SGT window vs the rest of the day ===")
+    within, outside = [], []
+    for ins, entry_time_utc, t in all_trades:
+        entry_sgt = entry_time_utc.astimezone(SGT)
+        (within if _within_autopilot_window(entry_sgt) else outside).append((ins, entry_time_utc, t))
+    summarize("within 21:30-01:00 SGT", within)
+    summarize("outside that window (rest of 24/5)", outside)
+
+    print("\n  -- same split, restricted to the instruments that clear breakeven --")
+    within_good = [(ins, et, t) for ins, et, t in within if ins in good_instruments]
+    outside_good = [(ins, et, t) for ins, et, t in outside if ins in good_instruments]
+    summarize("within window, good instruments", within_good)
+    summarize("outside window, good instruments", outside_good)
+
+    print("\n=== Win rate by SGT hour of entry (all instruments) ===")
+    by_hour = {}
+    for ins, entry_time_utc, t in all_trades:
+        if t.outcome not in ("WIN", "LOSS"):
+            continue
+        hour = entry_time_utc.astimezone(SGT).hour
+        by_hour.setdefault(hour, []).append(t)
+    for hour in range(24):
+        trades = by_hour.get(hour, [])
+        if not trades:
+            continue
+        win_rate = 100 * sum(1 for t in trades if t.outcome == "WIN") / len(trades)
+        # minute=45 so the label reflects "any part of this hour overlaps
+        # the window" for the two boundary hours (21:xx, 01:xx), not just
+        # the top of the hour
+        marker = " <- in window" if _within_autopilot_window(datetime(2000, 1, 1, hour, 45, tzinfo=SGT)) else ""
+        print(f"  {hour:02d}:00 SGT  n={len(trades):3d}  win_rate={win_rate:5.1f}%{marker}")
 
 
 if __name__ == "__main__":
