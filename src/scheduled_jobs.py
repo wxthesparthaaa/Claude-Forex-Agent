@@ -89,6 +89,13 @@ def _account_from_tracked_capital(state) -> AccountState:
 # means the loser skips entirely rather than racing.
 _evening_scan_lock = threading.Lock()
 
+# Minimum real-world gap enforced between two "Potential trades tonight"
+# sends, regardless of which process/thread/job is trying to send one --
+# see the dedupe check inside run_evening_scan_and_notify. Comfortably
+# longer than a single scan takes, short enough to never block a
+# legitimate next-day listing.
+MIN_LISTING_GAP = timedelta(minutes=15)
+
 
 def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool = True,
                                   instruments: list = None) -> list:
@@ -139,7 +146,7 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         save_candidates(candidates)
 
         if notify_listing:
-            # Re-reads the phase fresh right before sending, rather than
+            # Re-reads state fresh right before sending, rather than
             # reusing the snapshot from the top of this function -- a
             # full scan can take several seconds, and if the user
             # toggles Autopilot in Settings while one is in flight, the
@@ -148,8 +155,32 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
             # (Execution itself still uses the scan-start snapshot
             # deliberately -- switching risk_config/phase mid-scan would
             # be its own, worse inconsistency.)
-            current_mode = phase_state_from_state(load_state()).phase
-            send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
+            #
+            # ALSO a hard, mechanism-agnostic dedupe: real incident,
+            # confirmed by repeated duplicate sends persisting even with
+            # the once-per-calendar-day date-stamp gate in
+            # run_daily_dispatcher -- most likely overlapping process
+            # instances (Render sleep/wake or deploy transitions) each
+            # racing past that gate before the other's date-stamp write
+            # lands. MIN_LISTING_GAP re-checks a precise timestamp,
+            # re-read at the last possible moment, so no matter how many
+            # processes/threads reach this point, at most one send gets
+            # through per window.
+            fresh_state = load_state()
+            last_sent_iso = fresh_state.last_evening_listing_sent_at
+            now_utc = datetime.now(timezone.utc)
+            already_sent_recently = (
+                last_sent_iso is not None
+                and now_utc - datetime.fromisoformat(last_sent_iso) < MIN_LISTING_GAP
+            )
+            if already_sent_recently:
+                print(f"WARNING: skipping duplicate evening-listing send -- one already went out at "
+                      f"{last_sent_iso} (within {MIN_LISTING_GAP})", flush=True)
+            else:
+                current_mode = phase_state_from_state(fresh_state).phase
+                send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
+                fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
+                save_state(fresh_state)
 
         if phase_state.phase == "autopilot":
             auto_execute_candidates(client, candidates, phase_state, risk_config, account)

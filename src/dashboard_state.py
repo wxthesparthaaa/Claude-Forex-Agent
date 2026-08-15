@@ -70,6 +70,16 @@ class DashboardState:
     last_review_date: str | None = None
     last_reflection_date: str | None = None
     last_health_check_date: str | None = None  # 21:00 SGT pre-evening OANDA/GitHub connectivity check
+    # Precise timestamp (UTC ISO) of the last "Potential trades tonight"
+    # Telegram send -- a hard backstop on top of last_evening_listing_date.
+    # Real incident: duplicate sends kept recurring despite the date-stamp
+    # gate, most likely from overlapping process instances (Render
+    # sleep/wake or deploy transitions) each holding their own in-memory
+    # lock and each finding the date-stamp not yet updated. A per-day
+    # stamp can be raced across processes; re-checking a precise
+    # timestamp with a minimum gap, re-read immediately before sending,
+    # narrows that window regardless of which processes are involved.
+    last_evening_listing_sent_at: str | None = None
 
 
 def default_state() -> DashboardState:

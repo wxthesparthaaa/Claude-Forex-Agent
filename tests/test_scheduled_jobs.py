@@ -513,6 +513,54 @@ def test_evening_scan_notify_listing_false_suppresses_potential_trades_message(
     mock_auto_exec.assert_called_once()
 
 
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_evening_listing_skips_duplicate_send_within_min_gap(
+        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
+    # Real incident: duplicate "Potential trades tonight" sends kept
+    # recurring roughly every 5 minutes despite the once-per-day date
+    # gate in run_daily_dispatcher -- most likely overlapping process
+    # instances each racing past that gate. This is the hard backstop:
+    # a precise recent-timestamp check, independent of which process/
+    # thread/job reaches the send.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.last_evening_listing_sent_at = datetime.now(timezone.utc).isoformat()  # "just sent"
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)  # notify_listing=True by default
+
+    mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_evening_listing_sends_once_the_min_gap_has_passed(
+        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
+    from datetime import timedelta
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    long_ago = datetime.now(timezone.utc) - timedelta(minutes=20)
+    state.last_evening_listing_sent_at = long_ago.isoformat()
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    mock_send.assert_called_once()
+    updated = dashboard_state.load_state()
+    assert updated.last_evening_listing_sent_at != long_ago.isoformat()
+
+
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
 @patch("scheduled_jobs.run_evening_scan_and_notify")
