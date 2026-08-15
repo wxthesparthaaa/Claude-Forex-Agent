@@ -252,15 +252,18 @@ def _sgt(h, m, day=10):
     return _real_datetime(2026, 8, day, h, m, tzinfo=_SGT)
 
 
-def test_within_autopilot_scan_window_covers_930pm_to_1am():
-    within = scheduled_jobs._within_autopilot_scan_window
-    assert within(_sgt(21, 30)) is True
-    assert within(_sgt(23, 0)) is True
-    assert within(_sgt(0, 30)) is True
-    assert within(_sgt(1, 0)) is True
-    assert within(_sgt(21, 29)) is False
-    assert within(_sgt(1, 1)) is False
-    assert within(_sgt(12, 0)) is False
+def test_instrument_window_active_covers_each_pairs_own_session():
+    from market_hours import instrument_window_active
+    # EUR_USD: London/London-NY overlap, 16:00-01:00 SGT (spans midnight)
+    assert instrument_window_active("EUR_USD", _sgt(16, 0)) is True
+    assert instrument_window_active("EUR_USD", _sgt(23, 0)) is True
+    assert instrument_window_active("EUR_USD", _sgt(0, 30)) is True
+    assert instrument_window_active("EUR_USD", _sgt(15, 59)) is False
+    assert instrument_window_active("EUR_USD", _sgt(1, 0)) is False
+    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT -- well outside EUR's window,
+    # exactly the gap the old single fixed window used to miss entirely.
+    assert instrument_window_active("AUD_USD", _sgt(8, 0)) is True
+    assert instrument_window_active("AUD_USD", _sgt(22, 0)) is False
 
 
 class _FrozenDatetime(_real_datetime):
@@ -290,9 +293,46 @@ def test_interval_scan_skips_when_not_autopilot(mock_run, tmp_path, monkeypatch)
 
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_outside_window(mock_run, tmp_path, monkeypatch):
+def test_interval_scan_only_includes_instruments_in_their_own_window(mock_run, tmp_path, monkeypatch):
+    # 15:00 SGT: AUD/NZD's window (05:00-14:00) has already closed and
+    # EUR/GBP/CHF's (16:00-01:00) hasn't opened yet -- USD_JPY
+    # (08:00-17:00) is the only instrument in-window at this hour, unlike
+    # the old single fixed 21:30-01:00 window which would have skipped
+    # everything at 15:00 regardless of pair.
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(15, 0))  # mid-afternoon, well outside 9:30pm-1am
+    _freeze_at(monkeypatch, _sgt(15, 0))
+    mock_run.return_value = []
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result == []
+    mock_run.assert_called_once()
+    _, kwargs = mock_run.call_args
+    assert kwargs.get("instruments") == ["USD_JPY"]
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_paused_instruments(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(15, 0))  # only USD_JPY would otherwise be due, see test above
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.paused_instruments = {"USD_JPY": _sgt(15, 0, day=1).isoformat()}
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result is None
+    mock_run.assert_not_called()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_on_a_weekend(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, datetime(2026, 8, 15, 22, 0, tzinfo=_SGT))  # a Saturday
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
     dashboard_state.save_state(state)
@@ -305,12 +345,15 @@ def test_interval_scan_skips_outside_window(mock_run, tmp_path, monkeypatch):
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_skips_when_interval_not_yet_elapsed(mock_run, tmp_path, monkeypatch):
+    from universe import ALL_INSTRUMENTS
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(22, 0))
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
     state.autopilot_scan_interval_minutes = 30
-    state.last_autopilot_scan_timestamp = _sgt(21, 45).isoformat()  # only 15 min ago
+    # every instrument "just scanned" 15 min ago -- none due yet regardless
+    # of which ones are inside their own window at 22:00
+    state.last_autopilot_scan_timestamps = {i: _sgt(21, 45).isoformat() for i in ALL_INSTRUMENTS}
     dashboard_state.save_state(state)
 
     result = scheduled_jobs.run_autopilot_interval_scan()
@@ -321,19 +364,26 @@ def test_interval_scan_skips_when_interval_not_yet_elapsed(mock_run, tmp_path, m
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_runs_once_interval_has_elapsed(mock_run, tmp_path, monkeypatch):
+    from universe import ALL_INSTRUMENTS
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(22, 0))
     mock_run.return_value = ["ran"]
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
     state.autopilot_scan_interval_minutes = 30
-    state.last_autopilot_scan_timestamp = _sgt(21, 30).isoformat()  # exactly 30 min ago
+    state.last_autopilot_scan_timestamps = {i: _sgt(21, 30).isoformat() for i in ALL_INSTRUMENTS}
     dashboard_state.save_state(state)
 
     result = scheduled_jobs.run_autopilot_interval_scan()
 
     assert result == ["ran"]
     mock_run.assert_called_once()
+    # 22:00 SGT: EUR/GBP/CHF, XAU/XAG/BCO, USD_CAD, WTICO_USD are all
+    # in-window; AUD/NZD/USD_JPY are not (their windows are daytime SGT).
+    _, kwargs = mock_run.call_args
+    assert set(kwargs["instruments"]) == {
+        "EUR_USD", "GBP_USD", "USD_CHF", "USD_CAD", "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
+    }
 
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
@@ -352,7 +402,8 @@ def test_interval_scan_runs_immediately_when_no_prior_timestamp(mock_run, tmp_pa
 
 
 @patch("scheduled_jobs.send_message")
-def test_evening_scan_stamps_last_autopilot_scan_timestamp(mock_send, tmp_path, monkeypatch):
+def test_evening_scan_stamps_last_autopilot_scan_timestamps_per_instrument(mock_send, tmp_path, monkeypatch):
+    from universe import ALL_INSTRUMENTS
     _isolate_state(tmp_path, monkeypatch)
     state = dashboard_state.default_state()
     dashboard_state.save_state(state)
@@ -360,10 +411,30 @@ def test_evening_scan_stamps_last_autopilot_scan_timestamp(mock_send, tmp_path, 
     with patch("scheduled_jobs.run_live_scan", return_value=[]), \
          patch("scheduled_jobs.save_candidates"):
         client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-        run_evening_scan_and_notify(client)
+        run_evening_scan_and_notify(client)  # instruments=None -> full universe minus paused
 
     updated = dashboard_state.load_state()
-    assert updated.last_autopilot_scan_timestamp is not None
+    for instrument in ALL_INSTRUMENTS:
+        assert updated.last_autopilot_scan_timestamps.get(instrument) is not None
+
+
+@patch("scheduled_jobs.send_message")
+def test_evening_scan_only_stamps_the_instruments_it_actually_scanned(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    with patch("scheduled_jobs.run_live_scan", return_value=[]) as mock_scan, \
+         patch("scheduled_jobs.save_candidates"):
+        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+        run_evening_scan_and_notify(client, instruments=["USD_JPY"])
+
+    call_kwargs = mock_scan.call_args[1]
+    assert call_kwargs["instruments"] == ["USD_JPY"]
+
+    updated = dashboard_state.load_state()
+    assert updated.last_autopilot_scan_timestamps.get("USD_JPY") is not None
+    assert "EUR_USD" not in updated.last_autopilot_scan_timestamps
 
 
 def test_evening_scan_skips_when_already_in_progress_on_another_thread(tmp_path, monkeypatch):

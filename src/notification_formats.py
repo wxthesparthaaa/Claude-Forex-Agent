@@ -79,8 +79,8 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
     return "\n".join(lines)
 
 
-def format_friday_reflection_message(week_stats: dict) -> str:
-    from market_hours import BEST_SESSION_SGT, OUTSIDE_AUTOPILOT_WINDOW
+def format_friday_reflection_message(week_stats: dict, self_improvement_changes: list | None = None) -> str:
+    from market_hours import INSTRUMENT_WINDOWS_SGT, format_instrument_window
 
     lines = [
         "<b>Friday self-reflection</b>",
@@ -88,18 +88,22 @@ def format_friday_reflection_message(week_stats: dict) -> str:
         f"Trades: {week_stats['total_trades']} ({week_stats.get('win_rate_pct', 'n/a')}% win rate)",
     ]
     if week_stats.get("weakest_pair"):
-        lines.append(f"Weakest pair this week: {week_stats['weakest_pair']} -- consider reducing focus next week")
+        lines.append(f"Weakest pair this week: {week_stats['weakest_pair']}")
     if week_stats.get("strongest_pair"):
         lines.append(f"Strongest pair this week: {week_stats['strongest_pair']}")
 
-    # Suitable trading windows per pair, so ad-hoc/manual scans outside
-    # the fixed 9:30pm-1am Autopilot window know when each pair actually
-    # trades best -- AUD/NZD/JPY get little benefit from that window
-    # since it's built around the London-New York overlap.
-    lines.append("\n<b>Suggested trading windows (SGT)</b>")
-    for instrument, window in BEST_SESSION_SGT.items():
-        flag = " (outside Autopilot's 21:30-01:00 window)" if instrument in OUTSIDE_AUTOPILOT_WINDOW else ""
-        lines.append(f"  {instrument}: {window}{flag}")
+    # Each pair now actually scans/trades during its OWN window below
+    # (scheduled_jobs.run_autopilot_interval_scan), not just the old
+    # fixed 9:30pm-1am slot -- this list describes real bot behavior,
+    # not just a suggestion for manual reference.
+    lines.append("\n<b>Autopilot trading windows (SGT)</b>")
+    for instrument in INSTRUMENT_WINDOWS_SGT:
+        lines.append(f"  {instrument}: {format_instrument_window(instrument)}")
+
+    if self_improvement_changes:
+        lines.append("\n<b>Automatic adjustments this week</b>")
+        for change in self_improvement_changes:
+            lines.append(f"  {change}")
 
     lines.append("\nPreparing for Monday.")
     return "\n".join(lines)

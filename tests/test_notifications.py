@@ -78,20 +78,29 @@ def test_friday_reflection_message_includes_weak_and_strong_pairs():
     stats = {"pnl": 150.0, "pnl_pct": 7.5, "total_trades": 12, "win_rate_pct": 58.3,
               "weakest_pair": "USD_CHF", "strongest_pair": "XAU_USD"}
     msg = format_friday_reflection_message(stats)
-    assert "USD_CHF" in msg and "reducing focus" in msg
+    assert "Weakest pair this week: USD_CHF" in msg
     assert "XAU_USD" in msg
     assert "Preparing for Monday." in msg
 
 
-def test_friday_reflection_message_suggests_trading_windows_per_pair():
+def test_friday_reflection_message_lists_autopilot_windows_per_pair():
     stats = {"pnl": 0.0, "pnl_pct": 0.0, "total_trades": 0, "win_rate_pct": None,
               "weakest_pair": None, "strongest_pair": None}
     msg = format_friday_reflection_message(stats)
-    assert "Suggested trading windows" in msg
+    assert "Autopilot trading windows" in msg
     assert "EUR_USD: London" in msg
-    # AUD/NZD/JPY peak outside Autopilot's fixed 21:30-01:00 window -- flagged explicitly
-    assert "AUD_USD" in msg and "outside Autopilot" in msg
+    # AUD/NZD/JPY now scan/trade during their OWN window (Autopilot no
+    # longer shares one fixed evening-only slot across every pair).
+    assert "AUD_USD" in msg and "Sydney" in msg
     assert "USD_JPY" in msg and "Tokyo" in msg
+
+
+def test_friday_reflection_message_shows_self_improvement_changes():
+    stats = {"pnl": 0.0, "pnl_pct": 0.0, "total_trades": 0, "win_rate_pct": None,
+              "weakest_pair": None, "strongest_pair": None}
+    msg = format_friday_reflection_message(stats, ["Auto-paused USD_CAD for 2 weeks: net-negative 3 weeks running"])
+    assert "Automatic adjustments this week" in msg
+    assert "Auto-paused USD_CAD" in msg
 
 
 def test_get_telegram_config_prefers_env_vars(monkeypatch):

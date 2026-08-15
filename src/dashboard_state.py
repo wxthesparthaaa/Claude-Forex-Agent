@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, fields
 
 from autopilot import PhaseState
 from risk_engine import RiskConfig
@@ -40,11 +40,24 @@ class DashboardState:
     strategy_realized_pnl: float = 0.0
     last_review_timestamp: str | None = None  # filters our own journal to "since last night's review"
     week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
-    # How often Autopilot re-scans between the 9:30pm kickoff and the 1am
-    # review cutoff (see scheduled_jobs.run_autopilot_interval_scan).
+    # How often Autopilot re-scans each instrument once its own trading
+    # window is open (see scheduled_jobs.run_autopilot_interval_scan).
     # Minutes; one of 15/30/60/240.
     autopilot_scan_interval_minutes: int = 30
-    last_autopilot_scan_timestamp: str | None = None  # throttles the interval scan above
+    # {instrument: iso timestamp last scanned} -- per-instrument, since
+    # each pair now has its own window (market_hours.INSTRUMENT_WINDOWS_SGT)
+    # instead of one shared fixed evening slot; replaces the old single
+    # last_autopilot_scan_timestamp field.
+    last_autopilot_scan_timestamps: dict = field(default_factory=dict)
+    # {instrument: iso date the pause started} -- see
+    # scheduled_jobs.apply_self_improvement. A paused instrument is
+    # skipped entirely by both the interval scanner and the evening
+    # listing until its fixed cooldown expires.
+    paused_instruments: dict = field(default_factory=dict)
+    # {instrument: [weekly P&L, oldest first]} -- trailing history used
+    # by apply_self_improvement to decide pauses; only weeks an
+    # instrument actually traded get an entry.
+    weekly_pnl_by_instrument: dict = field(default_factory=dict)
     # Date-stamps (SGT, YYYY-MM-DD) marking the last calendar day each
     # touchpoint actually ran -- lets scheduled_jobs.run_daily_dispatcher
     # catch a touchpoint up whenever the process next wakes, rather than
@@ -86,6 +99,11 @@ def load_state() -> DashboardState:
         return default_state()
     with open(STATE_PATH) as f:
         data = json.load(f)
+    # Drop any persisted key that no longer matches a field -- lets the
+    # schema evolve (rename/remove a field) without a crash-on-load the
+    # next time this reads a JSON file written by an older version.
+    known_fields = {f.name for f in fields(DashboardState)}
+    data = {k: v for k, v in data.items() if k in known_fields}
     return DashboardState(**data)
 
 

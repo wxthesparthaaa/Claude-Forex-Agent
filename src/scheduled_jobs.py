@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import threading
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from oanda_client import OandaClient
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from live_scan import run_live_scan
-from market_hours import SGT
+from market_hours import SGT, is_trading_day, instrument_window_active
+from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, trades_opened_today, total_open_risk, closed_entries
 from trade_execution import auto_execute_candidates
@@ -89,14 +90,22 @@ def _account_from_tracked_capital(state) -> AccountState:
 _evening_scan_lock = threading.Lock()
 
 
-def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool = True) -> list:
+def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool = True,
+                                  instruments: list = None) -> list:
     """9:30pm SGT: scan the universe, list qualifying setups with the
     manual/autopilot liner -- and if autopilot is on, actually execute
     the qualifying ones (same risk-gated path as the dashboard's Scan
     Now, see trade_execution.auto_execute_candidates). Also the function
     run_autopilot_interval_scan re-invokes on its configured cadence
-    through the rest of the evening -- both paths share this one
+    through the rest of the day -- both paths share this one
     implementation so the listing/execution logic can't drift apart.
+
+    instruments restricts the scan to a specific subset (the interval
+    ticker passes only the instruments currently inside their own
+    trading window, see run_autopilot_interval_scan); None means the
+    full universe minus whatever's currently paused by
+    apply_self_improvement, which is what the fixed 21:30 evening
+    listing uses.
 
     notify_listing gates the "here's tonight's setups" Telegram message
     only -- the interval ticker passes False so the repeated scans stay
@@ -118,10 +127,14 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         risk_config = risk_config_from_state(state)
         phase_state = phase_state_from_state(state)
 
+        if instruments is None:
+            instruments = [i for i in ALL_INSTRUMENTS if i not in state.paused_instruments]
+
         summary = client.get_account_summary()
         account = _account_from_tracked_capital(state)
 
-        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
+        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
+                                    instruments=instruments)
         candidate_dicts = [asdict(c) for c in candidates]
         save_candidates(candidates)
 
@@ -141,11 +154,25 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         if phase_state.phase == "autopilot":
             auto_execute_candidates(client, candidates, phase_state, risk_config, account)
 
-        # Stamps every evening scan (whichever job triggered it) so the interval
-        # ticker below knows when the last one happened, regardless of phase --
-        # if Autopilot gets turned on mid-evening the stamp is already stale
-        # enough to trigger an immediate scan on the next tick.
-        state.last_autopilot_scan_timestamp = datetime.now(SGT).isoformat()
+        # Real incident, confirmed via the state-sync git history: this
+        # function loads `state` once at the top, then a scan (OANDA +
+        # Finnhub calls) can take several seconds -- long enough for
+        # run_daily_dispatcher's nightly-review/Friday-reflection branches
+        # (a separate scheduled job, same 5-minute tick) to correctly
+        # advance state on another thread in the meantime. Saving the
+        # STALE `state` object captured before the scan silently reverted
+        # those completions (last_review_date/last_reflection_date back
+        # to "not done yet"), which made the next 5-minute tick think
+        # they were newly due again -- a self-sustaining loop of duplicate
+        # Telegram messages roughly every 5 minutes. Same mechanism would
+        # revert a Settings change (e.g. toggling Autopilot) made while a
+        # scan was in flight. Re-loading fresh right before this specific,
+        # narrow mutation (only the fields this function owns) avoids
+        # clobbering whatever else advanced state during the scan.
+        state = load_state()
+        now_iso = datetime.now(SGT).isoformat()
+        for instrument in instruments:
+            state.last_autopilot_scan_timestamps[instrument] = now_iso
         save_state(state)
 
         return candidate_dicts
@@ -153,21 +180,16 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         _evening_scan_lock.release()
 
 
-def _within_autopilot_scan_window(now_sgt: datetime) -> bool:
-    """9:30pm to 1am SGT, the same window the evening scan (21:30) and
-    nightly review (01:00) already bracket."""
-    minutes = now_sgt.hour * 60 + now_sgt.minute
-    if now_sgt.hour < 21:
-        minutes += 24 * 60  # fold post-midnight hours (0:xx, 1:00) onto the same scale
-    return 21 * 60 + 30 <= minutes <= 25 * 60  # 21:30 .. 1:00 (next day)
-
-
 def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
-    """Ticks every few minutes (see app.py's scheduler); only actually
-    does anything if Autopilot is on, it's currently within the 9:30pm-
-    1am window, and enough time has passed since the last scan per the
-    user's configured interval (Settings: 15/30/60/240 min). No-ops
-    otherwise -- cheap to call often. Runs quietly (no "tonight's setups"
+    """Ticks every few minutes (see app.py's scheduler), all day every
+    trading day; only actually does anything if Autopilot is on. Each
+    instrument has its own conventional trading window
+    (market_hours.INSTRUMENT_WINDOWS_SGT -- e.g. AUD/NZD trade Sydney/
+    Tokyo hours, not just the old fixed evening slot every pair used to
+    share) and its own scan cooldown (Settings: 15/30/60/240 min,
+    tracked per instrument). Paused instruments (see
+    apply_self_improvement) are skipped entirely. No-ops if nothing is
+    due -- cheap to call often. Runs quietly (no "tonight's setups"
     Telegram message) -- only an actual auto-executed trade notifies."""
     state = load_state()
     phase_state = phase_state_from_state(state)
@@ -175,16 +197,26 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
         return None
 
     now = datetime.now(SGT)
-    if not _within_autopilot_scan_window(now):
+    if not is_trading_day(now):
         return None
 
-    if state.last_autopilot_scan_timestamp:
-        last = datetime.fromisoformat(state.last_autopilot_scan_timestamp)
-        elapsed_minutes = (now - last).total_seconds() / 60
-        if elapsed_minutes < state.autopilot_scan_interval_minutes:
-            return None
+    due = []
+    for instrument in ALL_INSTRUMENTS:
+        if instrument in state.paused_instruments:
+            continue
+        if not instrument_window_active(instrument, now):
+            continue
+        last = state.last_autopilot_scan_timestamps.get(instrument)
+        if last:
+            elapsed_minutes = (now - datetime.fromisoformat(last)).total_seconds() / 60
+            if elapsed_minutes < state.autopilot_scan_interval_minutes:
+                continue
+        due.append(instrument)
 
-    return run_evening_scan_and_notify(client, notify_listing=False)
+    if not due:
+        return None
+
+    return run_evening_scan_and_notify(client, notify_listing=False, instruments=due)
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
@@ -212,11 +244,60 @@ def run_nightly_review(client: OandaClient = None) -> list:
     return closed
 
 
+# How many of an instrument's last TRADED weeks (not calendar weeks --
+# a week with zero trades leaves no data point either way) must all be
+# net-negative before it gets auto-paused.
+PAUSE_AFTER_NEGATIVE_WEEKS = 3
+# How many of those trailing traded weeks are kept per instrument.
+PNL_HISTORY_WEEKS = 4
+# Fixed cooldown before a pause auto-expires. Deliberately a fixed
+# duration rather than a performance gate ("resume once it's no longer
+# net-negative") -- a paused instrument isn't being scanned, so it can
+# never generate the data that would prove recovery; re-evaluating from
+# scratch after a fixed break avoids that deadlock.
+PAUSE_DURATION_WEEKS = 2
+
+
+def _apply_self_improvement(state, week_by_instrument: dict, today: datetime) -> list:
+    """Mechanical, explainable, downside-only weekly adjustment: an
+    instrument that's closed net-negative for PAUSE_AFTER_NEGATIVE_WEEKS
+    traded weeks running gets paused from Autopilot (both the interval
+    scanner and the evening listing skip it entirely) for
+    PAUSE_DURATION_WEEKS, then automatically re-enters the rotation and
+    starts a fresh trailing history. Deliberately never increases size
+    or focus on a hot pair -- a ~15-trade week is too small a sample to
+    safely lean into, and the extensive backtesting done on this project
+    found no confirmed edge worth amplifying. Mutates `state` in place;
+    returns human-readable change lines for the Friday Telegram message."""
+    changes = []
+
+    expired = [instrument for instrument, paused_iso in state.paused_instruments.items()
+               if today - datetime.fromisoformat(paused_iso) >= timedelta(weeks=PAUSE_DURATION_WEEKS)]
+    for instrument in expired:
+        del state.paused_instruments[instrument]
+        state.weekly_pnl_by_instrument[instrument] = []
+        changes.append(f"Resumed {instrument} after a {PAUSE_DURATION_WEEKS}-week pause -- re-evaluating fresh")
+
+    for instrument, pnl in week_by_instrument.items():
+        if instrument in state.paused_instruments:
+            continue
+        history = state.weekly_pnl_by_instrument.setdefault(instrument, [])
+        history.append(pnl)
+        del history[:-PNL_HISTORY_WEEKS]
+        if len(history) >= PAUSE_AFTER_NEGATIVE_WEEKS and all(p < 0 for p in history[-PAUSE_AFTER_NEGATIVE_WEEKS:]):
+            state.paused_instruments[instrument] = today.isoformat()
+            changes.append(f"Auto-paused {instrument} for {PAUSE_DURATION_WEEKS} weeks: "
+                            f"net-negative {PAUSE_AFTER_NEGATIVE_WEEKS} weeks running")
+
+    return changes
+
+
 def run_friday_reflection(client: OandaClient = None) -> dict:
     """After Friday's session: week P&L (against tracked capital) + which
-    pairs performed best/worst, to inform focus going into Monday.
-    client is accepted (unused) for signature symmetry -- see
-    run_nightly_review."""
+    pairs performed best/worst, to inform focus going into Monday. Also
+    applies apply_self_improvement's mechanical pause/resume adjustments
+    off this week's per-instrument P&L. client is accepted (unused) for
+    signature symmetry -- see run_nightly_review."""
     state = load_state()
 
     closed = _closed_trades_since(state.week_start_timestamp, limit=200)
@@ -239,7 +320,9 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
         "win_rate_pct": round(100 * wins / len(closed), 1) if closed else None,
         "strongest_pair": strongest, "weakest_pair": weakest,
     }
-    send_message(format_friday_reflection_message(stats))
+
+    changes = _apply_self_improvement(state, by_instrument, datetime.now(timezone.utc))
+    send_message(format_friday_reflection_message(stats, changes))
 
     state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)
