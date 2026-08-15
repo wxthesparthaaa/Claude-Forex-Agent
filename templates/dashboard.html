@@ -240,6 +240,10 @@
   {% if candidates %}
   <div class="card">
     <h3 style="margin-top:0;">Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
+    {% if last_scan_at %}
+    <p style="color:var(--muted); font-size:0.85rem; margin:-0.25rem 0 0.75rem;">Scanned: {{ last_scan_at }}</p>
+    {% endif %}
+    <div style="overflow-x:auto;">
     <table>
       <tr><th>Pair</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>SL</th><th>TP</th><th>Amount traded</th><th></th></tr>
       {% for c in candidates %}
@@ -261,8 +265,20 @@
       </tr>
       {% endfor %}
     </table>
+    </div>
   </div>
   {% endif %}
+
+  <div class="card">
+    <details>
+      <summary style="cursor:pointer; font-weight:600;">Developer Notes</summary>
+      <ul style="margin:0.75rem 0 0; padding-left:1.1rem; font-size:0.85rem; color:var(--muted);">
+        {% for date, note in developer_notes %}
+        <li style="margin-bottom:0.4rem;"><span style="color:var(--fg);">{{ note }}</span> <span style="opacity:0.7;">&mdash; {{ date }}</span></li>
+        {% endfor %}
+      </ul>
+    </details>
+  </div>
 
   <footer>
     <span class="{{ 'session-open' if forex_open else 'session-closed' }}">
