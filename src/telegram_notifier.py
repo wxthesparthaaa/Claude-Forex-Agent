@@ -8,8 +8,10 @@ creating via @BotFather.
 from __future__ import annotations
 
 import os
+import traceback
 import urllib.request
 import urllib.parse
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
@@ -52,6 +54,16 @@ SOURCE_HEADER = "\U0001F310 <b>Claude Forex Agent</b>"
 
 
 def send_message(text: str, config: TelegramConfig = None) -> dict:
+    # Catch-all diagnostic for a still-unexplained incident: real sends
+    # have been observed with no corresponding log line from any of the
+    # specific call sites already instrumented (the evening-listing
+    # send, the 2-hour expiry notice) -- meaning either an uninstrumented
+    # caller exists, or the send isn't coming from this process at all.
+    # This is the ONE place every send in this codebase funnels through,
+    # so logging here, unconditionally, on every call, is the last place
+    # left to look before concluding it's external to this app entirely.
+    print(f"INFO: send_message() called at {datetime.now(timezone.utc).isoformat()} "
+          f"text[:60]={text[:60]!r}\n{''.join(traceback.format_stack())}", flush=True)
     config = config or get_telegram_config()
     url = f"https://api.telegram.org/bot{config.bot_token}/sendMessage"
     data = urllib.parse.urlencode({
