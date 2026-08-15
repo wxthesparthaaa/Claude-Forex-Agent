@@ -179,18 +179,27 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
                       f"{last_sent_iso} (within {MIN_LISTING_GAP})", flush=True)
             else:
                 current_mode = phase_state_from_state(fresh_state).phase
-                # Diagnostic for a still-unexplained incident: this send
-                # has been observed in production at times of day where
-                # every known caller (run_daily_dispatcher's weekday +
-                # 21:30 time gate) should make it impossible. Logging the
-                # full call stack here means the NEXT occurrence proves
-                # which code path actually reached this line, instead of
-                # inferring it from deploy timestamps alone.
+                # Real incident: Render's free tier has been observed
+                # restarting the process repeatedly and unpredictably
+                # (visible in its own logs as "No open HTTP ports
+                # detected" retries between bursts of otherwise-normal
+                # traffic -- a genuine crash/restart loop, not idle
+                # sleep-wake). If the process gets killed between the
+                # send below and the save that used to follow it, the
+                # "already sent" record never lands, and the NEXT boot
+                # has no memory the send happened -- sends again. Saving
+                # the record FIRST, before the network call to Telegram,
+                # means a mid-flight kill fails safe (a legitimate send
+                # might occasionally not go through) instead of failing
+                # unsafe (repeated duplicate sends across every restart).
+                fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
+                save_state(fresh_state)
+                # Diagnostic for the same incident: logs the full call
+                # stack so, if this still recurs, the log shows exactly
+                # which function reached this line and how.
                 print(f"INFO: sending evening listing at {now_utc.isoformat()} (mode={current_mode}, "
                       f"instruments={instruments})\n{''.join(traceback.format_stack())}", flush=True)
                 send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
-                fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
-                save_state(fresh_state)
 
         if phase_state.phase == "autopilot":
             auto_execute_candidates(client, candidates, phase_state, risk_config, account)
@@ -435,6 +444,11 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     now = datetime.now(SGT)
     today = now.date().isoformat()
     minutes = now.hour * 60 + now.minute
+    # Fires every ~5 min unconditionally -- lets a live search for
+    # "dispatcher tick" in Render's logs confirm right now whether this
+    # job is even running, and what it's computing weekday/minutes as,
+    # without waiting for a rare incident to reproduce.
+    print(f"INFO: dispatcher tick at {now.isoformat()} (weekday={now.weekday()}, minutes={minutes})", flush=True)
 
     state = load_state()
 
