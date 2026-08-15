@@ -235,7 +235,6 @@ def dashboard():
     # every open stop-loss hit), which is the honestly-computable analog
     # already available here without a currency-conversion detour.
     invested = total_open_risk(journal)
-    cash_reserve = strategy_capital - invested
     week_gain = realized_pnl_since(journal, state.week_start_timestamp)
     WEEKLY_GAIN_TARGET = 200.0
 
@@ -260,7 +259,7 @@ def dashboard():
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
-        invested=invested, cash_reserve=cash_reserve, week_gain=week_gain, weekly_gain_target=WEEKLY_GAIN_TARGET,
+        invested=invested, week_gain=week_gain, weekly_gain_target=WEEKLY_GAIN_TARGET,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )

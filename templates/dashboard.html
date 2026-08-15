@@ -80,8 +80,8 @@
       </div>
       <div class="stat-tile">
         <div class="stat-tile-label">Cash reserve</div>
-        <div class="stat-tile-value">{{ "%.2f"|format(cash_reserve) }}</div>
-        <div class="stat-tile-sub">{{ account_currency }}</div>
+        <div class="stat-tile-value">{{ "%.2f"|format(broker_balance) if broker_balance is not none else "n/a" }}</div>
+        <div class="stat-tile-sub">{{ account_currency }} demo NAV &middot; not used for sizing</div>
       </div>
       <div class="stat-tile">
         <div class="stat-tile-label">Invested</div>
@@ -92,15 +92,6 @@
         <div class="stat-tile-label">Gain (this week)</div>
         <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">{{ "%+.2f"|format(week_gain) }}</div>
         <div class="stat-tile-sub">{{ account_currency }} &middot; vs {{ "%.0f"|format(weekly_gain_target) }}/week target</div>
-      </div>
-      <div class="stat-tile" style="min-width:100%; margin-top:-0.1rem; padding:0.4rem 1rem; background:transparent; border:none;">
-        <div class="balance-label">
-          {% if broker_balance is not none %}
-            OANDA demo NAV: {{ "%.2f"|format(broker_balance) }} {{ account_currency }} (broker's default demo funding &mdash; not used for position sizing)
-          {% else %}
-            OANDA demo NAV unavailable
-          {% endif %}
-        </div>
       </div>
     </div>
 
