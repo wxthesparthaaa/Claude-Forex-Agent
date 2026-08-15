@@ -237,6 +237,9 @@ def dashboard():
     invested = total_open_risk(journal)
     week_gain = realized_pnl_since(journal, state.week_start_timestamp)
     WEEKLY_GAIN_TARGET = 200.0
+    overall_gain = strategy_capital - state.strategy_starting_capital
+    overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
+                         if state.strategy_starting_capital else 0.0)
 
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
@@ -260,6 +263,7 @@ def dashboard():
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
         invested=invested, week_gain=week_gain, weekly_gain_target=WEEKLY_GAIN_TARGET,
+        overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
