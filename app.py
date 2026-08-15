@@ -45,7 +45,7 @@ load_dotenv(encoding="utf-8-sig", override=True)
 
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
-    DEFAULT_STRATEGY_CAPITAL,
+    DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state,
 )
 from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses, is_forex_market_open, SGT, INSTRUMENT_WINDOWS_SGT, format_instrument_window
@@ -79,12 +79,13 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-15", "Added weekly confidence-weight reweighting -- Friday reflection now nudges which signals "
+                    "(breadth/RSI/candlestick/news) the score trusts, based on live win rates, not backtests."),
     ("2026-08-15", "Found and fixed the real cause of the phantom Telegram notifications -- a missing test "
                     "mock, not the deployed app -- and added a safety net so it can't recur."),
     ("2026-08-15", "Gave this project its own dedicated Telegram bot, separate from the sibling project's."),
     ("2026-08-15", "Fixed a Win rate percentage bug and redesigned the capital section into clearer stat tiles."),
     ("2026-08-15", "Autopilot's automatic scan now uses precise forex market hours, not just a weekday check."),
-    ("2026-08-15", "Autopilot now scans/trades each pair during its own session window, not one shared evening slot."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
@@ -287,7 +288,8 @@ def scan():
         client = OandaClient()
         summary = client.get_account_summary()
         account = _account_state_from_tracked_capital(state)
-        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"))
+        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
+                                    confidence_weights=confidence_weights_from_state(state))
         save_candidates(candidates)
 
         qualifying = [c for c in candidates if not c.rejected_reason]

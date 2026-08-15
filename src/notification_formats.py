@@ -79,7 +79,8 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
     return "\n".join(lines)
 
 
-def format_friday_reflection_message(week_stats: dict, self_improvement_changes: list | None = None) -> str:
+def format_friday_reflection_message(week_stats: dict, self_improvement_changes: list | None = None,
+                                      confidence_reweight_lines: list | None = None) -> str:
     from market_hours import INSTRUMENT_WINDOWS_SGT, format_instrument_window
 
     lines = [
@@ -104,6 +105,14 @@ def format_friday_reflection_message(week_stats: dict, self_improvement_changes:
         lines.append("\n<b>Automatic adjustments this week</b>")
         for change in self_improvement_changes:
             lines.append(f"  {change}")
+
+    if confidence_reweight_lines:
+        # All-time journal data, not just this week -- a single week
+        # rarely clears MIN_SAMPLES_PER_BUCKET, so this reflects the
+        # full accumulated history each time (see confidence_reweighting.py).
+        lines.append("\n<b>Confidence weight reassessment (all-time data)</b>")
+        for line in confidence_reweight_lines:
+            lines.append(f"  {line}")
 
     lines.append("\nPreparing for Monday.")
     return "\n".join(lines)

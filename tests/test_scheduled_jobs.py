@@ -160,6 +160,59 @@ def test_run_friday_reflection_identifies_strongest_and_weakest_pair(mock_send, 
     assert updated.week_start_timestamp is not None
 
 
+@patch("scheduled_jobs.send_message")
+def test_run_friday_reflection_leaves_weights_unchanged_without_enough_journal_history(
+        mock_send, tmp_path, monkeypatch):
+    # Same two-trade journal as the test above -- nowhere near
+    # MIN_SAMPLES_PER_BUCKET (15 per side), so reweighting must be a
+    # no-op even though the hook runs every week.
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    tj.save_journal([
+        _closed_entry(instrument="EUR_USD", realized_pnl=80.0, closed_at="2026-08-14T20:00:00Z"),
+        _closed_entry(instrument="USD_CHF", direction="SHORT", realized_pnl=-20.0, closed_at="2026-08-14T21:00:00Z"),
+    ])
+
+    run_friday_reflection()
+
+    updated = dashboard_state.load_state()
+    from confidence_score import ConfidenceWeights
+    assert updated.confidence_weights == dashboard_state.asdict(ConfidenceWeights())
+    sent_text = mock_send.call_args[0][0]
+    assert "not enough data yet to reassess" in sent_text
+
+
+@patch("scheduled_jobs.send_message")
+def test_run_friday_reflection_reweights_confidence_components_from_all_time_journal(
+        mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+
+    # 15 wins with a high breadth score, 15 losses with a low one --
+    # a clean, maximal lift so breadth's weight should move up.
+    entries = []
+    for i in range(15):
+        entries.append(_closed_entry(instrument="EUR_USD", realized_pnl=10.0,
+                                      closed_at=f"2026-08-01T{i % 24:02d}:00:00Z",
+                                      confidence_components={"breadth": 90.0}))
+    for i in range(15):
+        entries.append(_closed_entry(instrument="EUR_USD", realized_pnl=-10.0,
+                                      closed_at=f"2026-08-02T{i % 24:02d}:00:00Z",
+                                      confidence_components={"breadth": 30.0}))
+    tj.save_journal(entries)
+
+    run_friday_reflection()
+
+    updated = dashboard_state.load_state()
+    assert updated.confidence_weights["breadth"] > 0.35  # ConfidenceWeights() default
+    total = sum(updated.confidence_weights.values())
+    assert abs(total - 1.0) < 1e-9
+
+    sent_text = mock_send.call_args[0][0]
+    assert "Confidence weight reassessment" in sent_text
+    assert "breadth" in sent_text
+
+
 class ScanFakeClient(FakeClient):
     def get_pricing(self, instruments):
         return []

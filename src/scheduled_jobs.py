@@ -22,7 +22,10 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
 from oanda_client import OandaClient
-from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
+from dashboard_state import (
+    load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity,
+    confidence_weights_from_state,
+)
 from live_scan import run_live_scan
 from market_hours import SGT, is_forex_market_open, instrument_window_active
 from universe import ALL_INSTRUMENTS
@@ -35,6 +38,7 @@ from notification_formats import (
 from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
 from risk_engine import AccountState
+from confidence_reweighting import reweight_confidence_components
 
 
 def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> list:
@@ -142,7 +146,8 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         account = _account_from_tracked_capital(state)
 
         candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
-                                    instruments=instruments)
+                                    instruments=instruments,
+                                    confidence_weights=confidence_weights_from_state(state))
         candidate_dicts = [asdict(c) for c in candidates]
         save_candidates(candidates)
 
@@ -381,7 +386,16 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     }
 
     changes = _apply_self_improvement(state, by_instrument, datetime.now(timezone.utc))
-    send_message(format_friday_reflection_message(stats, changes))
+
+    # Deliberately all-time journal data, not just this week's `closed`
+    # list above -- a single week rarely clears MIN_SAMPLES_PER_BUCKET
+    # (15 trades on each side of the threshold), so reweighting needs
+    # the full accumulated history to say anything meaningful at all.
+    current_weights = confidence_weights_from_state(state)
+    new_weights, reweight_lines = reweight_confidence_components(load_journal(), current_weights)
+    state.confidence_weights = asdict(new_weights)
+
+    send_message(format_friday_reflection_message(stats, changes, reweight_lines))
 
     state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)

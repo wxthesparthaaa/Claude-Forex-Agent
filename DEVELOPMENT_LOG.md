@@ -293,4 +293,54 @@ evidenced fixes for real bugs that do exist in the deployed app — they
 just weren't the cause of this particular evening's saga. Worth keeping
 regardless of that, and now sitting alongside the actual root-cause fix.
 
+---
+
+## 2026-08-15 (late evening) — Live confidence-weight reweighting, replacing the backtest gate
+
+**Problem**: The 413-day backtest (2026-08-14/15 entry above) found no
+static edge in the live signal or six alternates. After discussing the
+finding, the decision made was to keep Autopilot running rather than
+revert to manual-approve, on the hypothesis that historical replay
+against *frozen* rules can't prove a signal that *adapts* to live
+results won't work — and that continuous live experimentation, not
+another backtest, is the right next research method. `confidence_score.py`
+had named this ("tunable via the Friday self-reflection process") as
+the intended design from day one, but it was never actually built —
+the four component weights (breadth/RSI/candlestick/news) had been
+static since Phase 6.
+
+**Solution**: Built `confidence_reweighting.py` and wired it into the
+existing Friday reflection touchpoint. Each week, it buckets every
+closed, decisively-won-or-lost trade in the **full all-time journal**
+(not just that week) by whether each component scored ≥70 or <70 at
+signal time, compares win rates between the two buckets, and nudges
+that component's weight toward whichever bucket is actually winning
+more — but only if there are at least 15 trades on both sides of the
+threshold (below that, a difference is as likely to be noise as
+signal, the exact lesson the backtest itself taught). Each week's move
+is capped at ±0.03, and every weight is floored/ceilinged to [0.05,
+0.60] so no single input can ever dominate or vanish from the blend.
+New weights always renormalize back to summing to 1.0. Persisted on
+`DashboardState.confidence_weights` (new field, defaults to
+`ConfidenceWeights()`'s existing values) and threaded through the full
+scan call chain (`app.py` /scan, `scheduled_jobs.run_evening_scan_and_notify`
+→ `live_scan.run_live_scan` → `scan_workflow.generate_candidate` →
+`compute_confidence`) so every scan actually uses the current, possibly
+-adjusted weights rather than always the hardcoded defaults. Every
+adjustment (or explicit "not enough data yet" / "no meaningful
+difference") is written into the Friday Telegram message under a new
+"Confidence weight reassessment (all-time data)" section, so this stays
+inspectable rather than a black box. 13 new unit tests cover the
+bucket win-rate math, sample-size gating, step cap, floor/ceiling
+enforcement even under repeated passes, and normalization; 2 more cover
+the `run_friday_reflection` hook itself (no-op with a thin journal,
+real reweighting with a clean 15-vs-15 lift). Full suite: 271 passed.
+`PROJECT_LOG.md` updated with the actual decision and a reframed phase
+structure (backtesting demoted from gate to reference; Phase C's
+"enough evidence to trust semi-auto" bar now needs to be redefined
+under this live-adaptation model — flagged as the next real decision
+point, not yet answered).
+
+**Fixed**: 2026-08-15, late evening SGT
+
 **Fixed**: 2026-08-15 ~22:35 SGT

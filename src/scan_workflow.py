@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pivot_detection import classify_structure, detect_structure_break
 from multi_timeframe import higher_timeframe_bias, entry_allowed
 from trade_levels import derive_trade_levels
-from confidence_score import SignalInputs, compute_confidence
+from confidence_score import SignalInputs, ConfidenceWeights, compute_confidence
 from position_sizing import calculate_units, resolve_conversion_rate, InstrumentMeta
 from instrument_metadata import round_price
 from risk_engine import ProposedTrade, RiskConfig, AccountState, validate_trade, RiskViolation
@@ -77,6 +77,7 @@ def generate_candidate(
     risk_config: RiskConfig,
     entry_timeframe: str = "15m",
     news_configured: bool = False,
+    confidence_weights: ConfidenceWeights | None = None,
 ) -> TradeCandidate | None:
     higher_structures = {tf: classify_structure(swings) for tf, swings in higher_timeframe_swings.items()}
     higher_bias = higher_timeframe_bias(higher_structures)
@@ -114,7 +115,7 @@ def generate_candidate(
         candlestick_pattern=candlestick_pattern,
         news_score=news_score,
     )
-    confidence = compute_confidence(signal_inputs)
+    confidence = compute_confidence(signal_inputs, confidence_weights)
 
     quote_currency = meta.quote_currency
     conversion_rate = resolve_conversion_rate(quote_currency, account_currency, get_price)

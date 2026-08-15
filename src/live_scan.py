@@ -26,6 +26,7 @@ from candlestick_patterns import Candle, detect_pattern
 from currency_strength import currency_returns, usd_strength_value, strength_signal
 from instrument_metadata import fetch_instrument_metadata
 from scan_workflow import generate_candidate
+from confidence_score import ConfidenceWeights
 from finnhub_adapter import FinnhubClient
 from news_relevance import news_score_for_instrument
 
@@ -132,7 +133,7 @@ def fetch_news_articles() -> list:
 
 
 def _process_instrument(client, instrument, meta, account_currency, get_price, account, risk_config,
-                         breadth_agreement, edge_zscore, news_articles):
+                         breadth_agreement, edge_zscore, news_articles, confidence_weights=None):
     """None on ANY failure for this one instrument (bad/missing candle
     data, no currency-conversion path found, etc.) -- real incident: an
     unhandled currency-conversion error for one instrument (JPY_SGD
@@ -142,14 +143,15 @@ def _process_instrument(client, instrument, meta, account_currency, get_price, a
     Every other instrument's candidate must not depend on this one."""
     try:
         return _process_instrument_unsafe(client, instrument, meta, account_currency, get_price, account,
-                                           risk_config, breadth_agreement, edge_zscore, news_articles)
+                                           risk_config, breadth_agreement, edge_zscore, news_articles,
+                                           confidence_weights)
     except Exception as e:
         print(f"WARNING: scan failed for {instrument}, skipping it: {e}", flush=True)
         return None
 
 
 def _process_instrument_unsafe(client, instrument, meta, account_currency, get_price, account, risk_config,
-                                breadth_agreement, edge_zscore, news_articles):
+                                breadth_agreement, edge_zscore, news_articles, confidence_weights=None):
     entry_candles, entry_closes, entry_highs, entry_lows = _fetch_closes_highs_lows(
         client, instrument, ENTRY_TIMEFRAME, BARS_FOR_SWINGS)
     entry_swings = find_swing_points(entry_highs, entry_lows)
@@ -178,7 +180,7 @@ def _process_instrument_unsafe(client, instrument, meta, account_currency, get_p
         news_score=news_score,
         meta=meta[instrument], account_currency=account_currency, get_price=get_price,
         account=account, risk_config=risk_config, entry_timeframe=ENTRY_TIMEFRAME,
-        news_configured=news_configured,
+        news_configured=news_configured, confidence_weights=confidence_weights,
     )
 
 
@@ -203,7 +205,8 @@ def fetch_mid_price(client, pair_name: str) -> float | None:
     return (float(bid) + float(ask)) / 2
 
 
-def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None) -> list:
+def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None,
+                   confidence_weights: ConfidenceWeights = None) -> list:
     instruments = instruments or ALL_INSTRUMENTS
 
     # Metadata, currency-strength inputs, and news are independent of
@@ -232,7 +235,8 @@ def run_live_scan(client, account, risk_config, account_currency: str, instrumen
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
         futures = {
             pool.submit(_process_instrument, client, instrument, meta, account_currency, get_price,
-                        account, risk_config, breadth_agreement, edge_zscore, news_articles): instrument
+                        account, risk_config, breadth_agreement, edge_zscore, news_articles,
+                        confidence_weights): instrument
             for instrument in instruments
         }
         for future in as_completed(futures):

@@ -11,6 +11,7 @@ import os
 from dataclasses import asdict, dataclass, field, fields
 
 from autopilot import PhaseState
+from confidence_score import ConfidenceWeights
 from risk_engine import RiskConfig
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
@@ -80,11 +81,18 @@ class DashboardState:
     # timestamp with a minimum gap, re-read immediately before sending,
     # narrows that window regardless of which processes are involved.
     last_evening_listing_sent_at: str | None = None
+    # Blend weights compute_confidence() uses for breadth/rsi/candlestick/
+    # news -- starts at ConfidenceWeights()'s defaults, nudged weekly by
+    # confidence_reweighting.reweight_confidence_components from the
+    # accumulated live journal (see run_friday_reflection). Kept as a
+    # plain dict in state, same pattern as risk_config.
+    confidence_weights: dict = field(default_factory=lambda: asdict(ConfidenceWeights()))
 
 
 def default_state() -> DashboardState:
     return DashboardState(risk_config=asdict(RiskConfig()), phase_state=asdict(PhaseState()),
-                           strategy_starting_capital=DEFAULT_STRATEGY_CAPITAL)
+                           strategy_starting_capital=DEFAULT_STRATEGY_CAPITAL,
+                           confidence_weights=asdict(ConfidenceWeights()))
 
 
 def tracked_equity(state: DashboardState) -> float:
@@ -134,3 +142,7 @@ def risk_config_from_state(state: DashboardState) -> RiskConfig:
 
 def phase_state_from_state(state: DashboardState) -> PhaseState:
     return PhaseState(**state.phase_state)
+
+
+def confidence_weights_from_state(state: DashboardState) -> ConfidenceWeights:
+    return ConfidenceWeights(**state.confidence_weights)

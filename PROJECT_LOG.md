@@ -311,3 +311,74 @@ deciding explicitly whether to revert Autopilot to manual-approve while
 signal research continues, rather than continuing to auto-execute on it
 by default. Not a decision to make silently in a log file — flagged
 here for the record, with the actual choice left to the user.
+
+## Decision and pivot (2026-08-15, evening)
+
+**The user's actual call, made explicitly rather than by default:**
+keep Autopilot running on the demo account, and retire backtesting as
+the gate on whether to keep trading. The reasoning given: 413 days of
+historical replay says none of the 7 signal families tested show a
+*static* edge, but that doesn't prove no signal can ever work — it
+tests fixed, never-updated rules against the past. The hypothesis going
+forward is that **continuous live experimentation, with the signal
+weights actually adapting to what's winning and losing in real trades,
+is a different bet than a frozen backtest** — closer to "the system
+gets better at picking among its own inputs over time" than "this one
+static rule either has edge or doesn't." The backtest scripts are kept
+in the repo as reference (they're real, correct tools — see
+`backtest_engine.py` and the 2026-08-14 `DEVELOPMENT_LOG.md` entry) but
+are no longer the gate on whether Autopilot keeps running.
+
+**What this replaces the backtest gate with.** Rather than "prove edge
+in historical replay before trusting this further," the new mechanism
+is `confidence_reweighting.py`: every Friday reflection now also asks
+"which of the four confidence components (breadth/RSI/candlestick/news)
+have actually correlated with wins vs. losses, across the full live
+journal to date" and nudges each component's blend weight accordingly
+— a small, capped step per week (±0.03), gated on at least 15 closed
+trades on both sides of a 70-point threshold per component before that
+component is touched at all, floored/ceilinged so no single input can
+ever dominate or vanish (0.05–0.60). This is deliberately the same
+"small samples lie" lesson the 413-day backtest itself taught, applied
+as a *safeguard on the live-adaptation mechanism* rather than as a
+reason to distrust live data altogether: the gating exists precisely so
+early noise in the still-thin live journal can't swing the weights hard
+off a handful of trades. Every week's adjustment (or lack of one, with
+the reason) is written into the Friday Telegram message, so it stays
+inspectable rather than a silent black box.
+
+**Reframed phases, given this pivot:**
+
+- **Phase A (infrastructure)** — unchanged, complete.
+- **Phase B (signal research)** — reframed from "prove a static signal
+  has edge in historical replay" to "run Autopilot live, accumulate a
+  real journal, and let `confidence_reweighting.py` continuously adapt
+  which inputs the confidence score trusts, based on what's actually
+  winning." Backtesting is demoted from gate to occasional reference
+  check, not the primary research method going forward.
+- **Phase C (the original staged, evidence-gated rollout)** — the
+  30-closed-trade-per-stage ladder is no longer positioned as something
+  to enter only *after* a validated static signal is found (Phase B, as
+  originally framed, may never produce one) — instead it's the next
+  thing to define concretely: what does "enough live evidence, with
+  weights that have now adapted, to trust semi-auto / a small live
+  stake" actually look like under this new live-adaptation model. **Not
+  yet defined — this is the next real decision point**, once enough
+  weeks of reweighting history exist to judge whether the mechanism is
+  actually converging on inputs that predict wins, or just drifting.
+- **Phase D (live/real-money trading)** — unchanged: still gated on
+  actually clearing a (yet to be redefined) Phase C, still requires the
+  separate `OANDA_ENV=live` credential change.
+
+**What to watch for, so this pivot doesn't quietly become "no gate at
+all."** The risk in trading "prove it in a backtest first" for "adapt
+live and see" is that adaptation can look like progress even when it's
+just noise fitting itself to a small sample — the exact failure mode
+the 413-day backtest surfaced in the *original* signal. The sample-size
+gate, step cap, and floor/ceiling in `confidence_reweighting.py` exist
+to slow that down, not eliminate it; a future review should look at
+whether the weekly-adjustment log actually shows weights stabilizing
+around a consistent story over months, versus oscillating — the former
+is evidence of a real signal being found, the latter is evidence this
+approach isn't working either and Phase C's real-money gate should stay
+closed until something does.
