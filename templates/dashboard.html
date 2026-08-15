@@ -25,6 +25,14 @@
     .balance-value { font-size: 2rem; font-weight: 700; margin: 0.25rem 0; }
     .balance-currency { font-size: 1rem; color: var(--muted); font-weight: 400; }
     .balance-label { color: var(--muted); font-size: 0.85rem; }
+    .stat-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; flex: 2; min-width: 300px; }
+    .stat-tile {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.85rem 1rem; flex: 1; min-width: 130px;
+    }
+    .stat-tile-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .stat-tile-value { font-size: 1.35rem; font-weight: 700; margin-top: 0.25rem; }
+    .stat-tile-sub { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
     .scan-btn {
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;
@@ -64,27 +72,53 @@
   <p class="subtitle">{{ phase_label }} &middot; {{ mode|upper }} mode</p>
 
   <div class="row">
-    <div class="card">
-      <div class="balance-label">Strategy capital ({{ mode|upper }})</div>
-      <div class="balance-value">
-        {{ "%.2f"|format(strategy_capital) }} <span class="balance-currency">{{ account_currency }}</span>
+    <div class="stat-grid">
+      <div class="stat-tile">
+        <div class="stat-tile-label">Strategy capital</div>
+        <div class="stat-tile-value">{{ "%.2f"|format(strategy_capital) }}</div>
+        <div class="stat-tile-sub">{{ account_currency }} &middot; {{ mode|upper }}</div>
       </div>
-      <div class="balance-label" style="margin-top:0.5rem;">
-        {% if broker_balance is not none %}
-          OANDA demo NAV: {{ "%.2f"|format(broker_balance) }} {{ account_currency }} (broker's default demo funding &mdash; not used for position sizing)
-        {% else %}
-          OANDA demo NAV unavailable
-        {% endif %}
+      <div class="stat-tile">
+        <div class="stat-tile-label">Cash reserve</div>
+        <div class="stat-tile-value">{{ "%.2f"|format(cash_reserve) }}</div>
+        <div class="stat-tile-sub">{{ account_currency }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">Invested</div>
+        <div class="stat-tile-value">{{ "%.2f"|format(invested) }}</div>
+        <div class="stat-tile-sub">at risk in open trades</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">Gain (this week)</div>
+        <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">{{ "%+.2f"|format(week_gain) }}</div>
+        <div class="stat-tile-sub">{{ account_currency }} &middot; vs {{ "%.0f"|format(weekly_gain_target) }}/week target</div>
+      </div>
+      <div class="stat-tile" style="min-width:100%; margin-top:-0.1rem; padding:0.4rem 1rem; background:transparent; border:none;">
+        <div class="balance-label">
+          {% if broker_balance is not none %}
+            OANDA demo NAV: {{ "%.2f"|format(broker_balance) }} {{ account_currency }} (broker's default demo funding &mdash; not used for position sizing)
+          {% else %}
+            OANDA demo NAV unavailable
+          {% endif %}
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Win rate</h3>
+    <div class="card" style="flex:1; min-width:260px;">
+      <h3 style="margin-top:0;">
+        Win rate
+        {% if (wins + losses) > 0 %}
+        <span style="color:var(--muted); font-weight:400; font-size:0.9rem;">&mdash; {{ "%.1f"|format(100 * wins / (wins + losses)) }}%</span>
+        {% endif %}
+      </h3>
       <div style="max-width:220px; margin:0 auto;">
         <canvas id="winRateChart" width="220" height="220"></canvas>
       </div>
       <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
         {{ closed_trades }} closed trade{{ '' if closed_trades == 1 else 's' }}
+        {% if closed_trades > (wins + losses) %}
+        <br><span style="font-size:0.78rem;">({{ closed_trades - wins - losses }} with unrecoverable P&amp;L, excluded from win rate)</span>
+        {% endif %}
       </p>
     </div>
 

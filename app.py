@@ -57,7 +57,8 @@ from scan_results import save_candidates, load_candidates, load_scan_results, fi
 from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import (
-    load_journal, trades_opened_today, total_open_risk, win_loss_counts, closed_entries, JOURNAL_XLSX_REPO_PATH,
+    load_journal, trades_opened_today, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
+    JOURNAL_XLSX_REPO_PATH,
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
@@ -227,6 +228,17 @@ def dashboard():
     wins, losses = win_loss_counts(journal)
     closed_trades = len(closed_entries(journal))
 
+    strategy_capital = tracked_equity_live(state, journal)
+    # "Invested" for a margin account isn't a notional position value the
+    # way it would be for a stock portfolio -- it's the capital actually
+    # committed as risk on currently open trades (what would be lost if
+    # every open stop-loss hit), which is the honestly-computable analog
+    # already available here without a currency-conversion detour.
+    invested = total_open_risk(journal)
+    cash_reserve = strategy_capital - invested
+    week_gain = realized_pnl_since(journal, state.week_start_timestamp)
+    WEEKLY_GAIN_TARGET = 200.0
+
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
     # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
@@ -247,7 +259,8 @@ def dashboard():
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
-        strategy_capital=tracked_equity_live(state, journal), broker_balance=broker_balance, account_currency=account_currency,
+        strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
+        invested=invested, cash_reserve=cash_reserve, week_gain=week_gain, weekly_gain_target=WEEKLY_GAIN_TARGET,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
