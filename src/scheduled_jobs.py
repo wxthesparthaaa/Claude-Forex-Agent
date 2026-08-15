@@ -17,6 +17,7 @@ if used directly.
 from __future__ import annotations
 
 import threading
+import traceback
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
@@ -178,6 +179,15 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
                       f"{last_sent_iso} (within {MIN_LISTING_GAP})", flush=True)
             else:
                 current_mode = phase_state_from_state(fresh_state).phase
+                # Diagnostic for a still-unexplained incident: this send
+                # has been observed in production at times of day where
+                # every known caller (run_daily_dispatcher's weekday +
+                # 21:30 time gate) should make it impossible. Logging the
+                # full call stack here means the NEXT occurrence proves
+                # which code path actually reached this line, instead of
+                # inferring it from deploy timestamps alone.
+                print(f"INFO: sending evening listing at {now_utc.isoformat()} (mode={current_mode}, "
+                      f"instruments={instruments})\n{''.join(traceback.format_stack())}", flush=True)
                 send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
                 fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
                 save_state(fresh_state)
