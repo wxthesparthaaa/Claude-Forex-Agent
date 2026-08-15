@@ -234,3 +234,63 @@ natural tick instead of firing instantly.
   empty result.
 
 **Fixed**: 2026-08-15 11:50–14:14 SGT
+
+---
+
+## 2026-08-15 (evening) — The actual root cause: a test suite leak, not the app
+
+**Problem**: Despite the three fixes above, duplicate "Potential trades
+tonight" messages kept recurring all evening — including at times (3:52pm,
+4:55pm, 6:57pm, 9:20pm, 9:28pm, 9:37pm, 10:00pm, 10:22pm, 10:30pm) the
+dispatcher's own weekday-and-time gate should have made impossible.
+Investigated exhaustively against the live, deployed service rather than
+guessing further: added diagnostic logging to every known send path and
+to the dispatcher's own tick; confirmed via Render's logs, repeatedly,
+that the dispatcher was correctly computing safe gate values at the exact
+reported incident times; confirmed via git-commit timestamps that no
+deploy lined up with any specific occurrence; ruled out the sibling
+"options-agent" project (different GitHub repo, no matching message text
+anywhere in its source, no scheduler even running on its Render service);
+ruled out local Windows Task Scheduler entries (different project,
+different message format); ruled out clock skew (server-printed
+timestamps matched real time to the second); ruled out a hidden Render
+Cron Job (none exist — confirmed via the account's own service list).
+To fully isolate the question, also split this project onto its own
+dedicated Telegram bot, separate from the one shared with the sibling
+project — the message still recurred even there, which is what finally
+proved it wasn't cross-project interference either.
+
+**The actual cause**: a test in `test_scheduled_jobs.py` —
+`test_evening_scan_lock_releases_so_a_later_call_still_works` — called
+the real `run_evening_scan_and_notify()` function to verify its lock-
+release behavior. It mocked the OANDA scan and the results save, but
+never mocked the Telegram send. Every local `pytest tests/` run — run
+dozens of times that day as routine pre-commit verification — silently
+sent a genuine "Potential trades tonight" message via whichever bot
+credentials the local `config/telegram_config.properties` fallback held
+at the time. This explains every property of the "mystery" at once: it
+tracked active development (tests run constantly while coding), it
+tracked deploys (tests always run right before a commit/push), and it
+survived the dedicated-bot migration (the local fallback file was
+updated to the new bot too, so the leak just kept using it) — none of
+it ever touched the deployed Render service, its scheduler, or the
+sibling project.
+
+**Solution**: Fixed the specific missing mock. Added `tests/conftest.py`
+— an autouse fixture that mocks `send_message` at every module's own
+import site for every test in the suite, so a future test that forgets
+this one mock can never reach the real Telegram API again, regardless of
+which file it's added to. Found and verified with hard evidence, not
+inference: running the full suite with output capture disabled
+(`pytest -s`) showed 3 real `send_message()` calls where only 2 were
+expected (the two tests in `test_notifications.py` that deliberately
+exercise `send_message()`'s own behavior); after the fix, an identical
+run showed exactly 2.
+
+**The honest note**: the three server-side fixes earlier this day (stale-
+state reload, timestamp dedupe, delayed scheduler start) were real,
+evidenced fixes for real bugs that do exist in the deployed app — they
+just weren't the cause of this particular evening's saga. Worth keeping
+regardless of that, and now sitting alongside the actual root-cause fix.
+
+**Fixed**: 2026-08-15 ~22:35 SGT

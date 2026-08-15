@@ -79,12 +79,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
-    ("2026-08-15", "Added a full development log tracking every problem and fix since this project started."),
-    ("2026-08-15", "Scan Now now tells you clearly when forex markets are closed, instead of an empty result."),
-    ("2026-08-15", "Fixed duplicate Telegram notifications for good -- three stacked fixes for state races, "
-                    "process restarts, and a hard dedupe backstop."),
+    ("2026-08-15", "Found and fixed the real cause of the phantom Telegram notifications -- a missing test "
+                    "mock, not the deployed app -- and added a safety net so it can't recur."),
+    ("2026-08-15", "Gave this project its own dedicated Telegram bot, separate from the sibling project's."),
+    ("2026-08-15", "Fixed a Win rate percentage bug and redesigned the capital section into clearer stat tiles."),
+    ("2026-08-15", "Autopilot's automatic scan now uses precise forex market hours, not just a weekday check."),
     ("2026-08-15", "Autopilot now scans/trades each pair during its own session window, not one shared evening slot."),
-    ("2026-08-15", "Added an automatic weekly pause for any pair that closes net-negative 3 weeks running."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
