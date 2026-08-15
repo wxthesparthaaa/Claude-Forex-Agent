@@ -18,7 +18,7 @@
     "autopilot_confidence_threshold_pct": 65.0
   },
   "phase_state": {
-    "phase": "autopilot",
+    "phase": "manual_paper",
     "closed_trades_in_phase": 0,
     "kill_switch_engaged": false
   },
@@ -31,7 +31,9 @@
   "last_review_timestamp": "2026-08-14T17:05:25.728963+00:00",
   "week_start_timestamp": "2026-08-14T17:05:30.210314+00:00",
   "autopilot_scan_interval_minutes": 15,
-  "last_autopilot_scan_timestamp": "2026-08-15T01:00:47.933021+08:00",
+  "last_autopilot_scan_timestamps": {},
+  "paused_instruments": {},
+  "weekly_pnl_by_instrument": {},
   "last_evening_listing_date": "2026-08-14",
   "last_review_date": "2026-08-15",
   "last_reflection_date": "2026-08-15",
