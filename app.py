@@ -24,7 +24,7 @@ import json
 import os
 import sys
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -48,12 +48,12 @@ from dashboard_state import (
     DEFAULT_STRATEGY_CAPITAL,
 )
 from autopilot import PHASE_LABELS
-from market_hours import all_session_statuses, is_forex_market_open
+from market_hours import all_session_statuses, is_forex_market_open, SGT
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
 from live_scan import run_live_scan, fetch_news_articles
 from universe import GRANULARITY, MAJOR_PAIRS
-from scan_results import save_candidates, load_candidates, find_candidate
+from scan_results import save_candidates, load_candidates, load_scan_results, find_candidate
 from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import (
@@ -71,6 +71,18 @@ app = Flask(__name__)
 # the sibling project). A fixed local default is fine for that purpose;
 # set FLASK_SECRET_KEY on Render if that default bothers you.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-dev")
+
+# Shown in the dashboard's collapsible "Developer Notes" section -- a
+# short, curated, most-recent-first changelog of real behavior changes,
+# not raw git log noise. Add one line per notable change when it ships.
+DEVELOPER_NOTES = [
+    ("2026-08-15", "Fixed duplicate Telegram notifications caused by a race between scheduled jobs."),
+    ("2026-08-15", "Autopilot now scans/trades each pair during its own session window, not one shared evening slot."),
+    ("2026-08-15", "Added an automatic weekly pause for any pair that closes net-negative 3 weeks running."),
+    ("2026-08-14", "Fixed the evening Telegram listing sometimes showing the wrong Autopilot/Manual mode."),
+    ("2026-08-14", "Prevented two scheduled scans from racing each other; GitHub state saves now retry on conflict."),
+    ("2026-08-14", "Widened news-sentiment matching to catch more currency-relevant headlines."),
+]
 
 
 def _oanda_time_to_unix(time_str: str) -> int:
@@ -167,12 +179,20 @@ def health():
     return {"status": "ok"}, 200
 
 
+def _format_sgt(iso_utc: str | None) -> str | None:
+    if not iso_utc:
+        return None
+    return datetime.fromisoformat(iso_utc).astimezone(SGT).strftime("%Y-%m-%d %H:%M SGT")
+
+
 @app.route("/")
 def dashboard():
     state = load_state()
     risk_config = risk_config_from_state(state)
     phase_state = phase_state_from_state(state)
-    candidates = load_candidates()
+    scan_results = load_scan_results()
+    candidates = scan_results["candidates"]
+    last_scan_at = _format_sgt(scan_results["scanned_at"])
 
     broker_balance = None
     account_currency = ""
@@ -211,10 +231,10 @@ def dashboard():
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes,
-        candidates=candidates, wins=wins, losses=losses, closed_trades=closed_trades,
+        candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity_live(state, journal), broker_balance=broker_balance, account_currency=account_currency,
-        default_strategy_capital=DEFAULT_STRATEGY_CAPITAL,
+        default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
     )
 
 
@@ -414,27 +434,34 @@ def settings():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # Catches up on the evening listing (21:30), nightly review (01:00),
-    # and Friday reflection (Sat 01:00) -- ticks every 5 min and runs
-    # whichever of those is already due but hasn't fired today, rather
-    # than a fixed CronTrigger per job. Necessary because Render's free
-    # tier puts the whole process to sleep after ~15 min idle and only
-    # wakes it on an incoming HTTP request: a plain CronTrigger firing
-    # at exactly 21:30/01:00 silently never runs if the process happens
-    # to be asleep at that exact minute, with no way to catch up later.
-    scheduler.add_job(run_daily_dispatcher, IntervalTrigger(minutes=5))
+    # Real incident: Render's free tier sleeps the whole process after
+    # ~15 min idle and wakes it on the next incoming HTTP request (e.g.
+    # someone opening the dashboard) -- every such wake re-runs this
+    # whole function from scratch, registering brand new jobs. APScheduler's
+    # IntervalTrigger fires ALMOST IMMEDIATELY upon registration by
+    # default (next_run_time defaults to "now"), so a burst of wake-ups
+    # in a short window (dashboard checks, a browser tab reloading, etc.)
+    # each produced their own immediate dispatcher tick -- these could
+    # land close enough together to race past the same once-per-day gate
+    # before each other's state write was visible, producing duplicate
+    # Telegram sends correlated with activity/traffic rather than any
+    # fixed time of day. Giving every job an explicit start_date one full
+    # interval in the future means a fresh boot waits for its first
+    # natural tick instead of firing instantly, so back-to-back wake-ups
+    # can no longer each get an immediate, unsynchronized first run.
+    now = datetime.now(timezone.utc)
+    scheduler.add_job(run_daily_dispatcher, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # Ticks every 5 min; only actually re-scans once Autopilot's configured
-    # interval (15/30/60/240 min, Settings) has elapsed since the last scan,
-    # and only within the 9:30pm-1am window above -- keeps Autopilot checking
-    # for fresh setups through the evening instead of the single 21:30 shot.
-    scheduler.add_job(run_autopilot_interval_scan, IntervalTrigger(minutes=5))
+    # interval (15/30/60/240 min, Settings) has elapsed since the last scan
+    # for each instrument currently inside its own trading window.
+    scheduler.add_job(run_autopilot_interval_scan, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # Re-pull state from GitHub periodically so a locally-placed trade or
     # locally-run job shows up on the cloud dashboard without a manual restart.
-    scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10))
+    scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10, start_date=now + timedelta(minutes=10)))
     # 2-hour expiry safeguard + SL/TP-closure detection -- runs even with
     # nobody looking at the dashboard (the dashboard also calls this on
     # every page load, but that alone wouldn't enforce anything unattended).
-    scheduler.add_job(check_open_trades, IntervalTrigger(minutes=5))
+    scheduler.add_job(check_open_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 
