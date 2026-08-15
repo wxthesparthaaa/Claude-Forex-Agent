@@ -32,6 +32,7 @@ def check_open_trades(client: OandaClient = None) -> list:
 
     now = datetime.now(timezone.utc)
     changed = []
+    expiry_notifications = []  # (instrument, direction, pnl, currency) -- sent AFTER save_journal below
 
     for entry in entries:
         if entry["status"] != "OPEN":
@@ -96,13 +97,27 @@ def check_open_trades(client: OandaClient = None) -> list:
             entry["closed_at"] = now.isoformat()
             entry["status"] = EXPIRED
             changed.append(entry)
-            send_message(
-                f"⏱ <b>{entry['instrument']} {entry['direction']} closed automatically</b> "
-                f"after 2 hours without hitting SL/TP.\nP&L: {pnl:+.2f} {entry.get('account_currency', '')}"
-            )
+            # Real incident (scheduled_jobs.run_evening_scan_and_notify
+            # had the same class of bug): sending before the journal is
+            # persisted means a process killed in between has already
+            # notified but has no record of it -- the next pass would
+            # find OANDA already shows this trade closed too, but a
+            # crash-then-retry sequence around this exact window is
+            # exactly what produced duplicate sends elsewhere today.
+            # Collecting the notification and sending it only after
+            # save_journal() below means a mid-flight kill fails safe.
+            expiry_notifications.append((entry["instrument"], entry["direction"], pnl,
+                                          entry.get("account_currency", "")))
 
     if changed:
         save_journal(entries)
+
+    for instrument, direction, pnl, currency in expiry_notifications:
+        send_message(
+            f"⏱ <b>{instrument} {direction} closed automatically</b> "
+            f"after 2 hours without hitting SL/TP.\nP&L: {pnl:+.2f} {currency}"
+        )
+
     return changed
 
 
