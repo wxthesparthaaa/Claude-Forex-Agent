@@ -18,7 +18,7 @@
     "autopilot_confidence_threshold_pct": 65.0
   },
   "phase_state": {
-    "phase": "manual_paper",
+    "phase": "autopilot",
     "closed_trades_in_phase": 0,
     "kill_switch_engaged": false
   },
