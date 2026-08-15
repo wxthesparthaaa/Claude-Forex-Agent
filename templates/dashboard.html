@@ -277,6 +277,13 @@
         <li style="margin-bottom:0.4rem;"><span style="color:var(--fg);">{{ note }}</span> <span style="opacity:0.7;">&mdash; {{ date }}</span></li>
         {% endfor %}
       </ul>
+      {% if development_log_url %}
+      <p style="margin:0.75rem 0 0; font-size:0.85rem;">
+        <a href="{{ development_log_url }}" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none; font-weight:600;">
+          Find out more of the updates done so far &rarr;
+        </a>
+      </p>
+      {% endif %}
     </details>
   </div>
 

@@ -72,17 +72,21 @@ app = Flask(__name__)
 # set FLASK_SECRET_KEY on Render if that default bothers you.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-dev")
 
-# Shown in the dashboard's collapsible "Developer Notes" section -- a
-# short, curated, most-recent-first changelog of real behavior changes,
-# not raw git log noise. Add one line per notable change when it ships.
+# Shown in the dashboard's collapsible "Developer Notes" section -- the
+# 5 MOST RECENT entries only (single-liner each), most-recent-first. The
+# full history lives in DEVELOPMENT_LOG.md (linked below this list on the
+# dashboard) -- add one line here per notable change when it ships, and
+# a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
-    ("2026-08-15", "Fixed duplicate Telegram notifications caused by a race between scheduled jobs."),
+    ("2026-08-15", "Added a full development log tracking every problem and fix since this project started."),
+    ("2026-08-15", "Scan Now now tells you clearly when forex markets are closed, instead of an empty result."),
+    ("2026-08-15", "Fixed duplicate Telegram notifications for good -- three stacked fixes for state races, "
+                    "process restarts, and a hard dedupe backstop."),
     ("2026-08-15", "Autopilot now scans/trades each pair during its own session window, not one shared evening slot."),
     ("2026-08-15", "Added an automatic weekly pause for any pair that closes net-negative 3 weeks running."),
-    ("2026-08-14", "Fixed the evening Telegram listing sometimes showing the wrong Autopilot/Manual mode."),
-    ("2026-08-14", "Prevented two scheduled scans from racing each other; GitHub state saves now retry on conflict."),
-    ("2026-08-14", "Widened news-sentiment matching to catch more currency-relevant headlines."),
-]
+][:5]
+
+DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
 
 
 def _oanda_time_to_unix(time_str: str) -> int:
@@ -235,11 +239,20 @@ def dashboard():
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity_live(state, journal), broker_balance=broker_balance, account_currency=account_currency,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
+        development_log_url=DEVELOPMENT_LOG_URL,
     )
 
 
 @app.route("/scan", methods=["POST"])
 def scan():
+    if not is_forex_market_open():
+        # Forex closes Friday ~5pm to Sunday ~5pm New York time. Scanning
+        # while closed would just return stale/last-known prices with no
+        # real trading possible -- tell the user clearly why, instead of
+        # an empty or confusing scan result.
+        flash("Forex markets are closed right now (weekend) -- trading isn't available until they reopen.", "error")
+        return redirect(url_for("dashboard"))
+
     state = load_state()
     risk_config = risk_config_from_state(state)
     phase_state = phase_state_from_state(state)
