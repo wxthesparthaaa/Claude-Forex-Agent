@@ -344,6 +344,26 @@ def test_interval_scan_skips_on_a_weekend(mock_run, tmp_path, monkeypatch):
 
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_skips_monday_early_morning_before_forex_reopens(mock_run, tmp_path, monkeypatch):
+    # Real gap this closes: forex reopens Sunday ~5pm New York time, which
+    # is ~5am Monday SGT -- a plain SGT weekday check (is_trading_day)
+    # would have treated all of Monday as a trading day starting at
+    # 00:00 SGT, letting this scan (and any auto-execution) run against
+    # closed-market prices for the first few hours of the week. 2026-08-17
+    # is a Monday; is_forex_market_open() must still say closed at 02:00 SGT.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, datetime(2026, 8, 17, 2, 0, tzinfo=_SGT))
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    result = scheduled_jobs.run_autopilot_interval_scan()
+
+    assert result is None
+    mock_run.assert_not_called()
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_skips_when_interval_not_yet_elapsed(mock_run, tmp_path, monkeypatch):
     from universe import ALL_INSTRUMENTS
     _isolate_state(tmp_path, monkeypatch)

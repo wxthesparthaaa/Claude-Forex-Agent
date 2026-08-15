@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from oanda_client import OandaClient
 from dashboard_state import load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity
 from live_scan import run_live_scan
-from market_hours import SGT, is_trading_day, instrument_window_active
+from market_hours import SGT, is_forex_market_open, instrument_window_active
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, trades_opened_today, total_open_risk, closed_entries
@@ -228,7 +228,16 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
         return None
 
     now = datetime.now(SGT)
-    if not is_trading_day(now):
+    if not is_forex_market_open(now):
+        # Precise NY-time-aware check (same one the dashboard footer and
+        # Scan Now use), not just an SGT weekday check -- forex actually
+        # closes Friday ~5pm and reopens Sunday ~5pm New York time, which
+        # doesn't line up with the SGT calendar's own Mon-Fri boundary
+        # (e.g. the market is still genuinely open Saturday 00:00-05:00
+        # SGT, and still genuinely closed Monday 00:00-05:00 SGT). A
+        # plain weekday check would have let this scan (and any
+        # auto-execution) attempt to run against closed-market prices
+        # in that Monday-morning gap every week.
         return None
 
     due = []
