@@ -25,10 +25,11 @@
     .balance-value { font-size: 2rem; font-weight: 700; margin: 0.25rem 0; }
     .balance-currency { font-size: 1rem; color: var(--muted); font-weight: 400; }
     .balance-label { color: var(--muted); font-size: 0.85rem; }
-    /* Column of two rows, stretched (via .row's default align-items:stretch)
-       to the same height as the sibling Win rate card, with the rows pushed
-       to the top and bottom via space-between so they align with it. */
-    .stat-grid { display: flex; flex-direction: column; justify-content: space-between; gap: 0.75rem; flex: 2; min-width: 300px; }
+    /* Compact column of two rows, sized to its own content (align-self
+       overrides .row's default align-items:stretch) rather than stretched
+       to match the taller Win rate card -- keeps the tiles close together
+       instead of spreading them apart to fill unused vertical space. */
+    .stat-grid { display: flex; flex-direction: column; align-self: flex-start; gap: 0.75rem; flex: 2; min-width: 300px; }
     .stat-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
     .stat-tile {
       background: var(--bg); border: 1px solid var(--border); border-radius: 8px;

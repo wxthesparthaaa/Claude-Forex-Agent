@@ -480,7 +480,15 @@ def test_evening_scan_skips_when_already_in_progress_on_another_thread(tmp_path,
         scheduled_jobs._evening_scan_lock.release()
 
 
-def test_evening_scan_lock_releases_so_a_later_call_still_works(tmp_path, monkeypatch):
+@patch("scheduled_jobs.send_message")
+def test_evening_scan_lock_releases_so_a_later_call_still_works(mock_send, tmp_path, monkeypatch):
+    # Real incident: this test was missing a send_message mock, so every
+    # local `pytest tests/` run sent a genuine "Potential trades tonight"
+    # Telegram message via whichever bot credentials the local
+    # config/telegram_config.properties fallback happened to hold --
+    # explaining a whole day of "phantom" duplicate-notification reports
+    # that had nothing to do with the deployed app, Render, or the
+    # scheduler at all.
     _isolate_state(tmp_path, monkeypatch)
     state = dashboard_state.default_state()
     dashboard_state.save_state(state)
