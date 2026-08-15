@@ -237,6 +237,8 @@ def dashboard():
     # already available here without a currency-conversion detour.
     invested = total_open_risk(journal)
     week_gain = realized_pnl_since(journal, state.week_start_timestamp)
+    week_start_capital = strategy_capital - week_gain  # equity before this week's trades
+    week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
     WEEKLY_GAIN_TARGET = 200.0
     overall_gain = strategy_capital - state.strategy_starting_capital
     overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
@@ -263,7 +265,7 @@ def dashboard():
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
-        invested=invested, week_gain=week_gain, weekly_gain_target=WEEKLY_GAIN_TARGET,
+        invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,

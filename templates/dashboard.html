@@ -63,6 +63,19 @@
     }
     .out-of-range { color: var(--red); font-size: 0.78rem; margin-top: 0.15rem; }
     .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 0.75rem 0; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-track {
+      position: absolute; inset: 0; cursor: pointer; background: var(--border);
+      border-radius: 999px; transition: background-color 0.15s ease;
+    }
+    .switch-track::before {
+      content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background: var(--fg); border-radius: 50%; transition: transform 0.15s ease;
+    }
+    .switch input:checked + .switch-track { background: var(--accent); }
+    .switch input:checked + .switch-track::before { transform: translateX(20px); }
+    .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
     footer {
       position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
       border-top: 1px solid var(--border); padding: 0.6rem 1.5rem; font-size: 0.8rem;
@@ -98,7 +111,9 @@
       <div class="stat-row">
         <div class="stat-tile">
           <div class="stat-tile-label">Gain (this week)</div>
-          <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">{{ "%+.2f"|format(week_gain) }}</div>
+          <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">
+            {{ "%+.2f"|format(week_gain) }} <span style="font-size:0.85rem; font-weight:400;">({{ "%+.1f"|format(week_gain_pct) }}%)</span>
+          </div>
           <div class="stat-tile-sub">{{ account_currency }} &middot; vs {{ "%.0f"|format(weekly_gain_target) }}/week target</div>
         </div>
         <div class="stat-tile">
@@ -147,7 +162,10 @@
 
           <div class="toggle-row">
             <span>Autopilot</span>
-            <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
+            <label class="switch">
+              <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
+              <span class="switch-track"></span>
+            </label>
           </div>
           <label>Autopilot re-scan every, during each pair's own window
             <select name="autopilot_scan_interval_minutes">
@@ -192,7 +210,7 @@
             <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
             <button class="scan-btn" type="submit" name="reset_capital" value="1"
                     style="margin-top:0.75rem;" data-loading-text="Resetting...">
-              Reset capital to {{ '%.0f'|format(default_strategy_capital) }}
+              Reset capital
             </button>
           </div>
         </form>

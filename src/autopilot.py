@@ -10,11 +10,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 PHASES = ["manual_paper", "manual_live", "semi_auto", "autopilot"]
+# Labels match PROJECT_LOG.md's 2026-08-15 phase reassessment (Phase A
+# infrastructure / B signal research / C staged rollout / D live money),
+# not the original 0/1/2/3 numbering -- that numbering implied the ladder
+# below was climbed with evidence before reaching the top, which didn't
+# happen. manual_paper/manual_live/semi_auto are the still-undefined
+# Phase C ladder (the original staged rollout, not yet properly entered);
+# autopilot is actually Phase B -- live signal research via continuous
+# confidence-weight reweighting, not a validated static signal, and not
+# Phase C's evidence-earned top rung.
 PHASE_LABELS = {
-    "manual_paper": "Phase 0: Manual approval, paper",
-    "manual_live": "Phase 1: Manual approval, small live",
-    "semi_auto": "Phase 2: Semi-auto (SL/TP auto-managed, entry approved)",
-    "autopilot": "Phase 3: Full autopilot",
+    "manual_paper": "Phase C: Manual approval, paper",
+    "manual_live": "Phase C: Manual approval, small live",
+    "semi_auto": "Phase C: Semi-auto (SL/TP auto-managed, entry approved)",
+    "autopilot": "Phase B: Live signal research",
 }
 
 TRADES_REQUIRED_TO_ADVANCE = 30
