@@ -219,7 +219,7 @@ settings or the last scan's results.
    corrupted the first environment variable's key name; fixed by loading
    with `encoding="utf-8-sig"`.
 
-## Status
+## Status (as of 2026-08-10, day of initial build)
 All 12 build-plan tasks complete as of this log: deployable skeleton
 live on Render/UptimeRobot, OANDA practice connectivity verified against
 the real account, the full signal pipeline (currency strength, pivot/
@@ -231,11 +231,83 @@ notification schedule wired (scheduler intentionally off by default
 until explicitly enabled), and GitHub state sync protecting Render's
 free-tier redeploys. **107 tests passing.**
 
-**Deliberately not yet done, by design, not oversight:** no autopilot
-phase has advanced past Phase 0 (manual approval, paper) — that
-requires 30 real closed trades of evidence, which doesn't exist yet.
-Actual (live-money) trading requires a separate `OANDA_ENV=live`
-credential change, never just a dashboard toggle. A full multi-year,
-multi-instrument backtest run (as opposed to the engine's tested
-mechanics) hasn't been executed yet — that's the natural next step
-before trusting this with real capital.
+**Deliberately not yet done, by design, not oversight (as of this
+day):** no autopilot phase has advanced past Phase 0 (manual approval,
+paper) — that requires 30 real closed trades of evidence, which doesn't
+exist yet. Actual (live-money) trading requires a separate
+`OANDA_ENV=live` credential change, never just a dashboard toggle. A
+full multi-year, multi-instrument backtest run (as opposed to the
+engine's tested mechanics) hasn't been executed yet — that's the natural
+next step before trusting this with real capital.
+
+*See the phase reassessment below — this section is preserved as
+written on the day of the initial build; several things stated here as
+"not yet done, by design" happened anyway in the days that followed,
+and the backtest run flagged as the prerequisite for real capital has
+since been run, with a result worth reading carefully before treating
+this section as still current.*
+
+## Phase reassessment (2026-08-15)
+
+**What actually happened vs. what was planned.** The staged, evidence-
+gated rollout described above — manual-approve paper → manual-approve
+small live → semi-auto → full autopilot, each gated on 30 closed trades
+— was not followed in practice. Later the same day (2026-08-10),
+Autopilot was changed to a direct Settings toggle, and the dashboard has
+been running **"Phase 3: Full autopilot"** (auto-executing trades on
+the demo account) since then — reached without ever accumulating the
+30-closed-trade evidence threshold at any stage. Stated plainly rather
+than glossed over: there's a real gap between the safety plan this
+document describes and what the running system has actually been doing.
+
+**The finding that changes the calculus.** An extensive, no-lookahead
+walk-forward backtest (2026-08-14/15, 413 days, all 11 traded
+instruments) — the exact backtest this log's original Status section
+flagged as the prerequisite before trusting this with real capital —
+has now been run. It tested the live entry signal (structure-break +
+multi-timeframe confluence) against every instrument, every scan-time
+window, every confidence threshold, and every R:R ratio: **none showed
+a real, temporally-stable edge.** The signal's own raw directional
+accuracy came back at 46–49%, at or below a coin flip, consistently in
+both halves of the period tested independently. Five alternate signal
+families (EMA crossover, RSI mean-reversion, 20-bar breakout, Bollinger
+mean-reversion, a mechanical price-action strategy) were tested too;
+none validated either. Full detail in
+[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)'s 2026-08-14 entry.
+
+**What this means for the phases going forward.** The original 4-stage
+ladder assumed the open question was "how much real-money exposure has
+this earned," gated on trade count. The actual open question, now
+answered, is "does the entry signal have a real edge at all" — and the
+honest answer right now is no, not yet demonstrated. Reframed:
+
+- **Phase A (infrastructure) — complete.** State sync, the risk engine,
+  position sizing, the notification pipeline, the dashboard, weekly
+  self-improvement pausing, and (as of the 2026-08-15 debugging saga) a
+  hardened test suite are all real, working, and verified against live
+  data. This part of the project is genuinely done.
+- **Phase B (signal research) — in progress, currently 0-for-7.** Six
+  alternate signal families plus the original structure-break signal
+  have been tested against 413 days of real data; none validated. This
+  is the actual blocker now, not evidence accumulation on a signal
+  already believed to work.
+- **Phase C (the original staged, evidence-gated rollout) — not yet
+  properly entered.** If and when Phase B produces a signal that clears
+  a real, out-of-sample, temporally-stable bar, the original
+  manual-paper → manual-live → semi-auto → full-auto ladder, gated on
+  30 closed trades per stage, is the right next step — as originally
+  designed, this time actually followed.
+- **Phase D (live/real-money trading)** — unchanged in principle
+  (requires a separate `OANDA_ENV=live` credential, never just a
+  dashboard toggle), now additionally blocked on actually clearing
+  Phase C, which hasn't happened.
+
+**Recommendation.** With Phase B not yet producing a validated signal,
+running Full Autopilot against the current, backtested-and-rejected
+signal — even on the demo account — isn't accumulating the kind of
+evidence the original plan intended; it's accumulating trade history
+against a signal already shown not to have a demonstrated edge. Worth
+deciding explicitly whether to revert Autopilot to manual-approve while
+signal research continues, rather than continuing to auto-execute on it
+by default. Not a decision to make silently in a log file — flagged
+here for the record, with the actual choice left to the user.
