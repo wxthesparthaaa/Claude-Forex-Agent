@@ -108,7 +108,7 @@
             <span>Autopilot</span>
             <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
           </div>
-          <label>Autopilot re-scan every, 9:30pm-1am
+          <label>Autopilot re-scan every, during each pair's own window
             <select name="autopilot_scan_interval_minutes">
               <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
               <option value="30" {{ 'selected' if autopilot_scan_interval_minutes == 30 else '' }}>30 min</option>
@@ -116,6 +116,16 @@
               <option value="240" {{ 'selected' if autopilot_scan_interval_minutes == 240 else '' }}>4 hr</option>
             </select>
           </label>
+          {% if instrument_windows %}
+          <details style="margin:0.4rem 0 0.75rem;">
+            <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">Each pair's trading window (SGT)</summary>
+            <ul style="margin:0.5rem 0 0; padding-left:1.1rem; font-size:0.8rem; color:var(--muted);">
+              {% for instrument, window in instrument_windows %}
+              <li>{{ instrument }}: {{ window }}</li>
+              {% endfor %}
+            </ul>
+          </details>
+          {% endif %}
           <div class="toggle-row">
             <span>Mode</span>
             <select name="mode">
@@ -200,6 +210,9 @@
 
   <div class="card">
     <h3 style="margin-top:0;">News sentiment</h3>
+    {% if news.most_recent_at %}
+    <p style="color:var(--muted); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">Most recent headline: {{ news.most_recent_at }}</p>
+    {% endif %}
     {% if not news.configured %}
     <p style="color:var(--muted); font-size:0.9rem;">
       Not configured yet &mdash; add a free <code>FINNHUB_API_KEY</code> (finnhub.io signup, no card needed)

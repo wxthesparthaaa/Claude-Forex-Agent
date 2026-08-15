@@ -48,7 +48,7 @@ from dashboard_state import (
     DEFAULT_STRATEGY_CAPITAL,
 )
 from autopilot import PHASE_LABELS
-from market_hours import all_session_statuses, is_forex_market_open, SGT
+from market_hours import all_session_statuses, is_forex_market_open, SGT, INSTRUMENT_WINDOWS_SGT, format_instrument_window
 from risk_engine import is_out_of_recommended_range, AccountState
 from oanda_client import OandaClient
 from live_scan import run_live_scan, fetch_news_articles
@@ -132,7 +132,16 @@ def _news_summary() -> dict:
     configured = bool(os.environ.get("FINNHUB_API_KEY"))
     articles = fetch_news_articles()
     if not articles:
-        return {"configured": configured, "currencies": [], "headlines": []}
+        return {"configured": configured, "currencies": [], "headlines": [], "most_recent_at": None}
+
+    # Freshness of the underlying data, not just the fetch cache (which
+    # uses a monotonic clock with no fixed relationship to wall-clock
+    # time) -- the newest article's own Finnhub timestamp answers "how
+    # dated is this" directly, regardless of caching mechanics.
+    most_recent_epoch = max((a.get("datetime", 0) for a in articles), default=0)
+    most_recent_at = _format_sgt(
+        datetime.fromtimestamp(most_recent_epoch, tz=timezone.utc).isoformat()
+    ) if most_recent_epoch else None
 
     currencies = []
     for pair in MAJOR_PAIRS:
@@ -161,7 +170,7 @@ def _news_summary() -> dict:
     tagged.sort(key=lambda h: (not h["currencies"], -h["datetime"]))
     headlines = tagged[:5]
 
-    return {"configured": True, "currencies": currencies, "headlines": headlines}
+    return {"configured": True, "currencies": currencies, "headlines": headlines, "most_recent_at": most_recent_at}
 
 
 def _out_of_range_warnings(risk_config) -> list:
@@ -197,6 +206,7 @@ def dashboard():
     scan_results = load_scan_results()
     candidates = scan_results["candidates"]
     last_scan_at = _format_sgt(scan_results["scanned_at"])
+    instrument_windows = [(i, format_instrument_window(i)) for i in INSTRUMENT_WINDOWS_SGT]
 
     broker_balance = None
     account_currency = ""
@@ -234,7 +244,7 @@ def dashboard():
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
-        autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes,
+        autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         sessions=all_session_statuses(), forex_open=is_forex_market_open(),
         strategy_capital=tracked_equity_live(state, journal), broker_balance=broker_balance, account_currency=account_currency,
