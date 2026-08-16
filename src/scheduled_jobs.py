@@ -19,7 +19,7 @@ from __future__ import annotations
 import threading
 import traceback
 from dataclasses import asdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from oanda_client import OandaClient
 from dashboard_state import (
@@ -27,7 +27,8 @@ from dashboard_state import (
     confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from live_scan import run_live_scan
-from market_hours import SGT, NY, is_forex_market_open, instrument_window_active, next_forex_open, next_forex_close
+from market_hours import (SGT, NY, is_forex_market_open, instrument_window_active,
+                           next_forex_open, next_forex_close, previous_forex_close)
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, closed_entries
@@ -220,7 +221,7 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
         # (a separate scheduled job, same 5-minute tick) to correctly
         # advance state on another thread in the meantime. Saving the
         # STALE `state` object captured before the scan silently reverted
-        # those completions (last_review_date/last_reflection_date back
+        # those completions (last_review_date/last_reflection_sent_at back
         # to "not done yet"), which made the next 5-minute tick think
         # they were newly due again -- a self-sustaining loop of duplicate
         # Telegram messages roughly every 5 minutes. Same mechanism would
@@ -579,19 +580,31 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     # A plain date-stamp check isn't enough on its own here, though --
     # is_forex_market_open(now) stays False across BOTH Saturday and
     # Sunday, so comparing against today's calendar date would fire a
-    # second time on Sunday. Comparing ISO week numbers instead (weeks
-    # run Monday-Sunday) means Saturday and Sunday share one week
-    # number -- firing once on whichever day the process first wakes
-    # closed, correctly skipping the other -- while a Monday-morning
-    # catch-up (still closed before the market reopens) reads as a new
-    # week and fires too, exactly the still-due-until-caught-up
-    # semantics the other three touchpoints already have.
-    last_reflection_week = (
-        date.fromisoformat(state.last_reflection_date).isocalendar()[:2]
-        if state.last_reflection_date else None
-    )
-    if not is_forex_market_open(now) and now.date().isocalendar()[:2] != last_reflection_week:
-        run_friday_reflection(client)
-        state = load_state()
-        state.last_reflection_date = today
-        save_state(state)
+    # second time on Sunday.
+    #
+    # An EARLIER version of this fix compared ISO calendar week numbers
+    # instead (Sat/Sun share one week number). That looked right but was
+    # itself buggy: a real incident sent the reflection correctly on
+    # Saturday, then sent it AGAIN a few minutes after midnight Monday --
+    # still closed (forex doesn't reopen until ~5am SGT Monday) -- purely
+    # because the ISO week label had already flipped to Monday's week
+    # even though the SAME weekend closure that started Friday was still
+    # ongoing. ISO weeks and the forex week don't share a boundary.
+    #
+    # Comparing against previous_forex_close(now) instead -- the actual
+    # moment THIS closed period began -- fixes both cases correctly at
+    # once: the Monday-00:00-05:00-SGT sliver resolves to the SAME
+    # Friday close as the Saturday/Sunday that already fired (so it's
+    # correctly recognized as already handled), while a genuinely missed
+    # weekend (last send predates even the previous week's close) still
+    # catches up on whichever tick the process first wakes closed.
+    if not is_forex_market_open(now):
+        last_sent = (
+            datetime.fromisoformat(state.last_reflection_sent_at)
+            if state.last_reflection_sent_at else None
+        )
+        if last_sent is None or last_sent < previous_forex_close(now):
+            run_friday_reflection(client)
+            state = load_state()
+            state.last_reflection_sent_at = datetime.now(timezone.utc).isoformat()
+            save_state(state)

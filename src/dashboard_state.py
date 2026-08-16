@@ -69,8 +69,18 @@ class DashboardState:
     # job it missed because nothing was running at that moment.
     last_evening_listing_date: str | None = None
     last_review_date: str | None = None
-    last_reflection_date: str | None = None
     last_health_check_date: str | None = None  # 21:00 SGT pre-evening OANDA/GitHub connectivity check
+    # Precise UTC ISO timestamp, NOT a date-stamp like its siblings above --
+    # gating this against a bare calendar date (or ISO week number, an
+    # earlier version of this fix) double-sent a real reflection: it fired
+    # correctly Saturday, then again a few minutes after midnight Monday
+    # (still closed -- forex doesn't reopen until ~5am SGT Monday) because
+    # the calendar had already rolled to a "new" day/week even though the
+    # SAME weekend closure was still ongoing. Comparing this timestamp
+    # against market_hours.previous_forex_close() -- the actual moment the
+    # current closed period began -- instead of a calendar boundary fixes
+    # that (see scheduled_jobs.run_daily_dispatcher).
+    last_reflection_sent_at: str | None = None
     # "open" | "closed" | None -- the market status as of the last dispatcher
     # tick, so scheduled_jobs.check_market_status_transition can tell a real
     # open<->closed transition apart from "still the same status as five

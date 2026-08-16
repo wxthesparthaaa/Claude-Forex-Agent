@@ -66,6 +66,26 @@ def next_forex_close(now: datetime = None) -> datetime:
     return close
 
 
+def previous_forex_close(now: datetime = None) -> datetime:
+    """The most recent Friday 5pm New York close at or before `now`, as a
+    NY-tzinfo datetime -- i.e. the moment the CURRENT (or most recently
+    ended) closed-for-the-weekend period began. Used to tell "already
+    handled this specific weekend closure" apart from "a new ISO
+    calendar week has started" -- those two aren't the same thing: the
+    ISO week flips at Sunday midnight (Monday 00:00), which lands
+    roughly 5 hours before forex actually reopens (Sunday 5pm NY ==
+    Monday ~5am SGT), so a check based on calendar week alone would
+    treat that pre-reopen Monday sliver as "a new week, never handled"
+    even when the weekend's reflection already correctly fired on
+    Saturday -- re-sending it a few hours later for no new data."""
+    now = (now or datetime.now(NY)).astimezone(NY)
+    days_back = (now.weekday() - 4) % 7  # Friday=4
+    close = datetime.combine(now.date() - timedelta(days=days_back), time(17, 0), tzinfo=NY)
+    if close > now:
+        close -= timedelta(days=7)
+    return close
+
+
 def time_until_forex_reopen(now: datetime = None) -> timedelta | None:
     """None if the market is currently open. Otherwise the time remaining
     until the next Sunday 5pm New York open -- the only closed periods are

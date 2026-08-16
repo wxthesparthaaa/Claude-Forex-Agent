@@ -887,7 +887,7 @@ def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_wee
 
     mock_reflection.assert_called_once()
     updated = dashboard_state.load_state()
-    assert updated.last_reflection_date == "2026-08-15"
+    assert updated.last_reflection_sent_at is not None
 
 
 @patch("scheduled_jobs.run_friday_reflection")
@@ -933,13 +933,37 @@ def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
         mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test: is_forex_market_open() is False on BOTH Saturday
     # and Sunday, so a plain "already ran today" date-stamp check would
-    # fire a second time on Sunday. Comparing ISO week numbers instead
-    # (Sat and Sun share one week) must treat Sunday as already handled.
+    # fire a second time on Sunday.
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=16))  # Sunday
     state = dashboard_state.default_state()
     state.last_review_date = "2026-08-16"
-    state.last_reflection_date = "2026-08-15"  # already reflected this same ISO week, on Saturday
+    state.last_reflection_sent_at = _sgt(10, 0, day=15).isoformat()  # already reflected Saturday
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Regression test for a real incident: the reflection correctly fired
+    # Saturday, then fired AGAIN a few minutes after midnight Monday --
+    # still closed, forex doesn't reopen until ~5am SGT Monday -- because
+    # an earlier version of this gate compared ISO calendar week numbers,
+    # and the week label had already flipped to Monday's week even though
+    # the SAME weekend closure that started Friday was still ongoing.
+    # Monday 00:01 SGT is only Sunday ~12:01pm New York time -- still
+    # well before the actual Sunday 5pm NY reopen.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(0, 1, day=17))  # Monday 00:01 SGT, still closed
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-17"
+    state.last_reflection_sent_at = _sgt(10, 0, day=15).isoformat()  # already reflected Saturday
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
@@ -960,7 +984,7 @@ def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_w
     _freeze_at(monkeypatch, _sgt(1, 0, day=17))  # Monday 1am SGT, market not yet reopened
     state = dashboard_state.default_state()
     state.last_review_date = "2026-08-17"
-    state.last_reflection_date = "2026-08-08"  # the Saturday before last -- a whole weekend missed
+    state.last_reflection_sent_at = _sgt(10, 0, day=8).isoformat()  # the Saturday before last -- a whole weekend missed
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()

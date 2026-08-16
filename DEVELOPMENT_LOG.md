@@ -959,3 +959,47 @@ stale `max_trades_per_day_max: 10`, assert `risk_config_from_state`
 returns the current code default instead). Full suite: 345 passed.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-17 — Friday reflection double-sent itself just after midnight Monday
+
+**Problem**: User reported an unexpected "Friday self-reflection"
+Telegram message at 12:01am -- asked whether that was correct or meant
+to send on Monday instead. Traced it precisely: `run_daily_dispatcher`'s
+gate compared ISO calendar week numbers (`now.date().isocalendar()[:2] != last_reflection_week`)
+against `is_forex_market_open(now)`. That comparison was ALREADY a
+previous fix (#53, "skip-a-week bug") for the case where Saturday and
+Sunday need to be treated as one closed period -- but it introduced a
+new, narrower bug of its own: the ISO week flips at Sunday midnight
+(Monday 00:00), which lands roughly 5 hours before forex actually
+reopens (Sunday 5pm New York == Monday ~5am SGT). Verified with real
+math: Monday 00:01 SGT is still only Sunday 12:01pm in New York -- the
+market hasn't reopened -- but the calendar already reads as a new ISO
+week (33 -> 34). If the reflection had already correctly fired Saturday
+(recording week 33), any dispatcher tick in that Monday 00:00-05:00 SGT
+window would see week 34 as "not yet handled this week" and fire again,
+re-sending the same stats with nothing new to report.
+
+**Fix**: Added `market_hours.previous_forex_close()` -- the most recent
+Friday 5pm New York close at or before `now`, i.e. the actual moment
+the current closed-for-the-weekend period began (not a calendar
+boundary). Replaced the ISO-week comparison with a precise timestamp
+comparison against it: renamed `DashboardState.last_reflection_date`
+(a bare SGT date) to `last_reflection_sent_at` (a UTC ISO timestamp,
+matching `last_evening_listing_sent_at`'s existing pattern) and gate on
+`last_sent < previous_forex_close(now)`. Verified with real math that
+Saturday, Sunday, AND the Monday-pre-reopen sliver all resolve to the
+same Friday-close boundary (so a Saturday send correctly blocks a
+Monday-00:01 refire), while a genuinely missed weekend (last send
+predates even the previous week's own Friday close) still catches up
+correctly on whichever tick the process first wakes closed.
+
+**Solution**: Added a regression test reproducing the exact incident
+(`test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver`)
+plus updated the existing Saturday/Sunday and missed-weekend catch-up
+tests for the new field. Full suite: 346 passed (one unrelated,
+pre-existing flaky test in `test_trade_journal.py` -- confirmed via
+`git stash` to fail identically on the prior commit, caused by real
+wall-clock time straddling the SGT midnight boundary during the test
+run itself, nothing to do with this fix).
+
+**Fixed**: 2026-08-17
