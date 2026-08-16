@@ -44,7 +44,7 @@
   "last_evening_listing_date": "2026-08-14",
   "last_review_date": "2026-08-16",
   "last_health_check_date": "2026-08-14",
-  "last_reflection_sent_at": null,
+  "last_reflection_sent_at": "2026-08-16T16:19:46.452533+00:00",
   "last_market_status": "closed",
   "last_evening_listing_sent_at": null,
   "confidence_weights": {
