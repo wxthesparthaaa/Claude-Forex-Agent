@@ -19,7 +19,7 @@ from __future__ import annotations
 import threading
 import traceback
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from oanda_client import OandaClient
 from dashboard_state import (
@@ -304,10 +304,17 @@ def run_nightly_review(client: OandaClient = None) -> list:
     state.strategy_realized_pnl += sum(t["pnl"] for t in closed)
     ending_equity = tracked_equity(state)
 
-    send_message(format_nightly_review_message(closed, starting_equity, ending_equity))
-
+    # Persisted BEFORE the network call to Telegram -- same fix already
+    # proven for run_evening_scan_and_notify's duplicate-send incident: a
+    # mid-flight kill (Render's documented crash/restart-loop behavior)
+    # then fails safe. A legitimate send might occasionally not go out,
+    # instead of the unsafe alternative -- last_review_timestamp never
+    # advancing, so the next tick after restart replays this exact
+    # review and sends the same "closed trades" summary twice.
     state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)
+
+    send_message(format_nightly_review_message(closed, starting_equity, ending_equity))
     return closed
 
 
@@ -398,10 +405,14 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     new_weights, reweight_lines = reweight_confidence_components(load_journal(), current_weights)
     state.confidence_weights = asdict(new_weights)
 
-    send_message(format_friday_reflection_message(stats, changes, reweight_lines))
-
+    # Persisted BEFORE the network call to Telegram, same reasoning as
+    # run_nightly_review -- a repeat run from a mid-flight kill would
+    # otherwise double-count this week's P&L into the trailing 3-week
+    # auto-pause history, not just duplicate the Telegram message.
     state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)
+
+    send_message(format_friday_reflection_message(stats, changes, reweight_lines))
     return stats
 
 
@@ -498,7 +509,32 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
         state.last_review_date = today
         save_state(state)
 
-    if now.weekday() == 5 and minutes >= 60 and state.last_reflection_date != today:
+    # Gated on the market actually being closed for the weekend, not a
+    # fixed "weekday == 5" check -- the other three touchpoints above
+    # all catch up correctly no matter which day the process happens to
+    # wake, because their gate is just a date-stamp check that's true on
+    # any day once due. This one required the process to be awake
+    # specifically on a Saturday: if Render's server slept through all
+    # of one particular Saturday, that week's reflection wasn't merely
+    # delayed, it was skipped outright, and the following Saturday
+    # silently folded two calendar weeks into one data point for the
+    # self-improvement pause logic.
+    #
+    # A plain date-stamp check isn't enough on its own here, though --
+    # is_forex_market_open(now) stays False across BOTH Saturday and
+    # Sunday, so comparing against today's calendar date would fire a
+    # second time on Sunday. Comparing ISO week numbers instead (weeks
+    # run Monday-Sunday) means Saturday and Sunday share one week
+    # number -- firing once on whichever day the process first wakes
+    # closed, correctly skipping the other -- while a Monday-morning
+    # catch-up (still closed before the market reopens) reads as a new
+    # week and fires too, exactly the still-due-until-caught-up
+    # semantics the other three touchpoints already have.
+    last_reflection_week = (
+        date.fromisoformat(state.last_reflection_date).isocalendar()[:2]
+        if state.last_reflection_date else None
+    )
+    if not is_forex_market_open(now) and now.date().isocalendar()[:2] != last_reflection_week:
         run_friday_reflection(client)
         state = load_state()
         state.last_reflection_date = today

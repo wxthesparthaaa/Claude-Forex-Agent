@@ -3,6 +3,8 @@ import sys
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import dashboard_state
@@ -116,6 +118,29 @@ def test_run_nightly_review_accumulates_into_tracked_capital_not_raw_nav(mock_se
 
 
 @patch("scheduled_jobs.send_message")
+def test_run_nightly_review_persists_state_even_if_the_telegram_send_fails(mock_send, tmp_path, monkeypatch):
+    # Regression test: this used to send_message() BEFORE saving
+    # last_review_timestamp -- a process killed between the two (a real,
+    # documented Render behavior) would replay this exact review on the
+    # next tick, sending the same "closed trades" summary twice. Now the
+    # save happens first, so even if the send itself fails outright, the
+    # state is already safely persisted and won't replay.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.strategy_realized_pnl = 0.0
+    dashboard_state.save_state(state)
+    tj.save_journal([_closed_entry(instrument="EUR_USD", realized_pnl=30.0, closed_at="2026-08-10T22:00:00Z")])
+    mock_send.side_effect = Exception("Telegram unreachable")
+
+    with pytest.raises(Exception, match="Telegram unreachable"):
+        run_nightly_review()
+
+    updated = dashboard_state.load_state()
+    assert updated.strategy_realized_pnl == 30.0
+    assert updated.last_review_timestamp is not None
+
+
+@patch("scheduled_jobs.send_message")
 def test_run_nightly_review_does_not_double_count_previously_reviewed_trades(mock_send, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     state = dashboard_state.default_state()
@@ -134,6 +159,24 @@ def test_run_nightly_review_does_not_double_count_previously_reviewed_trades(moc
     assert closed[0]["instrument"] == "GBP_USD"
     updated = dashboard_state.load_state()
     assert updated.strategy_realized_pnl == 10.0  # only the new trade, not 30+10
+
+
+@patch("scheduled_jobs.send_message")
+def test_run_friday_reflection_persists_state_even_if_the_telegram_send_fails(mock_send, tmp_path, monkeypatch):
+    # Regression test: a repeat run from a mid-flight kill wouldn't just
+    # duplicate the Telegram message -- it would also double-count that
+    # week's P&L into the trailing 3-week auto-pause history. Saving
+    # week_start_timestamp before the send closes that off.
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    tj.save_journal([_closed_entry(instrument="EUR_USD", realized_pnl=80.0, closed_at="2026-08-14T20:00:00Z")])
+    mock_send.side_effect = Exception("Telegram unreachable")
+
+    with pytest.raises(Exception, match="Telegram unreachable"):
+        run_friday_reflection()
+
+    updated = dashboard_state.load_state()
+    assert updated.week_start_timestamp is not None
 
 
 @patch("scheduled_jobs.send_message")
@@ -330,22 +373,38 @@ from zoneinfo import ZoneInfo
 _SGT = ZoneInfo("Asia/Singapore")
 
 
-def _sgt(h, m, day=10):
-    return _real_datetime(2026, 8, day, h, m, tzinfo=_SGT)
+def _sgt(h, m, day=10, month=8):
+    return _real_datetime(2026, month, day, h, m, tzinfo=_SGT)
 
 
 def test_instrument_window_active_covers_each_pairs_own_session():
     from market_hours import instrument_window_active
-    # EUR_USD: London/London-NY overlap, 16:00-01:00 SGT (spans midnight)
-    assert instrument_window_active("EUR_USD", _sgt(16, 0)) is True
-    assert instrument_window_active("EUR_USD", _sgt(23, 0)) is True
-    assert instrument_window_active("EUR_USD", _sgt(0, 30)) is True
-    assert instrument_window_active("EUR_USD", _sgt(15, 59)) is False
-    assert instrument_window_active("EUR_USD", _sgt(1, 0)) is False
-    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT -- well outside EUR's window,
-    # exactly the gap the old single fixed window used to miss entirely.
+    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT -- fixed year-round (Tokyo
+    # never observes DST), well outside EUR's window -- exactly the gap
+    # the old single fixed window used to miss entirely.
     assert instrument_window_active("AUD_USD", _sgt(8, 0)) is True
     assert instrument_window_active("AUD_USD", _sgt(22, 0)) is False
+
+
+def test_instrument_window_active_is_dst_aware_for_london_ny_anchored_pairs():
+    # Regression test: EUR_USD's window is anchored to London's own open
+    # and the London-NY overlap close, not a precomputed SGT clock time.
+    # In January (London on GMT, New York on EST) that lands on the old
+    # static 16:00-01:00 SGT window; in August (London on BST, New York
+    # on EDT) the real window is a full hour earlier -- 15:00-00:00 SGT
+    # -- which the old static table, silently assuming EST year-round,
+    # got wrong for roughly 8 months of the year.
+    from market_hours import instrument_window_active
+
+    assert instrument_window_active("EUR_USD", _sgt(16, 0, month=1)) is True   # Jan: matches the old values
+    assert instrument_window_active("EUR_USD", _sgt(0, 30, month=1)) is True
+    assert instrument_window_active("EUR_USD", _sgt(15, 59, month=1)) is False
+    assert instrument_window_active("EUR_USD", _sgt(1, 0, month=1)) is False
+
+    assert instrument_window_active("EUR_USD", _sgt(15, 0, month=8)) is True   # Aug: shifted an hour earlier
+    assert instrument_window_active("EUR_USD", _sgt(23, 30, month=8)) is True
+    assert instrument_window_active("EUR_USD", _sgt(14, 59, month=8)) is False
+    assert instrument_window_active("EUR_USD", _sgt(0, 30, month=8)) is False  # "open" under the old bug -- now correctly closed
 
 
 class _FrozenDatetime(_real_datetime):
@@ -376,13 +435,16 @@ def test_interval_scan_skips_when_not_autopilot(mock_run, tmp_path, monkeypatch)
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_only_includes_instruments_in_their_own_window(mock_run, tmp_path, monkeypatch):
-    # 15:00 SGT: AUD/NZD's window (05:00-14:00) has already closed and
-    # EUR/GBP/CHF's (16:00-01:00) hasn't opened yet -- USD_JPY
-    # (08:00-17:00) is the only instrument in-window at this hour, unlike
-    # the old single fixed 21:30-01:00 window which would have skipped
-    # everything at 15:00 regardless of pair.
+    # 14:30 SGT (August, EDT/BST in effect): AUD/NZD's window
+    # (05:00-14:00, fixed year-round) has already closed and EUR/GBP/
+    # CHF's DST-aware window (15:00-00:00 in August; see
+    # test_instrument_window_active_is_dst_aware_for_london_ny_anchored_pairs)
+    # hasn't opened yet -- USD_JPY (08:00-17:00, fixed year-round) is the
+    # only instrument in-window at this hour, unlike the old single
+    # fixed 21:30-01:00 window which would have skipped everything at
+    # this hour regardless of pair.
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(15, 0))
+    _freeze_at(monkeypatch, _sgt(14, 30))
     mock_run.return_value = []
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
@@ -399,10 +461,10 @@ def test_interval_scan_only_includes_instruments_in_their_own_window(mock_run, t
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_skips_paused_instruments(mock_run, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(15, 0))  # only USD_JPY would otherwise be due, see test above
+    _freeze_at(monkeypatch, _sgt(14, 30))  # only USD_JPY would otherwise be due, see test above
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.paused_instruments = {"USD_JPY": _sgt(15, 0, day=1).isoformat()}
+    state.paused_instruments = {"USD_JPY": _sgt(14, 30, day=1).isoformat()}
     dashboard_state.save_state(state)
 
     result = scheduled_jobs.run_autopilot_interval_scan()
@@ -786,10 +848,10 @@ def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_se
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
 @patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_runs_friday_reflection_only_on_saturday(
+def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_weekend(
         mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday
+    _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday, market closed by now
     state = dashboard_state.default_state()
     state.last_review_date = "2026-08-15"  # isolate reflection behavior
     dashboard_state.save_state(state)
@@ -804,16 +866,79 @@ def test_dispatcher_runs_friday_reflection_only_on_saturday(
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
 @patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_skips_friday_reflection_on_a_weekday(
+def test_dispatcher_skips_friday_reflection_while_the_market_is_open(
         mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # Monday
+    _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # Monday, market open
     state = dashboard_state.default_state()
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
 
     mock_reflection.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_still_reflects_if_render_only_wakes_on_sunday(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Regression test: the old "weekday == 5" gate meant a reflection
+    # that missed Saturday entirely was gone for the week, not delayed.
+    # Sunday is also a market-closed day (same ISO week as Saturday), so
+    # this must still catch up here instead of waiting for a Saturday
+    # that's never coming again this week.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=16))  # Sunday, market still closed
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-16"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_called_once()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Regression test: is_forex_market_open() is False on BOTH Saturday
+    # and Sunday, so a plain "already ran today" date-stamp check would
+    # fire a second time on Sunday. Comparing ISO week numbers instead
+    # (Sat and Sun share one week) must treat Sunday as already handled.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=16))  # Sunday
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-16"
+    state.last_reflection_date = "2026-08-15"  # already reflected this same ISO week, on Saturday
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_not_called()
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_weekend(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Regression test: if Render slept through the ENTIRE weekend, the
+    # first tick back (early Monday, still closed before the market
+    # reopens) must still catch the missed reflection up rather than
+    # waiting for a Saturday that already came and went.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(1, 0, day=17))  # Monday 1am SGT, market not yet reopened
+    state = dashboard_state.default_state()
+    state.last_review_date = "2026-08-17"
+    state.last_reflection_date = "2026-08-08"  # the Saturday before last -- a whole weekend missed
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_reflection.assert_called_once()
 
 
 @patch("scheduled_jobs.run_friday_reflection")

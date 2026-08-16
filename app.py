@@ -48,7 +48,7 @@ from dashboard_state import (
     DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from autopilot import PHASE_LABELS
-from market_hours import all_session_statuses, is_forex_market_open, SGT, INSTRUMENT_WINDOWS_SGT, format_instrument_window
+from market_hours import all_session_statuses, is_forex_market_open, SGT, ALL_INSTRUMENT_WINDOWS, format_instrument_window
 from risk_engine import is_out_of_recommended_range, validate_trade, ProposedTrade, RiskViolation
 from currency_exposure import currency_deltas_for_trade
 from oanda_client import OandaClient
@@ -80,6 +80,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Diagnostic review, orchestration subsystem: added a real kill switch, fixed a Friday-"
+                    "summary skip-a-week bug and a DST bug in Autopilot's hours -- 18 of 29 total now fixed."),
     ("2026-08-16", "Diagnostic review, execution/risk subsystem: fixed 3 risk-limit gates that were silently "
                     "no-ops, a Scan-Now double-order race, and 8 other findings -- 14 of 29 total now fixed."),
     ("2026-08-16", "Full-codebase diagnostic review (29 findings, 5 subsystems) -- fixed the first three: a "
@@ -88,8 +90,6 @@ DEVELOPER_NOTES = [
                     "checks real forex market hours before sending, like the other scheduled touchpoints do."),
     ("2026-08-15", "Added weekly confidence-weight reweighting -- Friday reflection now nudges which signals "
                     "(breadth/RSI/candlestick/news) the score trusts, based on live win rates, not backtests."),
-    ("2026-08-15", "Found and fixed the real cause of the phantom Telegram notifications -- a missing test "
-                    "mock, not the deployed app -- and added a safety net so it can't recur."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
@@ -189,7 +189,7 @@ def dashboard():
     scan_results = load_scan_results()
     candidates = scan_results["candidates"]
     last_scan_at = _format_sgt(scan_results["scanned_at"])
-    instrument_windows = [(i, format_instrument_window(i)) for i in INSTRUMENT_WINDOWS_SGT]
+    instrument_windows = [(i, format_instrument_window(i)) for i in ALL_INSTRUMENT_WINDOWS]
 
     broker_balance = None
     account_currency = ""
@@ -242,6 +242,7 @@ def dashboard():
         journal_url=journal_url,
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
+        kill_switch_engaged=phase_state.kill_switch_engaged,
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
@@ -489,8 +490,24 @@ def settings():
     # checks.
     autopilot_on = request.form.get("autopilot") == "on"
     new_phase = "autopilot" if autopilot_on else "manual_paper"
-    if new_phase != phase_state.phase:
-        state.phase_state = asdict(PhaseState(phase=new_phase, kill_switch_engaged=phase_state.kill_switch_engaged))
+
+    # Kill switch: autopilot.is_auto_execute_mode() (and everything that
+    # calls it -- auto_execute_candidates, should_auto_execute) already
+    # correctly checks kill_switch_engaged and refuses to place any new
+    # trade while it's True. That logic existed from day one; what was
+    # actually missing was any way to SET it -- no route or dashboard
+    # control ever wrote True here, so the switch was permanently
+    # unreachable. Rebuilt fresh on every save (not just when phase
+    # changes) so this checkbox's state is always captured, independent
+    # of whether Autopilot itself was also toggled in the same submit.
+    kill_switch_on = request.form.get("kill_switch") == "on"
+    state.phase_state = asdict(PhaseState(
+        phase=new_phase,
+        closed_trades_in_phase=phase_state.closed_trades_in_phase if new_phase == phase_state.phase else 0,
+        kill_switch_engaged=kill_switch_on,
+    ))
+    if kill_switch_on and not phase_state.kill_switch_engaged:
+        flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
 
     interval = request.form.get("autopilot_scan_interval_minutes")
     if interval is not None and int(interval) in (15, 30, 60, 240):

@@ -88,6 +88,11 @@
 <body>
   <h1>Claude Forex Agent</h1>
   <p class="subtitle">{{ phase_label }} &middot; {{ mode|upper }} mode</p>
+  {% if kill_switch_engaged %}
+  <p style="background:var(--red); color:#fff; font-weight:600; padding:0.6rem 1rem; border-radius:8px; margin:0 0 1.25rem;">
+    &#9888; Kill switch engaged -- Autopilot will not place any new trades until it's switched off in Settings.
+  </p>
+  {% endif %}
 
   <div class="row">
     <div class="stat-grid">
@@ -167,6 +172,18 @@
               <span class="switch-track"></span>
             </label>
           </div>
+          <div class="toggle-row">
+            <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
+            <label class="switch">
+              <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
+              <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
+            </label>
+          </div>
+          <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+            Emergency stop -- when on, Autopilot will not place any new trades, regardless of
+            confidence or phase. Existing open trades are unaffected and stay broker-protected
+            by their own SL/TP. Switch off to resume.
+          </p>
           <label>Autopilot re-scan every, during each pair's own window
             <select name="autopilot_scan_interval_minutes">
               <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

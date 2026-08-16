@@ -529,3 +529,77 @@ value gets clamped rather than saved raw) in addition to unit tests.
 passed.
 
 **Fixed**: 2026-08-16
+
+---
+
+## 2026-08-16 (continued) — Orchestration, Scheduling & Autopilot subsystem, all 4 findings fixed
+
+**Problem**: Third subsystem from the full-codebase diagnostic. In the
+best shape of the three reviewed so far -- most of the dangerous
+patterns had already been caught and fixed once, with clear in-code
+notes explaining the real incident behind each fix. The gap: those
+fixes only reached the one function that broke, not its siblings with
+the same shape.
+
+**Fixes**:
+
+1. **`run_nightly_review` and `run_friday_reflection` could duplicate-
+   send on a process kill** -- the exact bug class already fixed for
+   the evening listing (send-before-save, hardened after a real
+   incident), just never backported. Both now persist their state
+   (`last_review_timestamp` / `week_start_timestamp`, plus everything
+   `_apply_self_improvement` and the confidence reweighting already
+   mutated) *before* calling `send_message`, so a mid-flight kill fails
+   safe instead of replaying the send on restart.
+
+2. **Friday reflection could skip an entire week outright.** The other
+   three dispatcher touchpoints catch up correctly no matter which day
+   the process wakes -- their gate is a plain date-stamp check, true on
+   any day once due. Friday reflection additionally required
+   `weekday() == 5`; if Render's server slept through all of one
+   particular Saturday, that week's reflection wasn't delayed, it was
+   gone, and the next Saturday silently merged two calendar weeks into
+   one data point for the auto-pause logic. Replaced with a gate on
+   `not is_forex_market_open(now)` (the market being genuinely closed
+   for the weekend) compared by ISO week number rather than calendar
+   date -- fires once per week no matter which day (Sat, Sun, or an
+   early-Monday catch-up) the process first notices the market's
+   closed, without double-firing across Saturday and Sunday (both
+   market-closed, same ISO week).
+
+3. **The table gating exactly which hours Autopilot trades each pair
+   was DST-naive -- off by about an hour for roughly 8 months of the
+   year, including right now.** `INSTRUMENT_WINDOWS_SGT` stored
+   precomputed SGT clock times that silently assumed New York was
+   always on EST; `is_forex_market_open` had already solved this
+   correctly via `zoneinfo`, just never applied to this table.
+   Instruments anchored to London and/or New York sessions (`EUR_USD`,
+   `GBP_USD`, `USD_CHF`, `USD_CAD`, `WTICO_USD`, `XAU_USD`, `XAG_USD`,
+   `BCO_USD`) now compute each window edge fresh from its own real
+   timezone (`Europe/London` / `America/New_York`) at call time;
+   Tokyo/Sydney-anchored pairs (`USD_JPY`, `AUD_USD`, `NZD_USD`) keep
+   their fixed SGT windows since Tokyo never observes DST and this
+   table doesn't attempt to track Sydney's own opposite-hemisphere
+   calendar.
+
+4. **The kill switch had no dashboard control.** `autopilot.is_auto_execute_mode`
+   already correctly checked `kill_switch_engaged` and refused to place
+   any new trade while it was `True` -- that logic was correct from day
+   one. What was missing was any way to actually set it: no route, no
+   UI control anywhere ever wrote `True`. Added a real toggle to
+   Settings (same switch styling as the Autopilot toggle) plus a red
+   banner across the top of the whole dashboard whenever it's engaged,
+   so it's visible without opening Settings. Verified live against the
+   real OANDA practice account: engaged it via a direct `/settings`
+   POST, confirmed the banner and the persisted `kill_switch_engaged: true`,
+   then switched it back off. Left the unused 30-closed-trade evidence
+   ladder scaffolding in place, per the user's explicit choice --
+   harmless dead code, not a live safety gap, since the human toggle
+   already gates phase changes directly.
+
+**Solution**: 10 new regression tests across `test_scheduled_jobs.py`
+(send-before-save, the Friday-reflection week-boundary logic, and
+DST-aware window boundaries in both January and August). Full suite:
+299 passed.
+
+**Fixed**: 2026-08-16

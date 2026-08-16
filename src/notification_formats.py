@@ -81,7 +81,7 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
 
 def format_friday_reflection_message(week_stats: dict, self_improvement_changes: list | None = None,
                                       confidence_reweight_lines: list | None = None) -> str:
-    from market_hours import INSTRUMENT_WINDOWS_SGT, format_instrument_window
+    from market_hours import ALL_INSTRUMENT_WINDOWS, format_instrument_window
 
     lines = [
         "<b>Friday self-reflection</b>",
@@ -98,7 +98,7 @@ def format_friday_reflection_message(week_stats: dict, self_improvement_changes:
     # fixed 9:30pm-1am slot -- this list describes real bot behavior,
     # not just a suggestion for manual reference.
     lines.append("\n<b>Autopilot trading windows (SGT)</b>")
-    for instrument in INSTRUMENT_WINDOWS_SGT:
+    for instrument in ALL_INSTRUMENT_WINDOWS:
         lines.append(f"  {instrument}: {format_instrument_window(instrument)}")
 
     if self_improvement_changes:
