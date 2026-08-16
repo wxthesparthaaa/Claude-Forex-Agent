@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Raised the trades-per-day slider ceiling from 10 to 50 -- autopilot now scans each pair "
+                    "in its own real liquid window, so a full day can genuinely produce more setups than the "
+                    "old cap allowed. Default stays wherever you've set it; only the ceiling moved."),
     ("2026-08-16", "Footer now just says 'Open' or 'Closed, reopens in Xh Ym' instead of four session badges "
                     "nobody was using, and Telegram now sends a message on every market open/closed "
                     "transition with the SGT day and time of the next boundary."),

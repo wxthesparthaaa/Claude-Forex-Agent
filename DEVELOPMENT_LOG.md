@@ -886,3 +886,28 @@ render correctly via direct Jinja2 rendering (Flask's
 Full suite: 343 passed.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-16 (continued) — Raised the trades-per-day slider ceiling to 50
+
+**Problem**: User request -- now that autopilot scans each pair during
+its own real liquid window instead of one shared evening slot, a full
+day can genuinely produce more than the old ceiling of 10 qualifying
+setups. Default stays at whatever's currently saved (10, live); only
+the slider's own ceiling needed raising.
+
+**Changes**: `RiskConfig.max_trades_per_day_max` (`risk_engine.py`)
+raised from 10 to 50 -- this is also the value `/settings` actually
+clamps against server-side, so raising only the template's `max="10"`
+HTML attribute without this would have let the slider *display* up to
+50 while the backend silently clamped anything above 10 back down.
+Also switched `dashboard.html`'s slider from hardcoded `min="1" max="10"`
+to `min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}"`,
+matching the pattern this diagnostic review kept finding elsewhere
+(a template hardcoding a bound that's also defined server-side, with
+nothing keeping the two in sync) -- now there's one source of truth.
+
+**Solution**: Compile-check, full suite (343 passed, no test hardcoded
+the old ceiling), and a direct Jinja2 render confirming the slider's
+`max` attribute reflects the new value.
+
+**Fixed**: 2026-08-16

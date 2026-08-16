@@ -226,7 +226,8 @@
                  value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
           <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
-          <input type="range" name="max_trades_per_day" min="1" max="10" step="1"
+          <input type="range" name="max_trades_per_day"
+                 min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
                  value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
 
           <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>

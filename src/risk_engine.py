@@ -47,10 +47,15 @@ class RiskConfig:
     # matrix (see currency_exposure.py).
     max_currency_exposure_pct: float = 4.0
 
-    # 1-10, adjustable, Mon-Fri only, same cap in manual and autopilot.
+    # 1-50, adjustable, Mon-Fri only, same cap in manual and autopilot.
+    # Ceiling raised from 10 -- autopilot now scans each pair during its
+    # own real liquid window instead of one shared evening slot, so a
+    # full trading day can genuinely produce more than 10 qualifying
+    # setups. The 5 default is untouched; this only widens the slider's
+    # own ceiling for whoever wants to raise it.
     max_trades_per_day: int = 5
     max_trades_per_day_min: int = 1
-    max_trades_per_day_max: int = 10
+    max_trades_per_day_max: int = 50
 
     # Auto-execute threshold in autopilot phases. Adjustable slider.
     autopilot_confidence_threshold_pct: float = 50.0
