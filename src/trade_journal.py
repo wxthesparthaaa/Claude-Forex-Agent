@@ -13,6 +13,8 @@ import os
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 
+from market_hours import SGT
+
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 JOURNAL_PATH = os.path.join(STATE_DIR, "trade_journal.json")
 
@@ -156,16 +158,22 @@ def trades_opened_today(entries: list, now: datetime = None) -> int:
     the trades/day cap. Previously this was always hardcoded to 0 in
     AccountState (fine when only one manual execution happened at a
     time with a page reload in between; not fine once autopilot can
-    fire several in one scan)."""
+    fire several in one scan).
+
+    "Today" is SGT, not UTC -- every other day boundary in this system
+    (market windows, the evening scan, the nightly review) is SGT, and
+    UTC midnight falls at 8am SGT, mid trading day. Counting by UTC
+    would let a cluster of trades right around that boundary exceed the
+    intended daily cap for what a human would call one trading day."""
     now = now or datetime.now(timezone.utc)
-    today = now.date()
+    today = now.astimezone(SGT).date()
     count = 0
     for e in entries:
         try:
             opened = datetime.fromisoformat(e["opened_at"])
         except (KeyError, ValueError):
             continue
-        if opened.date() == today:
+        if opened.astimezone(SGT).date() == today:
             count += 1
     return count
 

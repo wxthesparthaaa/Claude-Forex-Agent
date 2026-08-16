@@ -199,6 +199,59 @@ def test_check_open_trades_force_closes_and_notifies_after_expiry(mock_send, tmp
     assert "2 hours" in mock_send.call_args[0][0]
 
 
+def test_check_open_trades_skips_a_second_concurrent_call_instead_of_racing(tmp_path, monkeypatch):
+    # Regression test: this function runs both from a 5-minute scheduled
+    # tick and on every dashboard page load, so two overlapping calls
+    # are routine -- without a lock, both would load the same journal
+    # snapshot and whichever save_journal() ran last would silently
+    # overwrite the other's already-detected changes.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    acquired_by_first_call = trade_monitor._monitor_lock.acquire(blocking=False)
+    assert acquired_by_first_call  # sanity check: lock starts free
+    try:
+        result = trade_monitor.check_open_trades(FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD"}]))
+        assert result == []  # the second/concurrent caller skips entirely, doesn't race
+    finally:
+        trade_monitor._monitor_lock.release()
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_one_failed_force_close_does_not_drop_other_reclassifications(mock_send, tmp_path, monkeypatch):
+    # Regression test: the expiry-close branch used to call
+    # client.close_trade() with no try/except, unlike the 404-handling
+    # branch right above it. An exception there used to propagate out of
+    # the whole function, meaning save_journal() (called once, after the
+    # entire loop) never ran -- silently discarding any OTHER trade's
+    # reclassification already computed earlier in that same pass.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))  # will classify SUCCESSFUL this pass
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))  # will hit the expiry branch and fail to close
+
+    entries = tj.load_journal()
+    entries[1]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
+    tj.save_journal(entries)
+
+    class FlakyCloseClient(FakeClient):
+        def close_trade(self, trade_id):
+            raise Exception("trade already closed by a concurrent call")
+
+    client = FlakyCloseClient(
+        open_trades=[{"id": "102", "instrument": "GBP_USD"}],  # 101 NOT listed -- already closed on OANDA
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "5.0",
+                         "averageClosePrice": "1.105", "closeTime": "2026-08-16T10:00:00.000000000Z"}],
+    )
+
+    changed = trade_monitor.check_open_trades(client)  # must not raise
+
+    assert [c["trade_id"] for c in changed] == ["101"]
+    entries = tj.load_journal()
+    by_id = {e["trade_id"]: e for e in entries}
+    assert by_id["101"]["status"] == tj.SUCCESSFUL  # persisted despite 102's failure
+    assert by_id["102"]["status"] == tj.OPEN  # left OPEN, to retry next pass -- not lost, not crashed
+
+
 @patch("trade_monitor.send_message")
 def test_check_open_trades_leaves_fresh_open_trades_untouched(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
@@ -276,3 +329,77 @@ def test_cancel_all_open_trades_skips_ones_already_closed_and_continues(mock_sen
     entries = tj.load_journal()
     eur_entry = next(e for e in entries if e["instrument"] == "EUR_USD")
     assert eur_entry["status"] == tj.OPEN  # untouched since the close call failed
+
+
+@patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_noop_when_everything_is_already_journaled(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+
+    client = FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD", "currentUnits": "8000"}])
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert result == []
+    mock_send.assert_not_called()
+    assert len(tj.load_journal()) == 1  # nothing new added
+
+
+@patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_journals_a_real_untracked_position(mock_send, tmp_path, monkeypatch):
+    # Regression test: an order-placement request that timed out
+    # client-side after OANDA had already filled it left place_and_
+    # record() with no trade_id to journal -- the position exists for
+    # real, at real risk, but was completely invisible to portfolio-heat,
+    # the 2-hour expiry safeguard, and the dashboard until now.
+    _isolate(tmp_path, monkeypatch)
+
+    client = FakeClient(open_trades=[{
+        "id": "555", "instrument": "GBP_USD", "currentUnits": "5000", "price": "1.27",
+        "openTime": "2026-08-16T09:00:00.000000000Z",
+        "stopLossOrder": {"price": "1.265"}, "takeProfitOrder": {"price": "1.28"},
+    }])
+
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert len(result) == 1
+    orphan = result[0]
+    assert orphan["trade_id"] == "555"
+    assert orphan["instrument"] == "GBP_USD"
+    assert orphan["direction"] == "LONG"
+    assert orphan["units"] == 5000
+    assert orphan["entry_price"] == 1.27
+    assert orphan["stop_loss"] == 1.265
+    assert orphan["take_profit"] == 1.28
+    assert orphan["status"] == tj.OPEN
+
+    entries = tj.load_journal()
+    assert len(entries) == 1
+    assert entries[0]["trade_id"] == "555"
+    mock_send.assert_called_once()
+    assert "untracked open position" in mock_send.call_args[0][0]
+
+
+@patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_infers_short_from_negative_units(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(open_trades=[{"id": "556", "instrument": "USD_JPY", "currentUnits": "-3000", "price": "150.0"}])
+
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert result[0]["direction"] == "SHORT"
+    assert result[0]["units"] == 3000  # stored as a positive magnitude, direction carries the sign
+
+
+@patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_defaults_missing_sl_tp_to_entry_price(mock_send, tmp_path, monkeypatch):
+    # No stopLossOrder/takeProfitOrder in OANDA's response -- must not
+    # crash, and must not silently write 0.0 or None where every other
+    # consumer of these fields (dashboard, journal_export) assumes a
+    # real, plausible price.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(open_trades=[{"id": "557", "instrument": "EUR_USD", "currentUnits": "1000", "price": "1.10"}])
+
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert result[0]["stop_loss"] == 1.10
+    assert result[0]["take_profit"] == 1.10

@@ -88,17 +88,34 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
         except RiskViolation:
             continue  # no longer safe given what this batch has already placed
 
-        result = place_and_record(client, cd)
+        try:
+            result = place_and_record(client, cd)
+        except Exception as e:
+            # One instrument's OANDA rejection/timeout must not abort the
+            # rest of the batch -- previously an unguarded call here
+            # meant candidate N's failure silently cost every candidate
+            # after it in the same scan a chance to execute at all.
+            print(f"WARNING: auto-execute failed for {cd['instrument']}, skipping it: {e}", flush=True)
+            continue
         if not result["success"]:
             continue
 
+        # The order is already placed and journaled at this point --
+        # append to executed and advance the running counters BEFORE the
+        # notification, so a Telegram failure can only ever cost this
+        # one trade's alert, never the batch's own bookkeeping or the
+        # remaining candidates' chance to execute.
         executed.append(cd)
         running_trades_today += 1
         running_open_risk += cd["risk_amount"]
-        send_message(
-            f"🤖 <b>Autopilot executed</b>: {cd['direction']} {cd['instrument']} -- "
-            f"{cd['units']} {cd.get('unit_label', 'units')} @ {cd['entry_price']} "
-            f"(confidence {cd['confidence_pct']}%)\nSL {cd['stop_loss']} / TP {cd['take_profit']}"
-        )
+        try:
+            send_message(
+                f"🤖 <b>Autopilot executed</b>: {cd['direction']} {cd['instrument']} -- "
+                f"{cd['units']} {cd.get('unit_label', 'units')} @ {cd['entry_price']} "
+                f"(confidence {cd['confidence_pct']}%)\nSL {cd['stop_loss']} / TP {cd['take_profit']}"
+            )
+        except Exception as e:
+            print(f"WARNING: auto-execute notification failed for {cd['instrument']} "
+                  f"(trade already placed and journaled): {e}", flush=True)
 
     return executed

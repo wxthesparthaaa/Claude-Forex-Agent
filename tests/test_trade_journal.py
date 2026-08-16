@@ -111,6 +111,29 @@ def test_trades_opened_today_ignores_malformed_entries():
     assert tj.trades_opened_today(entries, now) == 0
 
 
+def test_trades_opened_today_uses_sgt_day_boundary_not_utc():
+    # Regression test: UTC midnight falls at 8am SGT, mid trading day --
+    # every other day boundary in this system (market windows, the
+    # evening scan, the nightly review) is SGT.
+    #
+    # A trade opened 2026-08-15 20:00 UTC (2026-08-16 04:00 SGT) and
+    # "now" at 2026-08-16 01:00 UTC (2026-08-16 09:00 SGT) are the SAME
+    # SGT trading day, despite falling on two different UTC calendar
+    # dates -- comparing raw UTC dates would have wrongly excluded it.
+    now = datetime(2026, 8, 16, 1, 0, tzinfo=timezone.utc)
+    entries = [{"opened_at": datetime(2026, 8, 15, 20, 0, tzinfo=timezone.utc).isoformat()}]
+    assert tj.trades_opened_today(entries, now) == 1
+
+    # And the reverse: a trade opened 2026-08-16 10:00 UTC and "now" at
+    # 2026-08-16 20:00 UTC (2026-08-17 04:00 SGT, already the next SGT
+    # day) share the same UTC calendar date but are two different SGT
+    # trading days -- comparing raw UTC dates would have wrongly
+    # counted it toward the new SGT day's cap.
+    now = datetime(2026, 8, 16, 20, 0, tzinfo=timezone.utc)
+    entries = [{"opened_at": datetime(2026, 8, 16, 10, 0, tzinfo=timezone.utc).isoformat()}]
+    assert tj.trades_opened_today(entries, now) == 0
+
+
 def test_total_open_risk_sums_only_open_entries():
     entries = [
         {"status": "OPEN", "risk_amount": 40.0},

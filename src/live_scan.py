@@ -217,14 +217,37 @@ def fetch_mid_price(client, pair_name: str) -> float | None:
     missing price the same as any other "try the next path" case."""
     try:
         pricing = client.get_pricing([pair_name])
+        if not pricing:
+            return None
+        # Indexing moved inside the try -- OANDA can legitimately return
+        # an entry with empty bids/asks for a currently halted/untradeable
+        # instrument, which used to raise IndexError outside this
+        # function's own "never raises" guarantee (masked only by an
+        # outer catch-all one level up, not actually honored here).
+        bid = pricing[0]["bids"][0]["price"]
+        ask = pricing[0]["asks"][0]["price"]
+        return (float(bid) + float(ask)) / 2
     except Exception as e:
         print(f"WARNING: pricing lookup failed for {pair_name}: {e}", flush=True)
         return None
-    if not pricing:
-        return None
-    bid = pricing[0]["bids"][0]["price"]
-    ask = pricing[0]["asks"][0]["price"]
-    return (float(bid) + float(ask)) / 2
+
+
+def _fetch_instrument_metadata_or_empty(client, instruments: list) -> dict:
+    """{} on ANY failure -- fetch_instrument_metadata itself is left
+    raising (a manual diagnostic script relies on that), but this scan
+    orchestration layer needs the same per-failure isolation
+    _process_instrument already has for candles/pricing. A single
+    batched get_instruments() call used to have no guard at all here:
+    any hiccup fetching metadata failed it for every instrument in the
+    scan and aborted the whole thing. {} degrades gracefully instead --
+    _process_instrument's own try/except already turns a missing
+    meta[instrument] lookup into "skip this one instrument", the same
+    outcome as any other per-instrument failure."""
+    try:
+        return fetch_instrument_metadata(client, instruments)
+    except Exception as e:
+        print(f"WARNING: instrument metadata fetch failed, scanning without it: {e}", flush=True)
+        return {}
 
 
 def run_live_scan(client, account, risk_config, account_currency: str, instruments: list = None,
@@ -238,7 +261,7 @@ def run_live_scan(client, account, risk_config, account_currency: str, instrumen
     # OANDA/Finnhub latency) gunicorn's worker timeout on Render,
     # producing a 502 on Scan Now instead of a result.
     with ThreadPoolExecutor(max_workers=3) as setup_pool:
-        meta_future = setup_pool.submit(fetch_instrument_metadata, client, instruments)
+        meta_future = setup_pool.submit(_fetch_instrument_metadata_or_empty, client, instruments)
         strength_future = setup_pool.submit(_fetch_strength_inputs, client)
         news_future = setup_pool.submit(fetch_news_articles)
 

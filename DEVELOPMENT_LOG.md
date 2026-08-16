@@ -447,3 +447,85 @@ added across `test_currency_strength.py`, `test_live_scan_news.py`,
 suite: 278 passed.
 
 **Fixed**: 2026-08-16
+
+---
+
+## 2026-08-16 (continued) — Execution, Risk & Broker Integration subsystem, all 11 findings fixed
+
+**Problem**: Continuing the full-codebase diagnostic review, subsystem
+2 (execution, risk, and OANDA integration) came back with 5 critical
+and 6 high/medium findings -- the highest-stakes subsystem in the
+project, since bugs here directly cause wrong position sizes, wrong
+orders, or money-losing bugs. Fixed all 11.
+
+**The five critical fixes**:
+
+1. **Three of `risk_engine.validate_trade`'s five gates were permanent
+   no-ops.** Both production call sites that built an `AccountState`
+   hardcoded `peak_equity=equity` and `daily_realized_pnl=weekly_realized_pnl=0.0`,
+   so the max-drawdown circuit breaker, daily loss limit, and weekly
+   loss limit could never fire -- the math was correct and tested, it
+   was just never fed real numbers. Same root cause disabled the
+   per-currency exposure cap (`currency_net_exposure_pct` was always
+   `{}`). Fixed by replacing both hand-rolled copies with one shared
+   `dashboard_state.account_state_from_tracked_capital()`: persists a
+   real high-water-mark `peak_tracked_equity` that only ratchets
+   upward, computes real daily/weekly P&L from the journal via
+   `realized_pnl_since`, and rebuilds `currency_net_exposure_pct` from
+   real open positions via `currency_exposure.compute_net_currency_exposure_pct`.
+
+2. **"Scan Now" could double-submit a real order against the scheduled
+   autopilot scan.** `_evening_scan_lock` only guarded the scheduler's
+   path; the manual `/scan` route called `auto_execute_candidates`
+   directly with no lock. Now `/scan`'s auto-execution acquires the
+   same non-blocking lock, skipping this round (with a clear flash
+   message) rather than racing a concurrent scheduled scan for the
+   same instrument.
+
+3. **Manual "Execute" didn't actually re-check risk or re-fetch
+   price**, despite the route's own docstring claiming both. `app.py`
+   never imported `validate_trade` at all. Now `execute()` builds a
+   fresh `AccountState` and calls `validate_trade()` before submission,
+   and re-fetches the current mid-price to reject a candidate whose
+   stop-loss the market has already moved through since the scan.
+
+4. **The 2-hour expiry monitor raced itself** between its 5-minute
+   scheduled tick and every dashboard page load, and its force-close
+   branch had no try/except unlike its sibling branches -- an exception
+   there aborted the whole pass, silently discarding any other trade's
+   already-computed reclassification from earlier in the same loop.
+   Added a `_monitor_lock` (same non-blocking pattern as the evening
+   scan's lock) and wrapped the force-close call in try/except.
+
+5. *(Also critical, found together with #1)* the currency-exposure fix
+   above.
+
+**The rest**: batch auto-execution (`auto_execute_candidates`) now
+isolates each candidate's `place_and_record` call AND its post-trade
+Telegram notification, so one OANDA rejection or one Telegram outage
+can no longer abort every candidate later in the same batch;
+`scheduled_jobs.py` also gained an outer backstop so an unexpected
+failure there still lets the "already scanned" timestamp update run,
+closing off a silent-infinite-retry path. Added `trade_monitor.reconcile_orphan_trades()`,
+run on the same 5-minute cadence as the expiry monitor and on every
+dashboard load: diffs OANDA's actual open trades against the journal
+and journals any orphan found (the real-incident class this closes: an
+order-placement request that times out client-side after OANDA already
+filled it, leaving a real position invisible to risk tracking and the
+2-hour safeguard). `/settings` now clamps risk parameters server-side
+to their documented bounds instead of only warning visually.
+`trades_opened_today` now counts by SGT day instead of UTC (UTC
+midnight falls at 8am SGT, mid trading day). `live_scan.py`'s
+instrument-metadata fetch and `fetch_mid_price`'s bids/asks indexing
+both gained the same per-failure isolation `_process_instrument`
+already had for candles/pricing.
+
+**Solution**: Verified locally against the real OANDA practice account
+(dashboard load, and a direct `/settings` POST proving an out-of-range
+value gets clamped rather than saved raw) in addition to unit tests.
+21 new regression tests added across `test_dashboard_state.py`,
+`test_trade_execution.py`, `test_trade_monitor.py`, `test_trade_journal.py`,
+`test_live_scan_news.py`, and `test_scheduled_jobs.py`. Full suite: 293
+passed.
+
+**Fixed**: 2026-08-16

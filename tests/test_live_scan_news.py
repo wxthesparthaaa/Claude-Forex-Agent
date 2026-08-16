@@ -150,6 +150,31 @@ def test_fetch_mid_price_averages_bid_ask():
     assert live_scan.fetch_mid_price(client, "EUR_USD") == 1.11
 
 
+def test_fetch_mid_price_returns_none_instead_of_raising_on_empty_bids_asks():
+    # Regression test: the bids[0]/asks[0] indexing used to sit OUTSIDE
+    # the try/except, so a halted/untradeable instrument (a legitimate
+    # OANDA response shape: an entry with empty bids/asks arrays) would
+    # raise IndexError, breaking this function's own "never raises"
+    # guarantee -- previously only saved by an outer catch-all one level
+    # up, not actually honored here.
+    client = _FakePricingClient(pricing=[{"bids": [], "asks": []}])
+    assert live_scan.fetch_mid_price(client, "EUR_USD") is None
+
+
+def test_fetch_instrument_metadata_or_empty_degrades_instead_of_crashing_the_scan():
+    # Regression test: fetch_instrument_metadata's single batched
+    # get_instruments() call had no guard at this layer -- any hiccup
+    # failed metadata for every instrument in the scan and crashed the
+    # whole thing, unlike the per-instrument isolation candles/pricing
+    # already have.
+    class FailingClient:
+        def get_instruments(self, instruments):
+            raise Exception("OANDA timeout")
+
+    result = live_scan._fetch_instrument_metadata_or_empty(FailingClient(), ["EUR_USD"])
+    assert result == {}
+
+
 @patch("live_scan._process_instrument_unsafe")
 def test_process_instrument_returns_none_instead_of_raising_on_failure(mock_unsafe):
     # Real incident: an unhandled error for ONE instrument (bad candle

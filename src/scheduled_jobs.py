@@ -24,20 +24,19 @@ from datetime import datetime, timedelta, timezone
 from oanda_client import OandaClient
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity,
-    confidence_weights_from_state,
+    confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from live_scan import run_live_scan
 from market_hours import SGT, is_forex_market_open, instrument_window_active
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
-from trade_journal import load_journal, trades_opened_today, total_open_risk, closed_entries
+from trade_journal import load_journal, closed_entries
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
 )
 from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
-from risk_engine import AccountState
 from confidence_reweighting import reweight_confidence_components
 
 
@@ -70,14 +69,6 @@ def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> lis
     if limit is not None:
         result = result[-limit:]
     return result
-
-
-def _account_from_tracked_capital(state) -> AccountState:
-    equity = tracked_equity(state)
-    entries = load_journal()
-    return AccountState(equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
-                         open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
-                         currency_net_exposure_pct={})
 
 
 # run_daily_dispatcher's evening-listing branch and run_autopilot_interval_scan
@@ -143,7 +134,7 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
             instruments = [i for i in ALL_INSTRUMENTS if i not in state.paused_instruments]
 
         summary = client.get_account_summary()
-        account = _account_from_tracked_capital(state)
+        account = account_state_from_tracked_capital(state)
 
         candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
                                     instruments=instruments,
@@ -207,7 +198,19 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
                 send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
 
         if phase_state.phase == "autopilot":
-            auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+            try:
+                auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+            except Exception as e:
+                # auto_execute_candidates already isolates each candidate
+                # internally, but this is a second, outer backstop: if
+                # anything still escapes it, that exception must not also
+                # skip the last_autopilot_scan_timestamps update below --
+                # without this, a scanned instrument that hit an
+                # unexpected failure would never get marked "scanned",
+                # and the interval scanner would silently retry it every
+                # 5 minutes forever with no alert, while every OTHER
+                # instrument in this same batch never got a turn either.
+                print(f"WARNING: auto_execute_candidates failed for this scan batch: {e}", flush=True)
 
         # Real incident, confirmed via the state-sync git history: this
         # function loads `state` once at the top, then a scan (OANDA +

@@ -188,3 +188,53 @@ def test_auto_execute_second_candidate_blocked_by_first_within_same_batch(mock_s
     assert len(executed) == 1
     assert executed[0]["instrument"] == "EUR_USD"
     assert client.orders_placed == ["EUR_USD"]
+
+
+@patch("trade_execution.send_message")
+def test_auto_execute_one_oanda_rejection_does_not_abort_the_rest_of_the_batch(mock_send, tmp_path, monkeypatch):
+    # Regression test: place_and_record used to be called with no
+    # try/except -- one instrument's OANDA rejection/timeout would raise
+    # straight out of auto_execute_candidates, silently costing every
+    # OTHER candidate later in the same batch its own chance to execute.
+    _isolate(tmp_path, monkeypatch)
+
+    class FlakyClient(FakeClient):
+        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
+            if instrument == "EUR_USD":
+                raise Exception("OANDA timeout")
+            return super().place_market_order_with_sltp(instrument, units, stop_loss_price, take_profit_price)
+
+    client = FlakyClient()
+    state = PhaseState(phase="autopilot")
+    risk_config = RiskConfig(autopilot_confidence_threshold_pct=50.0)
+    candidates = [
+        candidate(instrument="EUR_USD", confidence_pct=80.0, risk_amount=40.0),  # fails to place
+        candidate(instrument="GBP_USD", confidence_pct=80.0, risk_amount=40.0),  # must still get its turn
+    ]
+
+    executed = trade_execution.auto_execute_candidates(client, candidates, state, risk_config, clean_account())
+
+    assert [c["instrument"] for c in executed] == ["GBP_USD"]
+    assert client.orders_placed == ["GBP_USD"]
+
+
+def test_auto_execute_a_failed_notification_does_not_abort_the_rest_of_the_batch(tmp_path, monkeypatch):
+    # Regression test: send_message() isn't wrapped in its own
+    # try/except (it can raise on a real network failure) -- an
+    # unguarded call here used to mean a Telegram outage right after a
+    # successful fill would abort every candidate still left in the
+    # batch, even though their orders had nothing to do with Telegram.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()
+    state = PhaseState(phase="autopilot")
+    risk_config = RiskConfig(autopilot_confidence_threshold_pct=50.0)
+    candidates = [
+        candidate(instrument="EUR_USD", confidence_pct=80.0, risk_amount=40.0),
+        candidate(instrument="GBP_USD", confidence_pct=80.0, risk_amount=40.0),
+    ]
+
+    with patch("trade_execution.send_message", side_effect=Exception("Telegram unreachable")):
+        executed = trade_execution.auto_execute_candidates(client, candidates, state, risk_config, clean_account())
+
+    assert [c["instrument"] for c in executed] == ["EUR_USD", "GBP_USD"]  # both orders still placed
+    assert client.orders_placed == ["EUR_USD", "GBP_USD"]

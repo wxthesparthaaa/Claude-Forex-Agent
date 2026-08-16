@@ -87,6 +87,11 @@ class DashboardState:
     # accumulated live journal (see run_friday_reflection). Kept as a
     # plain dict in state, same pattern as risk_config.
     confidence_weights: dict = field(default_factory=lambda: asdict(ConfidenceWeights()))
+    # Persisted high-water mark for risk_engine's max-drawdown circuit
+    # breaker -- None until the first real AccountState is built, then
+    # only ever ratchets upward. Without this, the breaker has nothing
+    # to measure a drawdown against (see account_state_from_tracked_capital).
+    peak_tracked_equity: float | None = None
 
 
 def default_state() -> DashboardState:
@@ -110,6 +115,54 @@ def tracked_equity_live(state: DashboardState, entries: list | None = None) -> f
     from trade_journal import load_journal, realized_pnl_since
     entries = entries if entries is not None else load_journal()
     return tracked_equity(state) + realized_pnl_since(entries, state.last_review_timestamp)
+
+
+def account_state_from_tracked_capital(state: DashboardState, entries: list | None = None):
+    """The single shared implementation of "build the AccountState
+    risk_engine.validate_trade() checks a real trade against," used by
+    both the manual scan/execute path (app.py) and the scheduled/
+    autopilot path (scheduled_jobs.py) -- previously each hand-rolled
+    its own copy, and both independently hardcoded peak_equity to always
+    equal current equity and daily/weekly realized P&L to always 0.0,
+    which permanently disabled three of RiskConfig's five limits (the
+    drawdown circuit breaker could never see a drawdown; the daily/
+    weekly loss limits could never see a loss) without either copy ever
+    raising an error to say so.
+
+    currency_net_exposure_pct is rebuilt from the journal's real open
+    positions rather than left at {} -- previously the per-currency
+    exposure cap could never see exposure already open from an earlier
+    trade, so e.g. EUR_USD long + GBP_USD long + AUD_USD long (really
+    one net USD-short bet three times over) would each individually
+    clear the cap."""
+    from risk_engine import AccountState
+    from trade_journal import load_journal, open_entries, total_open_risk, trades_opened_today, realized_pnl_since
+    from currency_exposure import compute_net_currency_exposure_pct
+
+    entries = entries if entries is not None else load_journal()
+    equity = tracked_equity(state)
+
+    # Ratchets upward only -- a drawdown must always be measured against
+    # the account's real historical best, never against today's own
+    # equity (which is what "peak_equity = equity" made this compute to
+    # 0% drawdown, always, no matter how much had actually been lost).
+    peak_equity = max(state.peak_tracked_equity or equity, equity)
+    if peak_equity != state.peak_tracked_equity:
+        state.peak_tracked_equity = peak_equity
+        save_state(state)
+
+    open_positions = [
+        {"instrument": e["instrument"], "direction": e["direction"], "risk_amount": e.get("risk_amount", 0.0)}
+        for e in open_entries(entries)
+    ]
+
+    return AccountState(
+        equity=equity, peak_equity=peak_equity,
+        daily_realized_pnl=realized_pnl_since(entries, state.last_review_timestamp),
+        weekly_realized_pnl=realized_pnl_since(entries, state.week_start_timestamp),
+        open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
+        currency_net_exposure_pct=compute_net_currency_exposure_pct(open_positions, equity),
+    )
 
 
 def load_state() -> DashboardState:

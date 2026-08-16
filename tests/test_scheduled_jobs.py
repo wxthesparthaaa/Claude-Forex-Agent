@@ -250,6 +250,35 @@ def test_run_evening_scan_auto_executes_when_autopilot_on(mock_send, mock_scan, 
 @patch("scheduled_jobs.save_candidates")
 @patch("scheduled_jobs.run_live_scan")
 @patch("scheduled_jobs.send_message")
+def test_run_evening_scan_still_marks_instruments_scanned_when_auto_execute_raises(
+        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
+    # Regression test: auto_execute_candidates already isolates each
+    # candidate's own failure internally, but if anything still escaped
+    # it unguarded, the exception used to propagate out of this whole
+    # function -- skipping the last_autopilot_scan_timestamps update
+    # below it entirely. That instrument would then never be marked
+    # "scanned," so the interval scanner would silently retry it every
+    # 5 minutes forever with no alert, while every OTHER instrument in
+    # this same batch never got a turn either.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    mock_auto_exec.side_effect = Exception("unexpected failure")
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client, instruments=["EUR_USD"])  # must not raise
+
+    updated = dashboard_state.load_state()
+    assert "EUR_USD" in updated.last_autopilot_scan_timestamps
+
+
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
 def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan, mock_save, mock_auto_exec,
                                                                tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)

@@ -45,22 +45,23 @@ load_dotenv(encoding="utf-8-sig", override=True)
 
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
-    DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state,
+    DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from autopilot import PHASE_LABELS
 from market_hours import all_session_statuses, is_forex_market_open, SGT, INSTRUMENT_WINDOWS_SGT, format_instrument_window
-from risk_engine import is_out_of_recommended_range, AccountState
+from risk_engine import is_out_of_recommended_range, validate_trade, ProposedTrade, RiskViolation
+from currency_exposure import currency_deltas_for_trade
 from oanda_client import OandaClient
-from live_scan import run_live_scan, fetch_news_articles
+from live_scan import run_live_scan, fetch_news_articles, fetch_mid_price
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, load_scan_results, find_candidate
-from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher
+from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher, _evening_scan_lock
 from github_state_sync import pull_state_from_github, github_file_url
 from trade_journal import (
-    load_journal, trades_opened_today, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
+    load_journal, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
     JOURNAL_XLSX_REPO_PATH,
 )
-from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades
+from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
@@ -79,6 +80,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Diagnostic review, execution/risk subsystem: fixed 3 risk-limit gates that were silently "
+                    "no-ops, a Scan-Now double-order race, and 8 other findings -- 14 of 29 total now fixed."),
     ("2026-08-16", "Full-codebase diagnostic review (29 findings, 5 subsystems) -- fixed the first three: a "
                     "dead confidence-score safeguard, a reweighting blind spot, and a scan-crashing fetch."),
     ("2026-08-16", "Fixed the Nightly review notification firing on Sundays with nothing to review -- it now "
@@ -87,7 +90,6 @@ DEVELOPER_NOTES = [
                     "(breadth/RSI/candlestick/news) the score trusts, based on live win rates, not backtests."),
     ("2026-08-15", "Found and fixed the real cause of the phantom Telegram notifications -- a missing test "
                     "mock, not the deployed app -- and added a safety net so it can't recur."),
-    ("2026-08-15", "Gave this project its own dedicated Telegram bot, separate from the sibling project's."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
@@ -98,29 +100,6 @@ def _oanda_time_to_unix(time_str: str) -> int:
     # microseconds (6 digits) since that's what fromisoformat accepts.
     trimmed = time_str[:26] + "+00:00"
     return int(datetime.fromisoformat(trimmed).timestamp())
-
-
-def _account_state_from_tracked_capital(state) -> AccountState:
-    """Sizing MUST use the strategy's own tracked capital, never OANDA's
-    raw demo NAV -- verified against the real account, the practice
-    balance (119,336.26 SGD) is the broker's default demo funding, wildly
-    larger than the $2,000 the strategy actually targets.
-
-    trades_today/open_risk_amount now come from the real journal instead
-    of being hardcoded to 0 -- that was a harmless simplification while
-    only one manual execution ever happened at a time (with a page
-    reload in between), but a real gap once Autopilot can fire several
-    trades from one scan. currency_net_exposure_pct is still not
-    reconstructed from open positions -- a separate, known gap, not
-    silently pretended away.
-    """
-    equity = tracked_equity(state)
-    entries = load_journal()
-    return AccountState(
-        equity=equity, peak_equity=equity, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
-        open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
-        currency_net_exposure_pct={},
-    )
 
 
 def _news_summary() -> dict:
@@ -221,6 +200,7 @@ def dashboard():
         broker_balance = float(summary.get("NAV", summary.get("balance", 0)))
         account_currency = summary.get("currency", "")
         check_open_trades(client)  # detect SL/TP closures + force-close anything past 2 hours
+        reconcile_orphan_trades(client)  # catch any OANDA position this app never journaled
         live_trades = live_trades_view(client)
     except Exception as e:
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
@@ -291,7 +271,7 @@ def scan():
     try:
         client = OandaClient()
         summary = client.get_account_summary()
-        account = _account_state_from_tracked_capital(state)
+        account = account_state_from_tracked_capital(state)
         candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
                                     confidence_weights=confidence_weights_from_state(state))
         save_candidates(candidates)
@@ -304,14 +284,29 @@ def scan():
             # nothing right now".
             flash("Scan complete: no qualifying setups found right now.", "success")
         elif phase_state.phase == "autopilot":
-            executed = auto_execute_candidates(client, candidates, phase_state, risk_config, account)
-            if executed:
-                names = ", ".join(f"{c['instrument']} {c['direction']}" for c in executed)
-                flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
-                      f"{len(executed)} auto-executed ({names}).", "success")
+            # Same non-blocking lock the scheduled autopilot scan uses
+            # around its own auto-execution -- without this, a click on
+            # Scan Now landing at the same moment as a scheduled scan
+            # could have both independently check "is this instrument
+            # already open?", both see no, and both place the same
+            # trade. The loser here skips execution entirely rather than
+            # racing the scheduled scan for it, matching that lock's own
+            # "loser skips" semantics.
+            if _evening_scan_lock.acquire(blocking=False):
+                try:
+                    executed = auto_execute_candidates(client, candidates, phase_state, risk_config, account)
+                finally:
+                    _evening_scan_lock.release()
+                if executed:
+                    names = ", ".join(f"{c['instrument']} {c['direction']}" for c in executed)
+                    flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
+                          f"{len(executed)} auto-executed ({names}).", "success")
+                else:
+                    flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
+                          f"none met the autopilot confidence threshold or risk caps.", "success")
             else:
-                flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
-                      f"none met the autopilot confidence threshold or risk caps.", "success")
+                flash(f"Scan complete: {len(qualifying)} candidate(s) found, but a scheduled autopilot scan "
+                      f"was already executing -- skipped this round to avoid a duplicate order.", "success")
         else:
             flash(f"Scan complete: {len(qualifying)} candidate(s) found. Review to execute manually.", "success")
     except Exception as e:
@@ -346,14 +341,30 @@ def trade_review(instrument):
 @app.route("/execute/<instrument>", methods=["POST"])
 def execute(instrument):
     """The one route that ever places a real order -- only ever reached
-    by a human's own click on a specific reviewed trade. Re-fetches
-    fresh pricing rather than trusting the scan-time snapshot before
-    submitting."""
+    by a human's own click on a specific reviewed trade. Re-checks risk
+    against a fresh AccountState and re-fetches current pricing rather
+    than trusting the scan-time snapshot before submitting -- this
+    docstring used to claim both and do neither; a candidate clicked
+    minutes after it was scanned was submitted with no re-check of
+    whether risk limits had since been used up by other trades, or
+    whether price had already moved past the recorded stop-loss."""
     candidate = find_candidate(instrument)
     if candidate is None or candidate.get("rejected_reason"):
         return redirect(url_for("dashboard"))
 
     confirmed_duplicate = request.form.get("confirm_duplicate") == "1"
+
+    state = load_state()
+    account = account_state_from_tracked_capital(state)
+    proposed = ProposedTrade(
+        instrument=instrument, direction=candidate["direction"], risk_amount=candidate["risk_amount"],
+        currency_deltas=currency_deltas_for_trade(instrument, candidate["direction"]),
+    )
+    try:
+        validate_trade(proposed, account, risk_config_from_state(state))
+    except RiskViolation as e:
+        flash(f"Execute blocked -- risk limits no longer clear: {e}", "error")
+        return redirect(url_for("dashboard"))
 
     try:
         client = OandaClient()
@@ -361,6 +372,24 @@ def execute(instrument):
             # Not an outright block -- shows a confirmation step so an
             # intentional add-to-position/re-entry can still go through.
             return render_template("confirm_duplicate.html", candidate=candidate)
+
+        # A market order always fills at the real live price regardless
+        # of this candidate's recorded entry_price -- what actually goes
+        # stale is the stop-loss: if price has already moved through it
+        # since the scan, submitting the old level opens a position
+        # already on the wrong side of its own stop. current_price is
+        # None (fetch_mid_price never raises) only degrades this one
+        # extra sanity check -- OANDA's own rejection, already handled
+        # below, remains the backstop either way.
+        current_price = fetch_mid_price(client, instrument)
+        if current_price is not None:
+            stop_loss = candidate["stop_loss"]
+            stale = (candidate["direction"] == "LONG" and current_price <= stop_loss) or \
+                    (candidate["direction"] == "SHORT" and current_price >= stop_loss)
+            if stale:
+                flash(f"Execute blocked -- price has moved to {current_price}, already at or past this "
+                      f"candidate's stop-loss ({stop_loss}). Scan again for a current setup.", "error")
+                return redirect(url_for("dashboard"))
 
         result = place_and_record(client, candidate, allow_duplicate=confirmed_duplicate)
         if not result["success"]:
@@ -426,16 +455,30 @@ def journal_export():
     )
 
 
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
 @app.route("/settings", methods=["POST"])
 def settings():
     state = load_state()
     risk_config = risk_config_from_state(state)
     phase_state = phase_state_from_state(state)
 
-    risk_config.risk_per_trade_pct = float(request.form.get("risk_per_trade_pct", risk_config.risk_per_trade_pct))
-    risk_config.max_trades_per_day = int(request.form.get("max_trades_per_day", risk_config.max_trades_per_day))
-    risk_config.autopilot_confidence_threshold_pct = float(
-        request.form.get("autopilot_confidence_threshold_pct", risk_config.autopilot_confidence_threshold_pct))
+    # is_out_of_recommended_range only drives the dashboard's cosmetic
+    # red warning -- nothing previously stopped an out-of-range value
+    # (a slider quirk, a malformed direct POST) from actually being
+    # saved and used for real position sizing. Clamped to the same
+    # documented bounds the slider itself is built from.
+    risk_config.risk_per_trade_pct = _clamp(
+        float(request.form.get("risk_per_trade_pct", risk_config.risk_per_trade_pct)),
+        risk_config.risk_per_trade_pct_min, risk_config.risk_per_trade_pct_max)
+    risk_config.max_trades_per_day = int(_clamp(
+        float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
+        risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
+    risk_config.autopilot_confidence_threshold_pct = _clamp(
+        float(request.form.get("autopilot_confidence_threshold_pct", risk_config.autopilot_confidence_threshold_pct)),
+        0.0, 100.0)
 
     # Direct toggle, bypassing the original 30-closed-trades phase gate
     # (explicit user request) -- checking the box turns autopilot on
@@ -507,6 +550,11 @@ def start_scheduler():
     # nobody looking at the dashboard (the dashboard also calls this on
     # every page load, but that alone wouldn't enforce anything unattended).
     scheduler.add_job(check_open_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Catches any OANDA position this app never journaled (e.g. an order
+    # confirmation lost to a network timeout right after a real fill) --
+    # same "runs unattended too, not just on page load" reasoning as
+    # check_open_trades above.
+    scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 

@@ -11,17 +11,43 @@ principle the sibling project's dashboard uses for its own snapshot.
 """
 from __future__ import annotations
 
+import threading
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 import requests
 
 from oanda_client import OandaClient
-from trade_journal import load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS, SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST
+from trade_journal import (
+    load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS,
+    SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST, JournalEntry,
+)
 from telegram_notifier import send_message
+
+# Same shape as scheduled_jobs._evening_scan_lock, for the same reason:
+# this runs both from a 5-minute scheduled tick AND on every dashboard
+# page load, so two overlapping calls are routine, not rare. Without a
+# lock, both could independently load the same journal snapshot, each
+# compute their own reclassifications, and whichever save_journal() runs
+# last would silently overwrite the other's already-detected changes --
+# including reverting a real OANDA close back to looking OPEN in the
+# journal until the next pass re-derives it. Non-blocking: the loser
+# skips this pass entirely rather than racing the winner.
+_monitor_lock = threading.Lock()
 
 
 def check_open_trades(client: OandaClient = None) -> list:
-    """Returns the list of entries that changed status this call."""
+    """Returns the list of entries that changed status this call. See
+    _monitor_lock's own comment for why this is guarded."""
+    if not _monitor_lock.acquire(blocking=False):
+        return []
+    try:
+        return _check_open_trades_unsafe(client)
+    finally:
+        _monitor_lock.release()
+
+
+def _check_open_trades_unsafe(client: OandaClient = None) -> list:
     entries = load_journal()
     pending = open_entries(entries)
     if not pending:
@@ -88,7 +114,19 @@ def check_open_trades(client: OandaClient = None) -> list:
             changed.append(entry)
 
         elif is_expired(entry, now):
-            result = client.close_trade(trade_id)
+            try:
+                result = client.close_trade(trade_id)
+            except Exception as e:
+                # Same "don't let one bad lookup abort the whole pass"
+                # reasoning as the 404-handling branch above -- e.g. this
+                # trade was already closed by an overlapping call that
+                # slipped in before _monitor_lock existed, or a transient
+                # OANDA error. Skip it this pass rather than raising,
+                # which used to abort save_journal() below entirely and
+                # silently drop every other reclassification already
+                # computed earlier in this same loop.
+                print(f"WARNING: failed to force-close expired trade {trade_id}: {e}", flush=True)
+                continue
             fill = result.get("orderFillTransaction", {})
             pnl = float(fill.get("pl", 0))
             entry["realized_pnl"] = pnl
@@ -163,6 +201,66 @@ def cancel_all_open_trades(client: OandaClient = None) -> list:
             f"Total P&L: {total_pnl:+.2f} {currency}"
         )
     return closed
+
+
+def reconcile_orphan_trades(client: OandaClient = None) -> list:
+    """Diffs OANDA's actual open trades against the journal's OPEN
+    entries and journals any orphan found -- a real position OANDA
+    filled that this app never recorded. Real incident class: an order-
+    placement request that timed out client-side (or otherwise lost its
+    response) after OANDA had already filled the order leaves place_and_
+    record() with no trade_id to journal, so the position exists for
+    real, at real risk, but is invisible to portfolio-heat, the 2-hour
+    expiry safeguard, and the dashboard's Live trades view -- until
+    someone happens to check OANDA directly. Returns the newly-journaled
+    orphan entries (empty if none found).
+
+    Recorded with whatever OANDA itself reports for direction/units/
+    entry price/SL/TP -- confidence and rationale are honest placeholders
+    (0.0 / a note explaining why), never guessed at, since this app has
+    no record of what scan (if any) proposed this trade."""
+    entries = load_journal()
+    known_ids = {e["trade_id"] for e in open_entries(entries)}
+
+    client = client or OandaClient()
+    orphans = [t for t in client.get_open_trades() if t["id"] not in known_ids]
+    if not orphans:
+        return []
+
+    now = datetime.now(timezone.utc)
+    new_entries = []
+    for t in orphans:
+        units = float(t.get("currentUnits", t.get("initialUnits", 0)) or 0)
+        direction = "LONG" if units >= 0 else "SHORT"
+        entry_price = float(t.get("price", 0) or 0)
+        sl_price = (t.get("stopLossOrder") or {}).get("price")
+        tp_price = (t.get("takeProfitOrder") or {}).get("price")
+        entry = JournalEntry(
+            trade_id=t["id"], instrument=t.get("instrument", "UNKNOWN"), direction=direction,
+            units=int(abs(units)), entry_price=entry_price,
+            # An unknown SL/TP defaults to the entry price rather than 0
+            # or None -- every other consumer of these fields (the
+            # dashboard, journal_export's R-multiple calc) assumes a
+            # real price, and entry_price is the least-wrong stand-in
+            # when OANDA's response didn't include the attached order.
+            stop_loss=float(sl_price) if sl_price is not None else entry_price,
+            take_profit=float(tp_price) if tp_price is not None else entry_price,
+            confidence_pct=0.0,
+            rationale=["Reconciled from an OANDA position with no matching journal entry -- "
+                       "an earlier order confirmation was likely lost. See reconcile_orphan_trades()."],
+            opened_at=t.get("openTime") or now.isoformat(),
+        )
+        new_entries.append(entry)
+
+    entries.extend(asdict(e) for e in new_entries)
+    save_journal(entries)
+
+    lines = "\n".join(f"  {e.instrument} {e.direction} ({e.units} units, id {e.trade_id})" for e in new_entries)
+    send_message(
+        f"⚠️ <b>Found {len(new_entries)} untracked open position(s) on OANDA</b> -- now journaled, "
+        f"but this means an earlier order confirmation was lost somewhere:\n{lines}"
+    )
+    return [asdict(e) for e in new_entries]
 
 
 def live_trades_view(client: OandaClient = None) -> list:
