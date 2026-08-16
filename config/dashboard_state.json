@@ -30,7 +30,7 @@
   "strategy_realized_pnl": 23.130699999999997,
   "last_review_timestamp": "2026-08-15T17:04:57.194124+00:00",
   "week_start_timestamp": "2026-08-14T17:05:30.210314+00:00",
-  "autopilot_scan_interval_minutes": 15,
+  "autopilot_scan_interval_minutes": 30,
   "last_autopilot_scan_timestamps": {},
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {},
