@@ -48,7 +48,8 @@ from dashboard_state import (
     DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from autopilot import PHASE_LABELS
-from market_hours import all_session_statuses, is_forex_market_open, SGT, ALL_INSTRUMENT_WINDOWS, format_instrument_window
+from market_hours import (is_forex_market_open, time_until_forex_reopen, format_duration,
+                           SGT, ALL_INSTRUMENT_WINDOWS, format_instrument_window)
 from risk_engine import is_out_of_recommended_range, validate_trade, ProposedTrade, RiskViolation
 from currency_exposure import currency_deltas_for_trade
 from oanda_client import OandaClient
@@ -80,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Footer now just says 'Open' or 'Closed, reopens in Xh Ym' instead of four session badges "
+                    "nobody was using, and Telegram now sends a message on every market open/closed "
+                    "transition with the SGT day and time of the next boundary."),
     ("2026-08-16", "Aesthetic pass across all three pages: card depth, tabular-nums on every number, "
                     "right-aligned financial columns, custom disclosure chevrons, consistent banner/button "
                     "styling -- the diagnostic review is now fully closed out, all 29 findings fixed."),
@@ -90,8 +94,6 @@ DEVELOPER_NOTES = [
                     "trade, added a GitHub-sync failure banner, and 3 other findings -- 23 of 29 now fixed."),
     ("2026-08-16", "Diagnostic review, orchestration subsystem: added a real kill switch, fixed a Friday-"
                     "summary skip-a-week bug and a DST bug in Autopilot's hours -- 18 of 29 total now fixed."),
-    ("2026-08-16", "Diagnostic review, execution/risk subsystem: fixed 3 risk-limit gates that were silently "
-                    "no-ops, a Scan-Now double-order race, and 8 other findings -- 14 of 29 total now fixed."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
@@ -233,6 +235,8 @@ def dashboard():
     overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
                          if state.strategy_starting_capital else 0.0)
 
+    reopen_delta = time_until_forex_reopen()
+
     news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
     # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
@@ -253,7 +257,8 @@ def dashboard():
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
-        sessions=all_session_statuses(), forex_open=is_forex_market_open(),
+        forex_open=reopen_delta is None,
+        reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,

@@ -833,3 +833,56 @@ this environment. No Python changed, so the existing 333-test suite is
 unaffected; no template-rendering tests exist to regress.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-16 (continued) — Simplified footer + a market open/closed Telegram notification
+
+**Problem**: User feedback on the dashboard footer -- the four
+individual Sydney/Tokyo/London/New York session badges weren't useful
+day to day; what's actually wanted is just "is forex open right now,
+and if not, when does it reopen." Separately, autopilot trades already
+get their own instant per-trade Telegram alert regardless of time of
+day (confirmed by reading `trade_execution.auto_execute_candidates`
+directly), but there was no notification at all for the market's own
+open/closed transitions -- someone checking Telegram had no way to know
+"the weekend just started" or "trading just resumed" without opening
+the dashboard.
+
+**Changes**:
+
+1. **Footer simplified** to one line: "Forex market: Open (24/5)" or
+   "Forex market: Closed &middot; reopens in {duration}" -- dropped the
+   per-session badges and the now-fully-unused `all_session_statuses()`
+   (its only caller). `is_session_open`/`SESSIONS_SGT` stay, since
+   they're still directly tested and still back
+   `INSTRUMENT_SESSION_LABEL` in the Friday reflection message.
+2. Added `market_hours.next_forex_open()` / `next_forex_close()` --
+   the absolute NY-tzinfo datetime of the next open/close boundary --
+   and refactored the existing `time_until_forex_reopen()` to build on
+   `next_forex_open()` instead of duplicating the same "next Sunday
+   5pm NY" computation. Added `format_duration()` for the footer's
+   "1d 5h" / "5h 32m" / "45m" display.
+3. **New Telegram touchpoint**: `scheduled_jobs.check_market_status_transition()`,
+   wired unconditionally into every 5-min `run_daily_dispatcher` tick
+   (unlike the other touchpoints, it can't be gated on time-of-day --
+   detecting the transition IS the job). Persists "open"/"closed" as
+   `DashboardState.last_market_status` and only sends when that value
+   actually flips from what it was last tick -- a cold-start state
+   (`None`) just records the current status silently rather than firing
+   a throwaway message on every fresh deploy. Both messages state the
+   SGT day and time of the next boundary, e.g. "Reopens Monday 05:00
+   SGT" / "Trading until Saturday 05:00 SGT" -- matching the user's ask
+   for "until what day and what time in Singapore GMT," not just a
+   bare "closed"/"open" flag.
+
+**Solution**: 10 new tests -- 6 in `test_trade_levels_hours_autopilot.py`
+for `next_forex_open`/`next_forex_close`/`time_until_forex_reopen`/
+`format_duration` (including the concrete date math, not just
+existence checks), 4 in `test_scheduled_jobs.py` for
+`check_market_status_transition` (cold start stays silent, both
+transition directions notify with the correct SGT day/time, an
+unchanged status doesn't re-notify). Verified the footer's two branches
+render correctly via direct Jinja2 rendering (Flask's
+`get_flashed_messages`/`url_for` stubbed for the standalone render).
+Full suite: 343 passed.
+
+**Fixed**: 2026-08-16

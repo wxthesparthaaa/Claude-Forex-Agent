@@ -71,6 +71,13 @@ class DashboardState:
     last_review_date: str | None = None
     last_reflection_date: str | None = None
     last_health_check_date: str | None = None  # 21:00 SGT pre-evening OANDA/GitHub connectivity check
+    # "open" | "closed" | None -- the market status as of the last dispatcher
+    # tick, so scheduled_jobs.check_market_status_transition can tell a real
+    # open<->closed transition apart from "still the same status as five
+    # minutes ago." None only on a fresh/never-run state -- that first tick
+    # just records the current status silently rather than notifying, since
+    # there's no genuine prior status to have transitioned from.
+    last_market_status: str | None = None
     # Precise timestamp (UTC ISO) of the last "Potential trades tonight"
     # Telegram send -- a hard backstop on top of last_evening_listing_date.
     # Real incident: duplicate sends kept recurring despite the date-stamp

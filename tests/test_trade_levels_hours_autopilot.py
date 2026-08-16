@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -8,7 +8,9 @@ import pytest
 
 from trade_levels import derive_trade_levels
 from pivot_detection import SwingPoint
-from market_hours import is_trading_day, is_session_open, is_forex_market_open, SGT, NY
+from market_hours import (is_trading_day, is_session_open, is_forex_market_open,
+                           time_until_forex_reopen, next_forex_open, next_forex_close,
+                           format_duration, SGT, NY)
 from autopilot import (
     PhaseState, can_advance_phase, next_phase, advance_phase,
     is_auto_execute_mode, should_auto_execute, TRADES_REQUIRED_TO_ADVANCE,
@@ -77,6 +79,40 @@ def test_forex_market_closes_friday_5pm_and_reopens_sunday_5pm_ny():
     assert is_forex_market_open(friday_after_close) is False
     assert is_forex_market_open(sunday_before_open) is False
     assert is_forex_market_open(sunday_after_open) is True
+
+
+def test_time_until_forex_reopen_is_none_while_open():
+    tuesday_3am = datetime(2026, 8, 11, 3, 0, tzinfo=NY)
+    assert time_until_forex_reopen(tuesday_3am) is None
+
+
+def test_time_until_forex_reopen_from_saturday():
+    saturday_noon = datetime(2026, 8, 15, 12, 0, tzinfo=NY)  # reopens Sunday 8/16 5pm
+    assert time_until_forex_reopen(saturday_noon) == timedelta(days=1, hours=5)
+
+
+def test_time_until_forex_reopen_from_just_before_sunday_open():
+    sunday_before_open = datetime(2026, 8, 16, 16, 59, tzinfo=NY)
+    assert time_until_forex_reopen(sunday_before_open) == timedelta(minutes=1)
+
+
+def test_next_forex_close_from_monday_and_from_friday_itself():
+    monday = datetime(2026, 8, 10, 9, 0, tzinfo=NY)
+    assert next_forex_close(monday) == datetime(2026, 8, 14, 17, 0, tzinfo=NY)
+    # Still before Friday's own close -- closes later the SAME day, not next week
+    friday_morning = datetime(2026, 8, 14, 9, 0, tzinfo=NY)
+    assert next_forex_close(friday_morning) == datetime(2026, 8, 14, 17, 0, tzinfo=NY)
+
+
+def test_next_forex_open_from_saturday():
+    saturday_noon = datetime(2026, 8, 15, 12, 0, tzinfo=NY)
+    assert next_forex_open(saturday_noon) == datetime(2026, 8, 16, 17, 0, tzinfo=NY)
+
+
+def test_format_duration_scales_from_minutes_to_days():
+    assert format_duration(timedelta(minutes=45)) == "45m"
+    assert format_duration(timedelta(hours=5, minutes=32)) == "5h 32m"
+    assert format_duration(timedelta(days=1, hours=23, minutes=59)) == "1d 23h"
 
 
 def test_phase_advancement_requires_enough_closed_trades():

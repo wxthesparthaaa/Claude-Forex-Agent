@@ -44,6 +44,24 @@ def format_potential_trades_message(candidates: list, mode: str) -> str:
     return "\n".join(lines)
 
 
+def format_market_closed_message(reopen_sgt) -> str:
+    """reopen_sgt: an SGT-tzinfo datetime -- the moment forex reopens.
+    Sent once on the open-to-closed transition (see
+    scheduled_jobs.check_market_status_transition), not on every tick."""
+    return (
+        f"🌙 <b>Forex market closed</b> for the weekend.\n"
+        f"Reopens {reopen_sgt.strftime('%A %H:%M')} SGT."
+    )
+
+
+def format_market_open_message(close_sgt) -> str:
+    """close_sgt: an SGT-tzinfo datetime -- the moment forex next closes."""
+    return (
+        f"🔔 <b>Forex market open</b>.\n"
+        f"Trading until {close_sgt.strftime('%A %H:%M')} SGT."
+    )
+
+
 def format_trade_executed_message(trade: dict) -> str:
     return (
         f"<b>Trade executed</b>: {trade['instrument']} {trade['direction']}\n"

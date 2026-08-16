@@ -42,6 +42,57 @@ def is_forex_market_open(now: datetime = None) -> bool:
     return True  # Mon-Thu: always open
 
 
+def next_forex_open(now: datetime = None) -> datetime:
+    """The next Sunday 5pm New York open at or after `now`, as a
+    NY-tzinfo datetime -- meaningful whether the market is currently open
+    or closed (while open, this just names the boundary the *current*
+    session grew out of; callers needing "when does it next open" only
+    call this while closed, same as time_until_forex_reopen)."""
+    now = (now or datetime.now(NY)).astimezone(NY)
+    days_ahead = (6 - now.weekday()) % 7  # Sunday=6
+    return datetime.combine(now.date() + timedelta(days=days_ahead), time(17, 0), tzinfo=NY)
+
+
+def next_forex_close(now: datetime = None) -> datetime:
+    """The next Friday 5pm New York close at or after `now`, as a
+    NY-tzinfo datetime. Only meaningful while the market is open --
+    Friday itself only counts if `now` is still before that day's 5pm
+    close, otherwise this rolls to the following week's Friday."""
+    now = (now or datetime.now(NY)).astimezone(NY)
+    days_ahead = (4 - now.weekday()) % 7  # Friday=4
+    close = datetime.combine(now.date() + timedelta(days=days_ahead), time(17, 0), tzinfo=NY)
+    if close <= now:
+        close += timedelta(days=7)
+    return close
+
+
+def time_until_forex_reopen(now: datetime = None) -> timedelta | None:
+    """None if the market is currently open. Otherwise the time remaining
+    until the next Sunday 5pm New York open -- the only closed periods are
+    Friday post-close, all of Saturday, and Sunday pre-open, and in every
+    one of those the next open is "the nearest Sunday 5pm NY at or after
+    now" (0 days ahead if it's already Sunday, since Sunday's open is
+    always later today when this function is reached at all)."""
+    now = (now or datetime.now(NY)).astimezone(NY)
+    if is_forex_market_open(now):
+        return None
+    return next_forex_open(now) - now
+
+
+def format_duration(delta: timedelta) -> str:
+    """Coarse, human-scale duration -- days+hours once it's multi-day,
+    hours+minutes once it's under a day, since the forex-closed window is
+    never long enough to need anything coarser than that."""
+    total_minutes = int(delta.total_seconds() // 60)
+    days, rem_minutes = divmod(total_minutes, 24 * 60)
+    hours, minutes = divmod(rem_minutes, 60)
+    if days > 0:
+        return f"{days}d {hours}h"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 def is_trading_day(now: datetime = None) -> bool:
     now = now or datetime.now(SGT)
     return now.weekday() < 5  # Mon=0 .. Fri=4
@@ -58,11 +109,6 @@ def is_session_open(session: str, now: datetime = None) -> bool:
     if _spans_midnight(start, end):
         return current >= start or current < end
     return start <= current < end
-
-
-def all_session_statuses(now: datetime = None) -> dict:
-    now = now or datetime.now(SGT)
-    return {name: is_session_open(name, now) for name in SESSIONS_SGT}
 
 
 # Which session each traded instrument is conventionally most liquid in,

@@ -27,13 +27,14 @@ from dashboard_state import (
     confidence_weights_from_state, account_state_from_tracked_capital,
 )
 from live_scan import run_live_scan
-from market_hours import SGT, is_forex_market_open, instrument_window_active
+from market_hours import SGT, NY, is_forex_market_open, instrument_window_active, next_forex_open, next_forex_close
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, closed_entries
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
+    format_market_closed_message, format_market_open_message,
 )
 from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
@@ -463,6 +464,46 @@ def run_pre_evening_health_check(client: OandaClient = None) -> list:
     return problems
 
 
+def check_market_status_transition(now: datetime = None) -> None:
+    """Sends a Telegram message exactly once on each open<->closed
+    transition, not on every 5-min tick this is called from -- compares
+    the current status against state.last_market_status (persisted) and
+    only notifies when they actually differ. A fresh/never-run state has
+    last_market_status=None, which is deliberately treated as "no known
+    prior status to have transitioned from" rather than as its own
+    distinct status -- so the very first tick after a deploy just
+    records whatever the market's doing right now, silently, instead of
+    always firing one throwaway message on cold start.
+
+    Saves the new status BEFORE the Telegram call, same reasoning as
+    run_evening_scan_and_notify's own send-before-save comment: if the
+    process dies mid-send, a legitimate message might occasionally not
+    go out, which is preferable to the alternative (an unsaved status
+    that re-fires the same "just transitioned" message on every restart
+    until the save finally lands)."""
+    now = now or datetime.now(NY)
+    currently_open = is_forex_market_open(now)
+    current_status = "open" if currently_open else "closed"
+
+    state = load_state()
+    previous_status = state.last_market_status
+    if previous_status == current_status:
+        return
+
+    state.last_market_status = current_status
+    save_state(state)
+
+    if previous_status is None:
+        return  # cold start -- nothing to announce a transition FROM
+
+    if currently_open:
+        close_sgt = next_forex_close(now).astimezone(SGT)
+        send_message(format_market_open_message(close_sgt))
+    else:
+        reopen_sgt = next_forex_open(now).astimezone(SGT)
+        send_message(format_market_closed_message(reopen_sgt))
+
+
 def run_daily_dispatcher(client: OandaClient = None) -> None:
     """Ticks every 5 min (see app.py's scheduler) -- catches up on any of
     the day's fixed-time touchpoints (21:00 health check, evening
@@ -486,6 +527,12 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     # job is even running, and what it's computing weekday/minutes as,
     # without waiting for a rare incident to reproduce.
     print(f"INFO: dispatcher tick at {now.isoformat()} (weekday={now.weekday()}, minutes={minutes})", flush=True)
+
+    # Unconditional, unlike every touchpoint below -- detecting an
+    # open<->closed transition has to run regardless of weekday/time-of-day
+    # gating, since the whole point is noticing whichever tick the
+    # transition itself falls on.
+    check_market_status_transition(now)
 
     state = load_state()
 

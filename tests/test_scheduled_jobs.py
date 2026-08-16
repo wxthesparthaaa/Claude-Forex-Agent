@@ -1081,3 +1081,70 @@ def test_dispatcher_does_not_rerun_health_check_already_done_today(mock_evening,
     scheduled_jobs.run_daily_dispatcher()
 
     mock_health.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_market_status_cold_start_records_status_without_notifying(mock_send, tmp_path, monkeypatch):
+    # A fresh/never-run state has last_market_status=None -- there's no
+    # real prior status to have transitioned FROM, so the first-ever
+    # check must record the current status silently, not fire a
+    # throwaway "market just closed/opened" message on every cold boot.
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+
+    from market_hours import NY
+    saturday_noon = datetime(2026, 8, 15, 12, 0, tzinfo=NY)
+    scheduled_jobs.check_market_status_transition(saturday_noon)
+
+    mock_send.assert_not_called()
+    assert dashboard_state.load_state().last_market_status == "closed"
+
+
+@patch("scheduled_jobs.send_message")
+def test_market_status_notifies_on_open_to_closed_transition(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.last_market_status = "open"
+    dashboard_state.save_state(state)
+
+    from market_hours import NY
+    friday_after_close = datetime(2026, 8, 14, 17, 1, tzinfo=NY)
+    scheduled_jobs.check_market_status_transition(friday_after_close)
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "closed" in sent_text.lower()
+    assert "Monday 05:00" in sent_text  # Sunday 5pm NY reopen (EDT, UTC-4) == Monday 05:00 SGT
+    assert dashboard_state.load_state().last_market_status == "closed"
+
+
+@patch("scheduled_jobs.send_message")
+def test_market_status_notifies_on_closed_to_open_transition(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.last_market_status = "closed"
+    dashboard_state.save_state(state)
+
+    from market_hours import NY
+    sunday_after_open = datetime(2026, 8, 16, 17, 1, tzinfo=NY)
+    scheduled_jobs.check_market_status_transition(sunday_after_open)
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "open" in sent_text.lower()
+    assert "Saturday 05:00" in sent_text  # next Friday 5pm NY == Saturday 05:00 SGT
+    assert dashboard_state.load_state().last_market_status == "open"
+
+
+@patch("scheduled_jobs.send_message")
+def test_market_status_does_not_renotify_when_status_is_unchanged(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.last_market_status = "closed"
+    dashboard_state.save_state(state)
+
+    from market_hours import NY
+    saturday_noon = datetime(2026, 8, 15, 12, 0, tzinfo=NY)  # still closed, same as before
+    scheduled_jobs.check_market_status_transition(saturday_noon)
+
+    mock_send.assert_not_called()

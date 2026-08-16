@@ -443,11 +443,12 @@
 
   <footer>
     <span class="{{ 'session-open' if forex_open else 'session-closed' }}">
-      Forex market: {{ 'Open (24/5)' if forex_open else 'Closed (weekend)' }}
+      {% if forex_open %}
+        Forex market: Open (24/5)
+      {% else %}
+        Forex market: Closed &middot; reopens in {{ reopens_in }}
+      {% endif %}
     </span>
-    {% for name, open in sessions.items() %}
-      <span class="{{ 'session-open' if open else 'session-closed' }}">{{ name }}: {{ 'Active' if open else '' }}</span>
-    {% endfor %}
   </footer>
 
   <script>
