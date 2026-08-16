@@ -28,7 +28,7 @@
   "week_start_equity": null,
   "strategy_starting_capital": 2000.0,
   "strategy_realized_pnl": 23.130699999999997,
-  "last_review_timestamp": "2026-08-15T17:04:57.194124+00:00",
+  "last_review_timestamp": "2026-08-16T21:04:46.855058+00:00",
   "week_start_timestamp": "2026-08-16T16:19:44.281581+00:00",
   "autopilot_scan_interval_minutes": 30,
   "last_autopilot_scan_timestamps": {},
@@ -53,5 +53,5 @@
     "candlestick": 0.15,
     "news": 0.25
   },
-  "peak_tracked_equity": 2023.1307
+  "peak_tracked_equity": null
 }
