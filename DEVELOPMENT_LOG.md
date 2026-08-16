@@ -911,3 +911,51 @@ the old ceiling), and a direct Jinja2 render confirming the slider's
 `max` attribute reflects the new value.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-16 (continued) — The trades-per-day ceiling fix above didn't actually reach production: a real state/code divergence bug
+
+**Problem**: User reported the raised ceiling still showed 10 on the
+live dashboard after the previous fix deployed. The code change was
+correct in isolation, but `dashboard_state.risk_config_from_state()`
+reconstructed `RiskConfig` via `RiskConfig(**state.risk_config)` --
+splatting the ENTIRE persisted dict back onto the dataclass, not just
+the fields a user can actually change. `state.risk_config` is a full
+snapshot, first written by `asdict(RiskConfig())` whenever a given
+account's state was created and never touched again except for the
+three genuinely user-adjustable fields (`risk_per_trade_pct`,
+`max_trades_per_day`, `autopilot_confidence_threshold_pct` -- confirmed
+by reading every line of the `/settings` route; nothing else is ever
+assigned there). Every other field -- every `_min`/`_max`/`suggested_*`
+bound and all five risk-limit percentages -- is a pure code-defined
+constant that had been getting frozen into that dict at first-save time
+and read back verbatim forever after. Raising
+`RiskConfig.max_trades_per_day_max` in code did nothing for any account
+whose state predated the change, because the stale `10` already baked
+into their persisted `state.risk_config["max_trades_per_day_max"]`
+always won over the new class default.
+
+This is a general bug, not specific to this one field -- ANY future
+tuning of a RiskConfig constant (a risk-limit default, a suggested
+value, a bound) would have silently failed to reach already-existing
+accounts the same way, with no error and no obvious symptom beyond "I
+changed the code but nothing changed."
+
+**Fix**: `risk_config_from_state()` now builds a fresh `RiskConfig()`
+(today's code defaults for everything) and overlays only the three
+fields `/settings` actually lets a user change, read from the
+persisted dict if present. Every other field always comes from the
+current code, the same way it would if state had never been saved at
+all -- so a code-level constant change now takes effect for every
+account immediately on the next page load, no state migration needed.
+(As a side effect, `/settings` already writes `asdict(risk_config)`
+back to state on every save, so hitting Save also "heals" an account's
+on-disk snapshot to current bounds -- but the real fix is not depending
+on that happening.)
+
+**Solution**: 2 new regression tests in `test_dashboard_state.py` --
+one confirming the three adjustable fields still round-trip correctly,
+one specifically reproducing this bug (seed `state.risk_config` with a
+stale `max_trades_per_day_max: 10`, assert `risk_config_from_state`
+returns the current code default instead). Full suite: 345 passed.
+
+**Fixed**: 2026-08-16

@@ -197,8 +197,37 @@ def save_state(state: DashboardState) -> None:
         print(f"WARNING: failed to push dashboard_state.json to GitHub: {e}", flush=True)
 
 
+
+# The only fields /settings actually lets a user change (see app.py's
+# settings() route) -- everything else on RiskConfig (bounds, suggested
+# defaults, the risk-limit percentages) is a code-defined constant, never
+# written by any route.
+_USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct")
+
+
 def risk_config_from_state(state: DashboardState) -> RiskConfig:
-    return RiskConfig(**state.risk_config)
+    """Real bug this fixes: state.risk_config is a full dict snapshot,
+    first written by asdict(RiskConfig()) whenever a given account's
+    state was created, then persisted forever after. Reconstructing via
+    RiskConfig(**state.risk_config) faithfully replayed EVERY field from
+    that old snapshot -- including bounds/suggested-default constants
+    that were never meant to be "saved settings" at all, just code
+    defaults. A later code change to one of those constants (e.g.
+    raising max_trades_per_day_max) then silently had no effect for any
+    account whose state predated the change, because the frozen old
+    value in the persisted dict always won.
+
+    Now only the three fields a user can actually change via /settings
+    come from the persisted dict; everything else -- bounds, suggested
+    defaults, the risk-limit percentages -- always comes from RiskConfig's
+    own current code defaults, so a code-level tuning takes effect for
+    every account immediately, the same way it would if state had never
+    been saved at all."""
+    fresh = RiskConfig()
+    for name in _USER_ADJUSTABLE_RISK_FIELDS:
+        if name in state.risk_config:
+            setattr(fresh, name, state.risk_config[name])
+    return fresh
 
 
 def phase_state_from_state(state: DashboardState) -> PhaseState:

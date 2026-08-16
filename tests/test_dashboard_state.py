@@ -25,6 +25,39 @@ def test_load_state_degrades_to_default_on_a_corrupt_file(tmp_path, monkeypatch)
     assert state.strategy_starting_capital == ds.DEFAULT_STRATEGY_CAPITAL
 
 
+def test_risk_config_from_state_keeps_the_users_actual_adjustable_settings():
+    state = ds.default_state()
+    state.risk_config["risk_per_trade_pct"] = 1.5
+    state.risk_config["max_trades_per_day"] = 8
+    state.risk_config["autopilot_confidence_threshold_pct"] = 70.0
+
+    risk_config = ds.risk_config_from_state(state)
+
+    assert risk_config.risk_per_trade_pct == 1.5
+    assert risk_config.max_trades_per_day == 8
+    assert risk_config.autopilot_confidence_threshold_pct == 70.0
+
+
+def test_risk_config_from_state_ignores_a_stale_persisted_bound_and_uses_the_current_code_default():
+    # Real bug this fixes: state.risk_config is a full dict snapshot,
+    # first written whenever an account's state was created and never
+    # touched again by any route (only risk_per_trade_pct/
+    # max_trades_per_day/autopilot_confidence_threshold_pct are ever
+    # user-set). A live account's snapshot can predate a later code
+    # change to one of the OTHER fields -- e.g. RiskConfig.max_trades_per_day_max
+    # was raised from 10 to 50, but an account whose state.risk_config
+    # dict still has "max_trades_per_day_max": 10 baked in from before
+    # that change must not have the stale 10 silently win forever.
+    from risk_engine import RiskConfig
+    state = ds.default_state()
+    state.risk_config["max_trades_per_day_max"] = 10  # simulates a pre-change snapshot
+
+    risk_config = ds.risk_config_from_state(state)
+
+    assert risk_config.max_trades_per_day_max == RiskConfig().max_trades_per_day_max
+    assert risk_config.max_trades_per_day_max != 10
+
+
 def test_tracked_equity_live_adds_realized_pnl_since_last_review():
     state = ds.default_state()
     state.strategy_starting_capital = 2000.0
