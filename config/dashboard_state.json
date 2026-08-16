@@ -29,21 +29,14 @@
   "strategy_starting_capital": 2000.0,
   "strategy_realized_pnl": 23.130699999999997,
   "last_review_timestamp": "2026-08-15T17:04:57.194124+00:00",
-  "week_start_timestamp": "2026-08-16T16:01:29.002886+00:00",
+  "week_start_timestamp": "2026-08-14T17:05:30.210314+00:00",
   "autopilot_scan_interval_minutes": 30,
   "last_autopilot_scan_timestamps": {},
   "paused_instruments": {},
-  "weekly_pnl_by_instrument": {
-    "USD_JPY": [
-      24.2793
-    ],
-    "USD_CHF": [
-      22.1952
-    ]
-  },
+  "weekly_pnl_by_instrument": {},
   "last_evening_listing_date": "2026-08-14",
   "last_review_date": "2026-08-16",
-  "last_reflection_date": "2026-08-15",
+  "last_reflection_date": "2026-08-17",
   "last_health_check_date": "2026-08-14",
   "last_market_status": "closed",
   "last_evening_listing_sent_at": null,
