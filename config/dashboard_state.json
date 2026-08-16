@@ -44,5 +44,6 @@
     "rsi": 0.25,
     "candlestick": 0.15,
     "news": 0.25
-  }
+  },
+  "peak_tracked_equity": null
 }
