@@ -7,22 +7,36 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     :root {
-      --bg: #191919; --fg: #e8e6e0; --muted: #999; --border: #333; --card: #232323;
-      --green: #3fb950; --red: #f85149; --accent: #d97757;
+      --bg: #191919; --fg: #e8e6e0; --muted: #999; --muted-2: #767676;
+      --border: #333; --border-soft: #2a2a2a; --card: #232323; --card-raised: #272727;
+      --green: #3fb950; --green-soft: rgba(63, 185, 80, 0.12);
+      --red: #f85149; --red-soft: rgba(248, 81, 73, 0.13);
+      --accent: #d97757; --accent-soft: rgba(217, 119, 87, 0.14);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px -4px rgba(0, 0, 0, 0.35);
     }
+    * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
       background: var(--bg); color: var(--fg);
-      max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 6rem; line-height: 1.5;
+      max-width: 900px; margin: 0 auto; padding: 2.25rem 1.5rem 6rem; line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
-    h1 { font-size: 1.5rem; margin-bottom: 0.1rem; }
-    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
-    .row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    ::selection { background: var(--accent-soft); color: var(--fg); }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+    h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.2rem; }
+    h3 { font-size: 1rem; font-weight: 650; letter-spacing: -0.005em; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.75rem; }
+    .row { display: flex; gap: 1.25rem; flex-wrap: wrap; }
     .card {
-      border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;
-      background: var(--card); margin-bottom: 1.25rem; flex: 1; min-width: 260px;
+      border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem;
+      background: var(--card); box-shadow: var(--shadow-card);
+      margin-bottom: 1.25rem; flex: 1; min-width: 260px;
     }
-    .balance-value { font-size: 2rem; font-weight: 700; margin: 0.25rem 0; }
+    .balance-value { font-size: 2rem; font-weight: 700; margin: 0.25rem 0; font-variant-numeric: tabular-nums; }
     .balance-currency { font-size: 1rem; color: var(--muted); font-weight: 400; }
     .balance-label { color: var(--muted); font-size: 0.85rem; }
     /* Compact column of two rows, sized to its own content (align-self
@@ -32,35 +46,54 @@
     .stat-grid { display: flex; flex-direction: column; align-self: flex-start; gap: 0.75rem; flex: 2; min-width: 300px; }
     .stat-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
     .stat-tile {
-      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-      padding: 0.85rem 1rem; flex: 1; min-width: 130px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.9rem 1.05rem; flex: 1; min-width: 130px; box-shadow: var(--shadow-card);
+      transition: border-color 0.15s ease;
     }
-    .stat-tile-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .stat-tile-value { font-size: 1.35rem; font-weight: 700; margin-top: 0.25rem; }
-    .stat-tile-sub { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
+    .stat-tile:hover { border-color: var(--muted-2); }
+    .stat-tile-label { color: var(--muted); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-tile-value { font-size: 1.4rem; font-weight: 700; margin-top: 0.3rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .stat-tile-sub { color: var(--muted); font-size: 0.72rem; margin-top: 0.2rem; }
+
+    button { font-family: inherit; }
     .scan-btn {
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: filter 0.15s ease, transform 0.1s ease; box-shadow: 0 2px 8px -2px var(--accent-soft);
     }
-    .scan-btn:hover { opacity: 0.9; }
+    .scan-btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .scan-btn:active:not(:disabled) { transform: scale(0.98); }
+    .scan-btn:disabled { cursor: default; filter: grayscale(0.3) brightness(0.8); opacity: 0.75; }
+    .scan-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .cancel-btn {
-      background: var(--red); color: #fff; border: none; border-radius: 8px;
+      background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: 8px;
       padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.1s ease;
     }
-    .cancel-btn:hover { opacity: 0.9; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
-    th { color: var(--muted); font-weight: 600; }
+    .cancel-btn:hover:not(:disabled) { background: var(--red-soft); }
+    .cancel-btn:active:not(:disabled) { transform: scale(0.98); }
+    .cancel-btn:disabled { cursor: default; opacity: 0.6; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border-soft); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .num { text-align: right; }
+    tbody tr { transition: background-color 0.12s ease; }
+    tbody tr:hover { background: var(--card-raised); }
+    tbody tr:last-child td { border-bottom: none; }
     .long { color: var(--green); font-weight: 600; }
     .short { color: var(--red); font-weight: 600; }
     .rejected { color: var(--muted); font-style: italic; font-size: 0.8rem; }
-    a.trade-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a.trade-link { color: var(--accent); text-decoration: none; font-weight: 600; transition: opacity 0.15s ease; }
+    a.trade-link:hover { opacity: 0.8; text-decoration: underline; }
+
     label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
     .settings input[type=range] { width: 100%; accent-color: var(--accent); }
     select {
       background: var(--bg); color: var(--fg); border: 1px solid var(--border);
-      border-radius: 6px; padding: 0.3rem 0.5rem;
+      border-radius: 6px; padding: 0.35rem 0.55rem; font-family: inherit; font-size: 0.9rem;
     }
+    select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .out-of-range { color: var(--red); font-size: 0.78rem; margin-top: 0.15rem; }
     .toggle-row { display: flex; justify-content: space-between; align-items: center; margin: 0.75rem 0; }
     .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
@@ -76,10 +109,34 @@
     .switch input:checked + .switch-track { background: var(--accent); }
     .switch input:checked + .switch-track::before { transform: translateX(20px); }
     .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    details > summary { cursor: pointer; font-weight: 600; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: "›"; display: inline-block; margin-right: 0.4rem; color: var(--muted);
+      transition: transform 0.15s ease; transform: rotate(0deg);
+    }
+    details[open] > summary::before { transform: rotate(90deg); }
+
+    .banner {
+      display: flex; align-items: flex-start; gap: 0.6rem; font-weight: 500;
+      padding: 0.75rem 1rem; border-radius: 10px; margin: 0 0 1.25rem;
+      border: 1px solid; line-height: 1.45;
+    }
+    .banner-error { background: var(--red-soft); border-color: rgba(248, 81, 73, 0.35); color: #ffb3af; }
+    .banner-success { background: var(--green-soft); border-color: rgba(63, 185, 80, 0.35); color: #a8e6b3; }
+    .banner-icon { flex-shrink: 0; }
+
+    .chip {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+      padding: 0.32rem 0.65rem; font-size: 0.85rem; font-variant-numeric: tabular-nums;
+    }
+
     footer {
       position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
-      border-top: 1px solid var(--border); padding: 0.6rem 1.5rem; font-size: 0.8rem;
+      border-top: 1px solid var(--border); padding: 0.65rem 1.5rem; font-size: 0.8rem;
       color: var(--muted); display: flex; justify-content: center; gap: 1.5rem;
+      backdrop-filter: blur(6px);
     }
     .session-open { color: var(--green); font-weight: 600; }
     .session-closed { color: var(--muted); }
@@ -89,15 +146,19 @@
   <h1>Claude Forex Agent</h1>
   <p class="subtitle">{{ phase_label }} &middot; {{ mode|upper }} mode</p>
   {% if kill_switch_engaged %}
-  <p style="background:var(--red); color:#fff; font-weight:600; padding:0.6rem 1rem; border-radius:8px; margin:0 0 1.25rem;">
-    &#9888; Kill switch engaged -- Autopilot will not place any new trades until it's switched off in Settings.
+  <p class="banner banner-error">
+    <span class="banner-icon">&#9888;</span>
+    <span>Kill switch engaged -- Autopilot will not place any new trades until it's switched off in Settings.</span>
   </p>
   {% endif %}
   {% if sync_status and not sync_status.ok %}
-  <p style="background:var(--red); color:#fff; font-weight:600; padding:0.6rem 1rem; border-radius:8px; margin:0 0 1.25rem;">
-    &#9888; GitHub backup sync failed{{ ' (' + sync_status.last_error + ')' if sync_status.last_error }} --
-    the most recent save may not have been backed up. Since this server has no permanent storage, that change
-    could be lost on the next restart. Check GITHUB_TOKEN/GITHUB_REPO if this persists.
+  <p class="banner banner-error">
+    <span class="banner-icon">&#9888;</span>
+    <span>
+      GitHub backup sync failed{{ ' (' + sync_status.last_error + ')' if sync_status.last_error }} --
+      the most recent save may not have been backed up. Since this server has no permanent storage, that change
+      could be lost on the next restart. Check GITHUB_TOKEN/GITHUB_REPO if this persists.
+    </span>
   </p>
   {% endif %}
 
@@ -243,17 +304,12 @@
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="card" style="border-color: {{ 'var(--green)' if messages[0][0] == 'success' else 'var(--red)' }};">
-      {% for category, message in messages %}
-        <div>
-          <strong style="color: {{ 'var(--green)' if category == 'success' else 'var(--red)' }};">
-            {{ 'Success:' if category == 'success' else 'Error:' }}
-          </strong> {{ message }}
-        </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+    {% for category, message in messages %}
+      <p class="banner {{ 'banner-success' if category == 'success' else 'banner-error' }}">
+        <span class="banner-icon">{{ '&#10003;'|safe if category == 'success' else '&#9888;'|safe }}</span>
+        <span><strong>{{ 'Success:' if category == 'success' else 'Error:' }}</strong> {{ message }}</span>
+      </p>
+    {% endfor %}
   {% endwith %}
 
   <div class="card">
@@ -266,22 +322,24 @@
       {% endif %}
     </div>
     {% if live_trades %}
+    <div style="overflow-x:auto;">
     <table>
-      <tr><th>Pair</th><th>Direction</th><th>Entry</th><th>Current</th><th>Unrealized P&amp;L</th><th>Open for</th><th>Auto-closes in</th></tr>
+      <tr><th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th class="num">Auto-closes in</th></tr>
       {% for t in live_trades %}
       <tr>
         <td>{{ t.instrument }}</td>
         <td class="{{ 'long' if t.direction == 'LONG' else 'short' }}">{{ t.direction }}</td>
-        <td>{{ t.entry_price }}</td>
-        <td>{{ t.current_price if t.current_price is not none else '—' }}</td>
-        <td class="{{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
+        <td class="num">{{ t.entry_price }}</td>
+        <td class="num">{{ t.current_price if t.current_price is not none else '—' }}</td>
+        <td class="num {{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
           {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
         </td>
-        <td>{{ t.hours_open }}h</td>
-        <td>{{ t.hours_remaining }}h</td>
+        <td class="num">{{ t.hours_open }}h</td>
+        <td class="num">{{ t.hours_remaining }}h</td>
       </tr>
       {% endfor %}
     </table>
+    </div>
     <form method="post" action="/cancel_all_trades" id="cancelAllForm" style="margin-top:0.75rem;">
       <button class="cancel-btn" type="submit" data-loading-text="Cancelling..."
               data-loading-status="Closing every open position.">Cancel all trades</button>
@@ -306,7 +364,7 @@
     {% else %}
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
       {% for c in news.currencies %}
-        <span style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.6rem; font-size:0.85rem;">
+        <span class="chip">
           {{ c.currency }}
           <strong class="{{ 'long' if c.score > 0 else ('short' if c.score < 0 else '') }}">{{ "%+.2f"|format(c.score) }}</strong>
         </span>
@@ -341,16 +399,16 @@
     {% endif %}
     <div style="overflow-x:auto;">
     <table>
-      <tr><th>Pair</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>SL</th><th>TP</th><th>Amount traded</th><th></th></tr>
+      <tr><th>Pair</th><th>Direction</th><th class="num">Confidence</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Amount traded</th><th></th></tr>
       {% for c in candidates %}
       <tr>
         <td>{{ c.instrument }}</td>
         <td class="{{ 'long' if c.direction == 'LONG' else 'short' }}">{{ c.direction }}</td>
-        <td>{{ c.confidence_pct }}%</td>
-        <td>{{ c.entry_price }}</td>
-        <td>{{ c.stop_loss }}</td>
-        <td>{{ c.take_profit }}</td>
-        <td>{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
+        <td class="num">{{ c.confidence_pct }}%</td>
+        <td class="num">{{ c.entry_price }}</td>
+        <td class="num">{{ c.stop_loss }}</td>
+        <td class="num">{{ c.take_profit }}</td>
+        <td class="num">{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
         <td>
           {% if c.rejected_reason %}
             <span class="rejected">{{ c.rejected_reason }}</span>

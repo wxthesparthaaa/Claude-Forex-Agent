@@ -80,6 +80,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Aesthetic pass across all three pages: card depth, tabular-nums on every number, "
+                    "right-aligned financial columns, custom disclosure chevrons, consistent banner/button "
+                    "styling -- the diagnostic review is now fully closed out, all 29 findings fixed."),
     ("2026-08-16", "Diagnostic review complete, 29 of 29 fixed: last subsystem stopped a Finnhub key from "
                     "leaking into logs and broadened news-keyword matching after real headlines showed 94% "
                     "were going undetected -- added stem-aware matching plus Euro/Pound/UK/Bessent gaps."),
@@ -89,8 +92,6 @@ DEVELOPER_NOTES = [
                     "summary skip-a-week bug and a DST bug in Autopilot's hours -- 18 of 29 total now fixed."),
     ("2026-08-16", "Diagnostic review, execution/risk subsystem: fixed 3 risk-limit gates that were silently "
                     "no-ops, a Scan-Now double-order race, and 8 other findings -- 14 of 29 total now fixed."),
-    ("2026-08-16", "Full-codebase diagnostic review (29 findings, 5 subsystems) -- fixed the first three: a "
-                    "dead confidence-score safeguard, a reweighting blind spot, and a scan-crashing fetch."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"

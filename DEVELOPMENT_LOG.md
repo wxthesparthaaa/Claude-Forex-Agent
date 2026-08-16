@@ -778,3 +778,58 @@ on-topic subset; it isn't a claim that the underlying data source got
 richer.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-16 (continued) — Aesthetic pass across all three pages, closing out the diagnostic review
+
+**Problem**: With all 29 diagnostic findings fixed, a final visual polish
+pass across `dashboard.html`, `trade_review.html`, and
+`confirm_duplicate.html`. The existing dark theme (near-black background,
+Claude-orange accent) was already a deliberate, consistent identity
+across all three pages -- the gap was execution, not direction: flat
+cards with no depth, browser-default disclosure triangles next to
+otherwise custom UI, financial figures left-aligned in tables instead of
+lining up on the decimal, hardcoded ad-hoc inline styles duplicated
+across banners that should have shared one definition, and no hover/
+focus/transition polish on interactive elements.
+
+**Changes** (CSS/markup only -- no Python, no behavior changes):
+
+- Added `font-variant-numeric: tabular-nums` to every balance figure,
+  stat tile, and table so digits actually line up in columns -- a small
+  thing that reads as noticeably more "financial software" than
+  proportional digits drifting per-row.
+- Right-aligned numeric table columns (Entry/SL/TP/Confidence/Amount/
+  P&L/hours) via a new `.num` class, instead of everything left-aligned
+  regardless of type.
+- Gave cards and stat tiles a subtle shadow (`--shadow-card`) for real
+  depth against the near-black background, plus a hover border-color
+  shift on stat tiles and a row-hover highlight on tables.
+- Replaced the browser's default `<summary>` disclosure triangle (which
+  looked out of place next to the rest of the custom-styled UI) with a
+  custom rotating chevron matching the accent palette.
+- Consolidated three separate copies of hand-rolled warning-banner
+  inline styles (kill switch, GitHub sync failure, flash messages) into
+  shared `.banner`/`.banner-error`/`.banner-success` classes -- same
+  visual result, one definition instead of three drifting ones.
+- Added transition/active/disabled states to every button (`.scan-btn`,
+  `.cancel-btn`, `.exec-btn`, `.confirm-btn`) and visible `:focus-visible`
+  rings throughout -- previously only the toggle switches had them.
+  Buttons in the middle of a submit (already-disabled by the existing
+  loading-state JS) now visually read as disabled instead of looking
+  identical to normal.
+- Added a "&larr; Dashboard" back-link to `trade_review.html`, which
+  previously had no way back except the browser's own back button.
+- Thin custom scrollbar styling consistent with the dark theme, so the
+  page doesn't show a jarring default OS scrollbar.
+
+**Solution**: Verified against real, live account data on a local dev
+server (a separate port, since port 5000 was already held by an
+unrelated project in this environment) -- confirmed via computed
+styles (box-shadow, border-radius, transitions, tabular-nums, the
+custom chevron replacing the native marker with no double-marker
+artifact) and via direct Jinja2 rendering of all three templates with
+both real and synthetic data, since a screenshot wasn't available in
+this environment. No Python changed, so the existing 333-test suite is
+unaffected; no template-rendering tests exist to regress.
+
+**Fixed**: 2026-08-16
