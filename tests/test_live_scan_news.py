@@ -38,6 +38,25 @@ def test_fetch_news_articles_merges_forex_and_general_deduped(mock_client_cls, m
     assert {a["id"] for a in articles} == {1, 2, 3}
 
 
+def test_fetch_strength_inputs_degrades_to_none_none_instead_of_crashing_the_scan():
+    # Regression test: one bad pair among the 7 majors used to raise
+    # straight out of this function (an unguarded future.result()),
+    # which would crash the entire evening scan silently -- no
+    # candidates, no Telegram message, an endless quiet 5-minute retry.
+    # Every instrument's confidence score depends on this shared fetch,
+    # so it needs the same per-failure isolation _process_instrument has.
+    class FlakyClient:
+        def get_candles(self, instrument, granularity, count):
+            if instrument == "USD_CHF":
+                raise Exception("OANDA timeout")
+            return [{"mid": {"o": "1.0", "h": "1.01", "l": "0.99", "c": "1.0"}} for _ in range(count)]
+
+    breadth_agreement, edge_zscore = live_scan._fetch_strength_inputs(FlakyClient())
+
+    assert breadth_agreement is None
+    assert edge_zscore is None
+
+
 @patch("live_scan.FinnhubClient")
 def test_fetch_news_articles_returns_empty_on_failure(mock_client_cls, monkeypatch):
     monkeypatch.setenv("FINNHUB_API_KEY", "dummy")

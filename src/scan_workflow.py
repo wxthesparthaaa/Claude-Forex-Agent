@@ -11,7 +11,7 @@ candles into this) and the backtest loop both sit on top of this.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pivot_detection import classify_structure, detect_structure_break
 from multi_timeframe import higher_timeframe_bias, entry_allowed
@@ -58,6 +58,13 @@ class TradeCandidate:
     account_currency: str
     rationale: list
     rejected_reason: str | None = None
+    # Which of confidence_components' four entries reflect a real reading
+    # vs a neutral 50.0 stand-in for missing data (e.g. news score for a
+    # commodity, which news_relevance.py has no keyword coverage for).
+    # Lets confidence_reweighting.py tell "this input was genuinely weak"
+    # apart from "this input was never available" when it later asks
+    # which components have actually correlated with wins.
+    confidence_components_available: dict = field(default_factory=dict)
 
 
 def generate_candidate(
@@ -135,6 +142,7 @@ def generate_candidate(
         instrument=instrument, direction=direction, entry_price=entry_price,
         stop_loss=stop_loss, take_profit=take_profit,
         confidence_pct=confidence["confidence_pct"], confidence_components=confidence.get("components", {}),
+        confidence_components_available=confidence.get("components_available", {}),
         units=units, unit_label=unit_label_for(instrument), risk_amount=risk_amount,
         notional_account_currency=round(notional_account_currency, 2), account_currency=account_currency,
         rationale=build_rationale(direction, breadth_agreement, rsi_value, candlestick_pattern,

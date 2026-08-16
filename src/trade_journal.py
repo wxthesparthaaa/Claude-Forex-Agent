@@ -59,6 +59,12 @@ class JournalEntry:
     # docstring says weights were meant to be "tunable via the Friday
     # self-reflection process"; that can't happen without this.
     confidence_components: dict = field(default_factory=dict)
+    # Which of confidence_components' entries were a real reading vs a
+    # neutral 50.0 stand-in for missing data (e.g. news score for a
+    # commodity trade) -- see scan_workflow.TradeCandidate's own comment.
+    # Absent on trades journaled before this field existed; treated as
+    # "unknown, assume available" by confidence_reweighting for those.
+    confidence_components_available: dict = field(default_factory=dict)
     status: str = OPEN
     closed_at: str | None = None
     exit_price: float | None = None
@@ -112,6 +118,7 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
         rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
         account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
         confidence_components=candidate.get("confidence_components", {}),
+        confidence_components_available=candidate.get("confidence_components_available", {}),
     )
     entries.append(asdict(entry))
     save_journal(entries)

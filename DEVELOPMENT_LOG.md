@@ -381,4 +381,69 @@ stay silent Sunday 1:04am SGT, and must still fire Saturday 1:04am SGT
 
 **Fixed**: 2026-08-16
 
-**Fixed**: 2026-08-15 ~22:35 SGT
+---
+
+## 2026-08-16 — Full-codebase diagnostic review, first three fixes (signal & strategy subsystem)
+
+**Problem**: Requested a senior-engineer-level diagnostic across all 43
+Python files, looking for the class of bug that has no failing test and
+looks fine until real money is on the line. Ran five parallel deep
+reviews (one per subsystem), surfacing 29 concrete findings ranked by
+real-world impact, published as a standalone report. Started fixing
+from the top, subsystem by subsystem.
+
+**Subsystem 1 (Signal & Strategy Logic) — all three findings fixed**:
+
+1. **The "edge stretch dampener" had never once fired, live or in
+   backtest.** `stats_signals.edge_zscore()` needs at least 120 data
+   points (`history_window=100 + roc_window=20`) before it will compute
+   anything; the strength series `live_scan.py` built was only 110
+   points (`BARS_FOR_STRENGTH_HISTORY(130) - STRENGTH_LOOKBACK(20)`),
+   10 short of the floor, every single time. `edge_zscore` silently
+   returned `None` on every call, so the confidence score's built-in
+   "get ready to turn at the edges" caution discount was permanently
+   inert. Fixed by raising `BARS_FOR_STRENGTH_HISTORY` to 150, with
+   headroom rather than sitting on the exact boundary; added a
+   regression test using the real production constants.
+
+2. **The new confidence-reweighting mechanism couldn't tell "no data"
+   from "genuinely weak."** Every per-component scorer in
+   `confidence_score.py` fills a missing input with a neutral 50.0 so
+   the blended `confidence_pct` always has a number to work with --
+   correct for that purpose, but it meant a component that was simply
+   never available (e.g. "news" on every gold/silver/oil trade, since
+   `news_relevance.py` has no keyword coverage for commodities) landed
+   in the reweighter's "low score" bucket next to genuinely weak
+   readings, actively teaching the mechanism the wrong lesson from
+   unrelated data. Fixed by adding `components_available` to
+   `compute_confidence`'s return, threading it through
+   `TradeCandidate.confidence_components_available` and a matching new
+   `JournalEntry` field, and updating `confidence_reweighting._bucket_win_rates`
+   to skip a component for a trade where it was never available --
+   while treating journal entries from before this field existed as
+   "available" (the prior behavior), so no historical data is silently
+   discarded.
+
+3. **One bad OANDA response could silently cancel an entire night's
+   scan.** `_process_instrument` was hardened long ago so one
+   instrument's failure can't take down the other 10 -- but
+   `_fetch_strength_inputs`, the shared fetch across the 7 major pairs
+   that every instrument's confidence score depends on, had no
+   equivalent guard. A single pair timeout would raise straight out of
+   `run_live_scan()`, and since the scheduled evening job has no
+   try/except around that call (only a `finally` releasing its lock),
+   the exception escaped the dispatcher tick entirely -- no candidates,
+   no Telegram message, a silent 5-minute retry loop indistinguishable
+   from "nothing to trade tonight." Fixed by wrapping the fetch so a
+   failure degrades to `(None, None)` instead of raising, matching the
+   "missing strength data is neutral" convention already used
+   throughout the confidence pipeline; added a regression test with a
+   client that fails on one of the 7 pairs.
+
+**Solution**: All three fixes are narrow and match existing patterns
+already proven correct elsewhere in the same codebase. 6 new tests
+added across `test_currency_strength.py`, `test_live_scan_news.py`,
+`test_confidence_score.py`, and `test_confidence_reweighting.py`. Full
+suite: 278 passed.
+
+**Fixed**: 2026-08-16

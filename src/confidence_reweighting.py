@@ -45,8 +45,8 @@ COMPONENTS = ("breadth", "rsi", "candlestick", "news")
 def _bucket_win_rates(journal_entries: list, component: str):
     """(high_win_rate_pct, high_n, low_win_rate_pct, low_n) for one
     component across all closed, decisively-won-or-lost trades that
-    have a recorded score for it. None if either bucket is below
-    MIN_SAMPLES_PER_BUCKET."""
+    have a recorded, genuinely-available score for it. None if either
+    bucket is below MIN_SAMPLES_PER_BUCKET."""
     high_wins = high_n = low_wins = low_n = 0
     for e in journal_entries:
         if e.get("status") == "OPEN":
@@ -57,6 +57,17 @@ def _bucket_win_rates(journal_entries: list, component: str):
         score = (e.get("confidence_components") or {}).get(component)
         if score is None:
             continue  # not journaled (pre-2026-08-13 trade) or this component had no reading
+        # confidence_score.py fills a missing input with a neutral 50.0
+        # so the blended confidence_pct always has a number to work
+        # with -- but that synthetic 50.0 is not evidence the component
+        # was genuinely weak, and must not be read as such here (e.g.
+        # "news" is never available for commodity trades). Entries
+        # journaled before this field existed have no availability
+        # record at all -- treated as available, matching the prior
+        # behavior for that older data rather than silently discarding it.
+        available = (e.get("confidence_components_available") or {}).get(component, True)
+        if not available:
+            continue
         won = pnl > 0
         if score >= HIGH_THRESHOLD:
             high_n += 1

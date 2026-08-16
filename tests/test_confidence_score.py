@@ -44,6 +44,21 @@ def test_stretched_edge_dampens_confidence():
     assert stretched_result["confidence_pct"] < calm_result["confidence_pct"]
 
 
+def test_components_available_reflects_which_inputs_were_genuinely_present():
+    # Regression test: every scorer returns a neutral 50.0 fallback when
+    # its own input is missing, so "components" alone can't distinguish
+    # a genuinely weak reading from a missing one -- confidence_pct needs
+    # that fallback, but confidence_reweighting.py needs to know which is
+    # which, or a component with zero real data (e.g. news on a
+    # commodity trade) skews the weekly reweighting for the wrong reason.
+    inputs = SignalInputs(entry_allowed=True, direction="LONG", breadth_agreement=0.8,
+                           edge_zscore=0.5, rsi_value=None, candlestick_pattern=None, news_score=None)
+    result = compute_confidence(inputs)
+    assert result["components_available"] == {
+        "breadth": True, "rsi": False, "candlestick": False, "news": False,
+    }
+
+
 def test_weights_are_configurable_for_the_weekly_review_process():
     inputs = SignalInputs(entry_allowed=True, direction="LONG", breadth_agreement=1.0,
                            edge_zscore=0.0, rsi_value=None, candlestick_pattern=None, news_score=None)

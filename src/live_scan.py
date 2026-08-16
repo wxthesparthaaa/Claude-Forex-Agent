@@ -31,7 +31,15 @@ from finnhub_adapter import FinnhubClient
 from news_relevance import news_score_for_instrument
 
 BARS_FOR_SWINGS = 60
-BARS_FOR_STRENGTH_HISTORY = 130
+# stats_signals.edge_zscore needs at least history_window(100) +
+# roc_window(20) = 120 points in the series it's given. The series length
+# here is BARS_FOR_STRENGTH_HISTORY - STRENGTH_LOOKBACK, so this must stay
+# comfortably above 140 -- at 130 it was silently 10 points short, and
+# edge_zscore returned None on every single call, live and in backtest,
+# meaning the "get ready to turn at the edges" caution dampener never
+# actually fired. 150 leaves headroom rather than sitting on the exact
+# boundary.
+BARS_FOR_STRENGTH_HISTORY = 150
 STRENGTH_LOOKBACK = 20
 MAX_PARALLEL_REQUESTS = 8
 
@@ -71,21 +79,35 @@ def compute_usd_strength_series(closes_by_pair: dict, lookback: int = STRENGTH_L
 
 
 def _fetch_strength_inputs(client) -> tuple:
-    closes_by_pair = {}
-    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
-        futures = {
-            pool.submit(_fetch_closes_highs_lows, client, pair, ENTRY_TIMEFRAME, BARS_FOR_STRENGTH_HISTORY): pair
-            for pair in MAJOR_PAIRS
-        }
-        for future in as_completed(futures):
-            pair = futures[future]
-            _, closes, _, _ = future.result()
-            closes_by_pair[pair] = closes
+    """(None, None) on ANY failure -- a single bad pair among the 7
+    majors used to crash this entirely via an unguarded future.result(),
+    which propagated out of run_live_scan() with no per-instrument
+    isolation the way _process_instrument already has. Every instrument's
+    confidence score depends on this one shared fetch, so a crash here
+    silently voided the whole scan (no candidates, no Telegram message,
+    a silent 5-minute retry loop) instead of just losing the breadth/
+    edge-zscore inputs for that scan. (None, None) is a safe degrade,
+    not a special case -- breadth_score(None) and edge_stretch_dampener
+    (None) already treat missing strength data as neutral."""
+    try:
+        closes_by_pair = {}
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
+            futures = {
+                pool.submit(_fetch_closes_highs_lows, client, pair, ENTRY_TIMEFRAME, BARS_FOR_STRENGTH_HISTORY): pair
+                for pair in MAJOR_PAIRS
+            }
+            for future in as_completed(futures):
+                pair = futures[future]
+                _, closes, _, _ = future.result()
+                closes_by_pair[pair] = closes
 
-    strength_series = compute_usd_strength_series(closes_by_pair)
-    latest_returns = currency_returns(closes_by_pair, STRENGTH_LOOKBACK)
-    signal = strength_signal(strength_series, latest_returns)
-    return signal["breadth_agreement"], signal["edge_zscore"]
+        strength_series = compute_usd_strength_series(closes_by_pair)
+        latest_returns = currency_returns(closes_by_pair, STRENGTH_LOOKBACK)
+        signal = strength_signal(strength_series, latest_returns)
+        return signal["breadth_agreement"], signal["edge_zscore"]
+    except Exception as e:
+        print(f"WARNING: currency-strength fetch failed, scanning without breadth/edge-zscore: {e}", flush=True)
+        return None, None
 
 
 def fetch_news_articles() -> list:

@@ -39,6 +39,22 @@ def test_edge_zscore_flags_a_stretched_move():
     assert abs(z) > 2
 
 
+def test_edge_zscore_can_actually_fire_with_the_real_production_fetch_size():
+    # Regression test: BARS_FOR_STRENGTH_HISTORY - STRENGTH_LOOKBACK used to
+    # produce a 110-point series, 10 short of edge_zscore's own
+    # history_window(100) + roc_window(20) = 120 floor -- so edge_zscore
+    # returned None on every single live scan, silently. This proves the
+    # real production constants now clear that floor.
+    from live_scan import compute_usd_strength_series, BARS_FOR_STRENGTH_HISTORY, STRENGTH_LOOKBACK
+    from universe import MAJOR_PAIRS
+
+    closes_by_pair = {pair: [100 + i * 0.01 for i in range(BARS_FOR_STRENGTH_HISTORY)] for pair in MAJOR_PAIRS}
+    series = compute_usd_strength_series(closes_by_pair, lookback=STRENGTH_LOOKBACK)
+
+    assert len(series) >= 120
+    assert edge_zscore(series) is not None
+
+
 def test_currency_returns_flips_sign_for_usd_base_pairs():
     closes = {
         "EUR_USD": [1.10, 1.10, 1.12],   # EUR strengthened vs USD

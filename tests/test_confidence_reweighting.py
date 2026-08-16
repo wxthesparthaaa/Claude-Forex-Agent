@@ -41,6 +41,39 @@ def test_bucket_win_rates_returns_none_below_min_samples():
     assert _bucket_win_rates(journal, "breadth") is None
 
 
+def test_bucket_win_rates_excludes_entries_where_the_component_was_never_available():
+    # Regression test: confidence_score.py fills a missing input with a
+    # neutral 50.0 stand-in so the blended score always has a number --
+    # e.g. every commodity trade gets a synthetic 50.0 "news" score,
+    # since news_relevance.py has no keyword coverage for gold/silver/
+    # oil. Without confidence_components_available, all of those
+    # synthetic 50.0s land in the "low" bucket next to genuinely weak
+    # readings and skew which way the news weight gets nudged for
+    # reasons that have nothing to do with news quality.
+    journal = _journal(high_wins=15, high_losses=0, low_wins=15, low_losses=0, component="news")
+    # Mark every "low" entry (the synthetic-50.0 ones) as unavailable.
+    for e in journal:
+        if e["confidence_components"]["news"] == 30.0:
+            e["confidence_components_available"] = {"news": False}
+
+    result = _bucket_win_rates(journal, "news")
+
+    assert result is None  # low bucket drops to 0 real entries, below MIN_SAMPLES_PER_BUCKET
+
+
+def test_bucket_win_rates_treats_missing_availability_field_as_available():
+    # Journal entries written before this field existed have no
+    # confidence_components_available key at all -- must not be silently
+    # discarded, or the reweighter loses all its pre-fix history at once.
+    journal = _journal(high_wins=15, high_losses=0, low_wins=0, low_losses=15)
+    assert all("confidence_components_available" not in e for e in journal)
+
+    result = _bucket_win_rates(journal, "breadth")
+
+    assert result is not None
+    assert result[1] == 15 and result[3] == 15  # high_n, low_n both counted normally
+
+
 def test_bucket_win_rates_computes_correct_rates_once_both_buckets_clear_the_floor():
     journal = _journal(high_wins=12, high_losses=3, low_wins=5, low_losses=10)  # 15/15
     result = _bucket_win_rates(journal, "breadth")

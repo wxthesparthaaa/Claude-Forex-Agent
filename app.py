@@ -79,6 +79,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Full-codebase diagnostic review (29 findings, 5 subsystems) -- fixed the first three: a "
+                    "dead confidence-score safeguard, a reweighting blind spot, and a scan-crashing fetch."),
     ("2026-08-16", "Fixed the Nightly review notification firing on Sundays with nothing to review -- it now "
                     "checks real forex market hours before sending, like the other scheduled touchpoints do."),
     ("2026-08-15", "Added weekly confidence-weight reweighting -- Friday reflection now nudges which signals "
@@ -86,7 +88,6 @@ DEVELOPER_NOTES = [
     ("2026-08-15", "Found and fixed the real cause of the phantom Telegram notifications -- a missing test "
                     "mock, not the deployed app -- and added a safety net so it can't recur."),
     ("2026-08-15", "Gave this project its own dedicated Telegram bot, separate from the sibling project's."),
-    ("2026-08-15", "Fixed a Win rate percentage bug and redesigned the capital section into clearer stat tiles."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"

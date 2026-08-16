@@ -111,6 +111,21 @@ def compute_confidence(inputs: SignalInputs, weights: ConfidenceWeights = None) 
         "candlestick": candlestick_score(inputs.candlestick_pattern, inputs.direction),
         "news": news_alignment_score(inputs.news_score, inputs.direction),
     }
+    # Each scorer above returns a neutral 50.0 when its own input is
+    # missing, so the weighted blend below always has a number to work
+    # with -- that's the right behavior for confidence_pct itself. But it
+    # means "components" alone can't tell a caller whether a score of
+    # 50.0 was a genuinely weak reading or just a missing-data stand-in.
+    # confidence_reweighting.py needs that distinction: a trade where
+    # "news" was never available (e.g. any commodity -- news_relevance.py
+    # has no keyword coverage for gold/silver/oil) must not be treated as
+    # evidence that a real, weak news score correlates with the outcome.
+    available = {
+        "breadth": inputs.breadth_agreement is not None,
+        "rsi": inputs.rsi_value is not None,
+        "candlestick": inputs.candlestick_pattern is not None,
+        "news": inputs.news_score is not None,
+    }
     raw = (
         weights.breadth * components["breadth"]
         + weights.rsi * components["rsi"]
@@ -122,5 +137,6 @@ def compute_confidence(inputs: SignalInputs, weights: ConfidenceWeights = None) 
     return {
         "confidence_pct": round(final, 1),
         "components": components,
+        "components_available": available,
         "edge_dampener": round(dampener, 2),
     }
