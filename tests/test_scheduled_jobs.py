@@ -716,6 +716,47 @@ def test_dispatcher_does_not_run_nightly_review_before_1am(
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
 @patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_skips_nightly_review_on_sunday_when_market_is_closed(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Real incident: a "Nightly review" Telegram message went out at
+    # 1:04am SGT on a Sunday -- forex is closed the entire day (open
+    # Sun ~5pm NY = ~6am Monday SGT), so there was no session to review.
+    # day=16 is a Sunday (day=10 is the Monday other tests anchor on).
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(1, 4, day=16))
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_not_called()
+    updated = dashboard_state.load_state()
+    assert updated.last_review_date is None
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_session(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Friday's session genuinely runs into Saturday 00:00-05:00 SGT
+    # (forex closes Fri ~5pm NY = ~5-6am Sat SGT) -- unlike Sunday, this
+    # is a legitimate review, not a repeat of the Sunday bug above.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(1, 4, day=15))  # Saturday
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_called_once()
+    updated = dashboard_state.load_state()
+    assert updated.last_review_date == "2026-08-15"
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_runs_friday_reflection_only_on_saturday(
         mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)

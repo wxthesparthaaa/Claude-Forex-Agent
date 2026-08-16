@@ -343,4 +343,42 @@ point, not yet answered).
 
 **Fixed**: 2026-08-15, late evening SGT
 
+---
+
+## 2026-08-16 — Nightly review fired on a Sunday with nothing to review
+
+**Problem**: A "Nightly review (1am SGT)" Telegram message went out at
+1:04am SGT on a Sunday, reporting two closed trades. Forex is closed
+the entire day Sunday (opens ~5pm New York, which is ~6am Monday SGT),
+so there was no trading session to review at that hour.
+
+**The actual cause**: `run_daily_dispatcher`'s nightly-review check
+(`if minutes >= 60 and state.last_review_date != today`) had no
+market-hours gate at all, unlike its two siblings in the same function
+(the evening listing and pre-evening health check both check
+`now.weekday() < 5` first). It fired every calendar day the process
+was awake past 1am, including weekends, and just reported whatever
+trades happened to have closed since the last review -- in this case,
+trades from Friday's session that either hadn't been reviewed yet or
+whose catch-up got pushed to Sunday because the process was asleep
+through Saturday's own 1am window.
+
+**Solution**: Added an `is_forex_market_open(now)` check to the
+nightly-review gate -- deliberately not a plain `weekday() < 5` check,
+because Friday's session genuinely continues into Saturday
+00:00-05:00 SGT (forex closes Friday ~5pm New York, ~5-6am Saturday
+SGT), and a naive weekday check would wrongly skip that legitimate
+post-Friday-session review too. `is_forex_market_open` already existed
+in `market_hours.py` and already handles this exact boundary correctly
+(used elsewhere for the same reason -- see `run_autopilot_interval_scan`).
+Now the review only fires while the market is actually open (or was,
+moments before); on Sunday it stays silent all day and catches up
+automatically the next tick after the market reopens Monday morning,
+same catch-up mechanism the dispatcher already uses for missed
+touchpoints. 2 new tests cover both directions: nightly review must
+stay silent Sunday 1:04am SGT, and must still fire Saturday 1:04am SGT
+(Friday's session, legitimately due). Full suite: 273 passed.
+
+**Fixed**: 2026-08-16
+
 **Fixed**: 2026-08-15 ~22:35 SGT

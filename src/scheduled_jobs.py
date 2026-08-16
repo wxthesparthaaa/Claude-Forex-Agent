@@ -478,7 +478,18 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
         state.last_evening_listing_date = today
         save_state(state)
 
-    if minutes >= 60 and state.last_review_date != today:
+    # is_forex_market_open(), not a plain weekday check -- the review at
+    # 1am SGT is reviewing the session that started the evening before,
+    # and Friday's session genuinely runs into Saturday 00:00-05:00 SGT
+    # (see run_autopilot_interval_scan's own comment on this), so a
+    # "weekday < 5" gate would wrongly skip Saturday's legitimate
+    # post-Friday-session review. What it must exclude is Sunday (and
+    # the Monday 00:00-~06:00 SGT gap before the market reopens): a real
+    # incident sent a "Nightly review" Telegram message at 1:04am SGT on
+    # a Sunday, reporting Friday's trades again with no new session to
+    # actually review, because this check had no market-hours gate at
+    # all while the sibling evening-listing/health-check checks did.
+    if minutes >= 60 and state.last_review_date != today and is_forex_market_open(now):
         run_nightly_review(client)
         state = load_state()
         state.last_review_date = today
