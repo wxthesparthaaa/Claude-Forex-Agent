@@ -803,8 +803,11 @@ def test_dispatcher_does_not_rerun_evening_listing_already_done_today(
 @patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_runs_nightly_review_once_due_any_day(
         mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Tuesday, not Monday -- Monday has no legitimate "evening before"
+    # session (Sunday was closed), so it's the one day this can't use as
+    # its "any ordinary day" example; see the Monday-specific tests below.
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # well past 1am, before tonight's 21:30
+    _freeze_at(monkeypatch, _sgt(10, 0, day=11))  # well past 1am, before tonight's 21:30
     state = dashboard_state.default_state()
     dashboard_state.save_state(state)
 
@@ -813,7 +816,7 @@ def test_dispatcher_runs_nightly_review_once_due_any_day(
     mock_review.assert_called_once()
     mock_evening.assert_not_called()  # not yet 21:30
     updated = dashboard_state.load_state()
-    assert updated.last_review_date == "2026-08-10"
+    assert updated.last_review_date == "2026-08-11"
 
 
 @patch("scheduled_jobs.run_friday_reflection")
@@ -870,6 +873,53 @@ def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_se
     mock_review.assert_called_once()
     updated = dashboard_state.load_state()
     assert updated.last_review_date == "2026-08-15"
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_skips_nightly_review_right_at_monday_market_reopen(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Regression test for a real incident: a "Nightly review" Telegram
+    # message went out at 5:04am SGT Monday reporting "0 closed trades" --
+    # forex only just reopened (~5am SGT Monday) at that exact moment, so
+    # both `minutes >= 60` and `is_forex_market_open(now)` flip true for
+    # the FIRST time that day simultaneously, and the review fired
+    # immediately with nothing to actually report. There's no genuine
+    # "evening before" session on Monday (Sunday was closed the whole
+    # day) -- day=17 is that same Monday.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(5, 4, day=17))
+    state = dashboard_state.default_state()
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_not_called()
+    updated = dashboard_state.load_state()
+    assert updated.last_review_date is None
+
+
+@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_nightly_review")
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_dispatcher_still_skips_nightly_review_later_in_the_monday_session(
+        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+    # Not just the exact reopen moment -- Monday has no legitimate
+    # "evening before" session at ANY point in its own day, so its own
+    # activity is meant to be picked up by Tuesday's 1am review instead
+    # (which correctly reports "since last review," spanning all of
+    # Monday) rather than Monday producing its own separate summary.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(23, 0, day=17))
+    state = dashboard_state.default_state()
+    state.last_evening_listing_date = "2026-08-17"  # isolate the review-only behavior
+    state.last_health_check_date = "2026-08-17"
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_daily_dispatcher()
+
+    mock_review.assert_not_called()
 
 
 @patch("scheduled_jobs.run_friday_reflection")
@@ -1001,10 +1051,11 @@ def test_dispatcher_catches_up_after_a_long_sleep_gap(
     # exact 21:30/01:00 firing moments -- the app only wakes up hours
     # later (e.g. an UptimeRobot ping at 23:00), and the dispatcher must
     # still catch both of today's touchpoints up in that single tick.
+    # Tuesday, not Monday -- see the Monday-specific tests below for why.
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(23, 0, day=10))
+    _freeze_at(monkeypatch, _sgt(23, 0, day=11))
     state = dashboard_state.default_state()
-    state.last_health_check_date = "2026-08-10"  # isolate the listing/review catch-up behavior
+    state.last_health_check_date = "2026-08-11"  # isolate the listing/review catch-up behavior
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
@@ -1172,3 +1223,34 @@ def test_market_status_does_not_renotify_when_status_is_unchanged(mock_send, tmp
     scheduled_jobs.check_market_status_transition(saturday_noon)
 
     mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_market_status_does_not_resend_within_the_gap_even_if_the_field_looks_reverted(
+        mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: two "Forex market open"
+    # messages landed 5 minutes apart. Root cause -- a concurrent
+    # scheduled job (run_autopilot_interval_scan, which can be mid-flight
+    # scanning AUD_USD/NZD_USD at the exact moment the market reopens,
+    # since their own trading window also starts at 5am SGT) does its
+    # own narrow state save at the end of its run and can silently carry
+    # a stale last_market_status back into the file after this function
+    # already updated it -- making the NEXT tick see a "reverted" status
+    # and treat it as a brand-new transition. This simulates that: the
+    # persisted field looks like it needs a transition, but a precise
+    # send timestamp from moments ago proves the message already went
+    # out, and the hard backstop must win regardless of what the field
+    # says.
+    _isolate_state(tmp_path, monkeypatch)
+    from market_hours import NY
+    state = dashboard_state.default_state()
+    state.last_market_status = "closed"  # looks reverted/stale
+    state.last_market_status_sent_at = datetime(2026, 8, 17, 21, 3, tzinfo=timezone.utc).isoformat()
+    dashboard_state.save_state(state)
+
+    now = datetime(2026, 8, 17, 21, 8, tzinfo=NY)  # 5 minutes later, market open
+    scheduled_jobs.check_market_status_transition(now)
+
+    mock_send.assert_not_called()
+    # The field itself still self-heals even though no message was sent.
+    assert dashboard_state.load_state().last_market_status == "open"

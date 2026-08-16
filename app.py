@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-17", "Fixed two more Monday-reopen bugs: a duplicated 'market open' message (a concurrent scan "
+                    "job -- AUD/NZD's own window also starts at 5am SGT -- could revert the status flag) and "
+                    "a nightly review firing with 0 trades the instant the market reopens with nothing to review."),
     ("2026-08-17", "Fixed a Friday reflection double-send: it could fire again just after midnight Monday "
                     "(still closed) because the ISO calendar week flips ~5 hours before forex actually "
                     "reopens. Now gated on the real moment the weekend closure began, not the calendar."),

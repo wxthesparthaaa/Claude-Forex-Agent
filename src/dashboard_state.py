@@ -88,6 +88,18 @@ class DashboardState:
     # just records the current status silently rather than notifying, since
     # there's no genuine prior status to have transitioned from.
     last_market_status: str | None = None
+    # Precise timestamp (UTC ISO) of the last market-status-change Telegram
+    # send -- a hard backstop on top of last_market_status, same MIN_LISTING_GAP
+    # pattern as last_evening_listing_sent_at below. Real incident:
+    # run_autopilot_interval_scan (a separate scheduled job, same 5-minute
+    # tick) can be mid-flight scanning AUD_USD/NZD_USD at the exact moment
+    # the market reopens (their own trading window also starts at 5am
+    # SGT); its own end-of-scan state save silently carried a stale
+    # last_market_status back into the file, making the next tick treat
+    # an already-announced transition as brand new. This timestamp,
+    # re-checked immediately before sending, catches that regardless of
+    # which field got clobbered.
+    last_market_status_sent_at: str | None = None
     # Precise timestamp (UTC ISO) of the last "Potential trades tonight"
     # Telegram send -- a hard backstop on top of last_evening_listing_date.
     # Real incident: duplicate sends kept recurring despite the date-stamp

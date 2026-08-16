@@ -1003,3 +1003,63 @@ wall-clock time straddling the SGT midnight boundary during the test
 run itself, nothing to do with this fix).
 
 **Fixed**: 2026-08-17
+
+## 2026-08-17 (continued) — Two more Monday-reopen bugs: a duplicated market-open message and a nightly review firing with 0 trades
+
+**Problem**: User reported, at Monday market reopen: a duplicate
+"Forex market open" message 5 minutes apart, and a "Nightly review"
+message showing "Closed trades: 0" that shouldn't have fired at all --
+correctly recognized as the same class of issue as the Friday
+reflection bug just fixed.
+
+**Bug 1 -- duplicate market-open message.** Traced to a genuine
+concurrency collision, not a fluke: `AUD_USD`/`NZD_USD`'s own trading
+windows also start at exactly 5am SGT (verified directly against
+`instrument_window_active`), the same moment forex itself reopens. So
+`run_autopilot_interval_scan` (a separate scheduled job, same 5-minute
+tick as the one running `check_market_status_transition`) is routinely
+mid-flight scanning those two pairs at the exact instant the market
+transitions. Its own end-of-scan state save (`run_evening_scan_and_notify`,
+the `last_autopilot_scan_timestamps` write) does reload state fresh
+right before saving -- but if that reload lands before
+`check_market_status_transition`'s own save on the other thread, the
+scan's save then silently carries the pre-transition `last_market_status`
+back into the file. The next tick sees it "reverted" and treats it as a
+brand-new transition.
+
+**Fix**: Same `MIN_LISTING_GAP` hard backstop already proven for the
+evening listing's own duplicate-send problem -- added
+`DashboardState.last_market_status_sent_at` (precise UTC ISO
+timestamp), re-checked immediately before sending regardless of what
+`last_market_status` itself says. Catches the race no matter which
+field got clobbered, instead of trying to eliminate the underlying
+interleaving.
+
+**Bug 2 -- nightly review firing with 0 trades.** The 1am review is
+meant to summarize "the session that started the evening before." On
+Monday, forex reopens ~5am SGT -- the exact moment `minutes >= 60` and
+`is_forex_market_open(now)` both flip true for the first time that day,
+so the review fired immediately, correctly but uselessly reporting
+0 trades since there'd been no time for any. Structurally, Monday has
+no "evening before" session at all (Sunday was closed the whole day) --
+the first genuinely meaningful review of the week is naturally
+Tuesday's, which reports "since last review" and correctly absorbs all
+of Monday's activity into one real summary instead of Monday getting
+its own premature, empty one.
+
+**Fix**: Added a second condition -- the market must ALSO have been
+open at today's own SGT midnight (`is_forex_market_open(now.replace(hour=0, ...))`) --
+distinguishing a real evening-before session (true every Tue-Fri, and
+Saturday thanks to Friday's session running past midnight) from a day
+whose own session hasn't started yet (Monday, Sunday). Verified this
+doesn't just block the exact reopen instant but Monday's entire day
+(a later catch-up, e.g. Render waking at 23:00, still correctly defers
+to Tuesday rather than producing its own summary) -- two existing tests
+that used Monday as an arbitrary "any ordinary day" example were moved
+to Tuesday, since Monday is now a genuine, intentional exception.
+
+**Solution**: 3 new regression tests (duplicate-suppression-despite-a-
+reverted-field, skip-at-exact-reopen, skip-later-in-the-same-Monday).
+Full suite: 349 passed.
+
+**Fixed**: 2026-08-17

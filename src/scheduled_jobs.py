@@ -497,6 +497,34 @@ def check_market_status_transition(now: datetime = None) -> None:
     if previous_status is None:
         return  # cold start -- nothing to announce a transition FROM
 
+    # Hard, mechanism-agnostic dedupe -- same MIN_LISTING_GAP pattern
+    # already proven for the evening listing's own duplicate-send
+    # problem. Real incident: two "Forex market open" messages landed 5
+    # minutes apart at market reopen. Root cause -- run_autopilot_interval_scan
+    # (a separate scheduled job, same 5-minute tick) can be mid-flight on
+    # AUD_USD/NZD_USD right at this exact moment (their own trading
+    # window also opens at 5am SGT); its own state save at the end of
+    # run_evening_scan_and_notify does a FRESH reload right before
+    # writing, but only re-fetches immediately before ITS OWN narrow
+    # save -- if that reload happens to land before this function's save
+    # above, its save then silently carries the pre-transition
+    # last_market_status back into the file. The next tick sees it
+    # reverted and treats it as a brand-new transition. Re-checking a
+    # precise timestamp at the last possible moment before sending
+    # catches this regardless of which field got clobbered.
+    fresh_state = load_state()
+    last_sent_iso = fresh_state.last_market_status_sent_at
+    now_utc = datetime.now(timezone.utc)
+    already_sent_recently = (
+        last_sent_iso is not None and now_utc - datetime.fromisoformat(last_sent_iso) < MIN_LISTING_GAP
+    )
+    if already_sent_recently:
+        print(f"WARNING: skipping duplicate market-status send -- one already went out at "
+              f"{last_sent_iso} (within {MIN_LISTING_GAP})", flush=True)
+        return
+    fresh_state.last_market_status_sent_at = now_utc.isoformat()
+    save_state(fresh_state)
+
     if currently_open:
         close_sgt = next_forex_close(now).astimezone(SGT)
         send_message(format_market_open_message(close_sgt))
@@ -560,7 +588,23 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     # a Sunday, reporting Friday's trades again with no new session to
     # actually review, because this check had no market-hours gate at
     # all while the sibling evening-listing/health-check checks did.
-    if minutes >= 60 and state.last_review_date != today and is_forex_market_open(now):
+    #
+    # A SECOND real incident, same root shape: the market-open check
+    # alone isn't enough on Monday morning either. Forex reopens ~5am
+    # SGT Monday, and at that exact moment `minutes >= 60` and
+    # `is_forex_market_open(now)` both flip true for the FIRST time that
+    # day -- firing the review immediately with "0 closed trades," since
+    # Monday's own session had only just started and there was no real
+    # "evening before" (Sunday) session to review at all. Requiring the
+    # market to ALSO have been open at today's SGT midnight distinguishes
+    # a real evening-before session (true every Tue-Fri and, thanks to
+    # the Friday-runs-past-midnight case above, Saturday) from a day
+    # whose own session hasn't started yet (Monday, Sunday) -- letting
+    # this correctly wait for Tuesday's 1am review to cover Monday's
+    # session instead of firing prematurely at Monday's own reopen.
+    today_midnight_sgt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if (minutes >= 60 and state.last_review_date != today and is_forex_market_open(now)
+            and is_forex_market_open(today_midnight_sgt)):
         run_nightly_review(client)
         state = load_state()
         state.last_review_date = today
