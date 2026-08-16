@@ -59,6 +59,105 @@ def test_tag_headline_neutral_when_no_keywords_match():
     assert tag["polarity"] == 0.0
 
 
+def test_tag_headline_detects_plural_tariffs_not_just_singular_tariff():
+    # Regression test: the word-boundary fix (which correctly stops
+    # "war" from matching inside "award") over-corrected -- "tariff"
+    # alone never matched the far more common real-world "tariffs",
+    # so a headline exactly like this one was silently tagged
+    # geopolitical: False.
+    tag = tag_headline("Trump tariffs to hit EU imports starting Monday")
+    assert tag["geopolitical"] is True
+
+
+def test_tag_headline_detects_plural_sanctions_not_just_singular_sanction():
+    tag = tag_headline("US imposes new sanctions on Russia")
+    assert tag["geopolitical"] is True
+
+
+def test_tag_headline_stem_matches_bare_market_movement_verbs():
+    # Regression test: pulled 101 real, live Finnhub headlines through
+    # tag_headline() and found 82% scored zero polarity even when a
+    # currency WAS matched -- e.g. "Asian stocks rise as US inflation,
+    # tech spur gains" and "Fed's Goolsbee says latest inflation data is
+    # better" both matched USD but scored 0.0, because only qualified
+    # phrases like "unexpectedly rises" or "better than expected" were
+    # covered, not the bare everyday verb.
+    assert tag_headline("Asian stocks rise as US inflation, tech spur gains")["polarity"] > 0
+    assert tag_headline("Fed's Goolsbee says latest inflation data is better")["polarity"] > 0
+    assert tag_headline("Sterling falls as UK growth data disappoints")["polarity"] < 0
+
+
+def test_tag_headline_stem_match_catches_inflected_forms_not_just_the_base_word():
+    # "rise~"/"fall~" etc. are STEM matches, not just the bare word --
+    # must catch tense variations without every inflection spelled out.
+    assert tag_headline("Dollar gains ahead of Fed decision")["polarity"] > 0
+    euro_tag = tag_headline("Euro declining against major peers")
+    assert "EUR" in euro_tag["currencies"] and euro_tag["polarity"] < 0
+    pound_tag = tag_headline("Pound recovering after steep losses")
+    assert "GBP" in pound_tag["currencies"] and pound_tag["polarity"] > 0
+
+
+def test_tag_headline_matches_bare_euro_and_pound():
+    # Real gap found while sanity-checking the stem-matching fix: bare
+    # "Euro"/"Pound" -- the single most common way these currencies get
+    # referred to in forex headlines -- weren't in the keyword lists at
+    # all. "eur"/"euro area" don't cover plain "Euro"; GBP had no
+    # currency-nickname entry at all (unlike "aussie"/"loonie"/"kiwi").
+    assert "EUR" in tag_headline("Euro hits three-month high against the dollar")["currencies"]
+    assert "GBP" in tag_headline("Pound slips after weak retail figures")["currencies"]
+
+
+def test_tag_headline_stem_match_handles_silent_e_before_ing():
+    # "rise"/"advance"/"improve"/"ease" all drop their trailing "e"
+    # before "-ing" (rise -> rising, not "riseing") -- a plain stem
+    # match on "rise" can't reach "rising" since "rising" doesn't
+    # literally start with "rise". These forms are listed explicitly in
+    # the keyword lists to cover the gap; this test locks that in.
+    assert tag_headline("Yen rising against the dollar")["polarity"] > 0
+    assert tag_headline("Franc advancing on safe-haven demand")["polarity"] > 0
+    assert tag_headline("Inflation improving faster than forecast")["polarity"] > 0
+    assert tag_headline("Bank of Canada sees price pressures easing")["polarity"] < 0
+
+
+def test_tag_headline_stem_match_does_not_over_match_unrelated_words():
+    # The whole reason stem matching is opt-in per keyword (not the
+    # default) rather than blanket-truncating every word: a short stem
+    # like "ris" would match "risk", which is common in forex news and
+    # not a directional signal. Confirms "risk" alone doesn't trip
+    # positive polarity the way a naive "ris~" stem would.
+    tag = tag_headline("Markets weigh geopolitical risk ahead of the open")
+    assert tag["polarity"] == 0.0
+
+
+def test_tag_headline_matches_us_treasury_secretary_for_usd():
+    # Real gap found live: "Bessent says US to apply measures never
+    # seen on Iran" matched nothing -- the Treasury Secretary wasn't in
+    # USD's keyword list, unlike "Powell"/"Lagarde"/"Ueda" for their
+    # own currencies.
+    tag = tag_headline("Bessent says US to apply measures never seen on Iran")
+    assert "USD" in tag["currencies"]
+
+
+def test_tag_headline_matches_bare_uk_for_gbp():
+    # Real gap found live: "UK economy gains from Gulf ceasefire, World
+    # Cup and sunshine" matched nothing -- GBP's list had "united
+    # kingdom"/"uk inflation" as specific phrases but no bare "uk"
+    # token, even though word-boundary matching makes it just as safe
+    # as the existing "aud" entry (won't match inside "truck"/"stuck").
+    tag = tag_headline("UK economy gains from Gulf ceasefire, World Cup and sunshine")
+    assert "GBP" in tag["currencies"]
+
+
+def test_tag_headline_detects_geopolitical_keyword():
+    # Regression test: "geopolit" was evidently meant as a stem for
+    # "geopolitical"/"geopolitics", but as a literal keyword under
+    # word-boundary matching it could never match anything -- there is
+    # no English word "geopolit" on its own, so this entry was
+    # permanently dead.
+    tag = tag_headline("Geopolitical tensions rise as talks collapse")
+    assert tag["geopolitical"] is True
+
+
 def test_relevant_headlines_filters_by_currency_and_sorts_recent_first():
     articles = [
         {"headline": "ECB holds rates steady", "summary": "", "datetime": 100},
@@ -185,3 +284,31 @@ def test_finnhub_client_includes_token_and_category(mock_get):
     assert called_url.endswith("/news")
     assert called_params["category"] == "forex"
     assert called_params["token"] == "dummy_key"
+
+
+@patch("finnhub_adapter.requests.get")
+def test_finnhub_client_error_message_never_contains_the_api_key(mock_get):
+    # Regression test: Finnhub's key travels as a URL query param (unlike
+    # OANDA's header-based auth), so requests' own HTTPError message
+    # embeds the full request URL -- key included -- in cleartext. A
+    # routine 429 (quota exceeded, expected on the free tier) used to
+    # produce an exception whose str() contained a live credential,
+    # which live_scan.fetch_news_articles() then printed straight into
+    # Render's persistent log stream.
+    import requests as _requests
+
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.url = "https://finnhub.io/api/v1/news?category=forex&token=SUPER-SECRET-KEY-12345"
+    mock_response.raise_for_status.side_effect = _requests.exceptions.HTTPError(
+        f"429 Client Error: Too Many Requests for url: {mock_response.url}", response=mock_response
+    )
+    mock_get.return_value = mock_response
+
+    client = FinnhubClient(api_key="SUPER-SECRET-KEY-12345")
+    try:
+        client.get_forex_news()
+        assert False, "expected HTTPError to propagate"
+    except _requests.exceptions.HTTPError as e:
+        assert "SUPER-SECRET-KEY-12345" not in str(e)
+        assert "429" in str(e)

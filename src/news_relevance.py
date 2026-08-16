@@ -27,12 +27,31 @@ CURRENCY_KEYWORDS = {
     # deliberately NOT added for USD ("us dollar" already covers it) --
     # "Australian dollar"/"Canadian dollar"/etc. all contain "dollar" too
     # and would falsely tag USD on every other currency's own headlines.
-    "USD": ["fed", "fomc", "federal reserve", "powell", "us dollar", "treasury",
+    #
+    # "bessent" (US Treasury Secretary) and bare "uk" added after
+    # pulling 101 real, live Finnhub headlines and checking which ones
+    # this scorer was missing -- "Bessent says US to apply measures..."
+    # and "UK economy gains from Gulf ceasefire..." both matched nothing
+    # despite being squarely on-topic, the same gap "Powell"/"united
+    # kingdom" already existed to close for their own currencies. Bare
+    # "uk" is safe under word-boundary matching (won't match inside
+    # "truck"/"stuck") the same way "aud" already safely doesn't match
+    # inside "fraud".
+    "USD": ["fed", "fomc", "federal reserve", "powell", "bessent", "us dollar", "treasury",
             "us jobs", "us cpi", "us inflation", "us payrolls", "nonfarm payrolls",
             "usd", "united states"],
-    "EUR": ["ecb", "eurozone", "lagarde", "euro area", "eur"],
+    # Bare "euro"/"pound" added after the stem-matching sanity check
+    # below turned up that neither was in the list at all -- "Euro
+    # declining against major peers" and "Pound recovering after steep
+    # losses" both matched zero currencies despite being unambiguous.
+    # "eur"/"euro area" don't cover the plain word "Euro", the single
+    # most common way EUR gets referred to in forex headlines; same gap
+    # for "Pound" vs. GBP. Safe under word-boundary matching -- "euro"
+    # won't match inside "European" (different word), and "pound" is
+    # dominated by its currency sense in financial-news headlines.
+    "EUR": ["ecb", "eurozone", "lagarde", "euro area", "eur", "euro"],
     "GBP": ["boe", "bank of england", "sterling", "uk inflation",
-            "gbp", "united kingdom", "britain", "british"],
+            "gbp", "united kingdom", "britain", "british", "uk", "pound"],
     "JPY": ["boj", "bank of japan", "yen", "ueda", "jpy", "japan", "japanese"],
     "CHF": ["snb", "swiss national bank", "franc", "chf", "switzerland", "swiss"],
     "AUD": ["rba", "reserve bank of australia", "aussie", "aud", "australia", "australian"],
@@ -40,7 +59,20 @@ CURRENCY_KEYWORDS = {
     "CAD": ["boc", "bank of canada", "loonie", "cad", "canada", "canadian"],
 }
 
-GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "invasion", "ceasefire", "geopolit"]
+# Plural/inflected forms added alongside their singular base -- the
+# word-boundary match in _contains_keyword() (the fix for "war" matching
+# inside "award") is exact-word-only by design, so "tariff" alone never
+# matched the far more common real-world "tariffs", and "sanction" never
+# matched "sanctions". A trailing "~" marks a keyword as STEM matching
+# instead of exact -- see _contains_keyword -- so "tariff~"/"sanction~"
+# catch "tariffs"/"tariffed"/"sanctioned"/"sanctions" etc. without
+# listing every inflection by hand. "geopolit" was evidently meant as a
+# stem for "geopolitical"/"geopolitics" but as a literal keyword could
+# never match anything on its own -- now a genuine stem match.
+GEOPOLITICAL_KEYWORDS = [
+    "trump", "tariff~", "war", "sanction~", "conflict",
+    "invasion", "ceasefire", "geopolit~",
+]
 
 # Polarity is scored for the currency's own VALUE, not general market/risk
 # sentiment -- a hike/hawkish stance strengthens a currency (higher
@@ -56,6 +88,22 @@ GEOPOLITICAL_KEYWORDS = ["trump", "tariff", "war", "sanction", "conflict", "inva
 # entirely: "Dollar drops as weak US jobs data pushes out Fed hike
 # expectations", "Euro area investor confidence returns to positive
 # territory".
+#
+# Broadened AGAIN after pulling 101 real, live Finnhub headlines through
+# this scorer directly: 94% got no currency match at all (mostly
+# genuinely off-topic geopolitical/oil/single-stock news Finnhub's
+# "general" category pulls in, not a matching bug) but WITHIN the
+# headlines that did match a currency, the polarity was still 0.0 for
+# clearly-directional ones like "Asian stocks rise as US inflation,
+# tech spur gains" and "Fed's Goolsbee says latest inflation data is
+# better" -- bare "rise"/"rises"/"gains"/"better" weren't covered at
+# all, only compound qualified phrases like "unexpectedly rises" or
+# "better than expected". Stem-matched ("~") entries below catch the
+# common tense variations of these market-movement verbs without
+# needing every inflection spelled out -- deliberately used only for
+# words distinctive enough that this is safe (a short/generic word like
+# "war" stem-matched would over-match "warehouse"/"warfare" the same
+# way the original "award" bug over-matched a substring).
 POSITIVE_KEYWORDS = [
     "hikes rates", "rate hike", "hawkish", "beats expectations", "beats forecast", "beats estimates",
     "tops estimates", "tops forecasts", "strong growth", "stronger than expected", "exceeds expectations",
@@ -66,21 +114,53 @@ POSITIVE_KEYWORDS = [
     "surges", "jumps", "climbs", "rallies", "strengthens", "gains ground", "outperforms",
     "unexpectedly rises", "unexpectedly grows", "faster than expected", "solid gains",
     "surprise gain", "upbeat", "improves more than expected", "tops forecast",
+    # Bare, stem-matched market-movement vocabulary -- the actual gap
+    # found against real headlines: qualified phrases were covered, the
+    # plain everyday verbs weren't.
+    "rise~", "gain~", "advance~", "recover~", "improve~", "boost~", "lift~",
+    "better", "higher", "stronger",
+    # "rise"/"advance"/"improve" all drop their trailing "e" before "-ing"
+    # (rise -> rising, not "riseing"), so the stem match above -- which
+    # only matches strings that literally start with the stem -- can't
+    # reach the "-ing" form. Listed explicitly rather than shortening the
+    # stem (e.g. "ris~") to cover it, since a shorter stem starts
+    # colliding with unrelated words ("ris~" would match "risk").
+    "rising", "advancing", "improving",
 ]
 NEGATIVE_KEYWORDS = [
     "cuts rates", "rate cut", "dovish", "stimulus", "recession", "misses expectations",
     "misses forecast", "misses estimates", "weaker than expected", "worse than expected", "weak jobs data",
     "weak us jobs", "soft jobs report", "pushes out hike expectations", "delays rate hike", "disappoints",
-    "war", "invasion", "sanctions", "tariff", "conflict",
+    "war", "invasion", "sanction~", "tariff~", "conflict",
     "plunges", "slumps", "tumbles", "weakens", "slides", "underperforms",
     "unexpectedly falls", "unexpectedly contracts", "slower than expected", "misses",
     "downbeat", "worsens more than expected", "shrinks", "contracts",
+    # Bare, stem-matched market-movement vocabulary, same reasoning as
+    # POSITIVE_KEYWORDS above.
+    "fall~", "drop~", "declin~", "sink~", "ease~", "cool~", "slow~", "retreat~",
+    "worse", "lower", "weaker",
+    # "ease" drops its trailing "e" before "-ing" ("easing", not
+    # "easeing") -- same reason "rising"/"advancing"/"improving" are
+    # listed explicitly above.
+    "easing",
 ]
 
 
 def _contains_keyword(text: str, keyword: str) -> bool:
-    """Word-boundary match, not plain substring -- a naive `in` check
-    matches "war" inside "award", "aud" inside "fraud", etc."""
+    """Word-boundary match by default -- a naive `in` check matches
+    "war" inside "award", "aud" inside "fraud", etc. A keyword ending in
+    "~" is STEM matched instead: "fall~" matches "fall"/"falls"/
+    "falling"/"fallen". (Words that drop a trailing "e" before "-ing",
+    like "rise" -> "rising", need that form listed separately -- the
+    stem only matches strings literally starting with the stem, and
+    "rising" doesn't start with "rise".) Deliberately opt-in per keyword, not the default
+    for every entry -- a short/generic word ("war", "us") stem-matched
+    would reintroduce the exact class of over-matching bug the plain
+    word-boundary fix exists to prevent ("war~" would match
+    "warehouse"/"warfare"/"warmth")."""
+    if keyword.endswith("~"):
+        stem = keyword[:-1]
+        return re.search(r"\b" + re.escape(stem) + r"\w*\b", text) is not None
     return re.search(r"\b" + re.escape(keyword) + r"\b", text) is not None
 
 

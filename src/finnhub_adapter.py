@@ -29,7 +29,22 @@ class FinnhubClient:
         params = dict(params or {})
         params["token"] = self.api_key
         r = requests.get(f"{BASE_URL}{path}", params=params, timeout=20)
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            # Unlike OANDA (auth via an Authorization header), Finnhub's
+            # key travels as a URL query param -- requests' own
+            # HTTPError message embeds the full request URL, so the raw
+            # exception (str(e)) contains the live key in cleartext.
+            # Real risk: live_scan.fetch_news_articles() catches any
+            # exception here and prints it, which would otherwise write
+            # a working Finnhub credential straight into Render's
+            # persistent log stream on a routine 429 (quota exceeded --
+            # expected on the free tier, not exotic). Re-raise with only
+            # the status code, never the original exception/URL.
+            raise requests.exceptions.HTTPError(
+                f"Finnhub request to {path} failed: HTTP {r.status_code}", response=r
+            ) from None
         return r.json()
 
     def get_forex_news(self, min_id: int = 0) -> list:

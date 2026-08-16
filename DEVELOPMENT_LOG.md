@@ -681,3 +681,100 @@ files (`test_state_paths.py`, `test_scan_results.py`, the latter never
 having had direct test coverage before). Full suite: 322 passed.
 
 **Fixed**: 2026-08-16
+
+## 2026-08-16 (continued) — Notifications, External Data & App Layer subsystem, all 5 findings fixed (last of the diagnostic's five)
+
+**Problem**: Fifth and final subsystem from the full-codebase diagnostic.
+Real engineering maturity was already visible here -- the dedupe lock,
+the persist-before-save ordering, the failure-inclusive news cache --
+but one credential could leak into logs, one already-fixed bug class
+had regressed, and the Flask layer's exception handling was
+inconsistent between sibling routes.
+
+**Fixes**:
+
+1. **`FINNHUB_API_KEY` could leak into Render's log stream in
+   cleartext.** Unlike OANDA (header-based auth), Finnhub's key travels
+   as a URL query param, so `requests`' own `HTTPError` message embeds
+   the full request URL -- key included. A routine 429 (quota exceeded,
+   expected on the free tier) would get caught and printed by
+   `live_scan.fetch_news_articles()`, writing a working credential
+   straight into a log anyone with access could read. `finnhub_adapter._get()`
+   now catches `HTTPError` and re-raises with only the status code,
+   never the original exception or URL.
+
+2. **The word-boundary keyword-matching fix had over-corrected, and the
+   real gap was much bigger than the diagnostic's own example.** The
+   original finding was narrow: `tariff` didn't match `tariffs`,
+   `sanction` didn't match `sanctions`, `geopolit` (meant as a stem)
+   matched nothing at all. Fixing just those was the obvious move, but
+   a direct challenge on whether that was actually sufficient -- rather
+   than just plural forms -- led to pulling 101 real, live Finnhub
+   headlines through the scorer directly. Result: 94% got no currency
+   match at all, and 82% scored zero polarity even counting genuinely
+   off-topic headlines (Finnhub's "general" category is dominated by
+   broad geopolitical/oil/single-stock news, not pure forex content --
+   a real data-source characteristic, not purely a bug). Within the
+   headlines that clearly *were* on-topic, real gaps were still
+   getting missed: "Bessent says US to apply measures never seen on
+   Iran" (the Treasury Secretary wasn't in USD's list, unlike
+   Powell/Lagarde/Ueda for their own currencies), "UK economy gains
+   from Gulf ceasefire..." (bare "uk" wasn't a keyword at all), "Asian
+   stocks rise... tech spur gains" and "...inflation data is better"
+   (matched a currency but scored 0.0 polarity -- only compound phrases
+   like "unexpectedly rises" were covered, not the bare everyday verb).
+   Added an opt-in `~`-suffix stem-match convention to
+   `news_relevance._contains_keyword()` (`"tariff~"`, `"rise~"`,
+   `"fall~"`, etc.) -- deliberately *not* the default for every keyword,
+   since stem-matching a short/generic word like `war` would reintroduce
+   the exact substring-over-match bug ("award") the word-boundary fix
+   exists to prevent. Also closed the concrete gaps found: `bessent`
+   added to USD, bare `uk`/`euro`/`pound` added (the last two turned up
+   while sanity-checking the fix -- neither currency had ever had a
+   bare-word entry, despite being the single most common way EUR/GBP
+   get referred to in headlines).
+   One subtlety worth documenting: several of the new stems (`rise`,
+   `advance`, `improve`, `ease`) drop their trailing silent "e" before
+   "-ing" (rise → rising, not "riseing"), so a plain stem match on the
+   base word can't reach the "-ing" form. Rather than shortening the
+   stem to work around it (which starts colliding with unrelated words
+   -- `ris~` would match `risk`), the "-ing" forms are listed as
+   separate explicit entries.
+
+3. **`/settings` had no exception handling, unlike every sibling POST
+   route.** `/scan`, `/execute`, and `/cancel_all_trades` all wrap their
+   body in try/except with a flash message on failure; `/settings`
+   didn't -- clearing a numeric field and saving produced an unhandled
+   500 instead of a helpful message. Wrapped in the same pattern as its
+   siblings.
+
+4. **`trade_review()` had no exception handling around its OANDA
+   calls, unlike the dashboard's equivalent block.** A transient OANDA
+   blip while a user clicked into a trade produced an unhandled 500
+   instead of a friendly redirect. Wrapped in the same try/except
+   pattern `dashboard()` already uses.
+
+5. **The local dev entrypoint ran with `debug=True` bound to
+   `0.0.0.0`.** Only reachable via local `python app.py` (Render's
+   actual `startCommand` is gunicorn, per `render.yaml`), but
+   `debug=True` enables Werkzeug's interactive in-browser debugger
+   (arbitrary code execution via its console) and `0.0.0.0` exposes it
+   to the whole local network, not just localhost. Now binds
+   `127.0.0.1` by default; `debug=True` needs an explicit
+   `FLASK_DEBUG=1` opt-in.
+
+**Solution**: 11 new regression tests added to
+`test_news_and_calendar.py` (Finnhub key-leak, real headlines that
+previously scored 0.0, stem-match inflected forms, the silent-e "-ing"
+gap, no over-matching on generic words like "risk", bare Euro/Pound/UK/
+Bessent). Full suite: 333 passed.
+
+**Honest note**: the stem-matching fix does not mean every headline
+now gets tagged -- most of that 94% no-match figure is genuinely
+off-topic content (individual-stock/oil/broad-geopolitics news Finnhub's
+"general" category pulls in), not a matching bug, and correctly staying
+untagged. This closes the concrete, evidenced gaps found in the
+on-topic subset; it isn't a claim that the underlying data source got
+richer.
+
+**Fixed**: 2026-08-16

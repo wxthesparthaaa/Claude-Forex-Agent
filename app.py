@@ -80,6 +80,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Diagnostic review complete, 29 of 29 fixed: last subsystem stopped a Finnhub key from "
+                    "leaking into logs and broadened news-keyword matching after real headlines showed 94% "
+                    "were going undetected -- added stem-aware matching plus Euro/Pound/UK/Bessent gaps."),
     ("2026-08-16", "Diagnostic review, persistence subsystem: fixed a journal race that could lose a real "
                     "trade, added a GitHub-sync failure banner, and 3 other findings -- 23 of 29 now fixed."),
     ("2026-08-16", "Diagnostic review, orchestration subsystem: added a real kill switch, fixed a Friday-"
@@ -88,8 +91,6 @@ DEVELOPER_NOTES = [
                     "no-ops, a Scan-Now double-order race, and 8 other findings -- 14 of 29 total now fixed."),
     ("2026-08-16", "Full-codebase diagnostic review (29 findings, 5 subsystems) -- fixed the first three: a "
                     "dead confidence-score safeguard, a reweighting blind spot, and a scan-crashing fetch."),
-    ("2026-08-16", "Fixed the Nightly review notification firing on Sundays with nothing to review -- it now "
-                    "checks real forex market hours before sending, like the other scheduled touchpoints do."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
@@ -331,16 +332,27 @@ def trade_review(instrument):
     if candidate is None:
         return redirect(url_for("dashboard"))
 
-    client = OandaClient()
-    candles = client.get_candles(instrument, GRANULARITY["15m"], count=80)
-    chart_data = [
-        {
-            "time": _oanda_time_to_unix(c["time"]),
-            "open": float(c["mid"]["o"]), "high": float(c["mid"]["h"]),
-            "low": float(c["mid"]["l"]), "close": float(c["mid"]["c"]),
-        }
-        for c in candles
-    ]
+    try:
+        client = OandaClient()
+        candles = client.get_candles(instrument, GRANULARITY["15m"], count=80)
+        chart_data = [
+            {
+                "time": _oanda_time_to_unix(c["time"]),
+                "open": float(c["mid"]["o"]), "high": float(c["mid"]["h"]),
+                "low": float(c["mid"]["l"]), "close": float(c["mid"]["c"]),
+            }
+            for c in candles
+        ]
+    except Exception as e:
+        # dashboard() already degrades gracefully on the same kind of
+        # OANDA blip -- this route made the same calls with no guard at
+        # all, so a transient timeout here produced an unhandled 500
+        # instead of a friendly redirect.
+        print(f"WARNING: could not load candles for {instrument}: {e}", flush=True)
+        flash(f"Couldn't load the price chart for {instrument} right now -- OANDA didn't respond. Try again shortly.",
+              "error")
+        return redirect(url_for("dashboard"))
+
     return render_template("trade_review.html", candidate=candidate, candles_json=json.dumps(chart_data))
 
 
@@ -467,78 +479,90 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 
 @app.route("/settings", methods=["POST"])
 def settings():
-    state = load_state()
-    risk_config = risk_config_from_state(state)
-    phase_state = phase_state_from_state(state)
+    try:
+        state = load_state()
+        risk_config = risk_config_from_state(state)
+        phase_state = phase_state_from_state(state)
 
-    # is_out_of_recommended_range only drives the dashboard's cosmetic
-    # red warning -- nothing previously stopped an out-of-range value
-    # (a slider quirk, a malformed direct POST) from actually being
-    # saved and used for real position sizing. Clamped to the same
-    # documented bounds the slider itself is built from.
-    risk_config.risk_per_trade_pct = _clamp(
-        float(request.form.get("risk_per_trade_pct", risk_config.risk_per_trade_pct)),
-        risk_config.risk_per_trade_pct_min, risk_config.risk_per_trade_pct_max)
-    risk_config.max_trades_per_day = int(_clamp(
-        float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
-        risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
-    risk_config.autopilot_confidence_threshold_pct = _clamp(
-        float(request.form.get("autopilot_confidence_threshold_pct", risk_config.autopilot_confidence_threshold_pct)),
-        0.0, 100.0)
+        # is_out_of_recommended_range only drives the dashboard's cosmetic
+        # red warning -- nothing previously stopped an out-of-range value
+        # (a slider quirk, a malformed direct POST) from actually being
+        # saved and used for real position sizing. Clamped to the same
+        # documented bounds the slider itself is built from.
+        risk_config.risk_per_trade_pct = _clamp(
+            float(request.form.get("risk_per_trade_pct", risk_config.risk_per_trade_pct)),
+            risk_config.risk_per_trade_pct_min, risk_config.risk_per_trade_pct_max)
+        risk_config.max_trades_per_day = int(_clamp(
+            float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
+            risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
+        risk_config.autopilot_confidence_threshold_pct = _clamp(
+            float(request.form.get("autopilot_confidence_threshold_pct",
+                                    risk_config.autopilot_confidence_threshold_pct)),
+            0.0, 100.0)
 
-    # Direct toggle, bypassing the original 30-closed-trades phase gate
-    # (explicit user request) -- checking the box turns autopilot on
-    # immediately, unchecking it reverts to manual approval. Every
-    # autopilot trade still passes the same risk validation and
-    # duplicate guard as a manual one; this only removes the "you must
-    # earn your way there" waiting period, not any of the actual safety
-    # checks.
-    autopilot_on = request.form.get("autopilot") == "on"
-    new_phase = "autopilot" if autopilot_on else "manual_paper"
+        # Direct toggle, bypassing the original 30-closed-trades phase gate
+        # (explicit user request) -- checking the box turns autopilot on
+        # immediately, unchecking it reverts to manual approval. Every
+        # autopilot trade still passes the same risk validation and
+        # duplicate guard as a manual one; this only removes the "you must
+        # earn your way there" waiting period, not any of the actual safety
+        # checks.
+        autopilot_on = request.form.get("autopilot") == "on"
+        new_phase = "autopilot" if autopilot_on else "manual_paper"
 
-    # Kill switch: autopilot.is_auto_execute_mode() (and everything that
-    # calls it -- auto_execute_candidates, should_auto_execute) already
-    # correctly checks kill_switch_engaged and refuses to place any new
-    # trade while it's True. That logic existed from day one; what was
-    # actually missing was any way to SET it -- no route or dashboard
-    # control ever wrote True here, so the switch was permanently
-    # unreachable. Rebuilt fresh on every save (not just when phase
-    # changes) so this checkbox's state is always captured, independent
-    # of whether Autopilot itself was also toggled in the same submit.
-    kill_switch_on = request.form.get("kill_switch") == "on"
-    state.phase_state = asdict(PhaseState(
-        phase=new_phase,
-        closed_trades_in_phase=phase_state.closed_trades_in_phase if new_phase == phase_state.phase else 0,
-        kill_switch_engaged=kill_switch_on,
-    ))
-    if kill_switch_on and not phase_state.kill_switch_engaged:
-        flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
+        # Kill switch: autopilot.is_auto_execute_mode() (and everything that
+        # calls it -- auto_execute_candidates, should_auto_execute) already
+        # correctly checks kill_switch_engaged and refuses to place any new
+        # trade while it's True. That logic existed from day one; what was
+        # actually missing was any way to SET it -- no route or dashboard
+        # control ever wrote True here, so the switch was permanently
+        # unreachable. Rebuilt fresh on every save (not just when phase
+        # changes) so this checkbox's state is always captured, independent
+        # of whether Autopilot itself was also toggled in the same submit.
+        kill_switch_on = request.form.get("kill_switch") == "on"
+        state.phase_state = asdict(PhaseState(
+            phase=new_phase,
+            closed_trades_in_phase=phase_state.closed_trades_in_phase if new_phase == phase_state.phase else 0,
+            kill_switch_engaged=kill_switch_on,
+        ))
+        if kill_switch_on and not phase_state.kill_switch_engaged:
+            flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
 
-    interval = request.form.get("autopilot_scan_interval_minutes")
-    if interval is not None and int(interval) in (15, 30, 60, 240):
-        state.autopilot_scan_interval_minutes = int(interval)
+        interval = request.form.get("autopilot_scan_interval_minutes")
+        if interval is not None and int(interval) in (15, 30, 60, 240):
+            state.autopilot_scan_interval_minutes = int(interval)
 
-    # Strategy capital: either an explicit override or a reset back to
-    # the original $2,000 target. Both re-baseline strategy_realized_pnl
-    # to 0 -- the new number IS the capital going forward, not "the old
-    # capital plus whatever P&L happened to be sitting on top of it".
-    if request.form.get("reset_capital"):
-        state.strategy_starting_capital = DEFAULT_STRATEGY_CAPITAL
-        state.strategy_realized_pnl = 0.0
-        flash(f"Strategy capital reset to {DEFAULT_STRATEGY_CAPITAL:.2f}.", "success")
-    else:
-        new_capital = request.form.get("strategy_capital")
-        if new_capital not in (None, ""):
-            new_capital = float(new_capital)
-            if abs(new_capital - tracked_equity_live(state)) > 0.01:
-                state.strategy_starting_capital = new_capital
-                state.strategy_realized_pnl = 0.0
-                flash(f"Strategy capital set to {new_capital:.2f}.", "success")
+        # Strategy capital: either an explicit override or a reset back to
+        # the original $2,000 target. Both re-baseline strategy_realized_pnl
+        # to 0 -- the new number IS the capital going forward, not "the old
+        # capital plus whatever P&L happened to be sitting on top of it".
+        if request.form.get("reset_capital"):
+            state.strategy_starting_capital = DEFAULT_STRATEGY_CAPITAL
+            state.strategy_realized_pnl = 0.0
+            flash(f"Strategy capital reset to {DEFAULT_STRATEGY_CAPITAL:.2f}.", "success")
+        else:
+            new_capital = request.form.get("strategy_capital")
+            if new_capital not in (None, ""):
+                new_capital = float(new_capital)
+                if abs(new_capital - tracked_equity_live(state)) > 0.01:
+                    state.strategy_starting_capital = new_capital
+                    state.strategy_realized_pnl = 0.0
+                    flash(f"Strategy capital set to {new_capital:.2f}.", "success")
 
-    state.risk_config = asdict(risk_config)
-    state.mode = request.form.get("mode", state.mode)
-    save_state(state)
-    flash(f"Autopilot {'enabled' if autopilot_on else 'disabled'}. Settings saved.", "success")
+        state.risk_config = asdict(risk_config)
+        state.mode = request.form.get("mode", state.mode)
+        save_state(state)
+        flash(f"Autopilot {'enabled' if autopilot_on else 'disabled'}. Settings saved.", "success")
+    except (ValueError, TypeError) as e:
+        # Every sibling POST route (/scan, /execute, /cancel_all_trades)
+        # already wraps its body this way -- /settings didn't. Real gap:
+        # clearing a number field and saving submits an empty string,
+        # which isn't None, so the form default never kicks in --
+        # float("") raised, uncaught, producing a bare 500 with no
+        # explanation of what went wrong instead of a clear message.
+        print(f"WARNING: settings save failed: {e}", flush=True)
+        flash(f"Couldn't save settings -- check that every number field has a valid value ({e}).", "error")
+
     return redirect(url_for("dashboard"))
 
 
@@ -594,5 +618,15 @@ if os.environ.get("RUN_SCHEDULER", "false") == "true":
 
 
 if __name__ == "__main__":
+    # This block only runs for local `python app.py` -- Render's actual
+    # startCommand is gunicorn (render.yaml), which never executes it.
+    # Previously bound 0.0.0.0 with debug=True unconditionally: 0.0.0.0
+    # exposes the dev server to every device on the local network (not
+    # just localhost), and Werkzeug's debug mode ships an interactive
+    # in-browser console that runs arbitrary Python -- together, anyone
+    # else on the same network/VPN could get code execution against a
+    # developer's machine. 127.0.0.1 keeps it local-only by default;
+    # debug mode now needs an explicit opt-in via FLASK_DEBUG=1.
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="127.0.0.1", port=port, debug=debug)
