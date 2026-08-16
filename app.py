@@ -56,7 +56,7 @@ from live_scan import run_live_scan, fetch_news_articles, fetch_mid_price
 from universe import GRANULARITY, MAJOR_PAIRS
 from scan_results import save_candidates, load_candidates, load_scan_results, find_candidate
 from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher, _evening_scan_lock
-from github_state_sync import pull_state_from_github, github_file_url
+from github_state_sync import pull_state_from_github, github_file_url, get_sync_status
 from trade_journal import (
     load_journal, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
     JOURNAL_XLSX_REPO_PATH,
@@ -80,6 +80,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-16", "Diagnostic review, persistence subsystem: fixed a journal race that could lose a real "
+                    "trade, added a GitHub-sync failure banner, and 3 other findings -- 23 of 29 now fixed."),
     ("2026-08-16", "Diagnostic review, orchestration subsystem: added a real kill switch, fixed a Friday-"
                     "summary skip-a-week bug and a DST bug in Autopilot's hours -- 18 of 29 total now fixed."),
     ("2026-08-16", "Diagnostic review, execution/risk subsystem: fixed 3 risk-limit gates that were silently "
@@ -88,17 +90,20 @@ DEVELOPER_NOTES = [
                     "dead confidence-score safeguard, a reweighting blind spot, and a scan-crashing fetch."),
     ("2026-08-16", "Fixed the Nightly review notification firing on Sundays with nothing to review -- it now "
                     "checks real forex market hours before sending, like the other scheduled touchpoints do."),
-    ("2026-08-15", "Added weekly confidence-weight reweighting -- Friday reflection now nudges which signals "
-                    "(breadth/RSI/candlestick/news) the score trusts, based on live win rates, not backtests."),
 ][:5]
 
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
 
 
 def _oanda_time_to_unix(time_str: str) -> int:
-    # OANDA gives nanosecond precision ("...000000000Z"); trim to
-    # microseconds (6 digits) since that's what fromisoformat accepts.
-    trimmed = time_str[:26] + "+00:00"
+    # OANDA gives nanosecond precision ("...000000000Z"), and Python's
+    # fromisoformat() (3.11+) accepts a fractional-seconds part of any
+    # length -- just swap the trailing "Z" for an explicit offset. The
+    # previous [:26] fixed-length slice assumed a 9-digit fraction was
+    # always present; a real OANDA timestamp with none at all (e.g.
+    # "...T05:11:57Z") produced "...57Z+00:00" -- both a Z and an
+    # offset, which fromisoformat rejects outright.
+    trimmed = time_str[:-1] + "+00:00" if time_str.endswith("Z") else time_str
     return int(datetime.fromisoformat(trimmed).timestamp())
 
 
@@ -242,7 +247,7 @@ def dashboard():
         journal_url=journal_url,
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
-        kill_switch_engaged=phase_state.kill_switch_engaged,
+        kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,

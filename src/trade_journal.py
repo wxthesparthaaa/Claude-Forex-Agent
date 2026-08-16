@@ -8,15 +8,34 @@ GitHub-Contents-API state-sync pattern as every other state file.
 """
 from __future__ import annotations
 
-import json
 import os
+import threading
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 
 from market_hours import SGT
+from state_paths import atomic_write_json, load_json_resilient
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 JOURNAL_PATH = os.path.join(STATE_DIR, "trade_journal.json")
+
+# Serializes every load-modify-save cycle against the journal, across
+# the whole process. record_open_trade, trade_monitor.check_open_trades,
+# .cancel_all_open_trades, and .reconcile_orphan_trades are all
+# reachable from genuinely independent triggers -- manual /execute and
+# /scan routes, two separate scheduled jobs, every dashboard page load
+# -- that can run concurrently. Real incident class this closes: the
+# interval scanner and a manual "Scan Now" both open a different trade
+# at nearly the same moment; both load the same journal snapshot before
+# either saves; whichever saves second silently overwrites the first's
+# entry entirely, even though that trade genuinely filled on OANDA and
+# real margin is committed. A caller that represents a real order/user
+# action (record_open_trade, cancel_all_open_trades,
+# reconcile_orphan_trades) should BLOCK and wait its turn here, never
+# silently drop a trade; check_open_trades is a cheap, frequent
+# background poll and acquires this same lock non-blockingly instead,
+# happy to just skip this pass and retry in 5 minutes if it's busy.
+JOURNAL_LOCK = threading.Lock()
 
 # Committed straight to the repo root (not config/, not served by the
 # app) -- a real, standalone .xlsx you can open directly on GitHub,
@@ -74,16 +93,11 @@ class JournalEntry:
 
 
 def load_journal() -> list:
-    if not os.path.exists(JOURNAL_PATH):
-        return []
-    with open(JOURNAL_PATH) as f:
-        return json.load(f)
+    return load_json_resilient(JOURNAL_PATH, [])
 
 
 def save_journal(entries: list) -> None:
-    os.makedirs(STATE_DIR, exist_ok=True)
-    with open(JOURNAL_PATH, "w") as f:
-        json.dump(entries, f, indent=2)
+    atomic_write_json(JOURNAL_PATH, entries)
     try:
         from github_state_sync import push_state_to_github
         push_state_to_github(JOURNAL_PATH)
@@ -112,18 +126,19 @@ def push_journal_xlsx_to_github(entries: list) -> bool:
 
 
 def record_open_trade(trade_id: str, candidate: dict) -> None:
-    entries = load_journal()
-    entry = JournalEntry(
-        trade_id=trade_id, instrument=candidate["instrument"], direction=candidate["direction"],
-        units=candidate["units"], entry_price=candidate["entry_price"], stop_loss=candidate["stop_loss"],
-        take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
-        rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
-        account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
-        confidence_components=candidate.get("confidence_components", {}),
-        confidence_components_available=candidate.get("confidence_components_available", {}),
-    )
-    entries.append(asdict(entry))
-    save_journal(entries)
+    with JOURNAL_LOCK:
+        entries = load_journal()
+        entry = JournalEntry(
+            trade_id=trade_id, instrument=candidate["instrument"], direction=candidate["direction"],
+            units=candidate["units"], entry_price=candidate["entry_price"], stop_loss=candidate["stop_loss"],
+            take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
+            rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
+            account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
+            confidence_components=candidate.get("confidence_components", {}),
+            confidence_components_available=candidate.get("confidence_components_available", {}),
+        )
+        entries.append(asdict(entry))
+        save_journal(entries)
 
 
 def open_entries(entries: list) -> list:

@@ -6,13 +6,13 @@ this once Render deployment needs it (see github_state_sync.py).
 """
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import asdict, dataclass, field, fields
 
 from autopilot import PhaseState
 from confidence_score import ConfidenceWeights
 from risk_engine import RiskConfig
+from state_paths import atomic_write_json, load_json_resilient
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 STATE_PATH = os.path.join(STATE_DIR, "dashboard_state.json")
@@ -166,10 +166,13 @@ def account_state_from_tracked_capital(state: DashboardState, entries: list | No
 
 
 def load_state() -> DashboardState:
-    if not os.path.exists(STATE_PATH):
+    # None (not a real dict) is the "missing or corrupt" sentinel here --
+    # a truncated/unreadable file degrades the same way a missing one
+    # already did (falls back to default_state()) instead of raising
+    # and breaking every route that touches state.
+    data = load_json_resilient(STATE_PATH, None)
+    if data is None:
         return default_state()
-    with open(STATE_PATH) as f:
-        data = json.load(f)
     # Drop any persisted key that no longer matches a field -- lets the
     # schema evolve (rename/remove a field) without a crash-on-load the
     # next time this reads a JSON file written by an older version.
@@ -179,9 +182,7 @@ def load_state() -> DashboardState:
 
 
 def save_state(state: DashboardState) -> None:
-    os.makedirs(STATE_DIR, exist_ok=True)
-    with open(STATE_PATH, "w") as f:
-        json.dump(asdict(state), f, indent=2)
+    atomic_write_json(STATE_PATH, asdict(state))
     try:
         from github_state_sync import push_state_to_github
         push_state_to_github(STATE_PATH)

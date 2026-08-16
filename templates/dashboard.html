@@ -93,6 +93,13 @@
     &#9888; Kill switch engaged -- Autopilot will not place any new trades until it's switched off in Settings.
   </p>
   {% endif %}
+  {% if sync_status and not sync_status.ok %}
+  <p style="background:var(--red); color:#fff; font-weight:600; padding:0.6rem 1rem; border-radius:8px; margin:0 0 1.25rem;">
+    &#9888; GitHub backup sync failed{{ ' (' + sync_status.last_error + ')' if sync_status.last_error }} --
+    the most recent save may not have been backed up. Since this server has no permanent storage, that change
+    could be lost on the next restart. Check GITHUB_TOKEN/GITHUB_REPO if this persists.
+  </p>
+  {% endif %}
 
   <div class="row">
     <div class="stat-grid">

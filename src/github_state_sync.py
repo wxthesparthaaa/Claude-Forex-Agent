@@ -13,11 +13,26 @@ import json
 import os
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from typing import Optional
 
 from state_paths import STATE_DIR, STATE_FILES
 
 API_BASE = "https://api.github.com"
+
+# The most recent push attempt's outcome, across every push_state_to_
+# github/push_binary_file call in this process -- previously a failure
+# here was only ever a print() to a log nobody was watching. Read by
+# app.py's dashboard route (get_sync_status) to show a warning banner
+# when the last sync failed, so a trade that saved locally but never
+# made it to GitHub (and would be silently lost on the next redeploy,
+# since Render's free tier has no persistent disk) is at least visible
+# rather than discovered after the fact.
+_sync_status = {"ok": True, "last_error": None, "last_attempt_at": None}
+
+
+def get_sync_status() -> dict:
+    return dict(_sync_status)
 
 
 def get_github_config() -> Optional[dict]:
@@ -96,6 +111,24 @@ def _push_with_retry(repo_path: str, content_bytes: bytes, config: dict, max_ret
     return False
 
 
+def _tracked_push(repo_path: str, content_bytes: bytes, config: dict) -> bool:
+    """Wraps _push_with_retry, recording the outcome into _sync_status
+    so a failure is visible to get_sync_status() (and the dashboard
+    banner it drives) instead of only ever a print() nobody was
+    watching. Re-raises on failure, same as _push_with_retry itself --
+    callers already catch and log a warning at their own call site
+    (trade_journal.save_journal, dashboard_state.save_state), and this
+    doesn't change that contract, just adds tracking alongside it."""
+    try:
+        ok = _push_with_retry(repo_path, content_bytes, config)
+        _sync_status.update(ok=ok, last_error=None if ok else "push returned false",
+                             last_attempt_at=datetime.now(timezone.utc).isoformat())
+        return ok
+    except Exception as e:
+        _sync_status.update(ok=False, last_error=str(e), last_attempt_at=datetime.now(timezone.utc).isoformat())
+        raise
+
+
 def push_state_to_github(local_path: str) -> bool:
     config = get_github_config()
     if config is None:
@@ -110,7 +143,7 @@ def push_state_to_github(local_path: str) -> bool:
     with open(local_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    return _push_with_retry(repo_path, content.encode("utf-8"), config)
+    return _tracked_push(repo_path, content.encode("utf-8"), config)
 
 
 def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:
@@ -123,7 +156,7 @@ def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:
     if config is None:
         return False
 
-    return _push_with_retry(repo_path, local_bytes, config)
+    return _tracked_push(repo_path, local_bytes, config)
 
 
 def github_file_url(repo_path: str) -> Optional[str]:

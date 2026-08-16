@@ -192,3 +192,67 @@ def test_github_file_url_builds_blob_link(monkeypatch):
     monkeypatch.setenv("GITHUB_REPO", "wxthesparthaaa/Claude-Forex-Agent")
     url = gss.github_file_url("trade_journal.xlsx")
     assert url == "https://github.com/wxthesparthaaa/Claude-Forex-Agent/blob/main/trade_journal.xlsx"
+
+
+def _reset_sync_status():
+    gss._sync_status.update(ok=True, last_error=None, last_attempt_at=None)
+
+
+@patch("github_state_sync._github_request")
+def test_get_sync_status_records_a_successful_push(mock_request, monkeypatch, tmp_path):
+    # Regression test: a push failure used to be only a print() at each
+    # caller's own try/except, with no way for the dashboard to know
+    # about it. get_sync_status() is what a warning banner reads.
+    _reset_sync_status()
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "user/repo")
+    local_path = str(tmp_path / "dashboard_state.json")
+    open(local_path, "w").write('{"mode": "demo"}')
+    monkeypatch.setattr(gss, "STATE_FILES", {"config/dashboard_state.json": local_path})
+    mock_request.side_effect = [(200, {"sha": "abc"}), (200, {})]
+
+    gss.push_state_to_github(local_path)
+
+    status = gss.get_sync_status()
+    assert status["ok"] is True
+    assert status["last_error"] is None
+    assert status["last_attempt_at"] is not None
+
+
+@patch("github_state_sync._github_request")
+def test_get_sync_status_records_a_failed_push(mock_request, monkeypatch, tmp_path):
+    _reset_sync_status()
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "user/repo")
+    local_path = str(tmp_path / "dashboard_state.json")
+    open(local_path, "w").write('{"mode": "demo"}')
+    monkeypatch.setattr(gss, "STATE_FILES", {"config/dashboard_state.json": local_path})
+    conflict = urllib.error.HTTPError(url="u", code=409, msg="Conflict", hdrs=None, fp=None)
+    mock_request.side_effect = [(200, {"sha": "s1"}), conflict, (200, {"sha": "s2"}), conflict,
+                                 (200, {"sha": "s3"}), conflict]
+
+    try:
+        gss.push_state_to_github(local_path)
+    except urllib.error.HTTPError:
+        pass
+
+    status = gss.get_sync_status()
+    assert status["ok"] is False
+    assert status["last_error"] is not None
+    assert status["last_attempt_at"] is not None
+
+
+def test_get_sync_status_stays_ok_when_github_is_not_configured(monkeypatch, tmp_path):
+    # Not configured (no GITHUB_TOKEN locally) must not read as a
+    # failure -- only a genuine attempt that failed should ever flip
+    # ok=False, or every local dev run would show a false-positive
+    # warning banner.
+    _reset_sync_status()
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_REPO", raising=False)
+    local_path = str(tmp_path / "dashboard_state.json")
+    open(local_path, "w").write("{}")
+
+    gss.push_state_to_github(local_path)
+
+    assert gss.get_sync_status()["ok"] is True

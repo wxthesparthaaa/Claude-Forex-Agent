@@ -603,3 +603,81 @@ DST-aware window boundaries in both January and August). Full suite:
 299 passed.
 
 **Fixed**: 2026-08-16
+
+---
+
+## 2026-08-16 (continued) — State, Persistence & Data Integrity subsystem, all 5 findings fixed
+
+**Problem**: Fourth subsystem from the full-codebase diagnostic. The
+aggregation math itself was already solid (the LOST-placeholder-zero
+handling is consistently applied everywhere); the real risk was
+concurrency -- multiple load-modify-save cycles against the same files,
+from triggers that genuinely run at the same time by this app's own
+design.
+
+**Fixes**:
+
+1. **An unguarded read-modify-write race could permanently erase a
+   real, live position from the journal.** `record_open_trade` loaded,
+   appended, and saved with no lock -- reachable from manual
+   `/execute`/`/scan` and the autopilot scan paths, which were only
+   serialized against *each other*. Added `trade_journal.JOURNAL_LOCK`,
+   shared across every journal mutation: `record_open_trade`,
+   `cancel_all_open_trades`, and `reconcile_orphan_trades` now block
+   and wait their turn (never silently drop a trade);
+   `check_open_trades` acquires the same lock non-blockingly (cheap
+   background poll, happy to just skip a pass and retry in 5 minutes).
+   This replaces `trade_monitor`'s own private `_monitor_lock`, which
+   only ever guarded against *itself* running twice, not against a
+   manual trade being recorded concurrently from a completely different
+   trigger.
+
+2. **A failed GitHub backup sync was invisible.** Push failures were
+   only ever a `print()` to a log nobody was watching, and every reboot
+   (every Render redeploy, since the free tier has no persistent disk)
+   unconditionally pulls from GitHub as truth. Added `github_state_sync.get_sync_status()`,
+   tracking the most recent push attempt's outcome, and a red warning
+   banner across the top of the dashboard whenever the last sync
+   failed -- the user's chosen scope (visibility), not an additional
+   Telegram alert or a change to the pull-on-boot overwrite behavior.
+
+3. **Friday reflection's win rate mathematically disagreed with the
+   dashboard's own win-rate tile, for the same week.** The dashboard
+   deliberately excludes breakeven/LOST-placeholder trades from the
+   denominator; Friday reflection divided by every closed trade
+   instead. Now both compute `wins / (wins + losses)`.
+
+4. **Every state file was written non-atomically, with no handling for
+   a corrupt read.** A process killed mid-write (Render has genuinely
+   done this before, not just idle-slept) could leave a truncated
+   `trade_journal.json`/`dashboard_state.json`/`scan_results.json`
+   that then raised on every subsequent load. Added
+   `state_paths.atomic_write_json()` (write to a temp file in the same
+   directory, `os.replace()` into place -- atomic on both POSIX and
+   Windows) and `state_paths.load_json_resilient()` (a missing OR
+   corrupt file both degrade to the same safe default instead of
+   raising), and wired both into all three modules.
+
+5. **Two different `closed_at` timestamp formats got compared as raw
+   strings.** OANDA's own `closeTime` (nanosecond fraction + `Z`)
+   versus this app's own `isoformat()` (microseconds, explicit
+   `+00:00`) -- correct in the overwhelming majority of cases, wrong
+   for two trades closing within the same second. Normalized at write
+   time in `trade_monitor.py`. Fixing this surfaced a second, related
+   bug along the way: the same "trim to 26 characters" trick used in
+   two other places (`app.py`'s `_oanda_time_to_unix`,
+   `journal_export.py`'s `_parse_iso`) assumed OANDA's timestamp always
+   had a 9-digit fractional-seconds part -- a real OANDA timestamp with
+   none at all produced an invalid string with both a `Z` and an
+   offset, which `datetime.fromisoformat` rejects. Fixed all three call
+   sites the same way.
+
+**Solution**: Verified locally against the real OANDA practice account
+(dashboard load, confirmed no false-positive sync-failure banner with
+GitHub unconfigured). 26 new regression tests across
+`test_trade_monitor.py`, `test_trade_journal.py`, `test_dashboard_state.py`,
+`test_github_state_sync.py`, `test_scheduled_jobs.py`, and two new
+files (`test_state_paths.py`, `test_scan_results.py`, the latter never
+having had direct test coverage before). Full suite: 322 passed.
+
+**Fixed**: 2026-08-16

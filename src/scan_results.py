@@ -3,23 +3,22 @@ dashboard and the trade-review page can both read them without
 re-scanning."""
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import asdict
 from datetime import datetime, timezone
+
+from state_paths import atomic_write_json, load_json_resilient
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 RESULTS_PATH = os.path.join(STATE_DIR, "scan_results.json")
 
 
 def save_candidates(candidates: list) -> None:
-    os.makedirs(STATE_DIR, exist_ok=True)
     payload = {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "candidates": [asdict(c) for c in candidates],
     }
-    with open(RESULTS_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
+    atomic_write_json(RESULTS_PATH, payload)
     try:
         from github_state_sync import push_state_to_github
         push_state_to_github(RESULTS_PATH)
@@ -30,11 +29,9 @@ def save_candidates(candidates: list) -> None:
 def load_scan_results() -> dict:
     """{"scanned_at": iso_utc_str_or_None, "candidates": [...]}. Handles
     the pre-timestamp file format (a bare list) written by any deploy
-    before this field existed, rather than crashing on it."""
-    if not os.path.exists(RESULTS_PATH):
-        return {"scanned_at": None, "candidates": []}
-    with open(RESULTS_PATH) as f:
-        data = json.load(f)
+    before this field existed, rather than crashing on it. A missing or
+    corrupt file both degrade to the same empty result."""
+    data = load_json_resilient(RESULTS_PATH, {"scanned_at": None, "candidates": []})
     if isinstance(data, list):
         return {"scanned_at": None, "candidates": data}
     return data

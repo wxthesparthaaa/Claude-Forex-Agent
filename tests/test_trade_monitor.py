@@ -65,7 +65,7 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
     client = FakeClient(
         open_trades=[],  # already closed on OANDA's side
         closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "35.0",
-                         "averageClosePrice": "1.11", "closeTime": "t"}],
+                         "averageClosePrice": "1.11", "closeTime": "2026-08-16T05:11:57Z"}],
     )
     changed = trade_monitor.check_open_trades(client)
 
@@ -73,6 +73,49 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
     assert changed[0]["status"] == tj.SUCCESSFUL
     assert changed[0]["realized_pnl"] == 35.0
     mock_send.assert_not_called()  # SL/TP closes don't need a Telegram ping here
+
+
+def test_normalize_oanda_timestamp_matches_pythons_own_isoformat_convention():
+    # Regression test: OANDA's raw closeTime (9-digit nanosecond
+    # fraction + "Z") used to be stored in the journal as-is, while
+    # every OTHER closed_at write in this app uses Python's own
+    # isoformat() (6-digit microseconds, explicit "+00:00" offset) --
+    # comparing the two formats as raw strings (which trade_journal.
+    # realized_pnl_since and scheduled_jobs._closed_trades_since both
+    # do) got the ordering wrong for trades closing within the same
+    # second of each other.
+    normalized = trade_monitor._normalize_oanda_timestamp("2026-08-16T05:11:57.123456789Z")
+    assert normalized == "2026-08-16T05:11:57.123456+00:00"
+
+
+def test_normalize_oanda_timestamp_handles_no_fractional_seconds():
+    # Regression test: a real OANDA timestamp can have no fractional-
+    # seconds component at all. The trim-to-26-characters trick used
+    # elsewhere in this codebase (app.py's _oanda_time_to_unix,
+    # journal_export.py's _parse_iso, before both were fixed alongside
+    # this) assumed a 9-digit fraction was always present and produced
+    # an invalid "...57Z+00:00" (both a Z and an offset) on a
+    # timestamp like this one, which datetime.fromisoformat rejects.
+    normalized = trade_monitor._normalize_oanda_timestamp("2026-08-16T05:11:57Z")
+    assert normalized == "2026-08-16T05:11:57+00:00"
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_stores_a_normalized_closed_at_not_oandas_raw_format(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    client = FakeClient(
+        open_trades=[],
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "35.0",
+                         "averageClosePrice": "1.11", "closeTime": "2026-08-16T05:11:57.987654321Z"}],
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    # No trailing "Z", no 9-digit fraction -- normalized to this app's
+    # own isoformat() convention, directly comparable to every other
+    # closed_at value in the journal.
+    assert changed[0]["closed_at"] == "2026-08-16T05:11:57.987654+00:00"
 
 
 @patch("trade_monitor.send_message")
@@ -83,7 +126,7 @@ def test_check_open_trades_classifies_failed_on_negative_pnl(mock_send, tmp_path
     client = FakeClient(
         open_trades=[],
         closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "-20.0",
-                         "averageClosePrice": "1.095", "closeTime": "t"}],
+                         "averageClosePrice": "1.095", "closeTime": "2026-08-16T05:11:57Z"}],
     )
     changed = trade_monitor.check_open_trades(client)
 
@@ -208,13 +251,58 @@ def test_check_open_trades_skips_a_second_concurrent_call_instead_of_racing(tmp_
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())
 
-    acquired_by_first_call = trade_monitor._monitor_lock.acquire(blocking=False)
+    acquired_by_first_call = tj.JOURNAL_LOCK.acquire(blocking=False)
     assert acquired_by_first_call  # sanity check: lock starts free
     try:
         result = trade_monitor.check_open_trades(FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD"}]))
         assert result == []  # the second/concurrent caller skips entirely, doesn't race
     finally:
-        trade_monitor._monitor_lock.release()
+        tj.JOURNAL_LOCK.release()
+
+
+def test_record_open_trade_waits_for_a_concurrent_journal_write_instead_of_racing(tmp_path, monkeypatch):
+    # Regression test: check_open_trades used to guard only against
+    # itself (a private _monitor_lock) -- record_open_trade, reachable
+    # from an entirely different trigger (a manual /execute click), had
+    # no lock at all. Now both share trade_journal.JOURNAL_LOCK, and
+    # record_open_trade BLOCKS (never silently skips or drops the
+    # trade) until whoever's holding it is done. Proven here with a
+    # real background thread: while the lock is held, record_open_trade
+    # must not proceed until it's released, and must not lose the trade
+    # it was recording while it waited.
+    import threading
+    import time as _time
+
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))  # pre-existing entry
+
+    holder_should_release = threading.Event()
+    lock_was_held_when_record_started = {}
+
+    def _hold_lock():
+        with tj.JOURNAL_LOCK:
+            holder_should_release.wait(timeout=2)
+
+    holder = threading.Thread(target=_hold_lock)
+    holder.start()
+    _time.sleep(0.05)  # let the holder thread actually acquire the lock first
+
+    def _record_while_locked():
+        lock_was_held_when_record_started["locked"] = tj.JOURNAL_LOCK.locked()
+        tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    recorder = threading.Thread(target=_record_while_locked)
+    recorder.start()
+    _time.sleep(0.05)  # give record_open_trade a chance to (correctly) block
+    assert recorder.is_alive()  # still waiting on the lock, not silently skipped
+
+    holder_should_release.set()
+    holder.join(timeout=2)
+    recorder.join(timeout=2)
+
+    assert lock_was_held_when_record_started["locked"] is True
+    entries = tj.load_journal()
+    assert {e["trade_id"] for e in entries} == {"101", "102"}  # both present -- nothing lost
 
 
 @patch("trade_monitor.send_message")

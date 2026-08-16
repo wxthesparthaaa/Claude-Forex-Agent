@@ -25,6 +25,26 @@ def test_load_journal_empty_when_no_file(tmp_path, monkeypatch):
     assert tj.load_journal() == []
 
 
+def test_load_journal_degrades_to_empty_on_a_corrupt_file(tmp_path, monkeypatch):
+    # Regression test: a process killed mid-write (real, documented
+    # Render behavior) used to leave a truncated trade_journal.json that
+    # then raised on every load_journal() call -- the dashboard, both
+    # scan routes, the monitor, both nightly jobs -- until the next
+    # GitHub pull happened to restore a good copy.
+    _isolate(tmp_path, monkeypatch)
+    with open(tj.JOURNAL_PATH, "w") as f:
+        f.write('[{"trade_id": "101", "instrument": "EUR_')  # truncated mid-write
+
+    assert tj.load_journal() == []
+
+
+def test_save_journal_is_atomic_no_temp_file_left_behind(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+    remaining = os.listdir(tmp_path)
+    assert remaining == ["trade_journal.json"]
+
+
 def test_record_open_trade_appends_entry(tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())

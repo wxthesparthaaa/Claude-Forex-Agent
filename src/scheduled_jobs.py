@@ -382,6 +382,7 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     pnl_pct = 100 * week_pnl / starting_equity if starting_equity else 0.0
 
     wins = sum(1 for t in closed if t["outcome"] == "WIN")
+    losses = sum(1 for t in closed if t["outcome"] == "LOSS")
     by_instrument = {}
     for t in closed:
         by_instrument.setdefault(t["instrument"], 0.0)
@@ -391,7 +392,15 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
 
     stats = {
         "pnl": week_pnl, "pnl_pct": pnl_pct, "total_trades": len(closed),
-        "win_rate_pct": round(100 * wins / len(closed), 1) if closed else None,
+        # wins / (wins + losses), matching trade_journal.win_loss_counts
+        # and the dashboard's own win-rate tile -- both deliberately
+        # exclude BREAKEVEN entries (real breakevens and LOST-placeholder
+        # zeros alike) from the denominator. This used to divide by
+        # len(closed) instead, which counts BREAKEVEN entries in the
+        # denominator but not the numerator, silently understating the
+        # win rate relative to what the dashboard reports for the same
+        # week -- worse the more placeholder/breakeven trades occur.
+        "win_rate_pct": round(100 * wins / (wins + losses), 1) if (wins + losses) else None,
         "strongest_pair": strongest, "weakest_pair": weakest,
     }
 

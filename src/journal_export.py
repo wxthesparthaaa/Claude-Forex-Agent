@@ -22,11 +22,16 @@ COLUMNS = [
 
 def _parse_iso(ts: str) -> datetime:
     """Handles both our own opened_at format (isoformat(), 6-digit
-    microseconds) and OANDA's closed_at format (9-digit nanoseconds +
-    trailing "Z", e.g. from the 2-hour expiry safeguard), which
-    datetime.fromisoformat() can't parse directly."""
+    microseconds) and OANDA's closed_at format (nanosecond fraction --
+    or sometimes none at all -- plus a trailing "Z"), which
+    datetime.fromisoformat() can't parse directly without the "Z" swap.
+    Python's fromisoformat() (3.11+) accepts a fractional-seconds part
+    of any length itself, so no manual truncation is needed -- an
+    earlier version here sliced to a fixed 26 characters assuming a
+    9-digit fraction was always present, which broke on a real OANDA
+    timestamp with no fractional seconds at all."""
     if ts.endswith("Z"):
-        ts = ts[:26] + "+00:00"  # trim to microsecond precision, same fix as app.py's _oanda_time_to_unix
+        ts = ts[:-1] + "+00:00"
     return datetime.fromisoformat(ts)
 
 

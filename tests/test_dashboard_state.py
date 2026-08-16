@@ -11,6 +11,20 @@ def test_default_state_uses_the_named_default_capital_constant():
     assert state.strategy_starting_capital == ds.DEFAULT_STRATEGY_CAPITAL
 
 
+def test_load_state_degrades_to_default_on_a_corrupt_file(tmp_path, monkeypatch):
+    # Regression test: a process killed mid-write used to leave a
+    # truncated dashboard_state.json that then raised on every
+    # load_state() call, breaking every route in the app.
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    with open(ds.STATE_PATH, "w") as f:
+        f.write('{"mode": "demo", "risk_config": {"risk_per_trade')  # truncated mid-write
+
+    state = ds.load_state()
+
+    assert state.strategy_starting_capital == ds.DEFAULT_STRATEGY_CAPITAL
+
+
 def test_tracked_equity_live_adds_realized_pnl_since_last_review():
     state = ds.default_state()
     state.strategy_starting_capital = 2000.0

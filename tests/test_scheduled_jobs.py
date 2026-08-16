@@ -199,6 +199,33 @@ def test_run_friday_reflection_identifies_strongest_and_weakest_pair(mock_send, 
     assert stats["pnl"] == 60.0
     mock_send.assert_called_once()
 
+
+@patch("scheduled_jobs.send_message")
+def test_run_friday_reflection_win_rate_matches_the_dashboards_own_convention(mock_send, tmp_path, monkeypatch):
+    # Regression test: this used to divide by len(closed) (every closed
+    # trade, including BREAKEVEN/LOST-placeholder entries), while the
+    # dashboard's own win-rate tile divides by (wins + losses),
+    # deliberately excluding those -- the two numbers permanently
+    # disagreed for the same week's data. 6 wins, 2 losses, 2 BREAKEVEN
+    # (pnl=0.0, e.g. LOST-placeholder trades): the dashboard convention
+    # gives 6/(6+2) = 75%, the old buggy one gave 6/10 = 60%.
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+
+    entries = []
+    for i in range(6):
+        entries.append(_closed_entry(instrument="EUR_USD", realized_pnl=10.0, closed_at=f"2026-08-14T{i:02d}:00:00Z"))
+    for i in range(2):
+        entries.append(_closed_entry(instrument="GBP_USD", realized_pnl=-10.0, closed_at=f"2026-08-14T{6+i:02d}:00:00Z"))
+    for i in range(2):
+        entries.append(_closed_entry(instrument="USD_CHF", realized_pnl=0.0, closed_at=f"2026-08-14T{8+i:02d}:00:00Z"))
+    tj.save_journal(entries)
+
+    stats = run_friday_reflection()
+
+    assert stats["total_trades"] == 10  # all 10 closed trades counted here
+    assert stats["win_rate_pct"] == 75.0  # but the rate itself excludes the 2 breakeven/placeholder trades
+
     updated = dashboard_state.load_state()
     assert updated.week_start_timestamp is not None
 

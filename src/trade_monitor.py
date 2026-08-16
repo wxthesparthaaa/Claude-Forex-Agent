@@ -11,7 +11,6 @@ principle the sibling project's dashboard uses for its own snapshot.
 """
 from __future__ import annotations
 
-import threading
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -20,31 +19,61 @@ import requests
 from oanda_client import OandaClient
 from trade_journal import (
     load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS,
-    SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST, JournalEntry,
+    SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST, JournalEntry, JOURNAL_LOCK,
 )
 from telegram_notifier import send_message
 
-# Same shape as scheduled_jobs._evening_scan_lock, for the same reason:
-# this runs both from a 5-minute scheduled tick AND on every dashboard
-# page load, so two overlapping calls are routine, not rare. Without a
-# lock, both could independently load the same journal snapshot, each
-# compute their own reclassifications, and whichever save_journal() runs
-# last would silently overwrite the other's already-detected changes --
-# including reverting a real OANDA close back to looking OPEN in the
-# journal until the next pass re-derives it. Non-blocking: the loser
-# skips this pass entirely rather than racing the winner.
-_monitor_lock = threading.Lock()
+
+def _normalize_oanda_timestamp(ts: str) -> str:
+    """OANDA's own timestamps (e.g. closeTime) use 9-digit nanosecond
+    precision plus a trailing "Z", while every OTHER closed_at write in
+    this file uses Python's own isoformat() (6-digit microseconds, an
+    explicit "+00:00" offset). Comparing the two formats as raw strings
+    -- which trade_journal.realized_pnl_since and scheduled_jobs.
+    _closed_trades_since both do, for "did this close after timestamp
+    X" filtering -- gets the date/hour/minute/second prefix right in
+    the overwhelming majority of cases, but can compare wrong for two
+    trades closing within the same second of each other. Normalizing at
+    write time means every closed_at in the journal is one consistent,
+    directly-comparable format going forward.
+
+    Just swaps the trailing "Z" for an explicit "+00:00" -- Python's
+    fromisoformat() (3.11+) already accepts a fractional-seconds part
+    of any length (including OANDA's 9-digit nanoseconds, or none at
+    all) and its own isoformat() output always normalizes to 6-digit
+    microseconds. An earlier version of this trick elsewhere in the
+    codebase (app.py's _oanda_time_to_unix, journal_export.py's
+    _parse_iso) sliced to a fixed 26 characters before appending the
+    offset, assuming a 9-digit fraction was always present -- that
+    breaks on a real OANDA timestamp with no fractional seconds at all
+    (e.g. "2026-08-12T05:11:57Z"), producing "...57Z+00:00" with both a
+    Z and an offset, which fromisoformat rejects outright."""
+    if ts.endswith("Z"):
+        ts = ts[:-1] + "+00:00"
+    return datetime.fromisoformat(ts).isoformat()
 
 
 def check_open_trades(client: OandaClient = None) -> list:
-    """Returns the list of entries that changed status this call. See
-    _monitor_lock's own comment for why this is guarded."""
-    if not _monitor_lock.acquire(blocking=False):
+    """Returns the list of entries that changed status this call.
+
+    Acquires trade_journal.JOURNAL_LOCK non-blockingly -- this runs both
+    from a 5-minute scheduled tick AND on every dashboard page load, so
+    two overlapping calls are routine, not rare, and it's cheap enough
+    to just skip this pass and retry in 5 minutes rather than wait.
+    Sharing JOURNAL_LOCK (not a private lock of its own) means this also
+    correctly waits out a concurrent record_open_trade/cancel_all_open_trades/
+    reconcile_orphan_trades from a totally different trigger (a manual
+    /execute click, say) instead of only guarding against itself --
+    without that, whichever of the two saved last would silently
+    overwrite the other's already-persisted changes, including
+    reverting a real OANDA close back to looking OPEN in the journal
+    until the next pass re-derives it."""
+    if not JOURNAL_LOCK.acquire(blocking=False):
         return []
     try:
         return _check_open_trades_unsafe(client)
     finally:
-        _monitor_lock.release()
+        JOURNAL_LOCK.release()
 
 
 def _check_open_trades_unsafe(client: OandaClient = None) -> list:
@@ -109,7 +138,8 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             # this one was missed.
             close_price = closed.get("averageClosePrice")
             entry["exit_price"] = float(close_price) if close_price is not None else None
-            entry["closed_at"] = closed.get("closeTime")
+            close_time = closed.get("closeTime")
+            entry["closed_at"] = _normalize_oanda_timestamp(close_time) if close_time else now.isoformat()
             entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
             changed.append(entry)
 
@@ -119,9 +149,8 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             except Exception as e:
                 # Same "don't let one bad lookup abort the whole pass"
                 # reasoning as the 404-handling branch above -- e.g. this
-                # trade was already closed by an overlapping call that
-                # slipped in before _monitor_lock existed, or a transient
-                # OANDA error. Skip it this pass rather than raising,
+                # trade was already closed by an overlapping call, or a
+                # transient OANDA error. Skip it this pass rather than raising,
                 # which used to abort save_journal() below entirely and
                 # silently drop every other reclassification already
                 # computed earlier in this same loop.
@@ -164,43 +193,47 @@ def cancel_all_open_trades(client: OandaClient = None) -> list:
     regardless of SL/TP/expiry -- an explicit user-initiated "get me
     flat now" action, distinct from the other three closure paths, so
     it gets its own status (CANCELLED) rather than being misread as a
-    stop-loss or a 2-hour timeout in the journal."""
-    entries = load_journal()
-    pending = open_entries(entries)
-    if not pending:
-        return []
+    stop-loss or a 2-hour timeout in the journal. Holds JOURNAL_LOCK
+    (blocking, not skip-if-busy -- see check_open_trades) across the
+    whole load-mutate-save cycle so this can't race a concurrent
+    journal write from anywhere else."""
+    with JOURNAL_LOCK:
+        entries = load_journal()
+        pending = open_entries(entries)
+        if not pending:
+            return []
 
-    client = client or OandaClient()
-    now = datetime.now(timezone.utc)
-    closed = []
+        client = client or OandaClient()
+        now = datetime.now(timezone.utc)
+        closed = []
 
-    for entry in entries:
-        if entry["status"] != "OPEN":
-            continue
-        try:
-            result = client.close_trade(entry["trade_id"])
-        except Exception as e:
-            print(f"WARNING: failed to cancel {entry['instrument']} ({entry['trade_id']}): {e}", flush=True)
-            continue
-        fill = result.get("orderFillTransaction", {})
-        pnl = float(fill.get("pl", 0))
-        exit_price = fill.get("price")
-        entry["realized_pnl"] = pnl
-        entry["exit_price"] = float(exit_price) if exit_price is not None else None
-        entry["closed_at"] = now.isoformat()
-        entry["status"] = CANCELLED
-        closed.append(entry)
+        for entry in entries:
+            if entry["status"] != "OPEN":
+                continue
+            try:
+                result = client.close_trade(entry["trade_id"])
+            except Exception as e:
+                print(f"WARNING: failed to cancel {entry['instrument']} ({entry['trade_id']}): {e}", flush=True)
+                continue
+            fill = result.get("orderFillTransaction", {})
+            pnl = float(fill.get("pl", 0))
+            exit_price = fill.get("price")
+            entry["realized_pnl"] = pnl
+            entry["exit_price"] = float(exit_price) if exit_price is not None else None
+            entry["closed_at"] = now.isoformat()
+            entry["status"] = CANCELLED
+            closed.append(entry)
 
-    if closed:
-        save_journal(entries)
-        total_pnl = sum(e["realized_pnl"] for e in closed)
-        currency = closed[0].get("account_currency", "")
-        lines = "\n".join(f"  {e['instrument']} {e['direction']}: {e['realized_pnl']:+.2f}" for e in closed)
-        send_message(
-            f"🛑 <b>All trades cancelled manually</b> ({len(closed)} closed)\n{lines}\n"
-            f"Total P&L: {total_pnl:+.2f} {currency}"
-        )
-    return closed
+        if closed:
+            save_journal(entries)
+            total_pnl = sum(e["realized_pnl"] for e in closed)
+            currency = closed[0].get("account_currency", "")
+            lines = "\n".join(f"  {e['instrument']} {e['direction']}: {e['realized_pnl']:+.2f}" for e in closed)
+            send_message(
+                f"🛑 <b>All trades cancelled manually</b> ({len(closed)} closed)\n{lines}\n"
+                f"Total P&L: {total_pnl:+.2f} {currency}"
+            )
+        return closed
 
 
 def reconcile_orphan_trades(client: OandaClient = None) -> list:
@@ -218,49 +251,53 @@ def reconcile_orphan_trades(client: OandaClient = None) -> list:
     Recorded with whatever OANDA itself reports for direction/units/
     entry price/SL/TP -- confidence and rationale are honest placeholders
     (0.0 / a note explaining why), never guessed at, since this app has
-    no record of what scan (if any) proposed this trade."""
-    entries = load_journal()
-    known_ids = {e["trade_id"] for e in open_entries(entries)}
+    no record of what scan (if any) proposed this trade. Holds
+    JOURNAL_LOCK (blocking -- see check_open_trades) across the whole
+    load-mutate-save cycle so this can't race a concurrent journal
+    write from anywhere else."""
+    with JOURNAL_LOCK:
+        entries = load_journal()
+        known_ids = {e["trade_id"] for e in open_entries(entries)}
 
-    client = client or OandaClient()
-    orphans = [t for t in client.get_open_trades() if t["id"] not in known_ids]
-    if not orphans:
-        return []
+        client = client or OandaClient()
+        orphans = [t for t in client.get_open_trades() if t["id"] not in known_ids]
+        if not orphans:
+            return []
 
-    now = datetime.now(timezone.utc)
-    new_entries = []
-    for t in orphans:
-        units = float(t.get("currentUnits", t.get("initialUnits", 0)) or 0)
-        direction = "LONG" if units >= 0 else "SHORT"
-        entry_price = float(t.get("price", 0) or 0)
-        sl_price = (t.get("stopLossOrder") or {}).get("price")
-        tp_price = (t.get("takeProfitOrder") or {}).get("price")
-        entry = JournalEntry(
-            trade_id=t["id"], instrument=t.get("instrument", "UNKNOWN"), direction=direction,
-            units=int(abs(units)), entry_price=entry_price,
-            # An unknown SL/TP defaults to the entry price rather than 0
-            # or None -- every other consumer of these fields (the
-            # dashboard, journal_export's R-multiple calc) assumes a
-            # real price, and entry_price is the least-wrong stand-in
-            # when OANDA's response didn't include the attached order.
-            stop_loss=float(sl_price) if sl_price is not None else entry_price,
-            take_profit=float(tp_price) if tp_price is not None else entry_price,
-            confidence_pct=0.0,
-            rationale=["Reconciled from an OANDA position with no matching journal entry -- "
-                       "an earlier order confirmation was likely lost. See reconcile_orphan_trades()."],
-            opened_at=t.get("openTime") or now.isoformat(),
+        now = datetime.now(timezone.utc)
+        new_entries = []
+        for t in orphans:
+            units = float(t.get("currentUnits", t.get("initialUnits", 0)) or 0)
+            direction = "LONG" if units >= 0 else "SHORT"
+            entry_price = float(t.get("price", 0) or 0)
+            sl_price = (t.get("stopLossOrder") or {}).get("price")
+            tp_price = (t.get("takeProfitOrder") or {}).get("price")
+            entry = JournalEntry(
+                trade_id=t["id"], instrument=t.get("instrument", "UNKNOWN"), direction=direction,
+                units=int(abs(units)), entry_price=entry_price,
+                # An unknown SL/TP defaults to the entry price rather than 0
+                # or None -- every other consumer of these fields (the
+                # dashboard, journal_export's R-multiple calc) assumes a
+                # real price, and entry_price is the least-wrong stand-in
+                # when OANDA's response didn't include the attached order.
+                stop_loss=float(sl_price) if sl_price is not None else entry_price,
+                take_profit=float(tp_price) if tp_price is not None else entry_price,
+                confidence_pct=0.0,
+                rationale=["Reconciled from an OANDA position with no matching journal entry -- "
+                           "an earlier order confirmation was likely lost. See reconcile_orphan_trades()."],
+                opened_at=t.get("openTime") or now.isoformat(),
+            )
+            new_entries.append(entry)
+
+        entries.extend(asdict(e) for e in new_entries)
+        save_journal(entries)
+
+        lines = "\n".join(f"  {e.instrument} {e.direction} ({e.units} units, id {e.trade_id})" for e in new_entries)
+        send_message(
+            f"⚠️ <b>Found {len(new_entries)} untracked open position(s) on OANDA</b> -- now journaled, "
+            f"but this means an earlier order confirmation was lost somewhere:\n{lines}"
         )
-        new_entries.append(entry)
-
-    entries.extend(asdict(e) for e in new_entries)
-    save_journal(entries)
-
-    lines = "\n".join(f"  {e.instrument} {e.direction} ({e.units} units, id {e.trade_id})" for e in new_entries)
-    send_message(
-        f"⚠️ <b>Found {len(new_entries)} untracked open position(s) on OANDA</b> -- now journaled, "
-        f"but this means an earlier order confirmation was lost somewhere:\n{lines}"
-    )
-    return [asdict(e) for e in new_entries]
+        return [asdict(e) for e in new_entries]
 
 
 def live_trades_view(client: OandaClient = None) -> list:
