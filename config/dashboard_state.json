@@ -45,7 +45,7 @@
     "BCO_USD": "2026-08-17T23:53:56.643660+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 2,
+  "interval_scan_count_since_digest": 3,
   "interval_scanned_instruments_since_digest": [
     "USD_CAD",
     "WTICO_USD",
