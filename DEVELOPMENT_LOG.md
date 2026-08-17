@@ -1258,3 +1258,60 @@ shape (two existing tests use a bare sentinel list for this).
 Full suite: 365 passed.
 
 **Fixed**: 2026-08-17
+
+## 2026-08-18 — The scan digest was STILL firing every 5 minutes; the earlier "reload fresh" fix narrowed the race but didn't close it
+
+**Problem**: User's Telegram showed the exact bug from yesterday
+persisting: "Scan check-in" digests 5 minutes apart, with the "since
+HH:MM" timestamp in the message body not advancing across consecutive
+sends (stuck at "since 22:19" for three sends in a row) while the scan
+count kept climbing (9, 10, 11) instead of resetting to 0 -- proof the
+reset itself was being computed correctly each time but never actually
+sticking for the next tick to see.
+
+**Root cause**: The previous fix (reload state fresh immediately
+before each side's own save) reduced the race window but didn't
+eliminate it, because `save_state()` is not fast -- it bundles a
+synchronous GitHub push that can take several seconds, longer while
+GitHub itself is degraded (exactly today's conditions). `check_scan_digest`
+and `run_autopilot_interval_scan`'s tally increment are separate
+scheduled jobs anchored to the identical 5-minute `IntervalTrigger`, so
+they fire at nearly the same instant on separate threads every tick.
+A "reload right before saving" only protects against staleness at the
+moment of reading -- it does nothing if the OTHER thread's read landed
+before this thread's save completes, which is entirely possible when
+that save's own network call can run for seconds.
+
+**Fix**: Added `_scan_digest_lock`, a real mutual-exclusion lock (not
+skip-if-busy, unlike `_evening_scan_lock` -- losing a tally increment
+or a digest reset to a race is a real accuracy loss, so this blocks
+rather than drops) wrapping the full read-decide-mutate-save cycle in
+both `check_scan_digest` and `run_autopilot_interval_scan`'s tally
+save. Whichever thread acquires it first now completes its entire
+cycle before the other can even begin reading, closing the window
+regardless of how long either `save_state()` call takes. The Telegram
+send itself stays outside the lock, so a slow Telegram call can't hold
+up the other job's tally increment.
+
+**A second, independent bug found while re-verifying**: fixing the
+above caused an existing regression test for `check_market_status_transition`'s
+own duplicate-send backstop to start failing -- traced to that
+function using a bare `datetime.now(timezone.utc)` for its "already
+sent recently" comparison instead of deriving it from the `now`
+parameter, unlike every other check in the same function. In
+production this is harmless (always called with the real current
+time), but it silently ignores any caller that passes a fixed `now` --
+exactly what every test in this file does -- making that one specific
+check date-dependent instead of deterministic. Fixed to derive from
+`now` consistently. The regression test itself also had an unrelated
+timezone-construction mistake (building one timestamp in UTC and
+another in NY time while intending "5 minutes apart," actually ~4
+hours apart) that had been silently masked by the real-clock bug
+coincidentally producing the same pass/fail result when first written;
+both are now fixed together.
+
+**Solution**: Full suite re-run after each change; the previously-
+failing `check_market_status_transition` test now passes for the
+right reason. Full suite: 365 passed.
+
+**Fixed**: 2026-08-18

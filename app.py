@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-18", "The scan-digest fix didn't fully take -- yesterday's 'reload fresh before saving' narrowed "
+                    "the race but save_state()'s own GitHub push is slow enough to still lose the reset. Added a "
+                    "real lock instead. Also found and fixed a same-shaped real-clock bug in the market-open alert."),
     ("2026-08-17", "The interval scanner used to run completely silently unless a trade fired -- added log "
                     "lines so 'INFO: autopilot interval scan at ... -- due: ...' / 'finished -- N candidates' "
                     "now confirm in Render's logs that it's genuinely running, not just the scheduler heartbeat."),

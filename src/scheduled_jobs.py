@@ -87,6 +87,27 @@ def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> lis
 # means the loser skips entirely rather than racing.
 _evening_scan_lock = threading.Lock()
 
+# Guards the read-modify-write cycle for the scan-digest counters
+# (interval_scan_count_since_digest / interval_scanned_instruments_
+# since_digest / last_scan_digest_sent_at) between run_autopilot_
+# interval_scan's tally increment and check_scan_digest's reset --
+# real incident: those two run as separate scheduled jobs anchored to
+# the SAME 5-minute IntervalTrigger, so they fire at nearly the exact
+# same instant on separate threads every single tick. An earlier fix
+# (reloading state fresh immediately before each one's own save)
+# narrowed the race window but didn't close it, because save_state()
+# itself is NOT fast -- it bundles a synchronous GitHub push that can
+# take several seconds, longer during a degraded GitHub API (confirmed
+# live: repeated digests only 5 minutes apart, the reset from one
+# check_scan_digest call silently lost to a concurrent tally-increment
+# save that had read state before the reset landed). A blocking lock
+# (not skip-if-busy, unlike _evening_scan_lock above) makes the two
+# read-modify-write cycles properly mutually exclusive regardless of
+# how long either save takes -- losing a tally increment or a digest
+# reset to a race would be a real accuracy loss, so this waits instead
+# of skipping.
+_scan_digest_lock = threading.Lock()
+
 # Minimum real-world gap enforced between two "Potential trades tonight"
 # sends, regardless of which process/thread/job is trying to send one --
 # see the dedupe check inside run_evening_scan_and_notify. Comfortably
@@ -290,23 +311,20 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     # message -- doesn't also get folded into the "quiet interval scans"
     # count check_scan_digest reports on.
     #
-    # Reloaded fresh right before this specific save, NOT reusing the
-    # `state` object loaded at the top of this function -- real incident:
-    # check_scan_digest runs as a separate scheduled job on the SAME
-    # 5-minute tick. If it resets the tally and sends a digest in the
-    # window between this function's own top-of-function load and this
-    # save, saving the stale `state` object here silently reverted that
-    # reset (and the last_scan_digest_sent_at update with it) back to
-    # its pre-send values -- so the very next tick saw a stale, already-
-    # past-due timestamp and fired another digest immediately, producing
-    # a new "check-in" every 5 minutes instead of respecting the
-    # configured interval.
-    fresh_state = load_state()
-    fresh_state.interval_scan_count_since_digest += 1
-    for instrument in due:
-        if instrument not in fresh_state.interval_scanned_instruments_since_digest:
-            fresh_state.interval_scanned_instruments_since_digest.append(instrument)
-    save_state(fresh_state)
+    # Lock-protected, not just a fresh reload -- see _scan_digest_lock's
+    # own comment for the full incident. A "reload right before saving"
+    # alone still isn't safe here, because save_state() bundles a
+    # synchronous GitHub push that can take several seconds, giving
+    # check_scan_digest's own read-modify-write cycle (a separate
+    # scheduled job firing at nearly this same instant) a wide window to
+    # interleave and silently lose one side's update.
+    with _scan_digest_lock:
+        fresh_state = load_state()
+        fresh_state.interval_scan_count_since_digest += 1
+        for instrument in due:
+            if instrument not in fresh_state.interval_scanned_instruments_since_digest:
+                fresh_state.interval_scanned_instruments_since_digest.append(instrument)
+        save_state(fresh_state)
 
     # Previously silent here even when a scan genuinely ran and correctly
     # found nothing to trade -- the ONLY visible trace in Render's logs
@@ -349,40 +367,53 @@ def check_scan_digest(now: datetime = None) -> None:
     defaults, so without this guard each restart's first tick saw
     last_scan_digest_sent_at=None and fired a fresh digest immediately,
     producing several digests minutes apart instead of one every
-    scan_digest_interval_minutes."""
-    state = load_state()
-    if phase_state_from_state(state).phase != "autopilot":
-        return
-    if state.scan_digest_interval_minutes <= 0:
-        return
+    scan_digest_interval_minutes.
 
+    The whole decide-and-reset sequence runs under _scan_digest_lock (see
+    its own comment) -- a SECOND real incident, after the cold-start fix
+    above: digests kept firing every 5 minutes anyway, with the "since"
+    timestamp never advancing, because run_autopilot_interval_scan's
+    tally increment (a separate scheduled job, same 5-minute tick) could
+    still read this function's pre-reset state and save over the reset a
+    moment later -- save_state() bundles a synchronous GitHub push that
+    can take several seconds, wide enough for the two threads to
+    interleave. A "reload right before saving" alone wasn't enough to
+    close that window; only mutual exclusion does."""
     now = now or datetime.now(timezone.utc)
     now_utc = now.astimezone(timezone.utc)
-    last_sent_iso = state.last_scan_digest_sent_at
-    if last_sent_iso is None:
-        state.last_scan_digest_sent_at = now_utc.isoformat()
-        save_state(state)
-        return
-    elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
-    if elapsed < timedelta(minutes=state.scan_digest_interval_minutes):
-        return
 
-    window_start_sgt = datetime.fromisoformat(last_sent_iso).astimezone(SGT)
-    scan_count = state.interval_scan_count_since_digest
-    instruments = state.interval_scanned_instruments_since_digest
+    send_args = None
+    with _scan_digest_lock:
+        state = load_state()
+        if phase_state_from_state(state).phase == "autopilot" and state.scan_digest_interval_minutes > 0:
+            last_sent_iso = state.last_scan_digest_sent_at
+            if last_sent_iso is None:
+                state.last_scan_digest_sent_at = now_utc.isoformat()
+                save_state(state)
+            else:
+                elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
+                if elapsed >= timedelta(minutes=state.scan_digest_interval_minutes):
+                    window_start_sgt = datetime.fromisoformat(last_sent_iso).astimezone(SGT)
+                    scan_count = state.interval_scan_count_since_digest
+                    instruments = state.interval_scanned_instruments_since_digest
 
-    # Reset BEFORE the Telegram call, same reasoning as every other
-    # touchpoint in this file (see check_market_status_transition's own
-    # comment) -- a mid-flight kill then fails safe (this one digest
-    # might occasionally not go out) instead of failing unsafe (the
-    # counters never advance, so the next tick sees last_scan_digest_sent_at
-    # still stale and immediately re-sends the same digest again).
-    state.last_scan_digest_sent_at = now_utc.isoformat()
-    state.interval_scan_count_since_digest = 0
-    state.interval_scanned_instruments_since_digest = []
-    save_state(state)
+                    # Reset BEFORE the Telegram call, same reasoning as
+                    # every other touchpoint in this file (see
+                    # check_market_status_transition's own comment) -- a
+                    # mid-flight kill then fails safe (this one digest
+                    # might occasionally not go out) instead of failing
+                    # unsafe (the counters never advance, so the next
+                    # tick sees a stale timestamp and re-sends immediately).
+                    state.last_scan_digest_sent_at = now_utc.isoformat()
+                    state.interval_scan_count_since_digest = 0
+                    state.interval_scanned_instruments_since_digest = []
+                    save_state(state)
+                    send_args = (scan_count, instruments, window_start_sgt)
 
-    send_message(format_scan_digest_message(scan_count, instruments, window_start_sgt))
+    # Sent outside the lock -- a slow Telegram call has no reason to hold
+    # up run_autopilot_interval_scan's own tally increment.
+    if send_args is not None:
+        send_message(format_scan_digest_message(*send_args))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
@@ -611,7 +642,16 @@ def check_market_status_transition(now: datetime = None) -> None:
     # catches this regardless of which field got clobbered.
     fresh_state = load_state()
     last_sent_iso = fresh_state.last_market_status_sent_at
-    now_utc = datetime.now(timezone.utc)
+    # Derived from the `now` parameter, NOT a separate datetime.now(timezone.utc)
+    # call -- every other check in this function already uses `now`
+    # (is_forex_market_open, next_forex_close/open), and using a second,
+    # independent "real clock" reading here just for this one comparison
+    # is inconsistent with that contract. In production the two are
+    # effectively identical (this always runs with the real current
+    # time), but it silently breaks any caller that passes a fixed `now`
+    # -- exactly what every test in this file does -- making this
+    # specific check date-dependent instead of deterministic.
+    now_utc = now.astimezone(timezone.utc)
     already_sent_recently = (
         last_sent_iso is not None and now_utc - datetime.fromisoformat(last_sent_iso) < MIN_LISTING_GAP
     )

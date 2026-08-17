@@ -1430,14 +1430,26 @@ def test_market_status_does_not_resend_within_the_gap_even_if_the_field_looks_re
     # send timestamp from moments ago proves the message already went
     # out, and the hard backstop must win regardless of what the field
     # says.
+    # Regression test for a SECOND bug this same test caught while
+    # rewriting it: the original version constructed `last_market_status_sent_at`
+    # directly in UTC but `now` in NY time (21:08 NY, intending "5
+    # minutes later" than 21:03 UTC) -- 21:08 NY is actually 01:08 UTC
+    # the FOLLOWING day (NY is UTC-4 in August), a ~4-hour gap, not 5
+    # minutes, which happened to pass anyway only because the function
+    # itself had a matching bug (used the real wall clock instead of
+    # the `now` parameter for this comparison, so the test's `now` was
+    # ignored entirely). Fixing the function's real-clock bug exposed
+    # this test's own inconsistent timezone construction. Both are now
+    # fixed: the function derives its comparison from `now`, and this
+    # test builds both timestamps in the same UTC frame so "5 minutes
+    # later" actually means 5 minutes.
     _isolate_state(tmp_path, monkeypatch)
-    from market_hours import NY
     state = dashboard_state.default_state()
     state.last_market_status = "closed"  # looks reverted/stale
     state.last_market_status_sent_at = datetime(2026, 8, 17, 21, 3, tzinfo=timezone.utc).isoformat()
     dashboard_state.save_state(state)
 
-    now = datetime(2026, 8, 17, 21, 8, tzinfo=NY)  # 5 minutes later, market open
+    now = datetime(2026, 8, 17, 21, 8, tzinfo=timezone.utc)  # 5 minutes later, market open (17:08 NY, Monday)
     scheduled_jobs.check_market_status_transition(now)
 
     mock_send.assert_not_called()
