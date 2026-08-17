@@ -490,5 +490,41 @@
     "closed_at": "2026-08-17T07:19:13.973275+00:00",
     "exit_price": null,
     "realized_pnl": 0.0
+  },
+  {
+    "trade_id": "916",
+    "instrument": "USD_JPY",
+    "direction": "SHORT",
+    "units": -20001,
+    "entry_price": 158.858,
+    "stop_loss": 159.11,
+    "take_profit": 158.354,
+    "confidence_pct": 67.1,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 30 (oversold -- some chase risk).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: supportive of this direction."
+    ],
+    "opened_at": "2026-08-17T07:43:18.563544+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.462614,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 73.37744229410177,
+      "candlestick": 50.0,
+      "news": 25.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": true
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
