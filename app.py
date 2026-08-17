@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-17", "The interval scanner used to run completely silently unless a trade fired -- added log "
+                    "lines so 'INFO: autopilot interval scan at ... -- due: ...' / 'finished -- N candidates' "
+                    "now confirm in Render's logs that it's genuinely running, not just the scheduler heartbeat."),
     ("2026-08-17", "Confirmed today's instability was a real, major GitHub platform outage (via GitHub's own "
                     "status page), not an app bug. Added a circuit breaker so one dashboard load doesn't pay "
                     "several stacked 15s timeouts in a row while GitHub is degraded -- fails fast after the first."),

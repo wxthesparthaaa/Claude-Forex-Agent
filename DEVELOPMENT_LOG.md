@@ -1224,3 +1224,37 @@ network); the breaker clears on the next success. Full suite: 365
 passed.
 
 **Fixed**: 2026-08-17
+
+## 2026-08-17 (continued) — No log line ever confirmed the interval scanner actually ran
+
+**Problem**: User asked what to look for in Render's logs to confirm
+Autopilot's interval scans are actually running, since they weren't
+seeing anything. Correct instinct -- `run_autopilot_interval_scan` had
+zero `print()` calls of its own. The only visible traces were an
+executed trade's own Telegram-send log line, or an unrelated WARNING
+from a partial failure (a Finnhub timeout, a bad pricing lookup) --
+a scan that ran correctly and found nothing to trade (the common case)
+left no evidence in the logs at all, indistinguishable from the
+scanner never having run.
+
+**Fix**: Added two unconditional `print()` lines around the actual
+scan call in `run_autopilot_interval_scan` -- one right before
+(`autopilot interval scan at ... -- due: EUR_USD, GBP_USD, ...`), one
+right after with the outcome (`... finished -- N candidate(s), M
+qualifying`). Deliberately only logs when there's real work to do (the
+function already no-ops quietly otherwise, which needs no line) --
+same "print unconditionally so a live log search can confirm this is
+running" reasoning already used for the dispatcher's own tick line.
+The qualifying-count computation is `isinstance`-guarded rather than
+trusting the return shape, since this is pure diagnostic logging
+layered on the real scan and must never be able to crash the scan
+itself over an unexpected return value.
+
+**Solution**: Existing test suite already covers
+`run_autopilot_interval_scan`'s behavior across every gating path; ran
+it to confirm the new logging doesn't change behavior or crash
+against a mocked return value that isn't the usual list-of-dicts
+shape (two existing tests use a bare sentinel list for this).
+Full suite: 365 passed.
+
+**Fixed**: 2026-08-17

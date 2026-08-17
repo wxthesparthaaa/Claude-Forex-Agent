@@ -308,7 +308,25 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
             fresh_state.interval_scanned_instruments_since_digest.append(instrument)
     save_state(fresh_state)
 
-    return run_evening_scan_and_notify(client, notify_listing=False, instruments=due)
+    # Previously silent here even when a scan genuinely ran and correctly
+    # found nothing to trade -- the ONLY visible trace in Render's logs
+    # was an actual executed trade's own message, or an unrelated WARNING
+    # from a partial failure (a Finnhub timeout, a bad pricing lookup).
+    # There was no way to tell "ran, found nothing" apart from "never ran
+    # at all" just from reading the logs. Same "print unconditionally"
+    # pattern already used for the dispatcher's own tick, one line per
+    # actual scan attempt (not every 5-min tick -- this function already
+    # no-ops quietly when nothing is due, which needs no log line).
+    print(f"INFO: autopilot interval scan at {now.isoformat()} -- due: {', '.join(due)}", flush=True)
+    candidates = run_evening_scan_and_notify(client, notify_listing=False, instruments=due)
+    # isinstance-guarded, not just "or []" -- this is pure diagnostic
+    # logging layered on top of the real scan, and must never be able to
+    # crash the scan itself just because a caller (or a test's mock)
+    # returned something other than the usual list-of-dicts shape.
+    qualifying = sum(1 for c in (candidates or []) if isinstance(c, dict) and not c.get("rejected_reason"))
+    print(f"INFO: autopilot interval scan finished -- {len(candidates or [])} candidate(s), "
+          f"{qualifying} qualifying", flush=True)
+    return candidates
 
 
 def check_scan_digest(now: datetime = None) -> None:
