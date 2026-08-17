@@ -3,6 +3,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
+import pytest
 import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -338,6 +339,80 @@ def test_check_open_trades_one_failed_force_close_does_not_drop_other_reclassifi
     by_id = {e["trade_id"]: e for e in entries}
     assert by_id["101"]["status"] == tj.SUCCESSFUL  # persisted despite 102's failure
     assert by_id["102"]["status"] == tj.OPEN  # left OPEN, to retry next pass -- not lost, not crashed
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_persists_an_expiry_close_immediately_not_batched_at_loop_end(
+        mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: close_trade() is IRREVERSIBLE
+    # on OANDA's side the instant it succeeds, but the old code only
+    # called save_journal() once, after the whole loop finished. A crash
+    # anywhere later in that same pass -- including while processing a
+    # LATER, unrelated entry -- silently reverted an already-genuinely-
+    # closed trade back to looking OPEN in the journal. The next pass
+    # would then find it missing from OANDA's open-trades list and
+    # misclassify it as LOST (unrecoverable P&L), even though its real
+    # outcome was known and computed the whole time.
+    #
+    # Simulated here via a SECOND entry whose corrupted opened_at makes
+    # is_expired() raise -- unguarded, so it propagates out of the whole
+    # function, standing in for a real mid-pass crash/restart. The FIRST
+    # entry must already be persisted to disk as EXPIRED despite the
+    # function never returning normally.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    entries = tj.load_journal()
+    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
+    entries[1]["opened_at"] = "not-a-real-timestamp"  # makes is_expired() raise for entry 102
+    tj.save_journal(entries)
+
+    client = FakeClient(
+        open_trades=[{"id": "101", "instrument": "EUR_USD"}, {"id": "102", "instrument": "GBP_USD"}],
+        close_trade_result={"orderFillTransaction": {"pl": "-3.5", "price": "1.098"}},
+    )
+
+    with pytest.raises(Exception):
+        trade_monitor.check_open_trades(client)
+
+    # 101 was processed (and its close_trade() call already happened on
+    # OANDA -- irreversible) before the crash hit 102. Its EXPIRED status
+    # must have survived, not been lost with the rest of the batch.
+    assert client.closed_ids == ["101"]
+    entries_on_disk = tj.load_journal()
+    by_id = {e["trade_id"]: e for e in entries_on_disk}
+    assert by_id["101"]["status"] == tj.EXPIRED
+    assert by_id["101"]["realized_pnl"] == -3.5
+    assert by_id["102"]["status"] == tj.OPEN  # never reached
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_marks_expired_with_best_effort_pnl_on_malformed_fill_response(
+        mock_send, tmp_path, monkeypatch):
+    # A malformed OANDA fill response after a successful close_trade()
+    # call must still resolve the entry as closed (best-effort P&L)
+    # rather than silently leaving it OPEN despite the close already
+    # being irreversible on OANDA's side.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    entries = tj.load_journal()
+    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
+    tj.save_journal(entries)
+
+    client = FakeClient(
+        open_trades=[{"id": "101", "instrument": "EUR_USD"}],
+        close_trade_result={"orderFillTransaction": {"pl": "not-a-number", "price": "1.098"}},
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    assert client.closed_ids == ["101"]
+    assert changed[0]["status"] == tj.EXPIRED
+    assert changed[0]["realized_pnl"] == 0.0
+    entries_on_disk = tj.load_journal()
+    assert entries_on_disk[0]["status"] == tj.EXPIRED  # not stuck OPEN
+    mock_send.assert_called_once()
 
 
 @patch("trade_monitor.send_message")

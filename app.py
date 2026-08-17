@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-18", "Trades that fully closed via the 2hr auto-expiry could still end up marked LOST/unrecoverable "
+                    "if a restart landed mid-pass -- the close on OANDA was already irreversible but the journal "
+                    "save was batched until the whole loop finished. Now saves immediately after each expiry-close."),
     ("2026-08-18", "The scan-digest fix didn't fully take -- yesterday's 'reload fresh before saving' narrowed "
                     "the race but save_state()'s own GitHub push is slow enough to still lose the reset. Added a "
                     "real lock instead. Also found and fixed a same-shaped real-clock bug in the market-open alert."),
@@ -93,9 +96,6 @@ DEVELOPER_NOTES = [
     ("2026-08-17", "Fixed why the app was crashing/unreachable: a GitHub outage crashed the whole app on "
                     "every boot attempt (unguarded pull at startup), which also made the new scan digest fire "
                     "every 5 min instead of 3hr via a stale-state race. Both fixed and isolated from the next one."),
-    ("2026-08-17", "Added a periodic 'still scanning' Telegram digest (Settings-adjustable interval, 3hr "
-                    "default, can be turned off) so quiet hours during the day don't look indistinguishable "
-                    "from a dead scanner, plus reordered the dashboard: Settings moved below News sentiment."),
     ("2026-08-17", "Fixed two more Monday-reopen bugs: a duplicated 'market open' message (a concurrent scan "
                     "job -- AUD/NZD's own window also starts at 5am SGT -- could revert the status flag) and "
                     "a nightly review firing with 0 trades the instant the market reopens with nothing to review."),

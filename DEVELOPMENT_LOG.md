@@ -1315,3 +1315,71 @@ failing `check_market_status_transition` test now passes for the
 right reason. Full suite: 365 passed.
 
 **Fixed**: 2026-08-18
+
+## 2026-08-18 — Trades that genuinely closed on OANDA via the 2-hour expiry were still getting marked LOST/unrecoverable after a mid-pass restart
+
+**Problem**: User reported the dashboard showing trades from the
+previous day as "unrecoverable" that they knew for a fact had been
+real, had run their full lifecycle on OANDA, and had closed via the
+app's own 2-hour auto-expiry -- ruling out a demo-account reset or any
+external OANDA quirk. A Render log search for "not found on OANDA",
+"marking LOST", and "unrecoverable" turned up no matching lines at
+all, which itself was a clue: the LOST classification for these
+entries wasn't happening on the same pass that logged it, it was
+happening later, against stale local state.
+
+**Root cause**: In `trade_monitor._check_open_trades_unsafe`'s main
+loop, the expiry-close branch called `client.close_trade(trade_id)` --
+an action that's IRREVERSIBLE the instant OANDA accepts it -- but only
+updated the in-memory `entries` list; `save_journal(entries)` was
+called exactly once, after the entire `for entry in entries:` loop
+finished processing every OPEN entry. Yesterday's frequent Render
+restarts (from the GitHub-outage boot-crash loop, since fixed, and
+from rapid redeploys) meant a kill could land anywhere between one
+entry's successful close and that single end-of-loop save --
+including while the same pass was still processing OTHER, unrelated
+entries. That reverted the already-closed entry back to looking OPEN
+locally. The NEXT pass then found it missing from OANDA's open-trades
+list, looked it up via `get_trade()`, and if that lookup no longer
+resolved cleanly (or by then genuinely 404'd), classified a trade that
+had actually completed its full lifecycle as LOST with unrecoverable
+P&L -- even though the real outcome (P&L, exit price, close time) had
+already been computed and was sitting one line above the batched save
+that never ran in time.
+
+**Fix**: Moved `save_journal(entries)` to fire immediately after each
+expiry-close's status update, inside the `elif is_expired(entry, now):`
+branch, instead of batching it with every other entry until the loop's
+end -- bounding any crash window to just the one entry currently being
+closed, not the whole remaining batch. Also wrapped the post-
+`close_trade()` fill-response parsing (`fill.get("pl")`,
+`fill.get("price")`) in its own try/except: a malformed response there
+was still unguarded even with the incremental save, and could lose
+track of an already-successful close before ever reaching either the
+`EXPIRED` status assignment or the new immediate save. On a parse
+failure the entry is now still marked `EXPIRED` with best-effort P&L
+(0.0, logged clearly) rather than silently falling through to the next
+loop iteration still "OPEN". The OTHER branch (SL/TP already closed on
+OANDA, reclassified via `get_trade()`) keeps its single batched save at
+the very end -- that branch has no fresh irreversible action of its
+own to protect, since a crash before its save just means the next pass
+re-reads the same still-true OANDA state and tries again, no data at
+risk.
+
+**Solution**: Two new regression tests in `tests/test_trade_monitor.py`.
+The first directly proves the fix: two entries both past expiry, the
+second's `opened_at` corrupted so `is_expired()` raises and the whole
+function crashes mid-pass (standing in for a real restart) -- asserts
+the FIRST entry's `close_trade()` call happened and its `EXPIRED`
+status with real P&L is already persisted to disk despite the function
+never returning normally. The second proves the fill-parsing guard:
+a non-numeric `pl` in the close response still resolves the entry as
+`EXPIRED` with `realized_pnl == 0.0` rather than leaving it stuck OPEN.
+Full suite: 367 passed (up from 365).
+
+Cannot retroactively repair the specific historical entries already
+mismarked LOST before this fix -- their real P&L is genuinely gone
+from this app's own records unless recovered from OANDA's own account
+history directly, which is outside this app's control.
+
+**Fixed**: 2026-08-18

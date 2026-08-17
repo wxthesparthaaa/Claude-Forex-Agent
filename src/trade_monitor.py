@@ -156,14 +156,57 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
                 # computed earlier in this same loop.
                 print(f"WARNING: failed to force-close expired trade {trade_id}: {e}", flush=True)
                 continue
-            fill = result.get("orderFillTransaction", {})
-            pnl = float(fill.get("pl", 0))
-            entry["realized_pnl"] = pnl
-            fill_price = fill.get("price")
-            entry["exit_price"] = float(fill_price) if fill_price is not None else None
+            # close_trade() above already did something IRREVERSIBLE on
+            # OANDA's side by this point -- wrapping the response
+            # parsing too, not just the call itself, because a malformed
+            # fill response here must still result in this entry getting
+            # marked closed (best-effort P&L) rather than silently
+            # falling through to the next loop iteration with the entry
+            # still "OPEN" locally despite genuinely being closed on
+            # OANDA -- the exact gap the incremental save below exists
+            # to close, which only helps if this entry actually reaches it.
+            try:
+                fill = result.get("orderFillTransaction", {})
+                pnl = float(fill.get("pl", 0))
+                entry["realized_pnl"] = pnl
+                fill_price = fill.get("price")
+                entry["exit_price"] = float(fill_price) if fill_price is not None else None
+            except (TypeError, ValueError) as e:
+                print(f"WARNING: trade {trade_id} closed on OANDA but its fill response couldn't be "
+                      f"parsed ({e}) -- marking closed with unknown P&L rather than leaving it OPEN", flush=True)
+                entry["realized_pnl"] = 0.0
+                entry["exit_price"] = None
             entry["closed_at"] = now.isoformat()
             entry["status"] = EXPIRED
             changed.append(entry)
+
+            # Real incident: close_trade() above just did something
+            # IRREVERSIBLE on OANDA's side -- the position is genuinely
+            # closed now, no undoing that. The OLD code only called
+            # save_journal() once, after this entire loop finished
+            # processing every OPEN entry. On a day with frequent
+            # restarts (a degraded GitHub API repeatedly crashing the
+            # process, since fixed, but the underlying "batch save at
+            # the very end" gap was still live), a kill anywhere between
+            # this successful close and that single end-of-loop save --
+            # including while processing a LATER, unrelated entry in the
+            # same pass -- lost this entry's already-real close from the
+            # local (and GitHub-synced) journal. It reverted to looking
+            # "still OPEN" even though OANDA had already closed it. The
+            # NEXT pass would then find it missing from OANDA's open-
+            # trades list and try to look up its close details via
+            # get_trade() -- which can itself 404 if, by then, something
+            # about that lookup no longer resolves cleanly, misclassifying
+            # a trade that genuinely ran its full lifecycle as LOST with
+            # unrecoverable P&L, when the real outcome was known and
+            # available the whole time, one line above.
+            #
+            # Saving immediately -- right after THIS entry's own
+            # irreversible action, not batched with however many OTHER
+            # entries this pass still has left to process -- bounds the
+            # crash window to just this one entry instead of the whole
+            # batch.
+            save_journal(entries)
             # Real incident (scheduled_jobs.run_evening_scan_and_notify
             # had the same class of bug): sending before the journal is
             # persisted means a process killed in between has already
@@ -171,11 +214,19 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             # find OANDA already shows this trade closed too, but a
             # crash-then-retry sequence around this exact window is
             # exactly what produced duplicate sends elsewhere today.
-            # Collecting the notification and sending it only after
-            # save_journal() below means a mid-flight kill fails safe.
-            expiry_notifications.append((entry["instrument"], entry["direction"], pnl,
+            # Collecting the notification and sending it only after the
+            # save just above (now per-entry, not batched at the very
+            # end of the loop) means a mid-flight kill fails safe.
+            expiry_notifications.append((entry["instrument"], entry["direction"], entry["realized_pnl"],
                                           entry.get("account_currency", "")))
 
+    # Whatever's left in `changed` here is from the OTHER branch (SL/TP
+    # already closed on OANDA, reclassified via get_trade()) -- that
+    # branch has no fresh irreversible action of its own to protect (the
+    # close already happened in the past; a crash before this save just
+    # means the next pass re-reads the same still-true OANDA state and
+    # tries again, no data at risk), so a single batched save for those
+    # is still fine.
     if changed:
         save_journal(entries)
 
