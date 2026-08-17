@@ -61,6 +61,20 @@ def _github_request(method: str, url: str, token: str, body: Optional[dict] = No
 
 
 def pull_state_from_github() -> int:
+    """Real incident: this used to let ANY non-404 failure (a 504 from
+    GitHub's own API, a network timeout) propagate straight out --
+    and app.py calls this bare at module import time, before Flask/
+    gunicorn ever binds to the port. A single degraded GitHub response
+    during a routine restart crashed the entire app on boot, not just
+    slowed it down, and Render kept retrying the same crashing import
+    into a boot-crash loop for as long as GitHub stayed unavailable.
+    Each file's pull is now isolated the same way a single instrument's
+    scan failure doesn't abort the rest of the batch elsewhere in this
+    codebase -- one file failing to pull just leaves whatever's already
+    on local disk for it (missing/default on a fresh instance, same
+    graceful-degradation contract load_json_resilient already provides
+    on the read side), instead of taking every other file's pull, and
+    the whole app, down with it."""
     config = get_github_config()
     if config is None:
         return 0
@@ -68,14 +82,18 @@ def pull_state_from_github() -> int:
     os.makedirs(STATE_DIR, exist_ok=True)
     pulled = 0
     for repo_path, local_path in STATE_FILES.items():
-        url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}?ref={config['branch']}"
-        status, data = _github_request("GET", url, config["token"])
-        if status == 404 or data is None:
-            continue
-        content = base64.b64decode(data["content"]).decode("utf-8")
-        with open(local_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        pulled += 1
+        try:
+            url = f"{API_BASE}/repos/{config['repo']}/contents/{repo_path}?ref={config['branch']}"
+            status, data = _github_request("GET", url, config["token"])
+            if status == 404 or data is None:
+                continue
+            content = base64.b64decode(data["content"]).decode("utf-8")
+            with open(local_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            pulled += 1
+        except Exception as e:
+            print(f"WARNING: failed to pull {repo_path} from GitHub, "
+                  f"leaving local state as-is: {e}", flush=True)
     return pulled
 
 

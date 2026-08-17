@@ -58,6 +58,54 @@ def test_pull_state_from_github_skips_missing_files(mock_request, monkeypatch, t
     assert gss.pull_state_from_github() == 0
 
 
+@patch("github_state_sync._github_request")
+def test_pull_state_from_github_isolates_a_degraded_file_instead_of_crashing(mock_request, monkeypatch, tmp_path):
+    # Real incident: this is called bare at app.py's module-import time,
+    # before Flask/gunicorn ever binds to the port. A degraded GitHub API
+    # (504 Gateway Timeout) let an unhandled HTTPError propagate straight
+    # out of this loop, crashing the ENTIRE app on every boot attempt --
+    # Render's own port-scanner then saw "no open HTTP ports" and kept
+    # retrying the same crashing import into a boot-crash loop for as
+    # long as GitHub stayed degraded. One file's failure must not abort
+    # the whole pull, and pull_state_from_github itself must never raise.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "user/repo")
+    monkeypatch.setattr(gss, "STATE_DIR", str(tmp_path))
+    degraded_path = str(tmp_path / "dashboard_state.json")
+    monkeypatch.setattr(gss, "STATE_FILES", {"config/dashboard_state.json": degraded_path})
+
+    mock_request.side_effect = urllib.error.HTTPError(url="u", code=504, msg="Gateway Timeout", hdrs=None, fp=None)
+
+    pulled = gss.pull_state_from_github()  # must not raise
+
+    assert pulled == 0
+    assert not os.path.exists(degraded_path)  # left untouched, not partially written
+
+
+@patch("github_state_sync._github_request")
+def test_pull_state_from_github_still_pulls_other_files_when_one_fails(mock_request, monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPO", "user/repo")
+    monkeypatch.setattr(gss, "STATE_DIR", str(tmp_path))
+    degraded_path = str(tmp_path / "degraded.json")
+    healthy_path = str(tmp_path / "healthy.json")
+    monkeypatch.setattr(gss, "STATE_FILES", {
+        "config/degraded.json": degraded_path,
+        "config/healthy.json": healthy_path,
+    })
+
+    content = '{"mode": "demo"}'
+    encoded = base64.b64encode(content.encode()).decode()
+    degraded = urllib.error.HTTPError(url="u", code=504, msg="Gateway Timeout", hdrs=None, fp=None)
+    mock_request.side_effect = [degraded, (200, {"content": encoded, "sha": "abc"})]
+
+    pulled = gss.pull_state_from_github()
+
+    assert pulled == 1
+    with open(healthy_path) as f:
+        assert f.read() == content
+
+
 def test_push_state_to_github_false_without_config(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_REPO", raising=False)

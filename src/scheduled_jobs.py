@@ -289,11 +289,24 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     # 21:30 evening listing -- which already sends its own dedicated
     # message -- doesn't also get folded into the "quiet interval scans"
     # count check_scan_digest reports on.
-    state.interval_scan_count_since_digest += 1
+    #
+    # Reloaded fresh right before this specific save, NOT reusing the
+    # `state` object loaded at the top of this function -- real incident:
+    # check_scan_digest runs as a separate scheduled job on the SAME
+    # 5-minute tick. If it resets the tally and sends a digest in the
+    # window between this function's own top-of-function load and this
+    # save, saving the stale `state` object here silently reverted that
+    # reset (and the last_scan_digest_sent_at update with it) back to
+    # its pre-send values -- so the very next tick saw a stale, already-
+    # past-due timestamp and fired another digest immediately, producing
+    # a new "check-in" every 5 minutes instead of respecting the
+    # configured interval.
+    fresh_state = load_state()
+    fresh_state.interval_scan_count_since_digest += 1
     for instrument in due:
-        if instrument not in state.interval_scanned_instruments_since_digest:
-            state.interval_scanned_instruments_since_digest.append(instrument)
-    save_state(state)
+        if instrument not in fresh_state.interval_scanned_instruments_since_digest:
+            fresh_state.interval_scanned_instruments_since_digest.append(instrument)
+    save_state(fresh_state)
 
     return run_evening_scan_and_notify(client, notify_listing=False, instruments=due)
 
@@ -307,7 +320,18 @@ def check_scan_digest(now: datetime = None) -> None:
     it off entirely. Only relevant while autopilot is actually the one
     running those scans -- a manual/semi-auto account would otherwise get
     a confusing "0 scans" digest for a mode where the interval scanner
-    never runs at all."""
+    never runs at all.
+
+    A cold/reset state (last_scan_digest_sent_at=None) just starts the
+    clock silently rather than sending immediately -- same reasoning as
+    check_market_status_transition's own cold-start handling. Real
+    incident this fixes: a degraded GitHub API crashed the app on boot
+    (see pull_state_from_github's own fix), and Render kept restarting
+    it into a boot-crash loop -- every restart reset in-memory state to
+    defaults, so without this guard each restart's first tick saw
+    last_scan_digest_sent_at=None and fired a fresh digest immediately,
+    producing several digests minutes apart instead of one every
+    scan_digest_interval_minutes."""
     state = load_state()
     if phase_state_from_state(state).phase != "autopilot":
         return
@@ -317,14 +341,15 @@ def check_scan_digest(now: datetime = None) -> None:
     now = now or datetime.now(timezone.utc)
     now_utc = now.astimezone(timezone.utc)
     last_sent_iso = state.last_scan_digest_sent_at
-    if last_sent_iso is not None:
-        elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
-        if elapsed < timedelta(minutes=state.scan_digest_interval_minutes):
-            return
+    if last_sent_iso is None:
+        state.last_scan_digest_sent_at = now_utc.isoformat()
+        save_state(state)
+        return
+    elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
+    if elapsed < timedelta(minutes=state.scan_digest_interval_minutes):
+        return
 
-    window_start_sgt = (
-        datetime.fromisoformat(last_sent_iso).astimezone(SGT) if last_sent_iso else None
-    )
+    window_start_sgt = datetime.fromisoformat(last_sent_iso).astimezone(SGT)
     scan_count = state.interval_scan_count_since_digest
     instruments = state.interval_scanned_instruments_since_digest
 

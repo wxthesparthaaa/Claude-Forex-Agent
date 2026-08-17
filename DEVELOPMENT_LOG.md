@@ -1117,3 +1117,68 @@ visual screenshot available in this environment, same caveat as the
 earlier aesthetic pass). Full suite: 356 passed.
 
 **Fixed**: 2026-08-17
+
+## 2026-08-17 (continued) — App crashing on boot during a GitHub outage, plus the scan digest firing every 5 minutes instead of every 3 hours
+
+**Problem**: User reported the site itself intermittently unreachable
+("constantly loading," manual Scan Now hanging) alongside a GitHub
+sync failure banner (504 Gateway Timeout), and asked to check whether
+recent changes were overwhelming the app, and why the sibling
+options-agent project runs smoother. Then, after the fixes below were
+mid-flight, reported the brand-new scan digest firing every 5 minutes
+instead of the configured 3 hours.
+
+**Bug 1 -- unguarded GitHub pull could crash the entire app on boot.**
+`pull_state_from_github()` is called bare at `app.py`'s module-import
+time, before Flask/gunicorn ever binds to the port. It had no
+try/except anywhere in its per-file loop, and `_github_request` only
+swallows a 404 -- any OTHER failure (a 504 from GitHub's own API, a
+network timeout) propagated straight out, crashing the whole app on
+every single boot attempt. Render's own port-scanner then correctly
+reported "No open HTTP ports detected... continuing to scan" in the
+logs -- not a slow app, a dead one -- and kept retrying the same
+crashing import into a boot-crash loop for as long as GitHub stayed
+degraded. (The sibling project has the identical gap, unprotected the
+same way -- it just wasn't hitting a GitHub outage at the same moment,
+which is the real answer to "why does it run smoother.")
+
+**Fix**: Isolated each file's pull inside `pull_state_from_github()`
+(one file failing leaves local disk as-is, matching
+`load_json_resilient`'s existing "degrade gracefully" contract) and
+wrapped the app.py call site itself in a second, defensive try/except,
+so a GitHub outage can no longer take the whole app down at boot.
+
+**Bug 2 -- the new scan digest fired every 5 minutes, not every 3
+hours.** Two causes, both fixed:
+1. `check_scan_digest` had no cold-start guard (unlike
+   `check_market_status_transition`, which already correctly has one)
+   -- a cold/reset state sent a digest immediately instead of just
+   starting the clock. Bug 1's boot-crash loop meant this was firing on
+   nearly every restart.
+2. The real, deterministic cause: `run_autopilot_interval_scan`'s
+   digest-tally save reused the `state` object loaded at the very top
+   of the function, instead of reloading fresh right before that
+   specific save -- the same stale-state-overwrite shape already found
+   and fixed twice today for other fields. `check_scan_digest` runs as
+   a separate scheduled job on the identical 5-minute tick; if it reset
+   the tally and recorded a send in the window between
+   `run_autopilot_interval_scan`'s own top-of-function load and this
+   save, the stale save silently reverted that reset -- so the very
+   next tick saw an already-stale, past-due timestamp and fired another
+   digest immediately.
+
+**Fix**: Added the same cold-start guard `check_market_status_transition`
+already has, and reloaded state fresh immediately before the digest-
+tally save (matching the pattern already used for
+`last_autopilot_scan_timestamps`'s own save in the same file).
+
+**Solution**: 5 new regression tests -- 2 for `pull_state_from_github`
+(a degraded file doesn't crash the pull, other files still succeed
+when one fails), 1 rewriting the digest's first-check test to confirm
+it now stays silent, 1 confirming it still sends once the real interval
+has elapsed, and 1 directly simulating the concurrent-job race (a
+`load_state` stub that performs the "other job's reset" mid-function,
+between this function's two real load calls) to prove the fix actually
+survives it. Full suite: 360 passed.
+
+**Fixed**: 2026-08-17

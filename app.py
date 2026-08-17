@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-17", "Fixed why the app was crashing/unreachable: a GitHub outage crashed the whole app on "
+                    "every boot attempt (unguarded pull at startup), which also made the new scan digest fire "
+                    "every 5 min instead of 3hr via a stale-state race. Both fixed and isolated from the next one."),
     ("2026-08-17", "Added a periodic 'still scanning' Telegram digest (Settings-adjustable interval, 3hr "
                     "default, can be turned off) so quiet hours during the day don't look indistinguishable "
                     "from a dead scanner, plus reordered the dashboard: Settings moved below News sentiment."),
@@ -634,7 +637,20 @@ def start_scheduler():
 # Pull whatever state already exists in GitHub before anything else reads
 # local files -- Render's free tier starts with an empty disk on every
 # deploy. A no-op if GITHUB_TOKEN/GITHUB_REPO aren't set (local dev).
-pull_state_from_github()
+#
+# Wrapped defensively (on top of pull_state_from_github's own internal
+# per-file isolation) because this runs at bare module-import time,
+# before Flask/gunicorn ever binds to the port -- real incident: a
+# degraded GitHub API (504s) let an exception here crash the entire
+# app on every boot attempt, which Render's own port-scanner then saw
+# as "no open HTTP ports," retrying the same crashing import into a
+# boot-crash loop for as long as GitHub stayed unavailable. Falling
+# back to whatever's already on local disk (nothing, on a truly fresh
+# instance) is strictly better than the app never starting at all.
+try:
+    pull_state_from_github()
+except Exception as e:
+    print(f"WARNING: pull_state_from_github failed at startup, continuing with local state: {e}", flush=True)
 
 # RUN_SCHEDULER defaults off; set to "true" on Render once the rest of
 # the system is verified, so real Telegram notifications don't start

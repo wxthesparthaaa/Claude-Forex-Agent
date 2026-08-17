@@ -709,6 +709,54 @@ def test_interval_scan_tallies_digest_counters_when_something_is_due(mock_run, t
 
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_digest_tally_does_not_revert_a_concurrent_digest_send(mock_run, tmp_path, monkeypatch):
+    # Regression test for a real incident: check_scan_digest and
+    # run_autopilot_interval_scan are separate scheduled jobs on the SAME
+    # 5-minute tick. If check_scan_digest resets the tally and records a
+    # send in the window between this function's own top-of-function
+    # state load and its digest-tally save, saving a STALE state object
+    # here silently reverted that reset -- so the next tick saw a stale,
+    # already-past-due timestamp and re-sent a digest just 5 minutes
+    # later instead of respecting the configured interval. Simulates the
+    # race directly: load_state()'s SECOND call (the fresh reload right
+    # before the save) returns state as if check_scan_digest had already
+    # reset it moments earlier, mid-function.
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 35))
+    mock_run.return_value = []
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.interval_scan_count_since_digest = 7  # stale -- as of the top-of-function load
+    dashboard_state.save_state(state)
+
+    real_load_state = dashboard_state.load_state
+    call_count = {"n": 0}
+
+    def racy_load_state():
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            # Simulate check_scan_digest winning the race in between:
+            # resets the tally and records a send, using the REAL
+            # load_state so this write actually lands on disk.
+            reset_state = real_load_state()
+            reset_state.interval_scan_count_since_digest = 0
+            reset_state.interval_scanned_instruments_since_digest = []
+            reset_state.last_scan_digest_sent_at = "2026-08-17T13:35:00+00:00"
+            dashboard_state.save_state(reset_state)
+        return real_load_state()
+
+    monkeypatch.setattr(scheduled_jobs, "load_state", racy_load_state)
+
+    scheduled_jobs.run_autopilot_interval_scan()
+
+    updated = dashboard_state.load_state()
+    # The concurrent reset must survive -- count built on TOP of the
+    # reset's 0 (not the stale 7), and the send record isn't reverted.
+    assert updated.interval_scan_count_since_digest == 1
+    assert updated.last_scan_digest_sent_at == "2026-08-17T13:35:00+00:00"
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_interval_scan_does_not_tally_when_nothing_is_due(mock_run, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday -- forex closed by then
@@ -750,7 +798,16 @@ def test_scan_digest_skips_outside_autopilot_phase(mock_send, tmp_path, monkeypa
 
 
 @patch("scheduled_jobs.send_message")
-def test_scan_digest_sends_on_first_ever_check_and_resets_counters(mock_send, tmp_path, monkeypatch):
+def test_scan_digest_cold_start_records_clock_without_sending(mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: a degraded GitHub API crashed
+    # the app on every boot attempt (see pull_state_from_github's own
+    # fix), and Render kept restarting it into a boot-crash loop. Each
+    # restart reset in-memory state to defaults, so last_scan_digest_sent_at
+    # was None again on every single restart -- without this guard, each
+    # restart's first tick would fire a fresh digest immediately, producing
+    # several digests only minutes apart instead of respecting the
+    # configured interval. Same cold-start handling as
+    # check_market_status_transition already has.
     _isolate_state(tmp_path, monkeypatch)
     state = dashboard_state.default_state()
     state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
@@ -760,6 +817,27 @@ def test_scan_digest_sends_on_first_ever_check_and_resets_counters(mock_send, tm
     dashboard_state.save_state(state)
 
     scheduled_jobs.check_scan_digest(datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc))
+
+    mock_send.assert_not_called()
+    updated = dashboard_state.load_state()
+    assert updated.last_scan_digest_sent_at is not None
+    # The tally itself is untouched by the cold-start tick -- it's still
+    # accumulating toward the first real send.
+    assert updated.interval_scan_count_since_digest == 6
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_sends_and_resets_counters_once_the_clock_has_run(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.interval_scan_count_since_digest = 6
+    state.interval_scanned_instruments_since_digest = ["AUD_USD", "NZD_USD"]
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.check_scan_digest(datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc))  # 4h later
 
     mock_send.assert_called_once()
     sent_text = mock_send.call_args[0][0]
