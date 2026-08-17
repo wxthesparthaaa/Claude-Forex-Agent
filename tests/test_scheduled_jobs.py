@@ -692,6 +692,117 @@ def test_interval_scan_calls_evening_scan_quietly(mock_run, tmp_path, monkeypatc
     assert kwargs.get("notify_listing") is False
 
 
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_tallies_digest_counters_when_something_is_due(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(21, 35))
+    mock_run.return_value = []
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_autopilot_interval_scan()
+
+    updated = dashboard_state.load_state()
+    assert updated.interval_scan_count_since_digest == 1
+    assert updated.interval_scanned_instruments_since_digest  # at least one instrument recorded
+
+
+@patch("scheduled_jobs.run_evening_scan_and_notify")
+def test_interval_scan_does_not_tally_when_nothing_is_due(mock_run, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday -- forex closed by then
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.run_autopilot_interval_scan()
+
+    mock_run.assert_not_called()
+    assert dashboard_state.load_state().interval_scan_count_since_digest == 0
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_off_when_interval_is_zero(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 0
+    state.interval_scan_count_since_digest = 5
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.check_scan_digest()
+
+    mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_skips_outside_autopilot_phase(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()  # defaults to manual_paper
+    state.scan_digest_interval_minutes = 180
+    state.interval_scan_count_since_digest = 5
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.check_scan_digest()
+
+    mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_sends_on_first_ever_check_and_resets_counters(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.interval_scan_count_since_digest = 6
+    state.interval_scanned_instruments_since_digest = ["AUD_USD", "NZD_USD"]
+    dashboard_state.save_state(state)
+
+    scheduled_jobs.check_scan_digest(datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc))
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "6 scans" in sent_text
+    assert "AUD_USD, NZD_USD" in sent_text
+
+    updated = dashboard_state.load_state()
+    assert updated.interval_scan_count_since_digest == 0
+    assert updated.interval_scanned_instruments_since_digest == []
+    assert updated.last_scan_digest_sent_at is not None
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_does_not_resend_before_interval_elapses(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 10, 0, tzinfo=timezone.utc).isoformat()
+    dashboard_state.save_state(state)
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)  # only 2h later, interval is 3h
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_resends_after_interval_elapses(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.interval_scan_count_since_digest = 3
+    dashboard_state.save_state(state)
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)  # 4h later, past the 3h interval
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+
+
 @patch("scheduled_jobs.auto_execute_candidates")
 @patch("scheduled_jobs.save_candidates")
 @patch("scheduled_jobs.run_live_scan")

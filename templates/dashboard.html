@@ -216,92 +216,6 @@
         {% endif %}
       </p>
     </div>
-
-    <div class="card settings">
-      <details>
-        <summary style="cursor:pointer; font-weight:600;">Settings</summary>
-        <form method="post" action="/settings" style="margin-top:0.75rem;">
-          <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
-          <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
-                 value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
-
-          <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
-          <input type="range" name="max_trades_per_day"
-                 min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
-                 value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
-
-          <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
-          <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
-                 value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
-
-          <div class="toggle-row">
-            <span>Autopilot</span>
-            <label class="switch">
-              <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
-              <span class="switch-track"></span>
-            </label>
-          </div>
-          <div class="toggle-row">
-            <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
-            <label class="switch">
-              <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
-              <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
-            </label>
-          </div>
-          <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-            Emergency stop -- when on, Autopilot will not place any new trades, regardless of
-            confidence or phase. Existing open trades are unaffected and stay broker-protected
-            by their own SL/TP. Switch off to resume.
-          </p>
-          <label>Autopilot re-scan every, during each pair's own window
-            <select name="autopilot_scan_interval_minutes">
-              <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
-              <option value="30" {{ 'selected' if autopilot_scan_interval_minutes == 30 else '' }}>30 min</option>
-              <option value="60" {{ 'selected' if autopilot_scan_interval_minutes == 60 else '' }}>1 hr</option>
-              <option value="240" {{ 'selected' if autopilot_scan_interval_minutes == 240 else '' }}>4 hr</option>
-            </select>
-          </label>
-          {% if instrument_windows %}
-          <details style="margin:0.4rem 0 0.75rem;">
-            <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">Each pair's trading window (SGT)</summary>
-            <ul style="margin:0.5rem 0 0; padding-left:1.1rem; font-size:0.8rem; color:var(--muted);">
-              {% for instrument, window in instrument_windows %}
-              <li>{{ instrument }}: {{ window }}</li>
-              {% endfor %}
-            </ul>
-          </details>
-          {% endif %}
-          <div class="toggle-row">
-            <span>Mode</span>
-            <select name="mode">
-              <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
-              <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
-            </select>
-          </div>
-
-          <label>Strategy capital
-            <input type="number" step="0.01" min="0" name="strategy_capital"
-                   value="{{ '%.2f'|format(strategy_capital) }}">
-          </label>
-          <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-            Updates live as Autopilot's trades close. Saving a different amount here
-            re-baselines it -- that becomes the new starting capital, P&amp;L tracking
-            restarts from zero.
-          </p>
-
-          {% for warning in out_of_range_warnings %}
-            <p class="out-of-range">&#9888; {{ warning }}</p>
-          {% endfor %}
-          <div class="toggle-row" style="gap:0.5rem;">
-            <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
-            <button class="scan-btn" type="submit" name="reset_capital" value="1"
-                    style="margin-top:0.75rem;" data-loading-text="Resetting...">
-              Reset capital
-            </button>
-          </div>
-        </form>
-      </details>
-    </div>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -312,6 +226,45 @@
       </p>
     {% endfor %}
   {% endwith %}
+
+  <div class="card">
+    <form method="post" action="/scan">
+      <button class="scan-btn" type="submit" data-loading-text="Scanning..."
+              data-loading-status="Checking 11 instruments -- can take up to a minute.">Scan now</button>
+    </form>
+  </div>
+
+  {% if candidates %}
+  <div class="card">
+    <h3 style="margin-top:0;">Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
+    {% if last_scan_at %}
+    <p style="color:var(--muted); font-size:0.85rem; margin:-0.25rem 0 0.75rem;">Scanned: {{ last_scan_at }}</p>
+    {% endif %}
+    <div style="overflow-x:auto;">
+    <table>
+      <tr><th>Pair</th><th>Direction</th><th class="num">Confidence</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Amount traded</th><th></th></tr>
+      {% for c in candidates %}
+      <tr>
+        <td>{{ c.instrument }}</td>
+        <td class="{{ 'long' if c.direction == 'LONG' else 'short' }}">{{ c.direction }}</td>
+        <td class="num">{{ c.confidence_pct }}%</td>
+        <td class="num">{{ c.entry_price }}</td>
+        <td class="num">{{ c.stop_loss }}</td>
+        <td class="num">{{ c.take_profit }}</td>
+        <td class="num">{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
+        <td>
+          {% if c.rejected_reason %}
+            <span class="rejected">{{ c.rejected_reason }}</span>
+          {% else %}
+            <a class="trade-link" href="/trade/{{ c.instrument }}">Review &rarr;</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -385,44 +338,105 @@
     {% endif %}
   </div>
 
-  <div class="card">
-    <form method="post" action="/scan">
-      <button class="scan-btn" type="submit" data-loading-text="Scanning..."
-              data-loading-status="Checking 11 instruments -- can take up to a minute.">Scan now</button>
-    </form>
-  </div>
+  <div class="card settings">
+    <details>
+      <summary style="cursor:pointer; font-weight:600;">Settings</summary>
+      <form method="post" action="/settings" style="margin-top:0.75rem;">
+        <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
+        <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
+               value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
-  {% if candidates %}
-  <div class="card">
-    <h3 style="margin-top:0;">Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
-    {% if last_scan_at %}
-    <p style="color:var(--muted); font-size:0.85rem; margin:-0.25rem 0 0.75rem;">Scanned: {{ last_scan_at }}</p>
-    {% endif %}
-    <div style="overflow-x:auto;">
-    <table>
-      <tr><th>Pair</th><th>Direction</th><th class="num">Confidence</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Amount traded</th><th></th></tr>
-      {% for c in candidates %}
-      <tr>
-        <td>{{ c.instrument }}</td>
-        <td class="{{ 'long' if c.direction == 'LONG' else 'short' }}">{{ c.direction }}</td>
-        <td class="num">{{ c.confidence_pct }}%</td>
-        <td class="num">{{ c.entry_price }}</td>
-        <td class="num">{{ c.stop_loss }}</td>
-        <td class="num">{{ c.take_profit }}</td>
-        <td class="num">{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
-        <td>
-          {% if c.rejected_reason %}
-            <span class="rejected">{{ c.rejected_reason }}</span>
-          {% else %}
-            <a class="trade-link" href="/trade/{{ c.instrument }}">Review &rarr;</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    </div>
+        <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
+        <input type="range" name="max_trades_per_day"
+               min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
+               value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
+
+        <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
+        <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
+               value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
+
+        <div class="toggle-row">
+          <span>Autopilot</span>
+          <label class="switch">
+            <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
+          <label class="switch">
+            <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
+            <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Emergency stop -- when on, Autopilot will not place any new trades, regardless of
+          confidence or phase. Existing open trades are unaffected and stay broker-protected
+          by their own SL/TP. Switch off to resume.
+        </p>
+        <label>Autopilot re-scan every, during each pair's own window
+          <select name="autopilot_scan_interval_minutes">
+            <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
+            <option value="30" {{ 'selected' if autopilot_scan_interval_minutes == 30 else '' }}>30 min</option>
+            <option value="60" {{ 'selected' if autopilot_scan_interval_minutes == 60 else '' }}>1 hr</option>
+            <option value="240" {{ 'selected' if autopilot_scan_interval_minutes == 240 else '' }}>4 hr</option>
+          </select>
+        </label>
+        <label>"Still scanning" check-in every
+          <select name="scan_digest_interval_minutes">
+            <option value="0" {{ 'selected' if scan_digest_interval_minutes == 0 else '' }}>Off</option>
+            <option value="60" {{ 'selected' if scan_digest_interval_minutes == 60 else '' }}>1 hr</option>
+            <option value="120" {{ 'selected' if scan_digest_interval_minutes == 120 else '' }}>2 hr</option>
+            <option value="180" {{ 'selected' if scan_digest_interval_minutes == 180 else '' }}>3 hr</option>
+            <option value="240" {{ 'selected' if scan_digest_interval_minutes == 240 else '' }}>4 hr</option>
+            <option value="360" {{ 'selected' if scan_digest_interval_minutes == 360 else '' }}>6 hr</option>
+          </select>
+        </label>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          A Telegram summary confirming Autopilot is still scanning even when nothing qualifies
+          to trade -- separate from trade alerts, which always send immediately regardless of this setting.
+        </p>
+        {% if instrument_windows %}
+        <details style="margin:0.4rem 0 0.75rem;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">Each pair's trading window (SGT)</summary>
+          <ul style="margin:0.5rem 0 0; padding-left:1.1rem; font-size:0.8rem; color:var(--muted);">
+            {% for instrument, window in instrument_windows %}
+            <li>{{ instrument }}: {{ window }}</li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+        <div class="toggle-row">
+          <span>Mode</span>
+          <select name="mode">
+            <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
+            <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
+          </select>
+        </div>
+
+        <label>Strategy capital
+          <input type="number" step="0.01" min="0" name="strategy_capital"
+                 value="{{ '%.2f'|format(strategy_capital) }}">
+        </label>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Updates live as Autopilot's trades close. Saving a different amount here
+          re-baselines it -- that becomes the new starting capital, P&amp;L tracking
+          restarts from zero.
+        </p>
+
+        {% for warning in out_of_range_warnings %}
+          <p class="out-of-range">&#9888; {{ warning }}</p>
+        {% endfor %}
+        <div class="toggle-row" style="gap:0.5rem;">
+          <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
+          <button class="scan-btn" type="submit" name="reset_capital" value="1"
+                  style="margin-top:0.75rem;" data-loading-text="Resetting...">
+            Reset capital
+          </button>
+        </div>
+      </form>
+    </details>
   </div>
-  {% endif %}
 
   <div class="card">
     <details>

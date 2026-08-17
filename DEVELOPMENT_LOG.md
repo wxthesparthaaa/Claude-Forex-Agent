@@ -1063,3 +1063,57 @@ reverted-field, skip-at-exact-reopen, skip-later-in-the-same-Monday).
 Full suite: 349 passed.
 
 **Fixed**: 2026-08-17
+
+## 2026-08-17 (continued) — Periodic "still scanning" digest, plus a dashboard reorder
+
+**Problem**: User traced the Render logs for a full trading day
+themselves and asked why "Potential trades tonight" only ever shows up
+once, at 21:30 SGT -- confirmed that's by design (the interval scanner
+stays deliberately silent unless a trade actually fires), then asked
+for the same kind of confirmation during the day too, so quiet hours
+don't look indistinguishable from a dead scanner. Raised the tradeoff
+first (a message on every 15/30-min scan could mean 20-30+ Telegram
+messages a day) rather than building the literal ask outright; user
+chose a periodic digest instead of per-scan spam, then asked for the
+interval itself to be a Settings control rather than a hardcoded
+constant.
+
+**Changes**:
+
+1. Added `DashboardState.scan_digest_interval_minutes` (default 180,
+   0 = off), `interval_scan_count_since_digest`, and
+   `interval_scanned_instruments_since_digest` -- a running tally
+   incremented in `run_autopilot_interval_scan` itself (not inside the
+   shared `run_evening_scan_and_notify`, so the fixed 21:30 listing --
+   which already sends its own dedicated message -- doesn't get folded
+   into the "quiet interval scans" count).
+2. New `scheduled_jobs.check_scan_digest()`, wired unconditionally into
+   `run_daily_dispatcher` (its own phase/interval/elapsed-time gating
+   lives inside the function, same pattern as `check_market_status_transition`).
+   Only relevant in autopilot phase -- a manual/semi-auto account would
+   otherwise get a confusing "0 scans" digest for a mode where the
+   interval scanner never runs. Resets the counters BEFORE the Telegram
+   send (not after -- caught this mid-implementation: resetting after
+   send means a mid-flight kill leaves the elapsed-time gate pointed at
+   a stale timestamp, which would immediately re-fire the same digest
+   on the next tick -- the exact duplicate-message bug shape already
+   fixed twice today for other touchpoints).
+3. New Settings dropdown ("'Still scanning' check-in every": Off/1/2/3/
+   4/6 hr) wired through `/settings` the same way `autopilot_scan_interval_minutes`
+   already is.
+4. **Dashboard reordered** per explicit request: top row (5 stat tiles +
+   win rate, unchanged) → flash messages (moved here, directly above
+   Scan Now, so save/error confirmations sit right next to the action
+   that triggered them) → Scan Now + last-scan results → Live trades →
+   News sentiment → Settings (pulled out of the top row into its own
+   full-width section) → Developer Notes.
+
+**Solution**: 7 new regression tests (digest counter tallying on a due
+scan vs. skipped on a closed market, off-switch, wrong-phase skip,
+first-ever send + counter reset, no-resend-before-interval,
+resend-after-interval). Verified the new section order and the new
+dropdown's rendered `selected` state via direct Jinja2 rendering (no
+visual screenshot available in this environment, same caveat as the
+earlier aesthetic pass). Full suite: 356 passed.
+
+**Fixed**: 2026-08-17

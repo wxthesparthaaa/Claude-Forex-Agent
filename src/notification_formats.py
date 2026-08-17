@@ -62,6 +62,24 @@ def format_market_open_message(close_sgt) -> str:
     )
 
 
+def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None) -> str:
+    """The interval scanner is deliberately silent otherwise -- only an
+    actual executed trade notifies -- so this periodic digest is the only
+    proof-of-life during a stretch where nothing qualified. window_start_sgt:
+    an SGT-tzinfo datetime (the previous digest's own send time) or None on
+    the very first digest, when there's no prior "since" to report."""
+    since = f" since {window_start_sgt.strftime('%H:%M')} SGT" if window_start_sgt else ""
+    if scan_count == 0:
+        return f"📊 <b>Scan check-in</b>\nNo pairs were in their trading window{since}."
+    pairs = ", ".join(instruments) if instruments else "no pairs"
+    plural = "scan" if scan_count == 1 else "scans"
+    return (
+        f"📊 <b>Scan check-in</b>\n"
+        f"{scan_count} {plural}{since} covering {pairs}.\n"
+        f"No new trades from this window."
+    )
+
+
 def format_trade_executed_message(trade: dict) -> str:
     return (
         f"<b>Trade executed</b>: {trade['instrument']} {trade['direction']}\n"

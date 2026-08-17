@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-17", "Added a periodic 'still scanning' Telegram digest (Settings-adjustable interval, 3hr "
+                    "default, can be turned off) so quiet hours during the day don't look indistinguishable "
+                    "from a dead scanner, plus reordered the dashboard: Settings moved below News sentiment."),
     ("2026-08-17", "Fixed two more Monday-reopen bugs: a duplicated 'market open' message (a concurrent scan "
                     "job -- AUD/NZD's own window also starts at 5am SGT -- could revert the status flag) and "
                     "a nightly review firing with 0 trades the instant the market reopens with nothing to review."),
@@ -268,6 +271,7 @@ def dashboard():
         kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
         risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
+        scan_digest_interval_minutes=state.scan_digest_interval_minutes,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
         forex_open=reopen_delta is None,
         reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
@@ -549,6 +553,10 @@ def settings():
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
             state.autopilot_scan_interval_minutes = int(interval)
+
+        digest_interval = request.form.get("scan_digest_interval_minutes")
+        if digest_interval is not None and int(digest_interval) in (0, 60, 120, 180, 240, 360):
+            state.scan_digest_interval_minutes = int(digest_interval)
 
         # Strategy capital: either an explicit override or a reset back to
         # the original $2,000 target. Both re-baseline strategy_realized_pnl

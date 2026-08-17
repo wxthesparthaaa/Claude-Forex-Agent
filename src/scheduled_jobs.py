@@ -35,7 +35,7 @@ from trade_journal import load_journal, closed_entries
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
-    format_market_closed_message, format_market_open_message,
+    format_market_closed_message, format_market_open_message, format_scan_digest_message,
 )
 from github_state_sync import get_github_config, pull_state_from_github
 from telegram_notifier import send_message
@@ -285,7 +285,61 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     if not due:
         return None
 
+    # Tallied here (not inside run_evening_scan_and_notify) so the fixed
+    # 21:30 evening listing -- which already sends its own dedicated
+    # message -- doesn't also get folded into the "quiet interval scans"
+    # count check_scan_digest reports on.
+    state.interval_scan_count_since_digest += 1
+    for instrument in due:
+        if instrument not in state.interval_scanned_instruments_since_digest:
+            state.interval_scanned_instruments_since_digest.append(instrument)
+    save_state(state)
+
     return run_evening_scan_and_notify(client, notify_listing=False, instruments=due)
+
+
+def check_scan_digest(now: datetime = None) -> None:
+    """Periodic "still scanning, nothing to trade" Telegram digest --
+    run_autopilot_interval_scan is deliberately silent otherwise (only an
+    actual executed trade notifies), which left no way to tell "quietly
+    working" apart from "not running at all" during the day. Interval is
+    user-adjustable in Settings (scan_digest_interval_minutes); 0 turns
+    it off entirely. Only relevant while autopilot is actually the one
+    running those scans -- a manual/semi-auto account would otherwise get
+    a confusing "0 scans" digest for a mode where the interval scanner
+    never runs at all."""
+    state = load_state()
+    if phase_state_from_state(state).phase != "autopilot":
+        return
+    if state.scan_digest_interval_minutes <= 0:
+        return
+
+    now = now or datetime.now(timezone.utc)
+    now_utc = now.astimezone(timezone.utc)
+    last_sent_iso = state.last_scan_digest_sent_at
+    if last_sent_iso is not None:
+        elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
+        if elapsed < timedelta(minutes=state.scan_digest_interval_minutes):
+            return
+
+    window_start_sgt = (
+        datetime.fromisoformat(last_sent_iso).astimezone(SGT) if last_sent_iso else None
+    )
+    scan_count = state.interval_scan_count_since_digest
+    instruments = state.interval_scanned_instruments_since_digest
+
+    # Reset BEFORE the Telegram call, same reasoning as every other
+    # touchpoint in this file (see check_market_status_transition's own
+    # comment) -- a mid-flight kill then fails safe (this one digest
+    # might occasionally not go out) instead of failing unsafe (the
+    # counters never advance, so the next tick sees last_scan_digest_sent_at
+    # still stale and immediately re-sends the same digest again).
+    state.last_scan_digest_sent_at = now_utc.isoformat()
+    state.interval_scan_count_since_digest = 0
+    state.interval_scanned_instruments_since_digest = []
+    save_state(state)
+
+    send_message(format_scan_digest_message(scan_count, instruments, window_start_sgt))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
@@ -562,6 +616,9 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     # gating, since the whole point is noticing whichever tick the
     # transition itself falls on.
     check_market_status_transition(now)
+    # Also unconditional -- its own elapsed-time/phase/off-switch gating
+    # lives inside the function itself, same reasoning as the call above.
+    check_scan_digest(now)
 
     state = load_state()
 

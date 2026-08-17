@@ -50,6 +50,24 @@ class DashboardState:
     # instead of one shared fixed evening slot; replaces the old single
     # last_autopilot_scan_timestamp field.
     last_autopilot_scan_timestamps: dict = field(default_factory=dict)
+    # Periodic "still scanning, nothing to trade" Telegram digest -- the
+    # interval scanner is deliberately silent otherwise (only an actual
+    # executed trade notifies), which left no way to tell "quietly
+    # working" apart from "not running at all" during the day. Minutes;
+    # one of 0 (off)/60/120/180/240/360. User-adjustable in Settings, same
+    # pattern as autopilot_scan_interval_minutes above.
+    scan_digest_interval_minutes: int = 180
+    # Running tally since the last digest send -- reset to 0/[] every time
+    # scheduled_jobs.check_scan_digest fires. Counts DISTINCT interval-scan
+    # ticks that actually scanned something, not per-instrument, so "8
+    # scans" means 8 separate dispatcher ticks found at least one
+    # in-window pair due, however many pairs each covered.
+    interval_scan_count_since_digest: int = 0
+    interval_scanned_instruments_since_digest: list = field(default_factory=list)
+    # Precise UTC ISO timestamp of the last digest send -- also doubles as
+    # "since when" the current tally has been accumulating, shown in the
+    # next digest's own message.
+    last_scan_digest_sent_at: str | None = None
     # {instrument: iso date the pause started} -- see
     # scheduled_jobs.apply_self_improvement. A paused instrument is
     # skipped entirely by both the interval scanner and the evening
