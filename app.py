@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-17", "Confirmed today's instability was a real, major GitHub platform outage (via GitHub's own "
+                    "status page), not an app bug. Added a circuit breaker so one dashboard load doesn't pay "
+                    "several stacked 15s timeouts in a row while GitHub is degraded -- fails fast after the first."),
     ("2026-08-17", "Fixed why the app was crashing/unreachable: a GitHub outage crashed the whole app on "
                     "every boot attempt (unguarded pull at startup), which also made the new scan digest fire "
                     "every 5 min instead of 3hr via a stale-state race. Both fixed and isolated from the next one."),

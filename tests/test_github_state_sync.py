@@ -2,11 +2,16 @@ import base64
 import os
 import sys
 import urllib.error
-from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import github_state_sync as gss
+
+
+def _reset_circuit_breaker():
+    gss._circuit_open_until = None
 
 
 def test_get_github_config_none_when_unset(monkeypatch):
@@ -304,3 +309,90 @@ def test_get_sync_status_stays_ok_when_github_is_not_configured(monkeypatch, tmp
     gss.push_state_to_github(local_path)
 
     assert gss.get_sync_status()["ok"] is True
+
+
+@patch("github_state_sync.urllib.request.urlopen")
+def test_circuit_breaker_skips_the_network_call_after_a_genuine_failure(mock_urlopen):
+    # Real incident: during an actual GitHub outage, a single dashboard
+    # page load triggers several separate GitHub calls back to back
+    # (checking/reconciling open trades, recording a just-executed
+    # trade). Each one used to pay the full 15s timeout before giving
+    # up, every time -- several of those stacked in one request reads as
+    # "the dashboard is stuck." The breaker must skip straight to
+    # failing fast (no network call at all) once a recent call has
+    # already genuinely failed.
+    _reset_circuit_breaker()
+    mock_urlopen.side_effect = urllib.error.URLError("Connection timed out")
+
+    try:
+        gss._github_request("GET", "https://api.github.com/x", "tok")
+        assert False, "expected the first call to actually try and fail"
+    except urllib.error.URLError:
+        pass
+    assert mock_urlopen.call_count == 1
+
+    try:
+        gss._github_request("GET", "https://api.github.com/x", "tok")
+        assert False, "expected the breaker to short-circuit instead of calling urlopen again"
+    except urllib.error.URLError as e:
+        assert "circuit breaker" in str(e)
+    assert mock_urlopen.call_count == 1  # NOT called a second time
+
+
+@patch("github_state_sync.urllib.request.urlopen")
+def test_circuit_breaker_closes_again_after_the_cooldown(mock_urlopen):
+    _reset_circuit_breaker()
+    gss._circuit_open_until = datetime.now(timezone.utc) - timedelta(seconds=1)  # cooldown already elapsed
+    mock_urlopen.side_effect = urllib.error.URLError("still down")
+
+    try:
+        gss._github_request("GET", "https://api.github.com/x", "tok")
+        assert False, "expected an actual retry, not the breaker"
+    except urllib.error.URLError as e:
+        assert "circuit breaker" not in str(e)  # this is the real failure, not a short-circuit
+    assert mock_urlopen.call_count == 1
+
+
+@patch("github_state_sync.urllib.request.urlopen")
+def test_circuit_breaker_is_not_tripped_by_a_404(mock_urlopen):
+    # A missing file is a normal, expected outcome (e.g. before it's
+    # ever been written) -- not evidence GitHub itself is unhealthy.
+    _reset_circuit_breaker()
+    mock_urlopen.side_effect = urllib.error.HTTPError(url="u", code=404, msg="Not Found", hdrs=None, fp=None)
+
+    gss._github_request("GET", "https://api.github.com/x", "tok")
+    gss._github_request("GET", "https://api.github.com/x", "tok")
+
+    assert mock_urlopen.call_count == 2  # both calls actually went out -- breaker never opened
+
+
+@patch("github_state_sync.urllib.request.urlopen")
+def test_circuit_breaker_is_not_tripped_by_a_409(mock_urlopen):
+    # 409 (optimistic-concurrency contention) is already handled by
+    # _push_with_retry's own retry loop -- it's routine, expected
+    # behavior of a healthy API under concurrent writers, not an outage.
+    _reset_circuit_breaker()
+    mock_urlopen.side_effect = urllib.error.HTTPError(url="u", code=409, msg="Conflict", hdrs=None, fp=None)
+
+    for _ in range(2):
+        try:
+            gss._github_request("GET", "https://api.github.com/x", "tok")
+        except urllib.error.HTTPError:
+            pass
+
+    assert mock_urlopen.call_count == 2  # both calls actually went out -- breaker never opened
+
+
+@patch("github_state_sync.urllib.request.urlopen")
+def test_circuit_breaker_clears_on_the_next_success(mock_urlopen):
+    _reset_circuit_breaker()
+    gss._circuit_open_until = datetime.now(timezone.utc) - timedelta(seconds=1)  # cooldown elapsed, allow a try
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.read.return_value = b"{}"
+    mock_response.__enter__.return_value = mock_response
+    mock_urlopen.return_value = mock_response
+
+    gss._github_request("GET", "https://api.github.com/x", "tok")
+
+    assert gss._circuit_open_until is None

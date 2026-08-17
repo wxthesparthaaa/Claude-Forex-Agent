@@ -13,7 +13,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from state_paths import STATE_DIR, STATE_FILES
@@ -30,6 +30,20 @@ API_BASE = "https://api.github.com"
 # rather than discovered after the fact.
 _sync_status = {"ok": True, "last_error": None, "last_attempt_at": None}
 
+# Real incident: during a genuine GitHub API outage, a single dashboard
+# page load can trigger several separate GitHub calls back to back
+# (checking open trades, reconciling orphans, recording a trade that
+# just executed -- each one its own save_state/save_journal call). Each
+# one used to pay the full 15s connect/read timeout before giving up,
+# every single time -- several stacked in one request reads as "the
+# dashboard is stuck," even though the app itself is fine. This breaker
+# remembers a recent genuine failure and skips straight to failing fast
+# (no network call at all) for a short cooldown, instead of re-paying
+# that timeout on every call while GitHub stays down. Cleared on the
+# next success, so it doesn't outlive the actual outage.
+_circuit_open_until: Optional[datetime] = None
+CIRCUIT_BREAKER_COOLDOWN = timedelta(seconds=20)
+
 
 def get_sync_status() -> dict:
     return dict(_sync_status)
@@ -44,6 +58,15 @@ def get_github_config() -> Optional[dict]:
 
 
 def _github_request(method: str, url: str, token: str, body: Optional[dict] = None):
+    global _circuit_open_until
+    now = datetime.now(timezone.utc)
+    if _circuit_open_until is not None and now < _circuit_open_until:
+        raise urllib.error.URLError(
+            f"GitHub API circuit breaker open until {_circuit_open_until.isoformat()} "
+            f"(a recent request genuinely failed -- skipping this one rather than paying "
+            f"another full timeout while GitHub is still down)"
+        )
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
@@ -53,10 +76,20 @@ def _github_request(method: str, url: str, token: str, body: Optional[dict] = No
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
+            _circuit_open_until = None
             return response.status, json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
+        # 404 ("file doesn't exist yet") and 409 (optimistic-concurrency
+        # contention, already handled by _push_with_retry's own retry
+        # loop) are both normal, expected outcomes of a healthy API, not
+        # evidence of an outage -- must not trip the breaker.
         if e.code == 404:
             return 404, None
+        if e.code != 409:
+            _circuit_open_until = now + CIRCUIT_BREAKER_COOLDOWN
+        raise
+    except (urllib.error.URLError, TimeoutError, OSError):
+        _circuit_open_until = now + CIRCUIT_BREAKER_COOLDOWN
         raise
 
 

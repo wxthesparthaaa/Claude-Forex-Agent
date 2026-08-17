@@ -1182,3 +1182,45 @@ between this function's two real load calls) to prove the fix actually
 survives it. Full suite: 360 passed.
 
 **Fixed**: 2026-08-17
+
+## 2026-08-17 (continued) — Circuit breaker for GitHub calls, so one real outage doesn't stall the dashboard repeatedly
+
+**Problem**: Confirmed directly against GitHub's own status page
+(githubstatus.com) that this was a genuine, major GitHub platform
+outage (started 13:40 UTC today, ~20% API error rate, ~50% error rate
+on raw content downloads -- exactly what the Contents API push/pull
+this app uses is doing), not an app bug. But the user reported a
+concrete symptom worth fixing regardless: a manual scan's trade
+executed fine (confirmed via its own Telegram alert, independent of
+GitHub), yet reloading the dashboard afterward sat stuck. Root cause:
+a single dashboard page load can trigger several separate GitHub calls
+back to back (checking open trades, reconciling orphans, recording the
+trade that just executed -- each its own `save_state`/`save_journal`
+call), and each one paid the full 15s connect/read timeout before
+giving up, every single time, with no memory that GitHub had already
+just failed seconds earlier. Several of those stacking in one request
+reads as "the dashboard is stuck," even though the app itself was
+never at risk (already fixed earlier today) and no data was lost
+(local writes always land before any GitHub push is even attempted).
+
+**Fix**: Added a short circuit breaker to `_github_request` (the one
+function every push/pull call in this module funnels through) -- a
+genuine failure (a real HTTP error other than 404/409, or a network-
+level timeout) opens the breaker for 20 seconds; any call attempted
+while it's open fails immediately with no network call at all, instead
+of re-paying the full timeout. Deliberately excludes 404 ("file
+doesn't exist yet," a normal outcome) and 409 (optimistic-concurrency
+contention already handled by `_push_with_retry`'s own retry loop) from
+tripping it -- neither is evidence GitHub itself is unhealthy. Clears
+automatically on the next success, so it can't outlive the actual
+outage and silently disable syncing once GitHub recovers.
+
+**Solution**: 5 new regression tests -- breaker opens after a genuine
+failure and skips the network call entirely on the next attempt within
+the cooldown; a call after the cooldown has elapsed genuinely retries
+rather than short-circuiting; 404 and 409 each independently confirmed
+not to trip the breaker (both calls in each test actually reach the
+network); the breaker clears on the next success. Full suite: 365
+passed.
+
+**Fixed**: 2026-08-17
