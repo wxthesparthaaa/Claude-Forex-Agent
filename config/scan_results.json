@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-08-17T06:28:11.226980+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-17T07:08:18.016524+00:00",
+  "candidates": [
+    {
+      "instrument": "USD_JPY",
+      "direction": "SHORT",
+      "entry_price": 158.924,
+      "stop_loss": 159.11,
+      "take_profit": 158.552,
+      "confidence_pct": 73.6,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 95.35274816416319,
+        "candlestick": 50.0,
+        "news": 29.166666666666664
+      },
+      "units": -27097,
+      "unit_label": "units",
+      "risk_amount": 40.462614,
+      "notional_account_currency": 34572.19,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 34 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: supportive of this direction."
+      ],
+      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 4.0% > 4.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    }
+  ]
 }
