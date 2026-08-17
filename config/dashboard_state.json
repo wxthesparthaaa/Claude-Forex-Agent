@@ -32,8 +32,8 @@
   "week_start_timestamp": "2026-08-16T16:19:44.281581+00:00",
   "autopilot_scan_interval_minutes": 30,
   "last_autopilot_scan_timestamps": {
-    "AUD_USD": "2026-08-17T09:43:13.598312+08:00",
-    "NZD_USD": "2026-08-17T09:43:13.598312+08:00",
+    "AUD_USD": "2026-08-17T10:18:23.666373+08:00",
+    "NZD_USD": "2026-08-17T10:18:23.666373+08:00",
     "USD_JPY": "2026-08-17T09:48:13.580802+08:00"
   },
   "paused_instruments": {},
