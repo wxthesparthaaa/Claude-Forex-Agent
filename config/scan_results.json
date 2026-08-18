@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-18T03:44:22.702527+00:00",
-  "candidates": [
-    {
-      "instrument": "USD_JPY",
-      "direction": "LONG",
-      "entry_price": 159.566,
-      "stop_loss": 159.457,
-      "take_profit": 159.784,
-      "confidence_pct": 77.1,
-      "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 58.333333333333336
-      },
-      "units": 46184,
-      "unit_label": "units",
-      "risk_amount": 40.319134,
-      "notional_account_currency": 59022.69,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 62 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-18T03:59:24.365698+00:00",
+  "candidates": []
 }
