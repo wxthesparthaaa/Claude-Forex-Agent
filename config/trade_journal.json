@@ -630,9 +630,9 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
+    "status": "LOST",
+    "closed_at": "2026-08-18T01:59:16.780513+00:00",
     "exit_price": null,
-    "realized_pnl": null
+    "realized_pnl": 0.0
   }
 ]
