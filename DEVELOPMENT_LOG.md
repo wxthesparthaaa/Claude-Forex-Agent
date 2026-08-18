@@ -1383,3 +1383,54 @@ from this app's own records unless recovered from OANDA's own account
 history directly, which is outside this app's control.
 
 **Fixed**: 2026-08-18
+
+## 2026-08-18 — Scan digests were STILL duplicating, in a new shape (paired sends 5 min apart, not a climbing count) -- and the wording itself was confusing
+
+**Problem**: User's Telegram showed three separate incidents in one day:
+two "Scan check-in" digests landing exactly 5 minutes apart, byte-for-byte
+identical content ("9 scans since 10:44 SGT covering USD_JPY", both times),
+then quiet for the full 3-hour interval before the next pair. This is a
+different signature than the earlier bug (which climbed 9/10/11 with a
+stuck timestamp) -- yesterday's real mutual-exclusion lock had already
+fixed that one. Separately, the wording itself ("N scans since ... covering
+X, Y, Z") read as ambiguous about what actually happened.
+
+**Root cause**: `_scan_digest_lock` only serializes `check_scan_digest`
+against itself within ONE process. It does nothing when a SECOND, separate
+Render process is briefly alive too -- and this deployment has already been
+observed restarting unpredictably outside of deploys (documented in
+`run_evening_scan_and_notify`'s own comment from an earlier incident this
+week: duplicate evening-listing sends traced to the same cause). Each
+process keeps its own local `dashboard_state.json`, only resynced with
+GitHub every 10 minutes otherwise. Two such processes can each
+independently cross the 3-hour threshold from their own stale local copy
+and both decide the digest is due -- far more visible here than for the
+once-a-day evening listing, since this fires roughly 8 times a day instead
+of once, giving it many more chances to land during a two-process overlap
+window.
+
+**Fix**: `check_scan_digest` now re-pulls state from GitHub itself, right
+before committing to a send (only once it locally looks due, not on every
+5-minute tick), and re-checks against that fresh copy before proceeding --
+narrowing the cross-process race window from "up to 10 minutes" down to one
+network round trip, the same best-effort pattern already used for the
+evening-listing dedupe. Not a perfect distributed lock (a genuinely
+simultaneous pull from both processes could still both pass), but it closes
+the overwhelming majority of the window this app can reach without adding
+real distributed-lock infrastructure for a personal trading bot on Render's
+free tier.
+
+**Also**: reworded the message per direct feedback -- leads with "Periodic
+scan complete" instead of the ambiguous "Scan check-in" / "N scans ...
+covering X, Y, Z", with the cycle count now a clearly-labeled supporting
+detail ("Checked X, Y, Z across N scan cycles since ...") rather than the
+headline.
+
+**Solution**: New regression test simulates the exact mechanism -- state
+locally looks due, then the mocked GitHub pull writes a newer
+`last_scan_digest_sent_at` directly to local disk (standing in for another
+process's already-completed send) -- asserts this process does NOT also
+send, and that the other process's timestamp survives untouched. Full
+suite: 368 passed (up from 367).
+
+**Fixed**: 2026-08-18

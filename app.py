@@ -81,6 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-18", "Scan digests were STILL duplicating (a new shape -- paired sends 5 min apart, then quiet for "
+                    "the full interval). Root cause: the lock only protects one process -- a second, separate "
+                    "Render instance with its own stale local state can independently decide it's due too. Now "
+                    "re-pulls from GitHub right before sending. Also reworded the message per direct feedback."),
     ("2026-08-18", "Trades that fully closed via the 2hr auto-expiry could still end up marked LOST/unrecoverable "
                     "if a restart landed mid-pass -- the close on OANDA was already irreversible but the journal "
                     "save was batched until the whole loop finished. Now saves immediately after each expiry-close."),
@@ -90,9 +94,6 @@ DEVELOPER_NOTES = [
     ("2026-08-17", "The interval scanner used to run completely silently unless a trade fired -- added log "
                     "lines so 'INFO: autopilot interval scan at ... -- due: ...' / 'finished -- N candidates' "
                     "now confirm in Render's logs that it's genuinely running, not just the scheduler heartbeat."),
-    ("2026-08-17", "Confirmed today's instability was a real, major GitHub platform outage (via GitHub's own "
-                    "status page), not an app bug. Added a circuit breaker so one dashboard load doesn't pay "
-                    "several stacked 15s timeouts in a row while GitHub is degraded -- fails fast after the first."),
     ("2026-08-17", "Fixed why the app was crashing/unreachable: a GitHub outage crashed the whole app on "
                     "every boot attempt (unguarded pull at startup), which also made the new scan digest fire "
                     "every 5 min instead of 3hr via a stale-state race. Both fixed and isolated from the next one."),
