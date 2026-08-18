@@ -47,7 +47,7 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
-  "last_scan_digest_sent_at": "2026-08-18T05:49:16.313547+00:00",
+  "last_scan_digest_sent_at": "2026-08-18T05:54:16.313342+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
     "USD_JPY": [
