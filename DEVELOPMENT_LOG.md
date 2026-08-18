@@ -1434,3 +1434,64 @@ send, and that the other process's timestamp survives untouched. Full
 suite: 368 passed (up from 367).
 
 **Fixed**: 2026-08-18
+
+## 2026-08-18 — The "unrecoverable" count kept climbing even after yesterday's fix -- root cause wasn't the batched save, it was get_trade() itself
+
+**Problem**: User's dashboard showed the unrecoverable count climb from 4
+to 7 in one day, AFTER yesterday's 2-hour-expiry batched-save fix had
+already deployed. Render logs (searched for "marking LOST") showed trade
+IDs 922, 934, 952, and 956, each hit at real times spread across the day --
+and trade 922 and trade 934 were each marked LOST TWICE, ~5-10 minutes
+apart, meaning the LOST status wasn't even sticking between passes.
+
+**Root cause**: Direct verification against the live OANDA account (using
+the app's own `OandaClient` and its already-configured credentials, plus
+the user's own screenshots of OANDA's trade history) confirmed all 4 trades
+had genuinely closed with real, non-zero P&L -- trade 922 via this app's
+own 2-hour force-close (+2.24, a win), and 934/952/956 via a completely
+normal stop-loss hit. None of these were lost data. Yet `get_trade(trade_id)`
+404'd for every one of them, and `get_closed_trades(count=50)` didn't
+include them either -- both came up completely empty on a trade this
+account's own transaction history (`/v3/accounts/.../transactions`) had
+full, correct records for the whole time (realizedPL, exit price, close
+time). This wasn't a rare race condition; it was happening on every SL/TP
+close that hit it, on this account, which is why the count kept climbing
+even with yesterday's fix already live -- 3 of the 4 new ones went through
+the SL/TP path, not the 2-hour expiry path.
+
+**Fix**: Added `OandaClient.find_closed_trade()`, which searches ORDER_FILL
+transactions in a time window starting at the trade's own open time for
+the fill whose `tradesClosed` includes this trade -- the one source that
+reliably has the data on this account. `trade_monitor`'s 404 handler now
+tries this fallback before marking a trade LOST, and only gives up (0.0
+P&L, genuinely unrecoverable) if the transaction search comes up empty
+too. Also moved this branch's `save_journal()` to fire immediately after
+resolving each entry (previously batched at the very end of the loop,
+reasoned as "safe" since a crash there just meant a harmless re-read next
+pass -- the repeated "marking LOST" log lines for the same trade ID proved
+that reasoning incomplete: the classification itself wasn't always
+sticking either).
+
+**Data correction**: Pulled the live production journal directly from the
+`state-sync` branch (where Render's GitHub sync actually pushes trade data
+-- distinct from `main`) and, using the real values recovered from OANDA's
+transaction history above, corrected the 4 already-mismarked entries:
+trade 922 (NZD_USD) LOST→SUCCESSFUL (P&L 0.0→+2.2434), trade 934 (AUD_USD)
+LOST→FAILED (0.0→-42.9527), trade 952 (XAG_USD) LOST→FAILED
+(0.0→-39.3075), trade 956 (EUR_USD) LOST→FAILED (0.0→-48.7741) -- each
+with its real exit price and close time filled in too. This only repairs
+entries where the real outcome could be independently verified against
+OANDA's own records; it does not fabricate values for anything that's
+genuinely unrecoverable.
+
+**Solution**: New tests in `tests/test_oanda_client.py` for
+`find_closed_trade()` (finds the right page, returns None when no page
+mentions the trade, skips the network call entirely when there are no
+pages), plus three new tests in `tests/test_trade_monitor.py`: fallback
+recovery classifies a real win as SUCCESSFUL (not LOST), a real loss as
+FAILED (not LOST), and a mid-pass crash while processing a LATER entry
+doesn't lose an EARLIER entry's already-recovered classification (same
+"immediate save" proof technique as yesterday's expiry-branch test). Full
+suite: 374 passed (up from 368).
+
+**Fixed**: 2026-08-18

@@ -81,6 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-18", "Found the REAL driver of the climbing 'unrecoverable' count: get_trade() 404'd for trades "
+                    "that had genuinely closed via a normal stop-loss -- confirmed against OANDA's own "
+                    "transaction history, which had the real P&L the whole time. Added a fallback that searches "
+                    "transaction history before giving up, and corrected the 4 already-mismarked entries."),
     ("2026-08-18", "Scan digests were STILL duplicating (a new shape -- paired sends 5 min apart, then quiet for "
                     "the full interval). Root cause: the lock only protects one process -- a second, separate "
                     "Render instance with its own stale local state can independently decide it's due too. Now "
@@ -94,9 +98,15 @@ DEVELOPER_NOTES = [
     ("2026-08-17", "The interval scanner used to run completely silently unless a trade fired -- added log "
                     "lines so 'INFO: autopilot interval scan at ... -- due: ...' / 'finished -- N candidates' "
                     "now confirm in Render's logs that it's genuinely running, not just the scheduler heartbeat."),
+    ("2026-08-17", "Confirmed today's instability was a real, major GitHub platform outage (via GitHub's own "
+                    "status page), not an app bug. Added a circuit breaker so one dashboard load doesn't pay "
+                    "several stacked 15s timeouts in a row while GitHub is degraded -- fails fast after the first."),
     ("2026-08-17", "Fixed why the app was crashing/unreachable: a GitHub outage crashed the whole app on "
                     "every boot attempt (unguarded pull at startup), which also made the new scan digest fire "
                     "every 5 min instead of 3hr via a stale-state race. Both fixed and isolated from the next one."),
+    ("2026-08-17", "Added a periodic 'still scanning' Telegram digest (Settings-adjustable interval, 3hr "
+                    "default, can be turned off) so quiet hours during the day don't look indistinguishable "
+                    "from a dead scanner, plus reordered the dashboard: Settings moved below News sentiment."),
     ("2026-08-17", "Fixed two more Monday-reopen bugs: a duplicated 'market open' message (a concurrent scan "
                     "job -- AUD/NZD's own window also starts at 5am SGT -- could revert the status flag) and "
                     "a nightly review firing with 0 trades the instant the market reopens with nothing to review."),
