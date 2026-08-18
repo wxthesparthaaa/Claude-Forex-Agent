@@ -1,61 +1,28 @@
 {
-  "scanned_at": "2026-08-18T14:37:10.553487+00:00",
+  "scanned_at": "2026-08-18T14:55:46.195706+00:00",
   "candidates": [
-    {
-      "instrument": "EUR_USD",
-      "direction": "LONG",
-      "entry_price": 1.15836,
-      "stop_loss": 1.15706,
-      "take_profit": 1.16096,
-      "confidence_pct": 70.0,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 24275,
-      "unit_label": "units",
-      "risk_amount": 40.319134,
-      "notional_account_currency": 35926.06,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 61 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no EUR-relevant headlines in the latest fetch (neutral)."
-      ],
-      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    },
     {
       "instrument": "GBP_USD",
       "direction": "LONG",
-      "entry_price": 1.35428,
+      "entry_price": 1.35475,
       "stop_loss": 1.35282,
-      "take_profit": 1.3572,
-      "confidence_pct": 70.0,
+      "take_profit": 1.35861,
+      "confidence_pct": 65.2,
       "confidence_components": {
         "breadth": 71.42857142857143,
-        "rsi": 100.0,
+        "rsi": 80.72006908387941,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 21614,
+      "units": 16349,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 37398.32,
+      "notional_account_currency": 28300.2,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 64 (neutral range).",
+        "RSI is 69 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: no GBP-relevant headlines in the latest fetch (neutral)."
       ],
