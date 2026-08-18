@@ -594,10 +594,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-18T03:05:19.107609+00:00",
+    "exit_price": 159.485,
+    "realized_pnl": -3.2394
   },
   {
     "trade_id": "934",
