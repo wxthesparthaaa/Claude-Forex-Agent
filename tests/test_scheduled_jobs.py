@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -841,7 +841,7 @@ def test_scan_digest_sends_and_resets_counters_once_the_clock_has_run(mock_send,
 
     mock_send.assert_called_once()
     sent_text = mock_send.call_args[0][0]
-    assert "6 scans" in sent_text
+    assert "6 scan cycles" in sent_text
     assert "AUD_USD, NZD_USD" in sent_text
 
     updated = dashboard_state.load_state()
@@ -879,6 +879,45 @@ def test_scan_digest_resends_after_interval_elapses(mock_send, tmp_path, monkeyp
     scheduled_jobs.check_scan_digest(now)
 
     mock_send.assert_called_once()
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_skips_send_when_a_fresh_github_pull_shows_another_process_already_sent(
+        mock_send, tmp_path, monkeypatch):
+    # Regression test for a real incident: two Telegram digests landed 5
+    # minutes apart with identical content, then stayed quiet for a full
+    # interval -- the signature of two separate Render process instances
+    # each deciding "due" from their own stale local dashboard_state.json
+    # (only resynced with GitHub every 10 minutes otherwise). The
+    # in-process _scan_digest_lock can't protect against a SECOND process
+    # doing this, since it's a separate Python interpreter with its own
+    # lock object. check_scan_digest now re-pulls from GitHub right before
+    # committing to a send -- simulated here by making that pull's mock
+    # write a newer last_scan_digest_sent_at directly to local disk, as if
+    # another process's send had just landed there.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.interval_scan_count_since_digest = 6
+    dashboard_state.save_state(state)
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)  # 4h later -- locally looks due
+
+    def _simulate_other_process_already_sent():
+        other = dashboard_state.load_state()
+        other.last_scan_digest_sent_at = (now - timedelta(minutes=2)).isoformat()  # sent 2 min ago
+        other.interval_scan_count_since_digest = 0
+        dashboard_state.save_state(other)
+        return 1
+
+    with patch("scheduled_jobs.pull_state_from_github", side_effect=_simulate_other_process_already_sent):
+        scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_not_called()  # the OTHER process's send counts -- this one must not duplicate it
+    updated = dashboard_state.load_state()
+    assert updated.last_scan_digest_sent_at == (now - timedelta(minutes=2)).isoformat()
 
 
 @patch("scheduled_jobs.auto_execute_candidates")

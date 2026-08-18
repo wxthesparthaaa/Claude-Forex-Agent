@@ -393,22 +393,55 @@ def check_scan_digest(now: datetime = None) -> None:
             else:
                 elapsed = now_utc - datetime.fromisoformat(last_sent_iso)
                 if elapsed >= timedelta(minutes=state.scan_digest_interval_minutes):
-                    window_start_sgt = datetime.fromisoformat(last_sent_iso).astimezone(SGT)
-                    scan_count = state.interval_scan_count_since_digest
-                    instruments = state.interval_scanned_instruments_since_digest
+                    # Real incident: the lock above only serializes this
+                    # function against ITSELF within one process -- it does
+                    # nothing when a SECOND, separate Render process is also
+                    # alive (this deployment has been observed restarting
+                    # unpredictably even outside deploys, not just idle
+                    # sleep/wake), each with its own local dashboard_state.json
+                    # that otherwise only resyncs with GitHub every 10
+                    # minutes. Two such processes can independently cross
+                    # this same threshold from their own stale local copy
+                    # and both decide the digest is due -- exactly the same
+                    # mechanism already diagnosed for the evening-listing
+                    # duplicate (see run_evening_scan_and_notify's own
+                    # comment), just far more visible here since this fires
+                    # every ~3 hours instead of once a day, giving it many
+                    # more chances per day to land during a two-process
+                    # overlap window. Re-pulling from GitHub itself right
+                    # before committing narrows that window from "up to 10
+                    # minutes" down to one network round trip -- not a
+                    # perfect distributed lock, but the same best-effort
+                    # narrowing already used for the evening listing.
+                    try:
+                        pull_state_from_github()
+                    except Exception as e:
+                        print(f"WARNING: scan digest's pre-send GitHub re-pull failed, "
+                              f"proceeding on local state: {e}", flush=True)
+                    state = load_state()
+                    last_sent_iso = state.last_scan_digest_sent_at
+                    still_due = last_sent_iso is not None and (
+                        now_utc - datetime.fromisoformat(last_sent_iso)
+                        >= timedelta(minutes=state.scan_digest_interval_minutes)
+                    )
 
-                    # Reset BEFORE the Telegram call, same reasoning as
-                    # every other touchpoint in this file (see
-                    # check_market_status_transition's own comment) -- a
-                    # mid-flight kill then fails safe (this one digest
-                    # might occasionally not go out) instead of failing
-                    # unsafe (the counters never advance, so the next
-                    # tick sees a stale timestamp and re-sends immediately).
-                    state.last_scan_digest_sent_at = now_utc.isoformat()
-                    state.interval_scan_count_since_digest = 0
-                    state.interval_scanned_instruments_since_digest = []
-                    save_state(state)
-                    send_args = (scan_count, instruments, window_start_sgt)
+                    if still_due:
+                        window_start_sgt = datetime.fromisoformat(last_sent_iso).astimezone(SGT)
+                        scan_count = state.interval_scan_count_since_digest
+                        instruments = state.interval_scanned_instruments_since_digest
+
+                        # Reset BEFORE the Telegram call, same reasoning as
+                        # every other touchpoint in this file (see
+                        # check_market_status_transition's own comment) -- a
+                        # mid-flight kill then fails safe (this one digest
+                        # might occasionally not go out) instead of failing
+                        # unsafe (the counters never advance, so the next
+                        # tick sees a stale timestamp and re-sends immediately).
+                        state.last_scan_digest_sent_at = now_utc.isoformat()
+                        state.interval_scan_count_since_digest = 0
+                        state.interval_scanned_instruments_since_digest = []
+                        save_state(state)
+                        send_args = (scan_count, instruments, window_start_sgt)
 
     # Sent outside the lock -- a slow Telegram call has no reason to hold
     # up run_autopilot_interval_scan's own tally increment.
