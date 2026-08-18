@@ -24,12 +24,17 @@ def _http_error(status_code):
 
 
 class FakeClient:
-    def __init__(self, open_trades=None, closed_trades=None, close_trade_result=None, not_found_ids=None):
+    def __init__(self, open_trades=None, closed_trades=None, close_trade_result=None, not_found_ids=None,
+                 transaction_history=None):
         self._open = open_trades or []
         self._closed_by_id = {t["id"]: t for t in (closed_trades or [])}
         self._close_result = close_trade_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
         self._not_found_ids = set(not_found_ids or [])
+        # trade_id -> {"realizedPL": ..., "price": ..., "time": ...}, standing
+        # in for OANDA's own transaction history (see find_closed_trade).
+        self._transaction_history = transaction_history or {}
         self.closed_ids = []
+        self.find_closed_trade_calls = []
 
     def get_open_trades(self):
         return self._open
@@ -42,6 +47,10 @@ class FakeClient:
     def close_trade(self, trade_id):
         self.closed_ids.append(trade_id)
         return self._close_result
+
+    def find_closed_trade(self, trade_id, opened_at_iso, search_hours=6):
+        self.find_closed_trade_calls.append(trade_id)
+        return self._transaction_history.get(trade_id)
 
 
 def candidate(**overrides):
@@ -196,8 +205,94 @@ def test_check_open_trades_marks_lost_when_oanda_has_no_record_of_the_trade(mock
     assert len(changed) == 1
     assert changed[0]["status"] == tj.LOST
     assert changed[0]["realized_pnl"] == 0.0
+    assert client.find_closed_trade_calls == ["832"]  # the fallback was tried, not skipped
     entries = tj.load_journal()
     assert entries[0]["status"] == tj.LOST  # no longer stuck OPEN
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_recovers_real_outcome_via_transaction_history_when_get_trade_404s(
+        mock_send, tmp_path, monkeypatch):
+    # Real incident, confirmed directly against a live OANDA account:
+    # get_trade() 404'd for trades that HAD genuinely closed -- both the
+    # single-trade lookup and get_closed_trades()'s list came up
+    # completely empty, while OANDA's own transaction history had the
+    # real close data (realizedPL, price, time) the whole time. Trades
+    # were being permanently marked LOST (P&L wiped to 0.0) despite their
+    # real outcome being fully recoverable. Before giving up, the 404
+    # path must now try the transaction-history fallback first.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("922", candidate(instrument="NZD_USD"))
+
+    client = FakeClient(
+        open_trades=[], not_found_ids=["922"],
+        transaction_history={"922": {"realizedPL": "2.2434", "price": "0.59078",
+                                      "time": "2026-08-17T17:14:15.420843922Z"}},
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    assert len(changed) == 1
+    assert changed[0]["status"] == tj.SUCCESSFUL  # real P&L was positive -- not LOST, not FAILED
+    assert changed[0]["realized_pnl"] == 2.2434
+    assert changed[0]["exit_price"] == 0.59078
+    assert changed[0]["closed_at"] == "2026-08-17T17:14:15.420843+00:00"
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.SUCCESSFUL
+    assert entries[0]["realized_pnl"] == 2.2434
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_recovered_loss_via_fallback_classifies_as_failed_not_lost(
+        mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("934", candidate(instrument="AUD_USD"))
+
+    client = FakeClient(
+        open_trades=[], not_found_ids=["934"],
+        transaction_history={"934": {"realizedPL": "-42.9527", "price": "0.71065",
+                                      "time": "2026-08-18T01:58:42.511013811Z"}},
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    assert changed[0]["status"] == tj.FAILED  # a real, recovered loss -- distinct from LOST (unrecoverable)
+    assert changed[0]["realized_pnl"] == -42.9527
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_persists_a_fallback_recovery_immediately_not_batched_at_loop_end(
+        mock_send, tmp_path, monkeypatch):
+    # Same "immediate save, not batched at the very end" reasoning as the
+    # expiry branch's own regression test -- this branch's classification
+    # (recovered via transaction history, or genuinely given up on) is a
+    # final conclusion about the trade, not a transient retry state, so a
+    # crash while processing a LATER, unrelated entry must not lose it.
+    # Simulated here via a second entry whose corrupted opened_at makes
+    # is_expired() raise -- unguarded, so it propagates out of the whole
+    # function, standing in for a real mid-pass crash/restart (same
+    # technique already proven for the expiry branch's own test).
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("922", candidate(instrument="NZD_USD"))
+    tj.record_open_trade("999", candidate(instrument="GBP_USD"))
+
+    entries = tj.load_journal()
+    entries[1]["opened_at"] = "not-a-real-timestamp"  # makes is_expired() raise for entry 999
+    tj.save_journal(entries)
+
+    client = FakeClient(
+        open_trades=[{"id": "999", "instrument": "GBP_USD"}],  # still "open" so it reaches is_expired()
+        not_found_ids=["922"],
+        transaction_history={"922": {"realizedPL": "2.2434", "price": "0.59078",
+                                      "time": "2026-08-17T17:14:15.420843922Z"}},
+    )
+
+    with pytest.raises(Exception):
+        trade_monitor.check_open_trades(client)
+
+    entries_on_disk = tj.load_journal()
+    by_id = {e["trade_id"]: e for e in entries_on_disk}
+    assert by_id["922"]["status"] == tj.SUCCESSFUL  # already saved before the crash on entry 999
+    assert by_id["922"]["realized_pnl"] == 2.2434
+    assert by_id["999"]["status"] == tj.OPEN  # never reached
 
 
 @patch("trade_monitor.send_message")

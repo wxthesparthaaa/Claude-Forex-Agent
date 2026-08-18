@@ -9,6 +9,7 @@ copies of the same logic.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
@@ -106,3 +107,42 @@ class OandaClient:
 
     def close_trade(self, trade_id: str) -> dict:
         return self._request("PUT", f"/v3/accounts/{self.account_id}/trades/{trade_id}/close")
+
+    def find_closed_trade(self, trade_id: str, opened_at_iso: str, search_hours: float = 6) -> Optional[dict]:
+        """Real incident: get_trade(trade_id) 404'd for trades that had
+        DEFINITELY closed -- confirmed directly against this account's own
+        transaction history, which had the real close data (realizedPL,
+        price, time) even though both /trades/{id} and get_closed_trades()'s
+        list came up completely empty for the same trade ID. Whatever the
+        cause on OANDA's side (this account's trade-resource retention
+        apparently doesn't match its transaction retention), the
+        transactions endpoint is the one source that's actually reliable
+        here, so this is the fallback trade_monitor reaches for before
+        giving up and marking a trade permanently LOST.
+
+        Searches ORDER_FILL transactions in a window starting at the
+        trade's own open time (search_hours is generous margin past this
+        app's own 2-hour force-close cap) for one whose tradesClosed
+        includes this trade -- that's the transaction that actually closed
+        it, whether via SL, TP, or this app's own close_trade() call.
+        Returns None only if genuinely not found there either."""
+        opened = datetime.fromisoformat(opened_at_iso.replace("Z", "+00:00"))
+        to = opened + timedelta(hours=search_hours)
+        params = {
+            "from": opened.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "to": to.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "type": "ORDER_FILL",
+            "pageSize": 1000,
+        }
+        result = self._request("GET", f"/v3/accounts/{self.account_id}/transactions", params=params)
+        for page_url in result.get("pages", []):
+            # Each page URL is already a full, absolute URL (OANDA's own
+            # pagination links) -- not a path to hand to self._request.
+            page = requests.get(page_url, headers=self._headers(), timeout=20)
+            page.raise_for_status()
+            for txn in page.json().get("transactions", []):
+                for closed in (txn.get("tradesClosed") or []):
+                    if closed.get("tradeID") == trade_id:
+                        return {"realizedPL": closed.get("realizedPL"), "price": closed.get("price"),
+                                "time": txn.get("time")}
+        return None

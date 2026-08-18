@@ -106,21 +106,59 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
                 closed = client.get_trade(trade_id)
             except requests.exceptions.HTTPError as e:
                 if e.response is not None and e.response.status_code == 404:
-                    # OANDA has no record of this trade ID at all -- not
-                    # "still settling", genuinely gone (a demo account
-                    # reset, or an ID that never resolved). Retrying
-                    # forever would never succeed and the phantom entry
-                    # keeps inflating the portfolio-heat calculation, so
-                    # mark it LOST rather than leaving it stuck OPEN
-                    # indefinitely. There's no way to recover its real
-                    # P&L, so it's recorded as 0.0, not guessed at.
-                    entry["realized_pnl"] = 0.0
-                    entry["exit_price"] = None
-                    entry["closed_at"] = now.isoformat()
-                    entry["status"] = LOST
-                    changed.append(entry)
-                    print(f"WARNING: trade {trade_id} not found on OANDA (404) -- "
-                          f"marking LOST, real P&L unrecoverable", flush=True)
+                    # Real incident, confirmed directly against this
+                    # account's own OANDA transaction history: get_trade()
+                    # 404'd here for trades that HAD genuinely closed --
+                    # both this single-trade lookup and get_closed_trades()'s
+                    # list came up completely empty, while the raw
+                    # transactions endpoint had the real close data the
+                    # whole time (this account's trade-resource retention
+                    # apparently doesn't match its transaction retention).
+                    # Before giving up, fall back to searching transaction
+                    # history for the fill that actually closed this trade
+                    # -- only mark LOST if that comes up empty too.
+                    fallback = None
+                    try:
+                        fallback = client.find_closed_trade(trade_id, entry["opened_at"])
+                    except Exception as fe:
+                        print(f"WARNING: transaction-history fallback for trade {trade_id} "
+                              f"failed: {fe}", flush=True)
+                    if fallback is not None:
+                        pnl = float(fallback["realizedPL"])
+                        entry["realized_pnl"] = pnl
+                        price = fallback.get("price")
+                        entry["exit_price"] = float(price) if price is not None else None
+                        close_time = fallback.get("time")
+                        entry["closed_at"] = _normalize_oanda_timestamp(close_time) if close_time else now.isoformat()
+                        entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
+                        changed.append(entry)
+                        print(f"INFO: trade {trade_id} not found via get_trade() (404) but recovered "
+                              f"via transaction history -- real P&L {pnl:+.2f}", flush=True)
+                    else:
+                        # Genuinely no record anywhere -- not "still
+                        # settling", genuinely gone (a demo account reset,
+                        # or an ID that never resolved). Retrying forever
+                        # would never succeed and the phantom entry keeps
+                        # inflating the portfolio-heat calculation, so mark
+                        # it LOST rather than leaving it stuck OPEN
+                        # indefinitely. There's no way to recover its real
+                        # P&L, so it's recorded as 0.0, not guessed at.
+                        entry["realized_pnl"] = 0.0
+                        entry["exit_price"] = None
+                        entry["closed_at"] = now.isoformat()
+                        entry["status"] = LOST
+                        changed.append(entry)
+                        print(f"WARNING: trade {trade_id} not found on OANDA (404, and not in "
+                              f"transaction history either) -- marking LOST, real P&L unrecoverable",
+                              flush=True)
+                    # Same "save right after resolving THIS entry" reasoning
+                    # as the expiry branch below -- this classification is
+                    # a genuine, final conclusion about the trade (found via
+                    # transaction history, or genuinely given up on), not a
+                    # transient retry state, so it shouldn't ride on the
+                    # single batched save at the very end of the loop
+                    # outliving whatever else this pass still has to do.
+                    save_journal(entries)
                 else:
                     print(f"WARNING: could not look up trade {trade_id}: {e}", flush=True)
                 continue
@@ -142,6 +180,7 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             entry["closed_at"] = _normalize_oanda_timestamp(close_time) if close_time else now.isoformat()
             entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
             changed.append(entry)
+            save_journal(entries)
 
         elif is_expired(entry, now):
             try:
@@ -220,13 +259,9 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             expiry_notifications.append((entry["instrument"], entry["direction"], entry["realized_pnl"],
                                           entry.get("account_currency", "")))
 
-    # Whatever's left in `changed` here is from the OTHER branch (SL/TP
-    # already closed on OANDA, reclassified via get_trade()) -- that
-    # branch has no fresh irreversible action of its own to protect (the
-    # close already happened in the past; a crash before this save just
-    # means the next pass re-reads the same still-true OANDA state and
-    # tries again, no data at risk), so a single batched save for those
-    # is still fine.
+    # Every branch above now saves immediately after resolving its own
+    # entry, so this is a pure safety net (a harmless redundant write if
+    # everything already landed) rather than the sole save it used to be.
     if changed:
         save_journal(entries)
 
