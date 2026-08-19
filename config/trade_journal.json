@@ -991,10 +991,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-19T16:53:03.282774+00:00",
+    "exit_price": 0.79876,
+    "realized_pnl": 11.9098
   },
   {
     "trade_id": "1016",
