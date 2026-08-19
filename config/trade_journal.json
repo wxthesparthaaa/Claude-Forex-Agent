@@ -850,5 +850,41 @@
     "closed_at": "2026-08-19T01:45:49.201698+00:00",
     "exit_price": 0.70762,
     "realized_pnl": 22.8052
+  },
+  {
+    "trade_id": "988",
+    "instrument": "USD_CHF",
+    "direction": "SHORT",
+    "units": -44143,
+    "entry_price": 0.81074,
+    "stop_loss": 0.81132,
+    "take_profit": 0.80958,
+    "confidence_pct": 75.6,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 38 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: neutral."
+    ],
+    "opened_at": "2026-08-19T07:02:02.026312+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.319134,
+    "confidence_components": {
+      "breadth": 85.71428571428571,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 52.5
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": true
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
