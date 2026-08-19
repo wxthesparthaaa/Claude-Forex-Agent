@@ -1,5 +1,5 @@
 {
-  "scanned_at": "2026-08-19T10:21:59.781949+00:00",
+  "scanned_at": "2026-08-19T10:42:02.053723+00:00",
   "candidates": [
     {
       "instrument": "USD_CHF",
@@ -14,15 +14,15 @@
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": -21326,
+      "units": -21330,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 27214.6,
+      "notional_account_currency": 27214.99,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 36 (neutral range).",
+        "RSI is 37 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
