@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-19T11:01:59.059866+00:00",
-  "candidates": [
-    {
-      "instrument": "USD_CHF",
-      "direction": "SHORT",
-      "entry_price": 0.8102,
-      "stop_loss": 0.8112,
-      "take_profit": 0.8082,
-      "confidence_pct": 80.0,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": -25597,
-      "unit_label": "units",
-      "risk_amount": 40.319134,
-      "notional_account_currency": 32666.04,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 41 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-19T11:21:58.156634+00:00",
+  "candidates": []
 }
