@@ -918,10 +918,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-19T12:26:20.523854+00:00",
+    "exit_price": 0.80971,
+    "realized_pnl": 6.6541
   },
   {
     "trade_id": "1000",
