@@ -32,8 +32,8 @@
   "week_start_timestamp": "2026-08-16T16:19:44.281581+00:00",
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
-    "AUD_USD": "2026-08-20T06:02:06.118121+08:00",
-    "NZD_USD": "2026-08-20T06:02:06.118121+08:00",
+    "AUD_USD": "2026-08-20T06:22:00.557108+08:00",
+    "NZD_USD": "2026-08-20T06:22:00.557108+08:00",
     "USD_JPY": "2026-08-19T21:32:12.147678+08:00",
     "EUR_USD": "2026-08-19T23:52:16.727261+08:00",
     "GBP_USD": "2026-08-19T23:52:16.727261+08:00",
@@ -45,11 +45,8 @@
     "BCO_USD": "2026-08-19T23:52:16.727261+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 1,
-  "interval_scanned_instruments_since_digest": [
-    "AUD_USD",
-    "NZD_USD"
-  ],
+  "interval_scan_count_since_digest": 0,
+  "interval_scanned_instruments_since_digest": [],
   "last_scan_digest_sent_at": "2026-08-19T21:36:49.843512+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
