@@ -45,7 +45,7 @@
     "BCO_USD": "2026-08-18T23:57:07.868732+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 4,
+  "interval_scan_count_since_digest": 5,
   "interval_scanned_instruments_since_digest": [
     "USD_JPY"
   ],
