@@ -1,30 +1,30 @@
 {
-  "scanned_at": "2026-08-19T13:32:06.263785+00:00",
+  "scanned_at": "2026-08-19T13:52:03.907247+00:00",
   "candidates": [
     {
       "instrument": "USD_CHF",
       "direction": "SHORT",
-      "entry_price": 0.80448,
+      "entry_price": 0.80336,
       "stop_loss": 0.81074,
-      "take_profit": 0.79196,
-      "confidence_pct": 47.4,
+      "take_profit": 0.7886,
+      "confidence_pct": 47.5,
       "confidence_components": {
         "breadth": 100.0,
         "rsi": 0.0,
         "candlestick": 50.0,
-        "news": 54.166666666666664
+        "news": 55.55555555555556
       },
-      "units": -4073,
+      "units": -3448,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 5181.17,
+      "notional_account_currency": 4388.58,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 13 (oversold -- some chase risk).",
+        "RSI is 11 (oversold -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-3.0) -- higher reversal risk than usual.",
+        "Caution: the broader currency move looks stretched (z=-3.1) -- higher reversal risk than usual.",
         "News sentiment: neutral."
       ],
       "rejected_reason": null,
