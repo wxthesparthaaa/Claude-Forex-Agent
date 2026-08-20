@@ -296,12 +296,14 @@
     {% if live_trades %}
     <div style="overflow-x:auto;">
     <table>
-      <tr><th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th class="num">Auto-closes in</th></tr>
+      <tr><th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th class="num">Auto-closes in</th></tr>
       {% for t in live_trades %}
       <tr>
         <td>{{ t.instrument }}</td>
         <td class="{{ 'long' if t.direction == 'LONG' else 'short' }}">{{ t.direction }}</td>
         <td class="num">{{ t.entry_price }}</td>
+        <td class="num short">{{ t.stop_loss }}</td>
+        <td class="num long">{{ t.take_profit }}</td>
         <td class="num">{{ t.current_price if t.current_price is not none else '—' }}</td>
         <td class="num {{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
           {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
