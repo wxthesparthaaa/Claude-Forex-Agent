@@ -1135,9 +1135,9 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-20T06:43:38.389093+00:00",
+    "exit_price": 158.475,
+    "realized_pnl": -14.2261
   }
 ]
