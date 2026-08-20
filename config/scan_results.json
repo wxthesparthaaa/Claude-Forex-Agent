@@ -1,12 +1,12 @@
 {
-  "scanned_at": "2026-08-20T07:02:02.210215+00:00",
+  "scanned_at": "2026-08-20T07:22:00.654688+00:00",
   "candidates": [
     {
       "instrument": "GBP_USD",
       "direction": "LONG",
-      "entry_price": 1.36126,
+      "entry_price": 1.36142,
       "stop_loss": 1.36,
-      "take_profit": 1.36378,
+      "take_profit": 1.36426,
       "confidence_pct": 80.0,
       "confidence_components": {
         "breadth": 100.0,
@@ -14,52 +14,19 @@
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 25171,
+      "units": 22331,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 43557.77,
+      "notional_account_currency": 38654.91,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 55 (neutral range).",
+        "RSI is 57 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    },
-    {
-      "instrument": "USD_CHF",
-      "direction": "SHORT",
-      "entry_price": 0.79882,
-      "stop_loss": 0.80046,
-      "take_profit": 0.79554,
-      "confidence_pct": 80.0,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": -15448,
-      "unit_label": "units",
-      "risk_amount": 40.319134,
-      "notional_account_currency": 19638.54,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 45 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": null,
+      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
