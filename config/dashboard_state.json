@@ -45,8 +45,17 @@
     "BCO_USD": "2026-08-20T21:52:09.384010+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 0,
-  "interval_scanned_instruments_since_digest": [],
+  "interval_scan_count_since_digest": 1,
+  "interval_scanned_instruments_since_digest": [
+    "EUR_USD",
+    "GBP_USD",
+    "USD_CAD",
+    "USD_CHF",
+    "XAU_USD",
+    "XAG_USD",
+    "WTICO_USD",
+    "BCO_USD"
+  ],
   "last_scan_digest_sent_at": "2026-08-20T12:46:49.844618+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
@@ -70,5 +79,6 @@
     "candlestick": 0.15,
     "news": 0.25
   },
-  "peak_tracked_equity": 2023.1307
+  "peak_tracked_equity": 2023.1307,
+  "trade_time_limit_enabled": false
 }
