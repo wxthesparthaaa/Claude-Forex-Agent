@@ -1243,10 +1243,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "EXPIRED",
+    "closed_at": "2026-08-20T11:25:36.289073+00:00",
+    "exit_price": 1.36389,
+    "realized_pnl": -5.3398
   },
   {
     "trade_id": "1072",
