@@ -1247,5 +1247,41 @@
     "closed_at": null,
     "exit_price": null,
     "realized_pnl": null
+  },
+  {
+    "trade_id": "1072",
+    "instrument": "USD_CHF",
+    "direction": "SHORT",
+    "units": -5524,
+    "entry_price": 0.79536,
+    "stop_loss": 0.79993,
+    "take_profit": 0.78622,
+    "confidence_pct": 66.4,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 24 (oversold -- some chase risk).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: neutral."
+    ],
+    "opened_at": "2026-08-20T09:22:07.392422+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.319134,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 45.53973241329878,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": true
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
