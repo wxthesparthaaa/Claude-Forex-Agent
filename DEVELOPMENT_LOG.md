@@ -1661,3 +1661,26 @@ matching explanation text in each case. Full suite unaffected: 393
 passed.
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 — Second follow-up: "Open for: 2.0h" still read as time-limit-flavored with the limit off
+
+**Problem**: Direct feedback on the status-line fix: "Open for" showing a
+real hours figure (coincidentally 2.0h in the screenshot) right below "2-
+hour time limit is OFF" still looked like it was measuring against that
+2-hour figure, even though the two are unrelated once the limit is off.
+
+**Fix**: "Open for" now shows the same "—" placeholder the Current and
+Unrealized P&L columns already use for "not applicable," instead of a
+real elapsed-hours number, whenever `trade_time_limit_enabled` is false.
+Only renders the real value (alongside "Auto-closes in") when the limit
+is actually on.
+
+**Solution**: Verified via Flask's test client, reading the raw response
+bytes directly (an earlier console-print of the decoded string looked
+corrupted, but that was this diagnostic script's own terminal encoding,
+not the actual response -- confirmed by checking the raw bytes: a proper
+UTF-8 em dash, `\xe2\x80\x94`, identical to the pre-existing dashes
+already used elsewhere in the same row). Template-only change; full
+suite unaffected: 393 passed.
+
+**Fixed**: 2026-08-20
