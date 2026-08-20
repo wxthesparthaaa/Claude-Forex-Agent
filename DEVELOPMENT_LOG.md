@@ -1495,3 +1495,59 @@ doesn't lose an EARLIER entry's already-recovered classification (same
 suite: 374 passed (up from 368).
 
 **Fixed**: 2026-08-18
+
+## 2026-08-20 — Three requested changes: a time-limit toggle, a weekly gain chart, and live trade status in scan digests
+
+**Request**: (1) Remove the 2-hour force-close and let SL/TP alone decide
+when a trade closes, with a Settings toggle to switch it back on. (2) A
+line chart above the Scan Now button showing this week's gain Monday to
+Friday, to see progress through the week. (3) The periodic scan digest
+should show whether a trade is currently open and its live gain/loss.
+
+**Time-limit toggle**: Added `DashboardState.trade_time_limit_enabled`
+(default `False`, so the change takes effect immediately for the existing
+account too, not just future ones). `trade_monitor.check_open_trades` and
+`live_trades_view` both take an `expiry_enabled` parameter that, when left
+as `None` (the default both real call sites use), resolves from
+`dashboard_state.trade_time_limit_enabled` at call time -- so a Settings
+change takes effect on the very next check without app.py or the scheduler
+needing to thread anything through by hand. `is_expired()` is only
+consulted when `expiry_enabled` is true. The Live Trades table's "Auto-
+closes in" column now shows "No limit" instead of a clamped 0.0h once past
+2 hours, which would otherwise misleadingly read as "about to close."
+
+**Weekly gain chart**: Added `trade_journal.weekly_gain_series()`, which
+buckets realized P&L by SGT calendar day since `state.week_start_timestamp`
+(the same field the existing "GAIN (THIS WEEK)" tile already uses) and
+returns a running cumulative total per weekday, Monday through today only
+(a quiet day repeats the previous day's total rather than showing a gap).
+Rendered as a Chart.js line chart in a new card directly above the Scan Now
+button, colored green/red by whether the week is net positive so far.
+
+**Scan digest trade status**: `notification_formats.format_scan_digest_message`
+now accepts an `open_trades` list (the same row shape
+`trade_monitor.live_trades_view()` already produces) and appends each
+open trade's instrument/direction/live unrealized P&L, or "No trade
+currently open" when the list is genuinely empty. `None` (distinct from
+an empty list) means the OANDA lookup itself failed and omits the section
+entirely, rather than claiming "no trade open" when this app genuinely
+doesn't know right now. `check_scan_digest` fetches this via
+`live_trades_view()`, wrapped so a lookup failure can never block the
+digest itself from sending.
+
+**Solution**: New tests across `test_trade_monitor.py` (toggle disables/
+enables the force-close, the `None` default correctly reads the persisted
+setting, `hours_remaining` is `None` when disabled),
+`test_trade_journal.py` (`weekly_gain_series`'s cumulative math, flat
+carry-through on quiet days, stopping at today vs. showing the full week
+on a weekend check, respecting the same week-start cutoff as the existing
+gain tile), `test_notifications.py` (the digest message's open-trade
+section for None/empty/single/multiple trades, and a missing-P&L
+fallback), and `test_scheduled_jobs.py` (the digest includes live status
+when the lookup succeeds, and still sends when it fails). Verified live
+against the running dev server: canvas renders, Chart.js instantiates
+without console errors, the settings toggle round-trips through a real
+POST to `/settings` and persists correctly. Full suite: 389 passed (up
+from 374).
+
+**Fixed**: 2026-08-20

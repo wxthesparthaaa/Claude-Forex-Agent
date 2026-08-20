@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "Added a Settings toggle to disable the 2hr force-close entirely (off by default -- SL/TP "
+                    "alone decide now), a weekly-gain line chart above Scan Now, and live open-trade P&L in "
+                    "the periodic scan digest."),
     ("2026-08-18", "Found the REAL driver of the climbing 'unrecoverable' count: get_trade() 404'd for trades "
                     "that had genuinely closed via a normal stop-loss -- confirmed against OANDA's own "
                     "transaction history, which had the real P&L the whole time. Added a fallback that searches "
