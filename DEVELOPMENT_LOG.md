@@ -1586,3 +1586,32 @@ data landing in the correct week's bucket; clicking "Per day" correctly
 swaps to the daily view and back. Full suite: 393 passed (up from 389).
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 — Show SL/TP in the Live trades table, verified mobile-safe
+
+**Request**: Do live trades have a TP and SL, and if so can they be shown
+in the Live trades section -- with any edits kept phone-compatible.
+
+**Answer**: Yes -- `trade_monitor.live_trades_view()` already included
+`stop_loss`/`take_profit` in every row (needed for the 2-hour expiry
+logic and the manual trade-review page), it just wasn't rendered in this
+particular table. Added SL/TP columns between Entry and Current, colored
+red/green matching the existing long/short convention used elsewhere on
+the page. No backend change needed -- the data was already there.
+
+**Mobile verification**: The table sits inside the same `overflow-x:auto`
+wrapper the candidates table above it already uses, so two extra columns
+widen the table, not the page. Verified directly at a 375px viewport (via
+a DOM-injected row, since the real account had no open trade to render
+against at the time): `document.body.scrollWidth` stayed exactly at the
+viewport width (no page-level horizontal overflow) while the table
+wrapper's own `scrollWidth` exceeded its `clientWidth` (it scrolls
+internally), confirming the phone layout stays intact.
+
+**Solution**: Verified rendering correctness via Flask's test client with
+a mocked `live_trades_view()` return (SL rendered red, TP rendered green,
+correct values in the right columns) rather than risking the real local
+journal against live OANDA reconciliation. Template-only change; full
+suite unaffected: 393 passed.
+
+**Fixed**: 2026-08-20

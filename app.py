@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "Added SL/TP columns to the Live trades table -- live_trades_view() already had the data, "
+                    "just wasn't showing it. Verified the extra columns stay mobile-safe: the table scrolls "
+                    "within its own card at a 375px viewport, the page itself never overflows sideways."),
     ("2026-08-20", "Correction: the dashboard chart should show gain PER WEEK by default (each week's own total, "
                     "across recent weeks), not a day-by-day breakdown of the current week. Added the real "
                     "per-week series and kept the daily one as a 'Per day' toggle on the same chart."),
