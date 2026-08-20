@@ -139,6 +139,14 @@ class DashboardState:
     # only ever ratchets upward. Without this, the breaker has nothing
     # to measure a drawdown against (see account_state_from_tracked_capital).
     peak_tracked_equity: float | None = None
+    # Explicit user request: let SL/TP alone decide when a trade closes,
+    # not this app's own 2-hour force-close -- False by default so this
+    # change takes effect immediately for existing accounts too (which
+    # don't have this field in their persisted state yet, and so pick up
+    # the dataclass default here on load), not just newly-created ones.
+    # See trade_monitor._check_open_trades_unsafe's own comment for how
+    # this gates the force-close branch.
+    trade_time_limit_enabled: bool = False
 
 
 def default_state() -> DashboardState:

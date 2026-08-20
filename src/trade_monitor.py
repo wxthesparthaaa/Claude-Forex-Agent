@@ -53,8 +53,16 @@ def _normalize_oanda_timestamp(ts: str) -> str:
     return datetime.fromisoformat(ts).isoformat()
 
 
-def check_open_trades(client: OandaClient = None) -> list:
+def check_open_trades(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
     """Returns the list of entries that changed status this call.
+
+    expiry_enabled: whether the 2-hour force-close applies at all --
+    None (the default, used by both real call sites: app.py's dashboard
+    route and the scheduled job) means "read dashboard_state.trade_time_limit_enabled
+    at call time," so a Settings change takes effect on the very next
+    check without either caller needing to thread it through by hand.
+    Tests pass True/False explicitly instead, to stay isolated from
+    whatever's on local disk in config/dashboard_state.json.
 
     Acquires trade_journal.JOURNAL_LOCK non-blockingly -- this runs both
     from a 5-minute scheduled tick AND on every dashboard page load, so
@@ -71,12 +79,15 @@ def check_open_trades(client: OandaClient = None) -> list:
     if not JOURNAL_LOCK.acquire(blocking=False):
         return []
     try:
-        return _check_open_trades_unsafe(client)
+        return _check_open_trades_unsafe(client, expiry_enabled)
     finally:
         JOURNAL_LOCK.release()
 
 
-def _check_open_trades_unsafe(client: OandaClient = None) -> list:
+def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
+    if expiry_enabled is None:
+        from dashboard_state import load_state
+        expiry_enabled = load_state().trade_time_limit_enabled
     entries = load_journal()
     pending = open_entries(entries)
     if not pending:
@@ -182,7 +193,7 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             changed.append(entry)
             save_journal(entries)
 
-        elif is_expired(entry, now):
+        elif expiry_enabled and is_expired(entry, now):
             try:
                 result = client.close_trade(trade_id)
             except Exception as e:
@@ -386,11 +397,21 @@ def reconcile_orphan_trades(client: OandaClient = None) -> list:
         return [asdict(e) for e in new_entries]
 
 
-def live_trades_view(client: OandaClient = None) -> list:
+def live_trades_view(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
     """Display-ready rows for the dashboard's "Live trades" section --
     journal entries still OPEN, enriched with OANDA's current
     unrealized P&L/price (the journal itself only has entry-time data)
-    and how close each is to the 2-hour expiry."""
+    and how close each is to the 2-hour expiry.
+
+    expiry_enabled: same resolution rule as check_open_trades -- None
+    reads dashboard_state.trade_time_limit_enabled at call time. When
+    disabled, "hours_remaining" is None (not a clamped 0.0h, which would
+    misleadingly read as "about to auto-close" for a trade this app no
+    longer force-closes at all)."""
+    if expiry_enabled is None:
+        from dashboard_state import load_state
+        expiry_enabled = load_state().trade_time_limit_enabled
+
     client = client or OandaClient()
     entries = open_entries(load_journal())
     if not entries:
@@ -414,6 +435,6 @@ def live_trades_view(client: OandaClient = None) -> list:
             "unrealized_pnl": float(live.get("unrealizedPL", 0)) if live else None,
             "account_currency": entry.get("account_currency", ""),
             "hours_open": round(elapsed, 1),
-            "hours_remaining": round(max(0.0, EXPIRY_HOURS - elapsed), 1),
+            "hours_remaining": round(max(0.0, EXPIRY_HOURS - elapsed), 1) if expiry_enabled else None,
         })
     return rows

@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import threading
 from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from market_hours import SGT
 from state_paths import atomic_write_json, load_json_resilient
@@ -218,6 +218,46 @@ def realized_pnl_since(entries: list, since_iso: str | None) -> float:
             continue
         total += e.get("realized_pnl") or 0.0
     return total
+
+
+def weekly_gain_series(entries: list, week_start_iso: str | None, now: datetime = None) -> list[tuple[str, float]]:
+    """Cumulative realized P&L per weekday (Mon-Fri, SGT) for the week in
+    progress -- one point per day up to and including today, so the
+    dashboard's chart shows how the week's gain has actually built up
+    day by day, not just the single running total the "GAIN (THIS WEEK)"
+    tile already shows. A day with no trades repeats the previous day's
+    cumulative total (a flat step, not a gap), matching how a running
+    balance would really look.
+
+    week_start_iso is the same field the "GAIN (THIS WEEK)" tile is
+    computed from (state.week_start_timestamp, reset every Friday
+    reflection) -- since forex is closed all weekend, everything after
+    it is inherently this week's Monday onward already, so this doesn't
+    need to separately derive "Monday of the current week" from it."""
+    now = now or datetime.now(timezone.utc)
+    today_sgt = now.astimezone(SGT).date()
+    monday = today_sgt - timedelta(days=today_sgt.weekday())
+
+    daily_pnl: dict = {}
+    for e in entries:
+        if e["status"] == OPEN:
+            continue
+        closed_at = e.get("closed_at")
+        if not closed_at:
+            continue
+        if week_start_iso is not None and closed_at <= week_start_iso:
+            continue
+        day = datetime.fromisoformat(closed_at).astimezone(SGT).date()
+        daily_pnl[day] = daily_pnl.get(day, 0.0) + (e.get("realized_pnl") or 0.0)
+
+    series = []
+    running = 0.0
+    day = monday
+    while day <= today_sgt and day.weekday() <= 4:  # Mon(0)..Fri(4) only
+        running += daily_pnl.get(day, 0.0)
+        series.append((day.strftime("%a"), running))
+        day += timedelta(days=1)
+    return series
 
 
 def hours_open(entry: dict, now: datetime = None) -> float:

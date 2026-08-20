@@ -32,6 +32,7 @@ from market_hours import (SGT, NY, is_forex_market_open, instrument_window_activ
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, closed_entries
+from trade_monitor import live_trades_view
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
@@ -347,7 +348,7 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     return candidates
 
 
-def check_scan_digest(now: datetime = None) -> None:
+def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
     """Periodic "still scanning, nothing to trade" Telegram digest --
     run_autopilot_interval_scan is deliberately silent otherwise (only an
     actual executed trade notifies), which left no way to tell "quietly
@@ -446,7 +447,19 @@ def check_scan_digest(now: datetime = None) -> None:
     # Sent outside the lock -- a slow Telegram call has no reason to hold
     # up run_autopilot_interval_scan's own tally increment.
     if send_args is not None:
-        send_message(format_scan_digest_message(*send_args))
+        # Real feedback: the digest gave no visibility into whether a
+        # trade was quietly open (and how it was doing) between the
+        # sparser trade-executed/trade-closed alerts. This OANDA call is
+        # best-effort and must never block the digest itself from
+        # sending -- None (not []) on failure, so the message correctly
+        # omits the section rather than claiming "no trade open" when
+        # this app genuinely doesn't know right now.
+        open_trades = None
+        try:
+            open_trades = live_trades_view(client)
+        except Exception as e:
+            print(f"WARNING: could not fetch open-trade status for the scan digest: {e}", flush=True)
+        send_message(format_scan_digest_message(*send_args, open_trades=open_trades))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:
@@ -734,7 +747,7 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     check_market_status_transition(now)
     # Also unconditional -- its own elapsed-time/phase/off-switch gating
     # lives inside the function itself, same reasoning as the call above.
-    check_scan_digest(now)
+    check_scan_digest(now, client)
 
     state = load_state()
 

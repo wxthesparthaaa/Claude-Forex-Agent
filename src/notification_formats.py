@@ -62,7 +62,8 @@ def format_market_open_message(close_sgt) -> str:
     )
 
 
-def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None) -> str:
+def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None,
+                                open_trades: list | None = None) -> str:
     """The interval scanner is deliberately silent otherwise -- only an
     actual executed trade notifies -- so this periodic digest is the only
     proof-of-life during a stretch where nothing qualified. window_start_sgt:
@@ -73,17 +74,43 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
     X, Y, Z" read as ambiguous -- unclear whether it meant each pair got
     scanned N times, or that a scan simply completed. Reworded to lead with
     what actually happened (a periodic scan completed) and state the tick
-    count as its own clearly-labeled detail, not the headline noun."""
+    count as its own clearly-labeled detail, not the headline noun.
+
+    open_trades: trade_monitor.live_trades_view()'s own row shape
+    (instrument/direction/unrealized_pnl/account_currency), or None when
+    that lookup itself failed (a transient OANDA hiccup) -- distinct from
+    an empty list (successfully checked, genuinely nothing open). Only
+    the None case omits this section entirely, since claiming "no trade
+    open" when the check itself failed would be reporting something this
+    app doesn't actually know. Second piece of real feedback this
+    addresses: no visibility into whether a trade was quietly open (and
+    how it was doing) between the sparser trade-executed/trade-closed
+    alerts."""
     since = f" since {window_start_sgt.strftime('%H:%M')} SGT" if window_start_sgt else ""
     if scan_count == 0:
-        return f"✅ <b>Periodic scan complete</b>\nNo pairs were in their trading window{since}. No new trades."
-    pairs = ", ".join(instruments) if instruments else "no pairs"
-    plural = "cycle" if scan_count == 1 else "cycles"
-    return (
-        f"✅ <b>Periodic scan complete</b>\n"
-        f"Checked {pairs} across {scan_count} scan {plural}{since}.\n"
-        f"No new trades from this window."
-    )
+        base = f"✅ <b>Periodic scan complete</b>\nNo pairs were in their trading window{since}. No new trades."
+    else:
+        pairs = ", ".join(instruments) if instruments else "no pairs"
+        plural = "cycle" if scan_count == 1 else "cycles"
+        base = (
+            f"✅ <b>Periodic scan complete</b>\n"
+            f"Checked {pairs} across {scan_count} scan {plural}{since}.\n"
+            f"No new trades from this window."
+        )
+
+    if open_trades is None:
+        return base
+    if not open_trades:
+        return base + "\n\nNo trade currently open."
+
+    lines = []
+    for t in open_trades:
+        pnl = t.get("unrealized_pnl")
+        currency = t.get("account_currency", "")
+        pnl_str = f"{pnl:+.2f} {currency}" if pnl is not None else "P&L unavailable"
+        lines.append(f"  {t['instrument']} {t['direction']}: {pnl_str}")
+    header = "Open trade" if len(open_trades) == 1 else "Open trades"
+    return base + f"\n\n📈 <b>{header}</b>\n" + "\n".join(lines)
 
 
 def format_trade_executed_message(trade: dict) -> str:

@@ -227,6 +227,18 @@
     {% endfor %}
   {% endwith %}
 
+  {% if weekly_gain_chart %}
+  <div class="card">
+    <h3 style="margin-top:0;">
+      This week's gain
+      <span style="font-weight:700; font-size:1em;">&mdash; {{ "%+.2f"|format(week_gain) }} {{ account_currency }}</span>
+    </h3>
+    <div style="max-width:100%; height:180px;">
+      <canvas id="weeklyGainChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <form method="post" action="/scan">
       <button class="scan-btn" type="submit" data-loading-text="Scanning..."
@@ -289,7 +301,7 @@
           {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
         </td>
         <td class="num">{{ t.hours_open }}h</td>
-        <td class="num">{{ t.hours_remaining }}h</td>
+        <td class="num">{{ (t.hours_remaining ~ 'h') if t.hours_remaining is not none else 'No limit' }}</td>
       </tr>
       {% endfor %}
     </table>
@@ -373,6 +385,17 @@
           Emergency stop -- when on, Autopilot will not place any new trades, regardless of
           confidence or phase. Existing open trades are unaffected and stay broker-protected
           by their own SL/TP. Switch off to resume.
+        </p>
+        <div class="toggle-row">
+          <span>2-hour time limit</span>
+          <label class="switch">
+            <input type="checkbox" name="trade_time_limit_enabled" {{ 'checked' if trade_time_limit_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default -- trades stay open until stop-loss or take-profit closes them,
+          instead of being force-closed after 2 hours. Switch on to restore the old time limit.
         </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
@@ -477,6 +500,37 @@
         plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
       }
     });
+
+    {% if weekly_gain_chart %}
+    (function () {
+      var labels = {{ weekly_gain_chart|map(attribute=0)|list|tojson }};
+      var values = {{ weekly_gain_chart|map(attribute=1)|list|tojson }};
+      var lineColor = values[values.length - 1] >= 0 ? '#3fb950' : '#f85149';
+      new Chart(document.getElementById('weeklyGainChart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            borderColor: lineColor,
+            backgroundColor: lineColor + '26',
+            fill: true,
+            tension: 0.25,
+            pointRadius: 4,
+            pointBackgroundColor: lineColor,
+          }]
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#333' }, ticks: { color: '#999' } },
+            y: { grid: { color: '#333' }, ticks: { color: '#999' } },
+          }
+        }
+      });
+    })();
+    {% endif %}
 
     // "Cancel all trades" affects every open position at once -- require
     // an explicit confirmation before it's even allowed to submit.

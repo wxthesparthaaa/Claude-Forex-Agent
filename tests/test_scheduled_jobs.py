@@ -881,6 +881,54 @@ def test_scan_digest_resends_after_interval_elapses(mock_send, tmp_path, monkeyp
     mock_send.assert_called_once()
 
 
+@patch("scheduled_jobs.live_trades_view")
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_includes_live_open_trade_status(mock_send, mock_live_trades, tmp_path, monkeypatch):
+    # Real feedback: the digest gave no visibility into whether a trade
+    # was quietly open (and its live P&L) between the sparser trade-
+    # executed/trade-closed alerts.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    dashboard_state.save_state(state)
+
+    mock_live_trades.return_value = [
+        {"instrument": "EUR_USD", "direction": "LONG", "unrealized_pnl": 8.5, "account_currency": "SGD"},
+    ]
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "EUR_USD LONG: +8.50 SGD" in sent_text
+
+
+@patch("scheduled_jobs.live_trades_view")
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_still_sends_when_the_open_trade_lookup_fails(mock_send, mock_live_trades, tmp_path, monkeypatch):
+    # The OANDA lookup for open-trade status is best-effort -- a failure
+    # there must not block the digest itself from sending.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    dashboard_state.save_state(state)
+
+    mock_live_trades.side_effect = Exception("OANDA timeout")
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "Open trade" not in sent_text
+    assert "No trade currently open" not in sent_text
+
+
 @patch("scheduled_jobs.send_message")
 def test_scan_digest_skips_send_when_a_fresh_github_pull_shows_another_process_already_sent(
         mock_send, tmp_path, monkeypatch):

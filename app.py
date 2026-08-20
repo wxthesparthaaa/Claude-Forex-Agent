@@ -60,7 +60,7 @@ from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher, _e
 from github_state_sync import pull_state_from_github, github_file_url, get_sync_status
 from trade_journal import (
     load_journal, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
-    JOURNAL_XLSX_REPO_PATH,
+    weekly_gain_series, JOURNAL_XLSX_REPO_PATH,
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
@@ -246,9 +246,10 @@ def dashboard():
         summary = client.get_account_summary()
         broker_balance = float(summary.get("NAV", summary.get("balance", 0)))
         account_currency = summary.get("currency", "")
-        check_open_trades(client)  # detect SL/TP closures + force-close anything past 2 hours
+        # detect SL/TP closures + force-close anything past 2 hours, if that's still enabled
+        check_open_trades(client, expiry_enabled=state.trade_time_limit_enabled)
         reconcile_orphan_trades(client)  # catch any OANDA position this app never journaled
-        live_trades = live_trades_view(client)
+        live_trades = live_trades_view(client, expiry_enabled=state.trade_time_limit_enabled)
     except Exception as e:
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
 
@@ -269,6 +270,7 @@ def dashboard():
     week_start_capital = strategy_capital - week_gain  # equity before this week's trades
     week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
     WEEKLY_GAIN_TARGET = 200.0
+    weekly_gain_chart = weekly_gain_series(journal, state.week_start_timestamp)
     overall_gain = strategy_capital - state.strategy_starting_capital
     overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
                          if state.strategy_starting_capital else 0.0)
@@ -300,7 +302,9 @@ def dashboard():
         reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
+        weekly_gain_chart=weekly_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
+        trade_time_limit_enabled=state.trade_time_limit_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -572,6 +576,12 @@ def settings():
         ))
         if kill_switch_on and not phase_state.kill_switch_engaged:
             flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
+
+        # Explicit user request: let SL/TP alone decide when a trade
+        # closes, no forced close at 2 hours -- a plain checkbox toggle
+        # like autopilot/kill_switch above, not clamped/validated against
+        # anything since it's just a bool.
+        state.trade_time_limit_enabled = request.form.get("trade_time_limit_enabled") == "on"
 
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):

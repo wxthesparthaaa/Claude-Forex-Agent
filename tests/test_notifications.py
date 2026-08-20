@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from notification_formats import (
     format_potential_trades_message, format_trade_executed_message,
     format_trade_closed_message, format_nightly_review_message, format_friday_reflection_message,
+    format_scan_digest_message,
 )
 from telegram_notifier import send_message, TelegramConfig, get_telegram_config
 
@@ -137,3 +138,41 @@ def test_send_message_prefixes_the_source_header(mock_urlopen):
     called_req = mock_urlopen.call_args[0][0]
     sent_body = urllib.parse.parse_qs(called_req.data.decode())
     assert sent_body["text"][0] == "\U0001F310 <b>Claude Forex Agent</b>\nhello"
+
+
+def test_format_scan_digest_message_omits_open_trade_section_when_lookup_failed():
+    # open_trades=None means the OANDA lookup itself failed -- must not
+    # claim "no trade open" when this app genuinely doesn't know.
+    msg = format_scan_digest_message(3, ["EUR_USD"], open_trades=None)
+    assert "Open trade" not in msg
+    assert "No trade currently open" not in msg
+
+
+def test_format_scan_digest_message_reports_no_trade_open_when_genuinely_none():
+    msg = format_scan_digest_message(3, ["EUR_USD"], open_trades=[])
+    assert "No trade currently open." in msg
+
+
+def test_format_scan_digest_message_shows_live_pnl_for_an_open_trade():
+    msg = format_scan_digest_message(3, ["EUR_USD"], open_trades=[
+        {"instrument": "EUR_USD", "direction": "LONG", "unrealized_pnl": 12.34, "account_currency": "SGD"},
+    ])
+    assert "Open trade" in msg
+    assert "EUR_USD LONG: +12.34 SGD" in msg
+
+
+def test_format_scan_digest_message_lists_multiple_open_trades():
+    msg = format_scan_digest_message(3, ["EUR_USD"], open_trades=[
+        {"instrument": "EUR_USD", "direction": "LONG", "unrealized_pnl": 12.34, "account_currency": "SGD"},
+        {"instrument": "GBP_USD", "direction": "SHORT", "unrealized_pnl": -5.0, "account_currency": "SGD"},
+    ])
+    assert "Open trades" in msg  # plural header
+    assert "EUR_USD LONG: +12.34 SGD" in msg
+    assert "GBP_USD SHORT: -5.00 SGD" in msg
+
+
+def test_format_scan_digest_message_handles_missing_pnl_gracefully():
+    msg = format_scan_digest_message(3, ["EUR_USD"], open_trades=[
+        {"instrument": "EUR_USD", "direction": "LONG", "unrealized_pnl": None, "account_currency": "SGD"},
+    ])
+    assert "P&L unavailable" in msg
