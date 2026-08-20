@@ -1211,5 +1211,41 @@
     "closed_at": "2026-08-20T09:04:46.713757+00:00",
     "exit_price": 0.79797,
     "realized_pnl": 18.7619
+  },
+  {
+    "trade_id": "1068",
+    "instrument": "GBP_USD",
+    "direction": "LONG",
+    "units": 7297,
+    "entry_price": 1.36435,
+    "stop_loss": 1.36,
+    "take_profit": 1.37305,
+    "confidence_pct": 66.3,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 76 (overbought -- some chase risk).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: neutral."
+    ],
+    "opened_at": "2026-08-20T09:22:02.100745+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.319134,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 45.356958439608874,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": true
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null
   }
 ]
