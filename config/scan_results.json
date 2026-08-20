@@ -1,27 +1,27 @@
 {
-  "scanned_at": "2026-08-20T08:42:01.102677+00:00",
+  "scanned_at": "2026-08-20T09:02:01.116298+00:00",
   "candidates": [
     {
       "instrument": "GBP_USD",
       "direction": "LONG",
-      "entry_price": 1.36336,
+      "entry_price": 1.3635,
       "stop_loss": 1.36,
-      "take_profit": 1.37008,
-      "confidence_pct": 67.5,
+      "take_profit": 1.3705,
+      "confidence_pct": 62.7,
       "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 69.87612760067279,
+        "breadth": 71.42857142857143,
+        "rsi": 70.77739802869765,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 9441,
+      "units": 9063,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 16359.52,
+      "notional_account_currency": 15706.87,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
         "RSI is 71 (overbought -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
@@ -30,32 +30,32 @@
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": true
       }
     },
     {
       "instrument": "USD_CHF",
       "direction": "SHORT",
-      "entry_price": 0.79784,
+      "entry_price": 0.7977,
       "stop_loss": 0.79993,
-      "take_profit": 0.79366,
-      "confidence_pct": 75.0,
+      "take_profit": 0.79324,
+      "confidence_pct": 70.0,
       "confidence_components": {
-        "breadth": 85.71428571428571,
+        "breadth": 71.42857142857143,
         "rsi": 100.0,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": -12110,
+      "units": -11347,
       "unit_label": "units",
       "risk_amount": 40.319134,
-      "notional_account_currency": 15391.1,
+      "notional_account_currency": 14422.64,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 37 (neutral range).",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 36 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
