@@ -220,12 +220,46 @@ def realized_pnl_since(entries: list, since_iso: str | None) -> float:
     return total
 
 
-def weekly_gain_series(entries: list, week_start_iso: str | None, now: datetime = None) -> list[tuple[str, float]]:
+def weekly_gain_series(entries: list, now: datetime = None, num_weeks: int = 8) -> list[tuple[str, float]]:
+    """Total realized P&L PER calendar week (Mon-Fri trading week, SGT),
+    one point per week -- the most recent num_weeks, up to and including
+    the current (possibly still in-progress) week -- so the dashboard's
+    chart shows whether gains are trending up or down week over week,
+    not a day-by-day breakdown within a single week. Each point is that
+    week's own total, not a running cumulative across weeks.
+
+    Every closed entry in the whole journal is bucketed by which week its
+    closed_at falls into (keyed by that week's Monday, SGT), not just
+    entries since state.week_start_timestamp -- that field only marks the
+    CURRENT week's own start, not past week boundaries, so it can't be
+    used to derive prior weeks' totals. A week with no closed trades
+    still appears as an explicit 0.0 point rather than being skipped, so
+    a quiet week is visible as a real zero, not a gap in the timeline."""
+    now = now or datetime.now(timezone.utc)
+    today_sgt = now.astimezone(SGT).date()
+    current_week_monday = today_sgt - timedelta(days=today_sgt.weekday())
+
+    weekly_pnl: dict = {}
+    for e in entries:
+        if e["status"] == OPEN:
+            continue
+        closed_at = e.get("closed_at")
+        if not closed_at:
+            continue
+        day = datetime.fromisoformat(closed_at).astimezone(SGT).date()
+        week_monday = day - timedelta(days=day.weekday())
+        weekly_pnl[week_monday] = weekly_pnl.get(week_monday, 0.0) + (e.get("realized_pnl") or 0.0)
+
+    weeks = [current_week_monday - timedelta(weeks=i) for i in range(num_weeks - 1, -1, -1)]
+    return [(f"{monday.month}/{monday.day}", weekly_pnl.get(monday, 0.0)) for monday in weeks]
+
+
+def daily_gain_series(entries: list, week_start_iso: str | None, now: datetime = None) -> list[tuple[str, float]]:
     """Cumulative realized P&L per weekday (Mon-Fri, SGT) for the week in
-    progress -- one point per day up to and including today, so the
-    dashboard's chart shows how the week's gain has actually built up
-    day by day, not just the single running total the "GAIN (THIS WEEK)"
-    tile already shows. A day with no trades repeats the previous day's
+    progress -- one point per day up to and including today, the drill-
+    down view the dashboard's chart switches to (per-week is the
+    default) to see how the current week's gain has actually built up
+    day by day. A day with no trades repeats the previous day's
     cumulative total (a flat step, not a gap), matching how a running
     balance would really look.
 

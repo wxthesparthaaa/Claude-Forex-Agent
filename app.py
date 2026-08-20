@@ -60,7 +60,7 @@ from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher, _e
 from github_state_sync import pull_state_from_github, github_file_url, get_sync_status
 from trade_journal import (
     load_journal, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
-    weekly_gain_series, JOURNAL_XLSX_REPO_PATH,
+    weekly_gain_series, daily_gain_series, JOURNAL_XLSX_REPO_PATH,
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
@@ -273,7 +273,8 @@ def dashboard():
     week_start_capital = strategy_capital - week_gain  # equity before this week's trades
     week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
     WEEKLY_GAIN_TARGET = 200.0
-    weekly_gain_chart = weekly_gain_series(journal, state.week_start_timestamp)
+    weekly_gain_chart = weekly_gain_series(journal)
+    daily_gain_chart = daily_gain_series(journal, state.week_start_timestamp)
     overall_gain = strategy_capital - state.strategy_starting_capital
     overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
                          if state.strategy_starting_capital else 0.0)
@@ -305,7 +306,7 @@ def dashboard():
         reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
-        weekly_gain_chart=weekly_gain_chart,
+        weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         trade_time_limit_enabled=state.trade_time_limit_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,

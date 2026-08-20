@@ -229,11 +229,17 @@
 
   {% if weekly_gain_chart %}
   <div class="card">
-    <h3 style="margin-top:0;">
-      This week's gain
-      <span style="font-weight:700; font-size:1em;">&mdash; {{ "%+.2f"|format(week_gain) }} {{ account_currency }}</span>
-    </h3>
-    <div style="max-width:100%; height:180px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <h3 id="gainChartTitle" style="margin:0;">
+        Gain per week
+        <span style="font-weight:700; font-size:1em;">&mdash; {{ "%+.2f"|format(week_gain) }} {{ account_currency }} this week</span>
+      </h3>
+      <div class="toggle-row" style="gap:0.4rem;">
+        <button type="button" id="gainChartWeekBtn" class="scan-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per week</button>
+        <button type="button" id="gainChartDayBtn" class="cancel-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per day</button>
+      </div>
+    </div>
+    <div style="max-width:100%; height:180px; margin-top:0.75rem;">
       <canvas id="weeklyGainChart"></canvas>
     </div>
   </div>
@@ -503,23 +509,31 @@
 
     {% if weekly_gain_chart %}
     (function () {
-      var labels = {{ weekly_gain_chart|map(attribute=0)|list|tojson }};
-      var values = {{ weekly_gain_chart|map(attribute=1)|list|tojson }};
-      var lineColor = values[values.length - 1] >= 0 ? '#3fb950' : '#f85149';
-      new Chart(document.getElementById('weeklyGainChart'), {
+      var series = {
+        week: { labels: {{ weekly_gain_chart|map(attribute=0)|list|tojson }},
+                values: {{ weekly_gain_chart|map(attribute=1)|list|tojson }},
+                title: 'Gain per week' },
+        day: { labels: {{ daily_gain_chart|map(attribute=0)|list|tojson }},
+               values: {{ daily_gain_chart|map(attribute=1)|list|tojson }},
+               title: 'Gain per day (this week)' },
+      };
+      var summary = ' — {{ "%+.2f"|format(week_gain) }} {{ account_currency }} this week';
+      var titleEl = document.getElementById('gainChartTitle');
+      var weekBtn = document.getElementById('gainChartWeekBtn');
+      var dayBtn = document.getElementById('gainChartDayBtn');
+
+      function colorFor(values) {
+        var last = values.length ? values[values.length - 1] : 0;
+        return last >= 0 ? '#3fb950' : '#f85149';
+      }
+
+      var chart = new Chart(document.getElementById('weeklyGainChart'), {
         type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            data: values,
-            borderColor: lineColor,
-            backgroundColor: lineColor + '26',
-            fill: true,
-            tension: 0.25,
-            pointRadius: 4,
-            pointBackgroundColor: lineColor,
-          }]
-        },
+        data: { labels: series.week.labels, datasets: [{
+          data: series.week.values, borderColor: colorFor(series.week.values),
+          backgroundColor: colorFor(series.week.values) + '26', fill: true, tension: 0.25,
+          pointRadius: 4, pointBackgroundColor: colorFor(series.week.values),
+        }] },
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
@@ -529,6 +543,30 @@
           }
         }
       });
+
+      // Toggle is purely client-side -- both series are already on the
+      // page, so switching views is instant with no extra request.
+      // "Per week" is the default view on every load, matching the
+      // explicit request that the chart show gain PER WEEK, not a
+      // daily breakdown, unless the user asks to drill into one week.
+      function show(key, activeBtn, inactiveBtn) {
+        var s = series[key];
+        var color = colorFor(s.values);
+        chart.data.labels = s.labels;
+        chart.data.datasets[0].data = s.values;
+        chart.data.datasets[0].borderColor = color;
+        chart.data.datasets[0].backgroundColor = color + '26';
+        chart.data.datasets[0].pointBackgroundColor = color;
+        chart.update();
+        titleEl.childNodes[0].textContent = s.title;
+        activeBtn.className = 'scan-btn';
+        activeBtn.style.cssText = 'padding:0.3rem 0.7rem; font-size:0.78rem;';
+        inactiveBtn.className = 'cancel-btn';
+        inactiveBtn.style.cssText = 'padding:0.3rem 0.7rem; font-size:0.78rem;';
+      }
+
+      weekBtn.addEventListener('click', function () { show('week', weekBtn, dayBtn); });
+      dayBtn.addEventListener('click', function () { show('day', dayBtn, weekBtn); });
     })();
     {% endif %}
 

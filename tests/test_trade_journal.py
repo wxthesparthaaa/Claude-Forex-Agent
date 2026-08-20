@@ -219,7 +219,7 @@ def test_win_loss_counts_ignores_entries_missing_realized_pnl():
 _MONDAY = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)  # 09:00 SGT Monday
 
 
-def test_weekly_gain_series_builds_cumulative_totals_up_to_today():
+def test_daily_gain_series_builds_cumulative_totals_up_to_today():
     entries = [
         {"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0},
         {"status": "FAILED", "closed_at": (_MONDAY + timedelta(days=1, hours=3)).isoformat(), "realized_pnl": -4.0},
@@ -227,14 +227,14 @@ def test_weekly_gain_series_builds_cumulative_totals_up_to_today():
     ]
     now = _MONDAY + timedelta(days=1, hours=5)  # Tuesday, later the same day
 
-    series = tj.weekly_gain_series(entries, week_start_iso=None, now=now)
+    series = tj.daily_gain_series(entries, week_start_iso=None, now=now)
 
     assert [day for day, _ in series] == ["Mon", "Tue"]
     assert series[0][1] == 10.0
     assert series[1][1] == 6.0  # cumulative: 10.0 - 4.0
 
 
-def test_weekly_gain_series_carries_the_running_total_flat_through_a_quiet_day():
+def test_daily_gain_series_carries_the_running_total_flat_through_a_quiet_day():
     entries = [
         {"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0},
         # nothing closes Tuesday
@@ -242,38 +242,82 @@ def test_weekly_gain_series_carries_the_running_total_flat_through_a_quiet_day()
     ]
     now = _MONDAY + timedelta(days=2, hours=4)  # Wednesday
 
-    series = tj.weekly_gain_series(entries, week_start_iso=None, now=now)
+    series = tj.daily_gain_series(entries, week_start_iso=None, now=now)
 
     assert [day for day, _ in series] == ["Mon", "Tue", "Wed"]
     assert [pnl for _, pnl in series] == [10.0, 10.0, 15.0]  # Tuesday repeats Monday's total
 
 
-def test_weekly_gain_series_stops_at_today_not_the_full_week():
+def test_daily_gain_series_stops_at_today_not_the_full_week():
     entries = [{"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0}]
     now = _MONDAY  # still Monday -- Tue-Fri haven't happened yet
 
-    series = tj.weekly_gain_series(entries, week_start_iso=None, now=now)
+    series = tj.daily_gain_series(entries, week_start_iso=None, now=now)
 
     assert [day for day, _ in series] == ["Mon"]
 
 
-def test_weekly_gain_series_shows_the_full_week_when_checked_over_the_weekend():
+def test_daily_gain_series_shows_the_full_week_when_checked_over_the_weekend():
     entries = [{"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0}]
     now = _MONDAY + timedelta(days=5)  # Saturday
 
-    series = tj.weekly_gain_series(entries, week_start_iso=None, now=now)
+    series = tj.daily_gain_series(entries, week_start_iso=None, now=now)
 
     assert [day for day, _ in series] == ["Mon", "Tue", "Wed", "Thu", "Fri"]
     assert series[-1][1] == 10.0  # no trades after Monday -- stays flat through Friday
 
 
-def test_weekly_gain_series_respects_week_start_cutoff_like_the_gain_tile_does():
+def test_daily_gain_series_respects_week_start_cutoff_like_the_gain_tile_does():
     entries = [
         {"status": "SUCCESSFUL", "closed_at": (_MONDAY - timedelta(days=3)).isoformat(), "realized_pnl": 999.0},
         {"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0},
     ]
     now = _MONDAY
 
-    series = tj.weekly_gain_series(entries, week_start_iso=_MONDAY.isoformat(), now=now)
+    series = tj.daily_gain_series(entries, week_start_iso=_MONDAY.isoformat(), now=now)
 
     assert series == [("Mon", 10.0)]  # last week's trade excluded, same as realized_pnl_since
+
+
+def test_weekly_gain_series_totals_each_week_separately_not_cumulative():
+    # Explicit correction: the chart must show each week's OWN gain, not
+    # a running cumulative across weeks and not a day-by-day breakdown.
+    entries = [
+        {"status": "SUCCESSFUL", "closed_at": (_MONDAY - timedelta(weeks=1, hours=-2)).isoformat(), "realized_pnl": 20.0},
+        {"status": "FAILED", "closed_at": (_MONDAY - timedelta(weeks=1, hours=-4)).isoformat(), "realized_pnl": -5.0},
+        {"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0},
+    ]
+    now = _MONDAY + timedelta(hours=5)  # this Monday
+
+    series = tj.weekly_gain_series(entries, now=now, num_weeks=2)
+
+    assert len(series) == 2
+    assert series[0][1] == 15.0  # last week: 20 - 5, NOT carried into this week's total
+    assert series[1][1] == 10.0  # this week, on its own
+
+
+def test_weekly_gain_series_returns_a_zero_point_for_a_week_with_no_trades():
+    entries = [{"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0}]
+    now = _MONDAY + timedelta(weeks=2)  # two quiet weeks after the one trade
+
+    series = tj.weekly_gain_series(entries, now=now, num_weeks=3)
+
+    assert [pnl for _, pnl in series] == [10.0, 0.0, 0.0]
+
+
+def test_weekly_gain_series_labels_each_point_with_that_weeks_monday():
+    entries = []
+    now = _MONDAY
+
+    series = tj.weekly_gain_series(entries, now=now, num_weeks=1)
+
+    assert series == [("8/17", 0.0)]
+
+
+def test_weekly_gain_series_includes_the_current_partial_week_as_the_last_point():
+    entries = [{"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 7.5}]
+    now = _MONDAY + timedelta(hours=5)  # still Monday -- this week is only just starting
+
+    series = tj.weekly_gain_series(entries, now=now, num_weeks=1)
+
+    assert series == [("8/17", 7.5)]
