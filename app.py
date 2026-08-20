@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "Follow-up: hiding 'Auto-closes in' fixed the contradiction but left no way to tell from the "
+                    "table whether a trade has a time limit at all. Added a single status line above Live trades "
+                    "instead -- '2hr time limit is ON/OFF' -- since it's one global toggle, not per-trade."),
     ("2026-08-20", "'Open for' next to 'Auto-closes in: No limit' read as contradictory -- not a real conflict, "
                     "but with the time limit off that column is now a constant 'No limit' for every row. Now it "
                     "only renders at all when the time limit is actually on, where both columns are meaningful."),

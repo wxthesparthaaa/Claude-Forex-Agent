@@ -1640,3 +1640,24 @@ column absent when off, present with the right value when on. Template-
 only change; full suite unaffected: 393 passed.
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 — Follow-up: hiding the column removed the confusion but also removed the answer
+
+**Problem**: With "Auto-closes in" hidden (the immediately preceding
+fix), the user asked a fair follow-up: looking at the Live trades table
+now, is a given trade actually subject to a time limit or not? There was
+no longer any way to tell from the table itself.
+
+**Fix**: The time limit is one global Settings toggle, not a per-trade
+property, so a per-row column was never really the right shape for this
+information anyway. Added a single status line above the table instead:
+"⏱ 2-hour time limit is ON/OFF -- ..." with a one-sentence explanation of
+what that means for every trade currently listed. Shows whether or not
+there are any open trades, so the current policy is visible either way.
+
+**Solution**: Verified via Flask's test client for both states (default
+off, and a patched `load_state` for on) -- correct bold ON/OFF and
+matching explanation text in each case. Full suite unaffected: 393
+passed.
+
+**Fixed**: 2026-08-20
