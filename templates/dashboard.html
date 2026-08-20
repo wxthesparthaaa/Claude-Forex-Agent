@@ -319,7 +319,7 @@
         <td class="num {{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
           {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
         </td>
-        <td class="num">{{ t.hours_open }}h</td>
+        <td class="num">{{ (t.hours_open ~ 'h') if trade_time_limit_enabled else '—' }}</td>
         {% if trade_time_limit_enabled %}<td class="num">{{ t.hours_remaining }}h</td>{% endif %}
       </tr>
       {% endfor %}
