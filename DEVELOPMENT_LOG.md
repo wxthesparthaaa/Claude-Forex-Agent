@@ -1615,3 +1615,28 @@ journal against live OANDA reconciliation. Template-only change; full
 suite unaffected: 393 passed.
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 — "Open for" vs "Auto-closes in" read as contradictory once the time limit is off
+
+**Problem**: User flagged a screenshot showing "Open for: 1.8h" next to
+"Auto-closes in: No limit" as looking like it might contradict itself.
+
+**Not actually a bug**: the two columns state different, compatible
+facts -- how long a trade has been open, and whether a TIME-based close
+will happen at all. But with the time-limit toggle off by default (from
+earlier today's change), "Auto-closes in" is now "No limit" for every
+single row, permanently -- zero differentiating information, which is
+exactly what invited the question in the first place.
+
+**Fix**: The "Auto-closes in" header and cell now only render when
+`trade_time_limit_enabled` is true. Off (the current default): just
+"Open for" stays, which is all that's actually meaningful. On: both
+columns render together, where they're genuinely complementary (elapsed
+vs. remaining).
+
+**Solution**: Verified both states via Flask's test client (mocked
+`live_trades_view` + a patched `load_state` for the enabled case) --
+column absent when off, present with the right value when on. Template-
+only change; full suite unaffected: 393 passed.
+
+**Fixed**: 2026-08-20

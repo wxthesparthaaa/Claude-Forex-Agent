@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "'Open for' next to 'Auto-closes in: No limit' read as contradictory -- not a real conflict, "
+                    "but with the time limit off that column is now a constant 'No limit' for every row. Now it "
+                    "only renders at all when the time limit is actually on, where both columns are meaningful."),
     ("2026-08-20", "Added SL/TP columns to the Live trades table -- live_trades_view() already had the data, "
                     "just wasn't showing it. Verified the extra columns stay mobile-safe: the table scrolls "
                     "within its own card at a 375px viewport, the page itself never overflows sideways."),
