@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "Correction: the dashboard chart should show gain PER WEEK by default (each week's own total, "
+                    "across recent weeks), not a day-by-day breakdown of the current week. Added the real "
+                    "per-week series and kept the daily one as a 'Per day' toggle on the same chart."),
     ("2026-08-20", "Added a Settings toggle to disable the 2hr force-close entirely (off by default -- SL/TP "
                     "alone decide now), a weekly-gain line chart above Scan Now, and live open-trade P&L in "
                     "the periodic scan digest."),

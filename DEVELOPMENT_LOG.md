@@ -1551,3 +1551,38 @@ POST to `/settings` and persists correctly. Full suite: 389 passed (up
 from 374).
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 — Correction: the dashboard chart should show gain PER WEEK, not a daily breakdown
+
+**Problem**: User caught that the chart shipped earlier today showed this
+week's gain building up day by day (Mon-Fri), when the actual request was
+one point per WEEK -- each week's own total, across several recent weeks,
+to see week-over-week progress. A follow-up made clear the daily view
+should stay available too, as a filter, with per-week as the default.
+
+**Fix**: Added `trade_journal.weekly_gain_series(entries, now=None,
+num_weeks=8)`, which buckets every closed trade in the whole journal by
+which calendar week it closed in (keyed by that week's Monday, SGT) and
+returns each week's own total -- not a running cumulative across weeks --
+for the most recent 8 weeks including the current still-in-progress one.
+Unlike the day-level version, this can't be derived from
+`state.week_start_timestamp` alone (that field only marks the CURRENT
+week's own start, not past week boundaries), so it re-derives every
+week's boundary directly from each entry's `closed_at`.
+
+The original function (now renamed `daily_gain_series`, unchanged logic)
+stays available as a drill-down: the chart card got "Per week"/"Per day"
+toggle buttons that swap the same Chart.js instance's data/labels/title
+client-side, no extra request. Per-week renders on every page load by
+default, matching the correction.
+
+**Solution**: `daily_gain_series`'s existing 5 tests renamed to match;
+added 5 new tests for `weekly_gain_series` (totals each week separately,
+not cumulative; a quiet week still gets an explicit 0.0 point rather than
+being skipped; week labels are that week's Monday date; the current
+partial week is included as the last point). Verified live against the
+running dashboard: default load shows 8 weekly points with real historical
+data landing in the correct week's bucket; clicking "Per day" correctly
+swaps to the daily view and back. Full suite: 393 passed (up from 389).
+
+**Fixed**: 2026-08-20
