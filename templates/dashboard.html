@@ -293,6 +293,13 @@
         <span style="color:var(--muted); font-size:0.8rem;">Journal sync not configured</span>
       {% endif %}
     </div>
+    <p style="margin:0.25rem 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+      {% if trade_time_limit_enabled %}
+        &#9202; 2-hour time limit is <strong style="color:var(--fg);">ON</strong> -- every trade below force-closes 2h after opening if SL/TP hasn't hit yet.
+      {% else %}
+        &#9202; 2-hour time limit is <strong style="color:var(--fg);">OFF</strong> -- every trade below stays open until its own SL or TP closes it.
+      {% endif %}
+    </p>
     {% if live_trades %}
     <div style="overflow-x:auto;">
     <table>
