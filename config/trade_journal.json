@@ -1351,10 +1351,10 @@
       "candlestick": true,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-08-21T01:20:42.084874+00:00",
+    "exit_price": 0.71273,
+    "realized_pnl": 81.4168
   },
   {
     "trade_id": "1095",
