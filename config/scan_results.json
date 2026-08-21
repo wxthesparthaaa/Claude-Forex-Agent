@@ -1,102 +1,36 @@
 {
-  "scanned_at": "2026-08-21T09:21:23.692677+00:00",
+  "scanned_at": "2026-08-21T09:41:24.356516+00:00",
   "candidates": [
-    {
-      "instrument": "EUR_USD",
-      "direction": "LONG",
-      "entry_price": 1.17082,
-      "stop_loss": 1.16867,
-      "take_profit": 1.17512,
-      "confidence_pct": 75.7,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 82.6192444967306,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 15324,
-      "unit_label": "units",
-      "risk_amount": 41.801792,
-      "notional_account_currency": 22763.28,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 68 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no EUR-relevant headlines in the latest fetch (neutral)."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    },
-    {
-      "instrument": "GBP_USD",
-      "direction": "LONG",
-      "entry_price": 1.36658,
-      "stop_loss": 1.36354,
-      "take_profit": 1.37266,
-      "confidence_pct": 78.7,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 94.61636924968161,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 10837,
-      "unit_label": "units",
-      "risk_amount": 41.801792,
-      "notional_account_currency": 18789.57,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 66 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    },
     {
       "instrument": "USD_CHF",
       "direction": "SHORT",
-      "entry_price": 0.79879,
+      "entry_price": 0.79883,
       "stop_loss": 0.80078,
-      "take_profit": 0.79481,
-      "confidence_pct": 82.8,
+      "take_profit": 0.79493,
+      "confidence_pct": 89.0,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 91.6596562930831,
-        "candlestick": 20.0,
+        "rsi": 98.55207893657287,
+        "candlestick": 50.0,
         "news": 87.5
       },
-      "units": -13225,
+      "units": -13499,
       "unit_label": "units",
       "risk_amount": 41.801792,
-      "notional_account_currency": 16779.17,
+      "notional_account_currency": 17123.72,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 33 (neutral range).",
-        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
+        "RSI is 35 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: works against this direction -- worth a second look."
       ],
       "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": true
       }
     }
