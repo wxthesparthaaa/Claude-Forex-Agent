@@ -1,61 +1,28 @@
 {
-  "scanned_at": "2026-08-21T02:41:22.294836+00:00",
+  "scanned_at": "2026-08-21T03:01:27.249671+00:00",
   "candidates": [
-    {
-      "instrument": "NZD_USD",
-      "direction": "LONG",
-      "entry_price": 0.59718,
-      "stop_loss": 0.59396,
-      "take_profit": 0.60362,
-      "confidence_pct": 55.0,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 0.0,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 10220,
-      "unit_label": "units",
-      "risk_amount": 41.801792,
-      "notional_account_currency": 7752.05,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 86 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    },
     {
       "instrument": "AUD_USD",
       "direction": "LONG",
-      "entry_price": 0.71384,
+      "entry_price": 0.71399,
       "stop_loss": 0.71208,
-      "take_profit": 0.71736,
-      "confidence_pct": 62.6,
+      "take_profit": 0.71781,
+      "confidence_pct": 59.6,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 30.449558057621005,
+        "rsi": 18.36166215660583,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 18699,
+      "units": 17233,
       "unit_label": "units",
       "risk_amount": 41.801792,
-      "notional_account_currency": 16954.28,
+      "notional_account_currency": 15625.71,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 79 (overbought -- some chase risk).",
+        "RSI is 81 (overbought -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: no AUD-relevant headlines in the latest fetch (neutral)."
       ],
