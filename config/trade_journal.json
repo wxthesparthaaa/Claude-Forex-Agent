@@ -1423,10 +1423,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null
+    "status": "FAILED",
+    "closed_at": "2026-08-21T12:39:08.152523+00:00",
+    "exit_price": 1.36354,
+    "realized_pnl": -42.6601
   },
   {
     "trade_id": "1105",
