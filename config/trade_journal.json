@@ -1387,10 +1387,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
+    "status": "LOST",
+    "closed_at": "2026-08-21T11:30:17.488431+00:00",
     "exit_price": null,
-    "realized_pnl": null
+    "realized_pnl": 0.0
   },
   {
     "trade_id": "1101",
