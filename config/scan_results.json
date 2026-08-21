@@ -1,4 +1,71 @@
 {
-  "scanned_at": "2026-08-21T08:41:22.950760+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-21T09:01:23.716507+00:00",
+  "candidates": [
+    {
+      "instrument": "GBP_USD",
+      "direction": "LONG",
+      "entry_price": 1.36655,
+      "stop_loss": 1.36354,
+      "take_profit": 1.37257,
+      "confidence_pct": 72.6,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 70.37296840733987,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": 10946,
+      "unit_label": "units",
+      "risk_amount": 41.801792,
+      "notional_account_currency": 18976.64,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 71 (overbought -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: neutral."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    },
+    {
+      "instrument": "EUR_USD",
+      "direction": "LONG",
+      "entry_price": 1.17053,
+      "stop_loss": 1.16867,
+      "take_profit": 1.17425,
+      "confidence_pct": 77.0,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 87.9691152960212,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": 17715,
+      "unit_label": "units",
+      "risk_amount": 41.801792,
+      "notional_account_currency": 26306.44,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 67 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: no EUR-relevant headlines in the latest fetch (neutral)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": true,
+        "news": false
+      }
+    }
+  ]
 }
