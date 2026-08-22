@@ -1792,3 +1792,65 @@ reports "BREAKEVEN" (the fix doesn't over-correct real flat closes). Full
 suite: 398 passed (up from 395).
 
 **Fixed**: 2026-08-21
+
+## 2026-08-21 (continued) — Research finding: RSI/volume momentum pyramiding does not show a real edge
+
+**Request**: User proposed pyramiding into a winning trade -- once
+momentum (RSI + volume) confirms a trade is still running, add a second
+same-pair position (same risk framework, journal-tagged as an experiment)
+to win more on strong moves. Asked to discuss before building; given the
+choice between backtesting the idea first or shipping straight to a
+live-tagged experiment, chose backtest first -- same "prove the edge
+before it touches live execution" standard the 2026-08-14 base-strategy
+research already established for this project.
+
+**Method**: New `scripts/backtest_momentum_addon.py`, reusing the exact
+entry-decision funnel from `backtest_entry_filter.py` (structure-break +
+`entry_allowed` + `derive_trade_levels` + the min-stop floor). For every
+base trade that reaches +1R in its favor before resolving, checks RSI(14)
+(trending but not yet exhausted -- 50-75 for a long, 25-50 for a short)
+and volume (current bar >= 1.2x its own 20-bar rolling average) at that
+exact bar; if both confirm, simulates a second same-direction position
+from there (same stop distance, same 2:1 R:R from its own new entry). No
+lookahead -- the momentum check only uses data available at that bar, and
+position sizing/currency conversion is deliberately not simulated, same
+as the base backtest (this measures signal quality, not dollar P&L).
+
+**Result**: 2662 base signals across all 11 instruments, 413 days
+(2025-07-03 to 2026-08-21). Base trades: 31.1% win rate, -0.066R
+expectancy (consistent with the Aug 14 finding that the raw entry signal
+has no real directional edge). 1257 trades (47%) reached +1R; of those,
+627 (50%) triggered the RSI+volume confirmation and got a simulated
+add-on. Add-on trades alone: 31.8% win rate, -0.046R expectancy -- also
+losing. Combined book (base + add-on together): -0.077R per base trade,
+worse than base-only. **Net effect of the pyramiding rule: -0.011R per
+base trade -- HURTS, not helps.**
+
+Checked for temporal stability (the same bar the Aug 14 backtest set):
+first half of the period -0.028R (hurts), second half +0.004R (helps) --
+the sign FLIPS between halves, the same "not a real, stable effect"
+signature that backtest already used to rule out several other ideas.
+Per-instrument: 4 of 11 show a small positive effect (GBP_USD +0.025R,
+USD_CAD +0.035R, XAU_USD +0.004R, BCO_USD +0.040R), 7 show a small
+negative one -- no consistent pattern, and every effect size is small
+enough to read as noise around zero rather than a real signal.
+
+**Conclusion, documented honestly rather than shipped as a feature**:
+this specific momentum-confirmation rule (RSI 50-75/25-50 + 1.2x volume
+at the +1R mark) does not show a real edge in this data, and pyramiding
+on top of a base strategy that itself has no confirmed directional edge
+would mean doubling down on unproven signal, not compounding a real one.
+Not implemented. Left open: a different trigger point (not exactly +1R),
+different RSI bands, or a genuine volume-breakout threshold (rather than
+just >=1.2x average) could behave differently and weren't tested here --
+this backtest answers the ONE specific parameterization discussed, not
+the whole design space.
+
+Also attempted to recover trades 1084/1095's real P&L now that OANDA's
+basic API is reachable again -- found the transactions endpoint
+specifically is still returning broken/empty data (confirmed: even a
+transaction ID within `lastTransactionID`'s own reported range returns
+nothing). Still blocked; will retry later.
+
+**Fixed**: 2026-08-21 (research finding, not a bug -- see 2026-08-14's
+same framing)
