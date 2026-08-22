@@ -1854,3 +1854,43 @@ nothing). Still blocked; will retry later.
 
 **Fixed**: 2026-08-21 (research finding, not a bug -- see 2026-08-14's
 same framing)
+
+## 2026-08-22 — Research finding: RSI/volume as a BASE-ENTRY filter also doesn't help
+
+**Request**: Follow-up to the pyramiding backtest -- would the same RSI/
+volume momentum check improve the base strategy itself if used as a hard
+entry gate (only take a trade at all if RSI+volume confirm at that exact
+moment), rather than as a pyramiding trigger? Or does it just add noise?
+
+**Method**: New `scripts/backtest_rsi_volume_entry_filter.py`, importing
+the fetch/entry-funnel machinery directly from `backtest_momentum_addon.py`
+rather than duplicating it. Same signal set as both prior backtests
+(structure-break + `entry_allowed` + `derive_trade_levels` + min-stop
+floor), same RSI/volume confirmation bands as the pyramiding test (RSI
+50-75 long / 25-50 short, volume >= 1.2x its 20-bar average) -- just
+evaluated at the entry bar itself instead of the +1R mark.
+
+**Result**: Same 2662 signals, 413 days. Baseline (unfiltered): 31.1% win
+rate, -0.066R. RSI+volume confirmed at entry (1034 signals, 38.8% of the
+total): 30.9% win rate, **-0.074R -- slightly WORSE than the unfiltered
+baseline**, not better. The non-confirmed subset (-0.060R) actually did
+marginally better than the confirmed one. Confirmed subset was worse than
+baseline in the first half specifically (-0.150R vs -0.075R baseline) and
+close to breakeven in the second (-0.006R vs -0.057R baseline) -- some
+improvement over time, but never positive, and the confirmed subset never
+beat its own unfiltered baseline in either half. Per-instrument: mostly
+worse (EUR_USD, GBP_USD, AUD_USD, USD_CHF, XAU_USD all confirmed-worse-
+than-baseline; GBP_USD notably so, -0.241R vs -0.039R baseline), with a
+few instruments (XAG_USD, BCO_USD, NZD_USD) improving.
+
+**Conclusion**: this specific RSI+volume confirmation, as an entry gate,
+does not improve the base strategy -- it cuts trade volume by ~61% while
+making results marginally worse on aggregate. Combined with the
+pyramiding backtest's finding (same signal, applied at +1R instead), this
+is now two independent tests of the same RSI/volume confirmation logic
+both coming back negative. Not implemented. As before, this tests one
+specific parameterization -- a different RSI band, a genuine volume-spike
+threshold, or a different indicator entirely could still behave
+differently.
+
+**Fixed**: 2026-08-22 (research finding, not a bug)
