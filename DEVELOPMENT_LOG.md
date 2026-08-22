@@ -1684,3 +1684,56 @@ already used elsewhere in the same row). Template-only change; full
 suite unaffected: 393 passed.
 
 **Fixed**: 2026-08-20
+
+## 2026-08-20 (continued) — Scan digest firing all weekend, and an evening listing that's no longer relevant in autopilot mode
+
+**Problem 1**: User's Telegram showed "Periodic scan complete" digests at
+6:21am and 9:21am reporting "No pairs were in their trading window" --
+during what should have been a market-closed weekend.
+
+**Root cause**: `check_scan_digest` never checked `is_forex_market_open()`
+at all. `run_autopilot_interval_scan` already correctly no-ops the whole
+closure (it has its own market-open gate), so the digest's own tally
+stayed genuinely at 0 scans throughout -- but the digest function itself
+had no equivalent gate, so it kept firing on its own 3-hour cadence right
+through Friday-to-Sunday, each time truthfully but uselessly reporting
+nothing happened.
+
+**Fix**: Added an `is_forex_market_open(now)` check at the very top of
+`check_scan_digest`, returning immediately (not even advancing
+`last_scan_digest_sent_at`) while the market's closed. The clock resumes
+exactly where it left off once the market reopens -- the first check
+after reopen will show real elapsed time well past the interval and fire
+once, which doubles as a welcome "back up and scanning" confirmation
+rather than spam.
+
+**Problem 2**: A separate message, "Potential trades tonight / No
+qualifying setups tonight / Auto pilot mode on," was flagged as no longer
+relevant now that autopilot is confirmed on and correctly labeled as such.
+
+**Root cause**: `run_evening_scan_and_notify`'s `notify_listing` branch
+sent this listing every night unconditionally, regardless of phase. In
+manual/semi-auto mode it's essential -- the only way that user learns
+about tonight's candidates to review and execute by hand. In autopilot
+mode it's redundant noise: any candidate that actually qualifies gets
+auto-executed and sends its own dedicated "Trade executed" message
+immediately after (same function, right below), and a quiet night with
+nothing qualifying is already covered by the periodic scan digest.
+
+**Fix**: The send is now skipped specifically when `current_mode ==
+"autopilot"` (the freshly-reread mode, same "re-read right before
+sending" snapshot this branch already used) -- scan and auto-execution
+both proceed completely unchanged; only this one specific notification is
+suppressed. `last_evening_listing_sent_at` is left untouched when
+skipped, since there's nothing sent to protect a later real send from
+duplicating.
+
+**Solution**: New regression test for the digest gate (Saturday `now`,
+market closed all day -- no send, `last_scan_digest_sent_at` unchanged).
+The evening-listing test that previously flipped phase manual→autopilot
+mid-scan (proving the notification text reflects a late change, not a
+stale snapshot) was flipped to autopilot→manual instead, since that
+direction still sends; a new dedicated test confirms autopilot→autopilot
+sends nothing at all. Full suite: 395 passed (up from 393).
+
+**Fixed**: 2026-08-20

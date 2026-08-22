@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-20", "The scan digest had no market-open gate and kept firing all weekend ('0 scans, no pairs in "
+                    "window'). Also stopped the 'Potential trades tonight' evening listing in autopilot mode -- "
+                    "no longer relevant there since auto-executed trades already get their own message."),
     ("2026-08-20", "'Open for: 2.0h' still read as time-limit-flavored right under 'time limit is OFF'. Now shows "
                     "the same '—' placeholder Current/Unrealized P&L already use for n/a, instead of a real "
                     "hours figure, whenever the time limit is off."),
