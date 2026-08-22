@@ -199,27 +199,41 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
                       f"{last_sent_iso} (within {MIN_LISTING_GAP})", flush=True)
             else:
                 current_mode = phase_state_from_state(fresh_state).phase
-                # Real incident: Render's free tier has been observed
-                # restarting the process repeatedly and unpredictably
-                # (visible in its own logs as "No open HTTP ports
-                # detected" retries between bursts of otherwise-normal
-                # traffic -- a genuine crash/restart loop, not idle
-                # sleep-wake). If the process gets killed between the
-                # send below and the save that used to follow it, the
-                # "already sent" record never lands, and the NEXT boot
-                # has no memory the send happened -- sends again. Saving
-                # the record FIRST, before the network call to Telegram,
-                # means a mid-flight kill fails safe (a legitimate send
-                # might occasionally not go through) instead of failing
-                # unsafe (repeated duplicate sends across every restart).
-                fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
-                save_state(fresh_state)
-                # Diagnostic for the same incident: logs the full call
-                # stack so, if this still recurs, the log shows exactly
-                # which function reached this line and how.
-                print(f"INFO: sending evening listing at {now_utc.isoformat()} (mode={current_mode}, "
-                      f"instruments={instruments})\n{''.join(traceback.format_stack())}", flush=True)
-                send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
+                # Real feedback: in autopilot mode, this listing carries
+                # no action the user needs to take -- any candidate that
+                # actually qualifies gets auto-executed and sends its own
+                # dedicated "Trade executed" message below, and a quiet
+                # night is already covered by the periodic scan digest
+                # (check_scan_digest). It was only ever meant for manual/
+                # semi-auto mode, where it's the sole way that user finds
+                # out about tonight's candidates to review and execute by
+                # hand -- so it's still sent there.
+                if current_mode == "autopilot":
+                    print(f"INFO: skipping evening-listing send -- autopilot mode doesn't need it "
+                          f"({len(candidate_dicts)} candidate(s), any qualifying one gets its own "
+                          f"trade-executed message from auto_execute_candidates below)", flush=True)
+                else:
+                    # Real incident: Render's free tier has been observed
+                    # restarting the process repeatedly and unpredictably
+                    # (visible in its own logs as "No open HTTP ports
+                    # detected" retries between bursts of otherwise-normal
+                    # traffic -- a genuine crash/restart loop, not idle
+                    # sleep-wake). If the process gets killed between the
+                    # send below and the save that used to follow it, the
+                    # "already sent" record never lands, and the NEXT boot
+                    # has no memory the send happened -- sends again. Saving
+                    # the record FIRST, before the network call to Telegram,
+                    # means a mid-flight kill fails safe (a legitimate send
+                    # might occasionally not go through) instead of failing
+                    # unsafe (repeated duplicate sends across every restart).
+                    fresh_state.last_evening_listing_sent_at = now_utc.isoformat()
+                    save_state(fresh_state)
+                    # Diagnostic for the same incident: logs the full call
+                    # stack so, if this still recurs, the log shows exactly
+                    # which function reached this line and how.
+                    print(f"INFO: sending evening listing at {now_utc.isoformat()} (mode={current_mode}, "
+                          f"instruments={instruments})\n{''.join(traceback.format_stack())}", flush=True)
+                    send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
 
         if phase_state.phase == "autopilot":
             try:
@@ -382,6 +396,21 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
     close that window; only mutual exclusion does."""
     now = now or datetime.now(timezone.utc)
     now_utc = now.astimezone(timezone.utc)
+
+    # Real incident: forex closes Friday ~5pm to Sunday ~5pm New York
+    # time, and run_autopilot_interval_scan already correctly no-ops the
+    # whole time (is_forex_market_open gates it) -- but this function had
+    # no such gate of its own, so it kept firing on its own interval
+    # straight through the closure, every time reporting "0 scans, no
+    # pairs were in their trading window" since there was genuinely
+    # nothing to scan. Skipping entirely while closed (not even
+    # advancing last_scan_digest_sent_at) means the weekend produces zero
+    # digests instead of one every interval, and the clock picks back up
+    # exactly where the market reopens -- the first check after reopen
+    # naturally fires once real elapsed time clears the interval, which
+    # doubles as a welcome "back up and scanning" confirmation.
+    if not is_forex_market_open(now_utc):
+        return
 
     send_args = None
     with _scan_digest_lock:

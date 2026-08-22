@@ -373,25 +373,55 @@ def test_evening_listing_reflects_phase_change_made_during_the_scan(mock_send, m
     # at the top of the function, before the scan itself (which can take
     # several seconds) ran -- if the user toggles Autopilot in Settings
     # while a scan is in flight, the notification text must reflect what
-    # they just set, not what it was when the scan started.
+    # they just set, not what it was when the scan started. Flips FROM
+    # autopilot TO manual here (not the other direction) since autopilot
+    # mode no longer sends this listing at all -- see the dedicated
+    # suppression test below for that direction.
     _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()  # starts manual_paper
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
     dashboard_state.save_state(state)
 
-    def _flip_to_autopilot_mid_scan(*args, **kwargs):
+    def _flip_to_manual_mid_scan(*args, **kwargs):
         mid_state = dashboard_state.load_state()
-        mid_state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+        mid_state.phase_state = {"phase": "manual_paper", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
         dashboard_state.save_state(mid_state)
         return []
 
-    mock_scan.side_effect = _flip_to_autopilot_mid_scan
+    mock_scan.side_effect = _flip_to_manual_mid_scan
     client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
 
     run_evening_scan_and_notify(client)
 
     sent_text = mock_send.call_args[0][0]
-    assert "Auto pilot mode on" in sent_text
-    assert "Manual mode on" not in sent_text
+    assert "Manual mode on" in sent_text
+    assert "Auto pilot mode on" not in sent_text
+
+
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_evening_listing_is_not_sent_in_autopilot_mode(mock_send, mock_scan, mock_save, tmp_path, monkeypatch):
+    # Real feedback: "Potential trades tonight ... Auto pilot mode on" is
+    # not relevant once autopilot is on -- any qualifying candidate gets
+    # its own "Trade executed" message from auto_execute_candidates, and
+    # a quiet night is already covered by the periodic scan digest. Only
+    # manual/semi-auto mode actually needs this listing (see the test
+    # above), so autopilot mode must not send it at all.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    mock_send.assert_not_called()
+    # The dedupe timestamp must stay untouched too -- nothing was sent,
+    # so there's nothing to protect a later real send from duplicating.
+    assert dashboard_state.load_state().last_evening_listing_sent_at is None
 
 
 from datetime import datetime as _real_datetime
@@ -782,6 +812,31 @@ def test_scan_digest_off_when_interval_is_zero(mock_send, tmp_path, monkeypatch)
     scheduled_jobs.check_scan_digest()
 
     mock_send.assert_not_called()
+
+
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_skips_entirely_while_the_market_is_closed(mock_send, tmp_path, monkeypatch):
+    # Real incident: run_autopilot_interval_scan already correctly
+    # no-ops all weekend (is_forex_market_open gates it), but this
+    # function had no such gate -- it kept firing every interval right
+    # through the closure, each time reporting "0 scans, no pairs were
+    # in their trading window" since there was genuinely nothing to
+    # scan. Must skip entirely (not even advance the clock) while closed.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 14, 8, 0, tzinfo=timezone.utc).isoformat()  # Friday
+    dashboard_state.save_state(state)
+
+    saturday = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)  # market closed all day Saturday
+    scheduled_jobs.check_scan_digest(saturday)
+
+    mock_send.assert_not_called()
+    # Nothing touched -- the clock resumes exactly where it left off,
+    # not reset as if a digest had genuinely gone out.
+    assert dashboard_state.load_state().last_scan_digest_sent_at == \
+        datetime(2026, 8, 14, 8, 0, tzinfo=timezone.utc).isoformat()
 
 
 @patch("scheduled_jobs.send_message")
