@@ -31,7 +31,7 @@ from market_hours import (SGT, NY, is_forex_market_open, instrument_window_activ
                            next_forex_open, next_forex_close, previous_forex_close)
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
-from trade_journal import load_journal, closed_entries
+from trade_journal import load_journal, closed_entries, LOST
 from trade_monitor import live_trades_view
 from trade_execution import auto_execute_candidates
 from notification_formats import (
@@ -63,7 +63,18 @@ def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> lis
         if since_iso is not None and closed_at <= since_iso:
             continue
         pnl = e.get("realized_pnl") or 0.0
-        outcome = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
+        # Real incident: a LOST entry's realized_pnl is ALWAYS 0.0 -- a
+        # placeholder for "genuinely unrecoverable," not a real, confirmed
+        # zero close (see trade_journal.LOST's own docstring). Classifying
+        # purely off the pnl VALUE folded these into "BREAKEVEN" right
+        # alongside actual confirmed-zero closes, misreporting "we know
+        # this closed flat" when the truth is "we don't know what this
+        # closed at." Checked first so it can never be shadowed by the
+        # pnl-sign logic below.
+        if e["status"] == LOST:
+            outcome = "UNRECOVERABLE"
+        else:
+            outcome = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
         result.append({
             "instrument": e["instrument"], "direction": e["direction"], "outcome": outcome,
             "pnl": pnl, "close_time": closed_at,

@@ -128,12 +128,25 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
                     # Before giving up, fall back to searching transaction
                     # history for the fill that actually closed this trade
                     # -- only mark LOST if that comes up empty too.
-                    fallback = None
                     try:
                         fallback = client.find_closed_trade(trade_id, entry["opened_at"])
                     except Exception as fe:
+                        # Real incident: OANDA's practice API genuinely
+                        # goes down (confirmed live, 503s on multiple
+                        # endpoints including plain account-summary
+                        # calls). A failure HERE means the transaction-
+                        # history search itself never completed -- it is
+                        # NOT evidence the trade is gone, and must not be
+                        # treated the same as "searched and found
+                        # nothing." Falling through to the LOST branch
+                        # below permanently wiped real, recoverable P&L
+                        # to 0.0 over what was often just a transient
+                        # network hiccup. Leave it OPEN and retry next
+                        # pass instead, same as the top-level "could not
+                        # look up trade" branch already does.
                         print(f"WARNING: transaction-history fallback for trade {trade_id} "
-                              f"failed: {fe}", flush=True)
+                              f"failed ({fe}) -- leaving OPEN to retry, NOT marking LOST", flush=True)
+                        continue
                     if fallback is not None:
                         pnl = float(fallback["realizedPL"])
                         entry["realized_pnl"] = pnl

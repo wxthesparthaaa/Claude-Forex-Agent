@@ -214,6 +214,32 @@ def test_check_open_trades_marks_lost_when_oanda_has_no_record_of_the_trade(mock
 
 
 @patch("trade_monitor.send_message")
+def test_check_open_trades_leaves_entry_open_when_the_fallback_itself_fails(mock_send, tmp_path, monkeypatch):
+    # Real incident: OANDA's practice API genuinely goes down (503s
+    # confirmed live, on multiple endpoints). A trade genuinely closed
+    # via SL/TP, get_trade() 404'd (this account's own known behavior),
+    # and the transaction-history fallback ALSO failed -- but because of
+    # a transient network error, not because it searched and found
+    # nothing. The old code treated a raised exception from the fallback
+    # exactly like "searched, found nothing," permanently wiping real,
+    # recoverable P&L to 0.0 (LOST) over what was often just a hiccup.
+    # Must leave it OPEN and retry next pass instead.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("832", candidate())
+
+    class FlakyFallbackClient(FakeClient):
+        def find_closed_trade(self, trade_id, opened_at_iso, search_hours=6):
+            raise Exception("503 Server Error: Service Unavailable")
+
+    client = FlakyFallbackClient(open_trades=[], not_found_ids=["832"])
+    changed = trade_monitor.check_open_trades(client)
+
+    assert changed == []
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.OPEN  # not LOST -- retried next pass instead
+
+
+@patch("trade_monitor.send_message")
 def test_check_open_trades_recovers_real_outcome_via_transaction_history_when_get_trade_404s(
         mock_send, tmp_path, monkeypatch):
     # Real incident, confirmed directly against a live OANDA account:

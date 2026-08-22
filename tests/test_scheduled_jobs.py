@@ -67,6 +67,29 @@ def test_closed_trades_since_ignores_still_open_entries(tmp_path, monkeypatch):
     assert scheduled_jobs._closed_trades_since(since_iso=None) == []
 
 
+def test_closed_trades_since_labels_a_lost_entry_unrecoverable_not_breakeven(tmp_path, monkeypatch):
+    # Real incident: a LOST entry's realized_pnl is ALWAYS 0.0 -- a
+    # placeholder for "genuinely unrecoverable," not a real, confirmed
+    # zero close. Classifying purely off the pnl value put these in the
+    # same bucket as an actual breakeven, so the nightly review Telegram
+    # message told the user "USD_CAD LONG: BREAKEVEN" for a trade whose
+    # real P&L was completely unknown, not zero.
+    _isolate_state(tmp_path, monkeypatch)
+    tj.save_journal([_closed_entry(status=tj.LOST, realized_pnl=0.0)])
+    result = scheduled_jobs._closed_trades_since(since_iso=None)
+    assert result[0]["outcome"] == "UNRECOVERABLE"
+
+
+def test_closed_trades_since_still_labels_a_genuine_zero_close_breakeven(tmp_path, monkeypatch):
+    # A real, confirmed-zero close (any status OTHER than LOST) is a
+    # different situation entirely -- the outcome is known, and it
+    # genuinely was flat. Must not get swept into "UNRECOVERABLE" too.
+    _isolate_state(tmp_path, monkeypatch)
+    tj.save_journal([_closed_entry(status=tj.SUCCESSFUL, realized_pnl=0.0)])
+    result = scheduled_jobs._closed_trades_since(since_iso=None)
+    assert result[0]["outcome"] == "BREAKEVEN"
+
+
 @patch("scheduled_jobs.send_message")
 def test_run_nightly_review_ignores_broker_wide_closed_trades_not_in_our_journal(mock_send, tmp_path, monkeypatch):
     # Regression test for a real incident: a shared demo/practice OANDA
