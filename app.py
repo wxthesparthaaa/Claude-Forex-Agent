@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-21", "Trades were wrongly marked LOST when OANDA's API itself failed mid-lookup (confirmed live: "
+                    "practice API returning 503 on everything) -- now retried instead. Also fixed a LOST trade's "
+                    "placeholder P&L reporting as 'BREAKEVEN' in the nightly review; now says 'UNRECOVERABLE'."),
     ("2026-08-20", "The scan digest had no market-open gate and kept firing all weekend ('0 scans, no pairs in "
                     "window'). Also stopped the 'Potential trades tonight' evening listing in autopilot mode -- "
                     "no longer relevant there since auto-executed trades already get their own message."),

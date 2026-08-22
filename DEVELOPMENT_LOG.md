@@ -1737,3 +1737,58 @@ direction still sends; a new dedicated test confirms autopilot→autopilot
 sends nothing at all. Full suite: 395 passed (up from 393).
 
 **Fixed**: 2026-08-20
+
+## 2026-08-21 — Trades wrongly marked LOST on a transient OANDA error, and a misleading "BREAKEVEN" label
+
+**Problem**: A live "Nightly review" Telegram message showed both an
+AUD_USD LONG and a USD_CAD LONG as "BREAKEVEN." The user was certain
+neither trade actually closed flat, and connected it to the time-limit
+toggle work -- suspecting the fix hadn't been applied consistently.
+
+**Investigation**: Pulled the live production journal from the
+`state-sync` branch and found both entries: `status: "LOST"`,
+`realized_pnl: 0.0`, `exit_price: null` -- the genuine-unrecoverable
+placeholder from `trade_monitor.py`'s 404 handling, NOT a real confirmed
+zero close. Attempted to verify the real outcome directly against OANDA
+(same technique as the 2026-08-18 recovery) but the practice API is
+currently returning 503 on every endpoint tried, including a plain
+account-summary call -- a genuine, live OANDA-side outage, not a bug in
+this app.
+
+**Root cause 1 (why they went LOST at all)**: The transaction-history
+fallback added on 2026-08-18 (to recover trades `get_trade()` 404's on)
+had its own gap: if `find_closed_trade()` itself raised -- exactly what
+happens when OANDA's API is down, as confirmed live above -- the code
+treated that failure identically to "searched and genuinely found
+nothing," permanently marking the trade LOST. A transient search failure
+is not evidence a trade is gone; it just means the search never
+completed.
+
+**Root cause 2 (why it said "BREAKEVEN" instead of something honest)**:
+`_closed_trades_since` classified outcome purely from the `realized_pnl`
+VALUE -- a LOST entry's placeholder 0.0 landed in the exact same
+"BREAKEVEN" bucket as an actual, confirmed-zero close. The dashboard and
+the raw journal were already accurate about this (the win-rate tile's
+"excluded from win rate" note, the `status: LOST` field itself) -- only
+the Telegram nightly review's derived label disagreed with them.
+
+**Fix**: A `find_closed_trade()` failure now leaves the entry OPEN to
+retry next pass, matching every other transient-lookup-error path in
+this file. `_closed_trades_since` checks `status == LOST` first and
+reports "UNRECOVERABLE" for those, before falling back to the normal
+pnl-sign classification for everything else -- so a LOST trade can never
+again be reported as a confirmed flat close.
+
+**Not yet done**: correcting the real P&L for trades 1084 (USD_CAD) and
+1095 (AUD_USD) specifically, the same way the 2026-08-18 batch was
+corrected -- blocked on OANDA's API actually coming back up. Will follow
+up once it's reachable again.
+
+**Solution**: New regression test simulates the exact failure (a
+FakeClient whose `find_closed_trade` raises) and asserts the entry stays
+OPEN, not LOST. Two new tests for `_closed_trades_since`: a LOST entry
+reports "UNRECOVERABLE," a genuine zero-pnl SUCCESSFUL entry still
+reports "BREAKEVEN" (the fix doesn't over-correct real flat closes). Full
+suite: 398 passed (up from 395).
+
+**Fixed**: 2026-08-21
