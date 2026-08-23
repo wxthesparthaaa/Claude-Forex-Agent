@@ -155,6 +155,21 @@ class DashboardState:
     # found; see pyramid_addon.check_pyramid_opportunities for the actual
     # rule (same RSI/volume bands, same +1R trigger, that were tested).
     pyramid_mode_enabled: bool = False
+    # Explicit user request: cancel every open trade 10 minutes before
+    # forex closes for the weekend (Friday 5pm New York), so nothing
+    # carries weekend gap risk into Monday's reopen. On by default --
+    # unlike the pyramid toggle, this is a protective/risk-reducing
+    # behavior, not an unproven experiment. See
+    # scheduled_jobs.check_friday_preclose_cancel for the actual check.
+    friday_preclose_cancel_enabled: bool = True
+    # The exact Friday-close timestamp (NY-tzinfo isoformat) already
+    # handled -- not a plain date-stamp, same "precise moment, not a
+    # calendar boundary" reasoning already used for
+    # last_reflection_sent_at (see that field's own comment): using the
+    # close's own timestamp as the dedupe key is inherently collision-
+    # proof across restarts/re-reads, no separate "which Friday was
+    # this" bookkeeping needed.
+    last_friday_preclose_cancel_at: str | None = None
 
 
 def default_state() -> DashboardState:

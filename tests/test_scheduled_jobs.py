@@ -1620,3 +1620,141 @@ def test_market_status_does_not_resend_within_the_gap_even_if_the_field_looks_re
     mock_send.assert_not_called()
     # The field itself still self-heals even though no message was sent.
     assert dashboard_state.load_state().last_market_status == "open"
+
+
+from market_hours import NY as _NY
+
+
+class _CancelFakeClient:
+    def __init__(self, close_result=None):
+        self._close_result = close_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
+        self.closed_ids = []
+
+    def close_trade(self, trade_id):
+        self.closed_ids.append(trade_id)
+        return self._close_result
+
+
+def _friday_candidate(**overrides):
+    defaults = dict(instrument="EUR_USD", direction="LONG", units=8000, entry_price=1.10,
+                     stop_loss=1.095, take_profit=1.11, confidence_pct=72.0,
+                     rationale=["Bullish break..."], account_currency="SGD")
+    defaults.update(overrides)
+    return defaults
+
+
+@patch("scheduled_jobs.send_message")
+def test_friday_preclose_cancel_skips_when_market_closed(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    now = datetime(2026, 8, 22, 12, 0, tzinfo=_NY)  # Saturday -- always closed
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    assert client.closed_ids == []
+
+
+@patch("scheduled_jobs.send_message")
+def test_friday_preclose_cancel_skips_when_disabled(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.friday_preclose_cancel_enabled = False
+    dashboard_state.save_state(state)
+    tj.record_open_trade("101", _friday_candidate())
+
+    now = datetime(2026, 8, 21, 16, 55, tzinfo=_NY)  # Friday, 5 min before close
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    assert client.closed_ids == []
+
+
+@patch("scheduled_jobs.send_message")
+def test_friday_preclose_cancel_skips_outside_the_10_minute_window(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    tj.record_open_trade("101", _friday_candidate())
+
+    now = datetime(2026, 8, 21, 16, 45, tzinfo=_NY)  # Friday, 15 min before close -- not yet
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    assert client.closed_ids == []
+
+
+@patch("trade_monitor.send_message")
+def test_friday_preclose_cancel_closes_open_trades_within_the_window(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    tj.record_open_trade("101", _friday_candidate())
+
+    now = datetime(2026, 8, 21, 16, 55, tzinfo=_NY)  # Friday, 5 min before close -- within the window
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    assert client.closed_ids == ["101"]
+    mock_send.assert_called_once()
+    assert "ahead of the weekend close" in mock_send.call_args[0][0]
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.CANCELLED
+
+    updated = dashboard_state.load_state()
+    close = scheduled_jobs.next_forex_close(now)
+    assert updated.last_friday_preclose_cancel_at == close.isoformat()
+
+
+@patch("trade_monitor.send_message")
+def test_friday_preclose_cancel_does_not_fire_twice_in_the_same_window(mock_send, tmp_path, monkeypatch):
+    # The 5-minute tick can land on more than one qualifying check within
+    # the 10-minute window (e.g. 16:52 and 16:57) -- only the first must
+    # act; the second must see the dedupe timestamp already matches.
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())
+    tj.record_open_trade("101", _friday_candidate())
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(datetime(2026, 8, 21, 16, 52, tzinfo=_NY), client)
+    assert client.closed_ids == ["101"]
+
+    tj.record_open_trade("102", _friday_candidate(instrument="GBP_USD"))  # a second trade opens in between
+    scheduled_jobs.check_friday_preclose_cancel(datetime(2026, 8, 21, 16, 57, tzinfo=_NY), client)
+
+    assert client.closed_ids == ["101"]  # the second entry was NOT touched -- already handled this Friday
+    mock_send.assert_called_once()
+
+
+@patch("scheduled_jobs.send_message")
+def test_friday_preclose_cancel_records_the_dedupe_timestamp_even_with_nothing_open(
+        mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    dashboard_state.save_state(dashboard_state.default_state())  # no open trades at all
+
+    now = datetime(2026, 8, 21, 16, 55, tzinfo=_NY)
+    client = _CancelFakeClient()
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    mock_send.assert_not_called()  # cancel_all_open_trades no-ops quietly when nothing's open
+    close = scheduled_jobs.next_forex_close(now)
+    assert dashboard_state.load_state().last_friday_preclose_cancel_at == close.isoformat()
+
+
+@patch("scheduled_jobs.send_message")
+def test_friday_preclose_cancel_fires_again_for_a_later_friday(mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    # Already handled LAST Friday's close -- a week earlier.
+    state.last_friday_preclose_cancel_at = scheduled_jobs.next_forex_close(
+        datetime(2026, 8, 14, 16, 55, tzinfo=_NY)).isoformat()
+    dashboard_state.save_state(state)
+    tj.record_open_trade("101", _friday_candidate())
+
+    now = datetime(2026, 8, 21, 16, 55, tzinfo=_NY)  # THIS Friday, a different close entirely
+    client = _CancelFakeClient()
+
+    scheduled_jobs.check_friday_preclose_cancel(now, client)
+
+    assert client.closed_ids == ["101"]

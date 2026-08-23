@@ -432,6 +432,17 @@
           not a proven edge. Journaled with an "Experiment" tag (visible in the Trade journal
           export) so you can judge its own results separately and switch this back off anytime.
         </p>
+        <div class="toggle-row">
+          <span>Cancel all trades before weekend close</span>
+          <label class="switch">
+            <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          On by default. Closes every open trade 10 minutes before forex closes for the
+          weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

@@ -298,7 +298,7 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
     return changed
 
 
-def cancel_all_open_trades(client: OandaClient = None) -> list:
+def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually") -> list:
     """Closes every journal-tracked OPEN trade immediately via OANDA,
     regardless of SL/TP/expiry -- an explicit user-initiated "get me
     flat now" action, distinct from the other three closure paths, so
@@ -306,7 +306,13 @@ def cancel_all_open_trades(client: OandaClient = None) -> list:
     stop-loss or a 2-hour timeout in the journal. Holds JOURNAL_LOCK
     (blocking, not skip-if-busy -- see check_open_trades) across the
     whole load-mutate-save cycle so this can't race a concurrent
-    journal write from anywhere else."""
+    journal write from anywhere else.
+
+    reason: folded into the Telegram summary's own header ("All trades
+    cancelled {reason}") -- defaults to the wording the manual /execute
+    button has always used. scheduled_jobs.check_friday_preclose_cancel
+    passes its own wording so an automated weekend-protective cancel
+    doesn't read as if a human clicked the button."""
     with JOURNAL_LOCK:
         entries = load_journal()
         pending = open_entries(entries)
@@ -340,7 +346,7 @@ def cancel_all_open_trades(client: OandaClient = None) -> list:
             currency = closed[0].get("account_currency", "")
             lines = "\n".join(f"  {e['instrument']} {e['direction']}: {e['realized_pnl']:+.2f}" for e in closed)
             send_message(
-                f"🛑 <b>All trades cancelled manually</b> ({len(closed)} closed)\n{lines}\n"
+                f"🛑 <b>All trades cancelled {reason}</b> ({len(closed)} closed)\n{lines}\n"
                 f"Total P&L: {total_pnl:+.2f} {currency}"
             )
         return closed

@@ -32,7 +32,7 @@ from market_hours import (SGT, NY, is_forex_market_open, instrument_window_activ
 from universe import ALL_INSTRUMENTS
 from scan_results import save_candidates
 from trade_journal import load_journal, closed_entries, LOST
-from trade_monitor import live_trades_view
+from trade_monitor import live_trades_view, cancel_all_open_trades
 from trade_execution import auto_execute_candidates
 from notification_formats import (
     format_potential_trades_message, format_nightly_review_message, format_friday_reflection_message,
@@ -756,6 +756,67 @@ def check_market_status_transition(now: datetime = None) -> None:
         send_message(format_market_closed_message(reopen_sgt))
 
 
+# Explicit user request: cancel every open trade this many minutes before
+# forex closes for the weekend, so nothing carries weekend gap risk into
+# Monday's reopen.
+FRIDAY_PRECLOSE_CANCEL_WINDOW = timedelta(minutes=10)
+
+
+def check_friday_preclose_cancel(now: datetime = None, client: OandaClient = None) -> None:
+    """Cancels every open trade once it's within FRIDAY_PRECLOSE_CANCEL_WINDOW
+    of forex's Friday 5pm New York close -- see FRIDAY_PRECLOSE_CANCEL_WINDOW's
+    own comment. Reuses trade_monitor.cancel_all_open_trades (the same
+    path the manual "Cancel all trades" button uses), with its own
+    wording so the Telegram summary doesn't read as if a human clicked
+    it. Applies regardless of phase or the kill switch -- this is a
+    protective action reducing risk, not a new-trade path, so it's not
+    gated the way auto_execute_candidates/pyramid_addon are.
+
+    Opt-out via Settings (DashboardState.friday_preclose_cancel_enabled,
+    on by default -- unlike the pyramid toggle, this is risk-reducing,
+    not an unproven experiment).
+
+    Dedupe key is the CLOSE'S OWN timestamp, not a calendar date-stamp --
+    same "precise moment, not a calendar boundary" reasoning already
+    used for last_reflection_sent_at (a plain date/ISO-week stamp
+    produced a real double-send bug there earlier this session). This
+    also naturally handles the 5-minute tick landing on more than one
+    qualifying check within the 10-minute window: only the FIRST one
+    within the window acts, the state save changes what "already
+    handled" compares against, and any later tick in the same window
+    finds it already matches."""
+    now = now or datetime.now(NY)
+    if not is_forex_market_open(now):
+        return  # nothing to do -- not Friday's own pre-close window at all
+
+    state = load_state()
+    if not state.friday_preclose_cancel_enabled:
+        return
+
+    close = next_forex_close(now)
+    if close - now.astimezone(NY) > FRIDAY_PRECLOSE_CANCEL_WINDOW:
+        return  # not yet within the window
+
+    close_iso = close.isoformat()
+    if state.last_friday_preclose_cancel_at == close_iso:
+        return  # already handled this specific Friday's close
+
+    client = client or OandaClient()
+    cancelled = cancel_all_open_trades(client, reason="ahead of the weekend close")
+
+    # Recorded even when there was nothing open to cancel -- the point is
+    # "this specific close has been checked," not "a cancellation
+    # happened," so a quiet Friday doesn't re-check every tick for the
+    # rest of the 10-minute window.
+    fresh_state = load_state()
+    fresh_state.last_friday_preclose_cancel_at = close_iso
+    save_state(fresh_state)
+
+    if cancelled:
+        print(f"INFO: cancelled {len(cancelled)} trade(s) ahead of Friday's forex close "
+              f"({close_iso})", flush=True)
+
+
 def run_daily_dispatcher(client: OandaClient = None) -> None:
     """Ticks every 5 min (see app.py's scheduler) -- catches up on any of
     the day's fixed-time touchpoints (21:00 health check, evening
@@ -788,6 +849,10 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
     # Also unconditional -- its own elapsed-time/phase/off-switch gating
     # lives inside the function itself, same reasoning as the call above.
     check_scan_digest(now, client)
+    # Same reasoning again -- has to run regardless of weekday/time-of-day
+    # gating below, since the whole point is noticing whichever 5-minute
+    # tick lands inside Friday's own 10-minute pre-close window.
+    check_friday_preclose_cancel(now, client)
 
     state = load_state()
 

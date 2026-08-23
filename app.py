@@ -343,6 +343,7 @@ def dashboard():
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         trade_time_limit_enabled=state.trade_time_limit_enabled, pyramid_mode_enabled=state.pyramid_mode_enabled,
+        friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -626,6 +627,12 @@ def settings():
         # want to watch it live and judge for themselves. Same plain
         # checkbox pattern as the toggle above.
         state.pyramid_mode_enabled = request.form.get("pyramid_mode_enabled") == "on"
+
+        # Explicit user request: cancel every open trade 10 min before
+        # the weekend close so nothing carries gap risk into Monday. On
+        # by default (risk-reducing, not an experiment) -- same plain
+        # checkbox pattern as the toggles above.
+        state.friday_preclose_cancel_enabled = request.form.get("friday_preclose_cancel_enabled") == "on"
 
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
