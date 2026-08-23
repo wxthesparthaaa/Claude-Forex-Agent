@@ -9,13 +9,54 @@ copies of the same logic.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
 
 PRACTICE_URL = "https://api-fxpractice.oanda.com"
 LIVE_URL = "https://api-fxtrade.oanda.com"
+
+# Real incident: a single dashboard page load can make several sequential
+# OANDA calls (account summary, check_open_trades' own get_open_trades()
+# plus a get_trade()/find_closed_trade() pair per entry that needs
+# reclassifying, reconcile_orphan_trades' own get_open_trades(),
+# live_trades_view's own get_open_trades() again -- get_open_trades()
+# alone is called 3 separate times per request). Each one pays up to the
+# full 20s timeout independently when OANDA is degraded, and with
+# several journal entries needing reclassification in the same pass that
+# stacks into multiple minutes for one page load -- exactly the same
+# "several stacked calls in one request reads as the app being stuck"
+# shape github_state_sync's own circuit breaker was built for. Same
+# fix: remember a recent genuine failure and fail fast (no network call)
+# for a short cooldown instead of re-paying that timeout on every
+# subsequent call while OANDA stays degraded. A 404 does NOT trip it --
+# get_trade() 404ing for a trade that's genuinely just not found via that
+# specific endpoint is routine, expected behavior on this account (see
+# trade_monitor.py's own 404-handling comment), not evidence of an outage.
+_circuit_open_until: Optional[datetime] = None
+CIRCUIT_BREAKER_COOLDOWN = timedelta(seconds=20)
+
+
+def _check_circuit_breaker() -> None:
+    global _circuit_open_until
+    now = datetime.now(timezone.utc)
+    if _circuit_open_until is not None and now < _circuit_open_until:
+        raise requests.exceptions.ConnectionError(
+            f"OANDA API circuit breaker open until {_circuit_open_until.isoformat()} "
+            f"(a recent request genuinely failed -- skipping this one rather than paying "
+            f"another full timeout while OANDA is still degraded)"
+        )
+
+
+def _trip_circuit_breaker() -> None:
+    global _circuit_open_until
+    _circuit_open_until = datetime.now(timezone.utc) + CIRCUIT_BREAKER_COOLDOWN
+
+
+def _clear_circuit_breaker() -> None:
+    global _circuit_open_until
+    _circuit_open_until = None
 
 
 class OandaClient:
@@ -33,9 +74,20 @@ class OandaClient:
         }
 
     def _request(self, method: str, path: str, params: dict = None, json: dict = None) -> dict:
+        _check_circuit_breaker()
         url = f"{self.base_url}{path}"
-        r = requests.request(method, url, headers=self._headers(), params=params, json=json, timeout=20)
-        r.raise_for_status()
+        try:
+            r = requests.request(method, url, headers=self._headers(), params=params, json=json, timeout=20)
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                raise  # routine, expected outcome on this account -- not evidence of an outage
+            _trip_circuit_breaker()
+            raise
+        except requests.exceptions.RequestException:
+            _trip_circuit_breaker()
+            raise
+        _clear_circuit_breaker()
         return r.json()
 
     def get_account_summary(self) -> dict:
@@ -137,9 +189,17 @@ class OandaClient:
         result = self._request("GET", f"/v3/accounts/{self.account_id}/transactions", params=params)
         for page_url in result.get("pages", []):
             # Each page URL is already a full, absolute URL (OANDA's own
-            # pagination links) -- not a path to hand to self._request.
-            page = requests.get(page_url, headers=self._headers(), timeout=20)
-            page.raise_for_status()
+            # pagination links) -- not a path to hand to self._request, so
+            # this repeats _request's own circuit-breaker check/trip
+            # rather than going through it.
+            _check_circuit_breaker()
+            try:
+                page = requests.get(page_url, headers=self._headers(), timeout=20)
+                page.raise_for_status()
+            except requests.exceptions.RequestException:
+                _trip_circuit_breaker()
+                raise
+            _clear_circuit_breaker()
             for txn in page.json().get("transactions", []):
                 for closed in (txn.get("tradesClosed") or []):
                     if closed.get("tradeID") == trade_id:

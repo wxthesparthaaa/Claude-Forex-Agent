@@ -1,14 +1,28 @@
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+
+import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+import oanda_client as oc
 from oanda_client import OandaClient
 
 
 def _client():
     return OandaClient(access_token="tok", account_id="101-000-0000000-001", env="practice")
+
+
+def _reset_circuit_breaker():
+    oc._circuit_open_until = None
+
+
+def _http_error(status_code):
+    resp = MagicMock()
+    resp.status_code = status_code
+    return requests.exceptions.HTTPError(response=resp)
 
 
 def _page_response(transactions):
@@ -62,3 +76,103 @@ def test_find_closed_trade_returns_none_when_there_are_no_pages_at_all(mock_get)
 
     assert result is None
     mock_get.assert_not_called()
+
+
+@patch("oanda_client.requests.request")
+def test_circuit_breaker_skips_the_network_call_after_a_genuine_failure(mock_request):
+    # Real incident: a single dashboard page load makes several
+    # sequential OANDA calls (get_open_trades() alone 3 times per
+    # request, plus a get_trade()/find_closed_trade() pair per journal
+    # entry needing reclassification) -- each one used to pay the full
+    # 20s timeout independently when OANDA was degraded, and several
+    # stacked in one request read as "the dashboard is stuck for
+    # minutes." The breaker must skip straight to failing fast (no
+    # network call at all) once a recent call has already genuinely failed.
+    _reset_circuit_breaker()
+    mock_request.side_effect = requests.exceptions.ConnectionError("Connection refused")
+    client = _client()
+
+    try:
+        client._request("GET", "/v3/accounts/x/summary")
+        assert False, "expected the first call to actually try and fail"
+    except requests.exceptions.ConnectionError:
+        pass
+    assert mock_request.call_count == 1
+
+    try:
+        client._request("GET", "/v3/accounts/x/summary")
+        assert False, "expected the breaker to short-circuit instead of calling requests.request again"
+    except requests.exceptions.ConnectionError as e:
+        assert "circuit breaker" in str(e)
+    assert mock_request.call_count == 1  # NOT called a second time
+
+
+@patch("oanda_client.requests.request")
+def test_circuit_breaker_closes_again_after_the_cooldown(mock_request):
+    _reset_circuit_breaker()
+    oc._circuit_open_until = datetime.now(timezone.utc) - timedelta(seconds=1)  # cooldown already elapsed
+    mock_request.side_effect = requests.exceptions.ConnectionError("still down")
+    client = _client()
+
+    try:
+        client._request("GET", "/v3/accounts/x/summary")
+        assert False, "expected an actual retry, not the breaker"
+    except requests.exceptions.ConnectionError as e:
+        assert "circuit breaker" not in str(e)  # this is the real failure, not a short-circuit
+    assert mock_request.call_count == 1
+
+
+@patch("oanda_client.requests.request")
+def test_circuit_breaker_is_not_tripped_by_a_404(mock_request):
+    # get_trade() 404ing for a trade genuinely not found via that
+    # specific endpoint is routine, expected behavior on this account
+    # (confirmed live -- see find_closed_trade's own docstring), not
+    # evidence OANDA itself is unhealthy.
+    _reset_circuit_breaker()
+    resp = MagicMock()
+    resp.status_code = 404
+    resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
+    mock_request.return_value = resp
+    client = _client()
+
+    for _ in range(2):
+        try:
+            client._request("GET", "/v3/accounts/x/trades/999")
+        except requests.exceptions.HTTPError:
+            pass
+
+    assert mock_request.call_count == 2  # both calls actually went out -- breaker never opened
+
+
+@patch("oanda_client.requests.request")
+def test_circuit_breaker_clears_on_the_next_success(mock_request):
+    _reset_circuit_breaker()
+    oc._circuit_open_until = datetime.now(timezone.utc) - timedelta(seconds=1)  # cooldown elapsed, allow a try
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {"account": {}}
+    mock_request.return_value = resp
+    client = _client()
+
+    client._request("GET", "/v3/accounts/x/summary")
+
+    assert oc._circuit_open_until is None
+
+
+@patch("oanda_client.requests.request")
+def test_circuit_breaker_makes_repeated_stacked_calls_fail_fast_not_slow(mock_request):
+    # Directly proves the reported symptom is fixed: 3 sequential calls
+    # (matching get_open_trades() being called 3x in one dashboard
+    # request) while OANDA is down must only pay the real network
+    # attempt once, not three times.
+    _reset_circuit_breaker()
+    mock_request.side_effect = requests.exceptions.Timeout("Read timed out")
+    client = _client()
+
+    for _ in range(3):
+        try:
+            client._request("GET", "/v3/accounts/x/openTrades")
+        except requests.exceptions.RequestException:
+            pass
+
+    assert mock_request.call_count == 1  # only the first one actually hit the network
