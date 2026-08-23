@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-23", "Shipped the pyramid add-on as an opt-in Settings toggle (off by default) despite both "
+                    "backtests coming back negative -- explicit informed request to watch it live and judge for "
+                    "themselves. Same risk checks as any trade, own journal tag to track it separately."),
     ("2026-08-22", "Follow-up backtest: RSI/volume as a hard BASE-ENTRY filter (not a pyramid trigger) also "
                     "doesn't help -- confirmed entries did slightly WORSE than unfiltered (-0.074R vs -0.066R) "
                     "while cutting volume 61%. Two independent tests of the same signal, both negative."),

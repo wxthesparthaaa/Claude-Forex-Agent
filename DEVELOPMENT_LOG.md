@@ -1894,3 +1894,69 @@ threshold, or a different indicator entirely could still behave
 differently.
 
 **Fixed**: 2026-08-22 (research finding, not a bug)
+
+## 2026-08-23 — Shipped the pyramid add-on as an opt-in feature, despite the backtest saying it doesn't work
+
+**Request**: Explicit, informed request after seeing both backtests'
+negative results: build it anyway, gated behind a toggle, so the user
+can watch it run live and judge for themselves whether to keep it on.
+
+**Implementation**: New `src/pyramid_addon.py`, `check_pyramid_opportunities()`.
+For every OPEN, non-add-on, not-yet-pyramided journal entry: reads its
+live price from `client.get_open_trades()`, computes unrealized R
+against the entry/stop, and once it's >= +1R, fetches recent M15 candles
+and checks the exact same RSI(14) (50-75 long / 25-50 short) + volume
+(>= 1.2x its 20-bar average) confirmation the backtest used. On
+confirmation, builds a synthetic candidate at the current price (same
+stop distance as the base trade, same 2:1 R:R, same `risk_per_trade_pct`
+sizing -- deliberately NOT boosted, since a size increase was never
+backtested), re-validates it through the real `risk_engine.validate_trade()`
+against a running account snapshot (same "account for what this batch
+already placed" discipline `auto_execute_candidates` uses), and places it
+via the same `place_and_record()` every other order goes through
+(`allow_duplicate=True`, since this deliberately opens a second position
+on an instrument that already has one open).
+
+Gated on `DashboardState.pyramid_mode_enabled` (off by default) AND
+autopilot phase AND the kill switch, matching `auto_execute_candidates`'
+own gate exactly -- this places real orders without a human clicking
+through them, so it only runs where that's already the accepted
+architecture. Registered as its own scheduled job, never triggered by a
+dashboard page load. A non-blocking lock (`_pyramid_lock`, skip-if-busy)
+guards the whole function -- two overlapping 5-minute ticks reading the
+same base trade's "not yet pyramided" state before either saves could
+otherwise each independently pass risk validation and both place a real
+duplicate add-on, the same class of race this codebase has hit for
+read-only bookkeeping several times; here the stakes are an actual
+duplicate order, so it skips entirely rather than risking it.
+
+**Journal tracking** (the explicit ask: track this as its own experiment):
+`JournalEntry` gained `pyramided` (on the base trade, so it's never added
+to twice, and blocks chaining an add-on of an add-on), `experiment_tag`
+("PYRAMID_ADDON" for add-on trades, `None` for everything else), and
+`parent_trade_id` (ties an add-on back to what it was added to).
+`journal_export.py`'s Excel workbook gained "Experiment" and "Parent
+Trade ID" columns so these are visible in the same GitHub-synced export
+the user already reviews trades in.
+
+**Settings UI**: new toggle, "Pyramid into winners (experimental)," with
+the backtest's own numbers stated plainly in the explanatory text right
+below it (net negative, -0.011R/trade, sign flips between halves) --
+opting in is an informed choice, not a hidden risk.
+
+**Solution**: 12 new tests in `tests/test_pyramid_addon.py` covering: the
+toggle/phase/kill-switch gates, skipping a trade that hasn't reached +1R,
+skipping when RSI or volume individually fails to confirm, a full
+successful placement (order placed, both journal entries correctly
+tagged, base marked pyramided, notification sent), refusing to re-
+pyramid an already-pyramided trade, refusing to chain an add-on of an
+add-on, the SHORT-direction RSI band, the concurrent-call lock, and a
+risk-violation (max trades/day already reached) correctly blocking the
+add-on. RSI test fixtures use hand-tuned synthetic price series (verified
+empirically to land in/out of the 50-75 and 25-50 confirmation bands, not
+guessed). Verified live against the running dashboard: toggle renders
+unchecked by default, round-trips through a real `/settings` POST and
+persists correctly, no console errors, no mobile horizontal overflow.
+Full suite: 410 passed (up from 398).
+
+**Fixed**: 2026-08-23
