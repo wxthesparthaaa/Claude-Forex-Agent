@@ -2005,3 +2005,53 @@ the fix -- 3 sequential calls (matching `get_open_trades()`'s real
 once, not three times. Full suite: 415 passed (up from 410).
 
 **Fixed**: 2026-08-23
+
+## 2026-08-24 — Cancel all trades 10 minutes before the weekend close
+
+**Request**: Avoid weekend gap risk -- cancel every open trade shortly
+before forex closes for the weekend (Friday), so nothing carries into
+Monday's reopen exposed to whatever moved over the weekend.
+
+**Implementation**: New `scheduled_jobs.check_friday_preclose_cancel()`,
+called unconditionally from `run_daily_dispatcher` alongside
+`check_market_status_transition`/`check_scan_digest` -- same shape, its
+own gating lives inside the function rather than in the dispatcher's
+weekday/time gates below it. Once `now` is within
+`FRIDAY_PRECLOSE_CANCEL_WINDOW` (10 min) of forex's Friday 5pm New York
+close, calls `trade_monitor.cancel_all_open_trades()` -- the exact same
+path the manual "Cancel all trades" button already uses, no new closing
+logic written. That function's Telegram summary used to hardcode
+"cancelled manually," which would have been actively misleading for an
+automated trigger, so it now takes a `reason` parameter (default
+unchanged, "manually," for the existing button; this call passes "ahead
+of the weekend close").
+
+**Dedupe**: keyed on the close's OWN timestamp
+(`DashboardState.last_friday_preclose_cancel_at`), not a calendar
+date-stamp -- the same "precise moment, not a calendar boundary"
+reasoning already used for `last_reflection_sent_at`, after a plain
+date/ISO-week stamp produced a real double-send bug there earlier this
+session. This also cleanly handles the 5-minute tick landing on more
+than one qualifying check inside the 10-minute window (e.g. both 16:52
+and 16:57 NY both fall within 10 min of a 17:00 close) -- the first one
+saves the close's timestamp, and any later one in the same window finds
+it already matches and skips.
+
+**Scope**: applies regardless of phase or the kill switch -- this closes
+EXISTING positions (risk-reducing), unlike `auto_execute_candidates`/
+`pyramid_addon` which open new ones, so it doesn't need their "only in
+autopilot, never with the kill switch on" gate. New Settings toggle,
+"Cancel all trades before weekend close," **on by default** -- unlike
+the pyramid toggle, this reduces risk rather than being an unproven
+experiment, so the default matches what was actually asked for.
+
+**Solution**: 7 new tests in `tests/test_scheduled_jobs.py`: skips when
+the market's closed (not Friday's window), skips when disabled, skips
+outside the 10-minute window, actually closes open trades and sends the
+right (non-misleading) message within the window, doesn't fire twice for
+two qualifying ticks in the same window, still records the dedupe
+timestamp on a quiet Friday with nothing open, and fires again for a
+genuinely later Friday (proving the dedupe key doesn't wrongly persist
+across weeks). Full suite: 422 passed (up from 415).
+
+**Fixed**: 2026-08-24

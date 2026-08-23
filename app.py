@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-24", "Added auto-cancel of all open trades 10 min before the weekend close (on by default), so "
+                    "nothing carries gap risk into Monday. Reuses the same 'Cancel all trades' path the manual "
+                    "button already uses, deduped on the close's own timestamp, not a calendar date."),
     ("2026-08-23", "Dashboard was taking 5-10 min to load -- get_open_trades() alone is called 3x per page load "
                     "with no circuit breaker, each paying up to 20s independently while OANDA is degraded. Added "
                     "one, same pattern as GitHub's, so a stacked run of calls fails fast, not slow."),
