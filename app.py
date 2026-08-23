@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-23", "Dashboard was taking 5-10 min to load -- get_open_trades() alone is called 3x per page load "
+                    "with no circuit breaker, each paying up to 20s independently while OANDA is degraded. Added "
+                    "one, same pattern as GitHub's, so a stacked run of calls fails fast, not slow."),
     ("2026-08-23", "Shipped the pyramid add-on as an opt-in Settings toggle (off by default) despite both "
                     "backtests coming back negative -- explicit informed request to watch it live and judge for "
                     "themselves. Same risk checks as any trade, own journal tag to track it separately."),

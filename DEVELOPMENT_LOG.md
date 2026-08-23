@@ -1960,3 +1960,48 @@ persists correctly, no console errors, no mobile horizontal overflow.
 Full suite: 410 passed (up from 398).
 
 **Fixed**: 2026-08-23
+
+## 2026-08-23 (continued) — Dashboard taking 5-10 minutes to load, Render logs showing nothing unusual
+
+**Problem**: User reported the dashboard spinning for 5-10 minutes before
+finally loading. Confirmed this predated today's pyramid work. Couldn't
+access Render's own dashboard/logs directly (not authenticated in this
+session's browser, correctly declined to sign in on the user's behalf).
+
+**Root cause, from code inspection**: `get_open_trades()` alone is called
+3 separate times per single dashboard page load -- once each in
+`check_open_trades`, `reconcile_orphan_trades`, and `live_trades_view`.
+`check_open_trades` additionally calls `get_trade()` and, on a 404,
+`find_closed_trade()` (itself one or more paginated calls) for every
+journal entry that needs reclassifying. None of this had a circuit
+breaker -- unlike GitHub's own calls, which already got one exactly for
+this "several stacked calls in one request" shape (see 2026-08-17's
+entry). Every OANDA call independently pays up to its full 20s timeout
+when the API is degraded, which this session already confirmed it
+genuinely was (live 503s, a still-malformed transactions endpoint). With
+several journal entries needing reclassification in the same pass, that
+compounds into multiple minutes for one page load -- matching the
+reported symptom closely enough to act on without waiting for the actual
+Render logs, which the user wasn't able to paste in time.
+
+**Fix**: Added a circuit breaker to `oanda_client.py`, structurally
+identical to `github_state_sync.py`'s -- a recent genuine failure opens
+a 20s cooldown during which every subsequent call fails immediately (no
+network attempt at all) instead of re-paying the timeout. A 404 does NOT
+trip it, matching the GitHub breaker's own 404/409 exemption -- `get_trade()`
+404ing for a trade genuinely not found via that specific endpoint is
+routine, confirmed-live behavior on this account, not evidence of an
+outage. Applied at `_request()`'s single choke point (covers every
+`OandaClient` method automatically) plus `find_closed_trade()`'s own raw
+`requests.get()` calls for transaction pages, which bypass `_request`
+entirely.
+
+**Solution**: 5 new tests in `tests/test_oanda_client.py`, mirroring the
+GitHub breaker's own test suite exactly: a genuine failure trips it and
+the next call short-circuits; the breaker re-opens after the cooldown
+elapses; a 404 never trips it; a success clears it; and a direct proof of
+the fix -- 3 sequential calls (matching `get_open_trades()`'s real
+3x-per-request pattern) while OANDA is down only pay the network timeout
+once, not three times. Full suite: 415 passed (up from 410).
+
+**Fixed**: 2026-08-23
