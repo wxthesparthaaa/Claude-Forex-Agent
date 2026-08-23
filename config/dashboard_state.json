@@ -94,5 +94,6 @@
     "news": 0.25
   },
   "peak_tracked_equity": 2090.0896,
-  "trade_time_limit_enabled": false
+  "trade_time_limit_enabled": false,
+  "pyramid_mode_enabled": true
 }
