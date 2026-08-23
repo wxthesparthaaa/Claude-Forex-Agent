@@ -64,6 +64,7 @@ from trade_journal import (
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
+from pyramid_addon import check_pyramid_opportunities
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
@@ -335,7 +336,7 @@ def dashboard():
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
-        trade_time_limit_enabled=state.trade_time_limit_enabled,
+        trade_time_limit_enabled=state.trade_time_limit_enabled, pyramid_mode_enabled=state.pyramid_mode_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -614,6 +615,12 @@ def settings():
         # anything since it's just a bool.
         state.trade_time_limit_enabled = request.form.get("trade_time_limit_enabled") == "on"
 
+        # Experimental, explicit user request after seeing the backtest
+        # (net negative, -0.011R/trade -- see pyramid_addon.py) -- they
+        # want to watch it live and judge for themselves. Same plain
+        # checkbox pattern as the toggle above.
+        state.pyramid_mode_enabled = request.form.get("pyramid_mode_enabled") == "on"
+
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
             state.autopilot_scan_interval_minutes = int(interval)
@@ -691,6 +698,12 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Experimental, off by default (Settings) -- see pyramid_addon.py's
+    # own docstring for the backtest this is based on and why it's
+    # opt-in. Scheduler-only, never triggered by a page load: this
+    # places real orders, same "only a deliberate trigger, not a passive
+    # view, gets to do that" discipline auto_execute_candidates follows.
+    scheduler.add_job(check_pyramid_opportunities, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 

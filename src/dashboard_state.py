@@ -147,6 +147,14 @@ class DashboardState:
     # See trade_monitor._check_open_trades_unsafe's own comment for how
     # this gates the force-close branch.
     trade_time_limit_enabled: bool = False
+    # Explicit user request, after reviewing scripts/backtest_momentum_addon.py's
+    # own result (net negative: -0.011R/trade across 2662 signals, 413
+    # days, sign flips between halves -- not a real, stable edge) -- they
+    # want to watch it run live and judge for themselves, with a hard
+    # switch to turn it off. Off by default given what the backtest
+    # found; see pyramid_addon.check_pyramid_opportunities for the actual
+    # rule (same RSI/volume bands, same +1R trigger, that were tested).
+    pyramid_mode_enabled: bool = False
 
 
 def default_state() -> DashboardState:

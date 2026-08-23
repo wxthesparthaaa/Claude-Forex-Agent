@@ -90,6 +90,23 @@ class JournalEntry:
     closed_at: str | None = None
     exit_price: float | None = None
     realized_pnl: float | None = None
+    # True once this (base, non-add-on) trade has already spawned a
+    # pyramid add-on -- see pyramid_addon.py. Prevents adding to the same
+    # trade twice; an add-on trade never sets this on ITSELF (chaining
+    # add-on-of-an-add-on is deliberately not supported).
+    pyramided: bool = False
+    # None for every normal trade. "PYRAMID_ADDON" for a trade opened by
+    # pyramid_addon.py -- lets the journal/export isolate the
+    # experiment's own trades from the base strategy's, per the explicit
+    # request to track its effectiveness separately.
+    experiment_tag: str | None = None
+    # The base trade's own trade_id, for a PYRAMID_ADDON entry only --
+    # ties the add-on back to what it was added to.
+    parent_trade_id: str | None = None
+
+
+# See JournalEntry.experiment_tag's own comment.
+PYRAMID_ADDON_TAG = "PYRAMID_ADDON"
 
 
 def load_journal() -> list:
@@ -136,6 +153,7 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
             account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
             confidence_components=candidate.get("confidence_components", {}),
             confidence_components_available=candidate.get("confidence_components_available", {}),
+            experiment_tag=candidate.get("experiment_tag"), parent_trade_id=candidate.get("parent_trade_id"),
         )
         entries.append(asdict(entry))
         save_journal(entries)

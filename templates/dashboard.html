@@ -416,6 +416,22 @@
           Off by default -- trades stay open until stop-loss or take-profit closes them,
           instead of being force-closed after 2 hours. Switch on to restore the old time limit.
         </p>
+        <div class="toggle-row">
+          <span style="color:var(--accent); font-weight:600;">Pyramid into winners (experimental)</span>
+          <label class="switch">
+            <input type="checkbox" name="pyramid_mode_enabled" {{ 'checked' if pyramid_mode_enabled else '' }}>
+            <span class="switch-track" style="{{ 'background:var(--accent);' if pyramid_mode_enabled else '' }}"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default. When on (autopilot only): once an open trade reaches +1R and RSI +
+          volume confirm continuing momentum, adds a second same-direction position on the
+          same pair (same risk sizing, real order, same risk checks as any other trade).
+          Backtested before shipping this: net negative overall (-0.011R/trade across 2662
+          signals, 413 days) and the effect flips sign between the two halves of that period --
+          not a proven edge. Journaled with an "Experiment" tag (visible in the Trade journal
+          export) so you can judge its own results separately and switch this back off anytime.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
