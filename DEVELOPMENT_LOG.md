@@ -2101,4 +2101,56 @@ a completely unrelated, healthy EUR_USD lookup confirms the second call
 actually goes out rather than being short-circuited. Full suite: 424
 passed (up from 422).
 
+## 2026-08-24 (continued) — check_open_trades ran with zero log output while a trade sat unreconciled for 45+ minutes
+
+**Request**: User flagged a Telegram digest showing "XAG_USD LONG: P&L
+unavailable," asking whether its SL/TP were set too close together or
+whether it was a separate bug.
+
+**Investigation**: Queried OANDA directly for trade 1142 (the XAG_USD
+LONG) -- genuinely closed via stop-loss at 13:44:51 UTC, realizedPL
+-40.6670, close price 68.93000. Not an SL/TP-distance issue at all; the
+trade closed normally. But the journal (`origin/state-sync:config/
+trade_journal.json`) still showed it `"status": "OPEN"` over 20 minutes
+later, and still OPEN 45+ minutes and ~9 scheduled ticks later on a
+second check. Asked the user for fresh Render logs to find out why
+`check_open_trades` (the job that should have reclassified it) hadn't
+caught it.
+
+**What the logs showed**: `run_daily_dispatcher` and
+`run_autopilot_interval_scan` both ticked exactly on their normal
+5-minute schedule throughout the whole window -- the scheduler itself
+was healthy, ruling out a full stall or restart. But there was zero
+trace of `check_open_trades` doing anything, in either direction. Code
+review explained why: every path through `check_open_trades` -- the
+successful "found it CLOSED via get_trade(), classified, saved" case,
+the "nothing pending" case, and the non-blocking `JOURNAL_LOCK`-skip
+case -- printed nothing. Unlike `run_daily_dispatcher` and
+`run_autopilot_interval_scan`, which both already had unconditional
+tick lines added earlier this project specifically so a stall would be
+visible, `check_open_trades` never got the same treatment. Its silence
+in the logs was consistent with it running-and-succeeding,
+running-and-finding-nothing, or silently losing the lock race every
+single tick -- no way to tell which from Render's logs alone.
+
+**Fix**: Added an unconditional tick line (`check_open_trades tick at
+... -- N pending`) at the top of `_check_open_trades_unsafe`, and a
+`WARNING` print when the non-blocking `JOURNAL_LOCK` acquisition is
+skipped (previously a silent `return []`). Doesn't change any
+reconciliation behavior -- purely closes the observability gap so a
+repeat is diagnosable from logs instead of requiring another manual
+OANDA-vs-journal cross-check.
+
+**Status**: Root cause of THIS specific stall (why check_open_trades
+failed to reconcile trade 1142 across ~9 ticks) is still unconfirmed --
+the new logging will surface it if it recurs. Trade 1142's journal
+entry itself was still showing stale/OPEN as of this fix; the confirmed
+real outcome (LOST via SL, -40.6670, closed 13:44:51 UTC) is recorded
+here in case a manual correction (same pattern as the 2026-08-2x
+4-entry correction via a state-sync worktree) is needed if the entry
+doesn't self-heal once the new logging deploys.
+
+**Solution**: `tests/test_trade_monitor.py` unaffected (33 passed).
+Full suite: 424 passed.
+
 **Fixed**: 2026-08-24

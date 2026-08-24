@@ -82,6 +82,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-24", "A closed trade sat stuck OPEN in the journal for 45+ min across ~9 scheduled ticks with zero "
+                    "explanation in the logs -- check_open_trades had no log line on ANY path (success, no-op, or "
+                    "silently losing the JOURNAL_LOCK race), unlike the dispatcher/scan jobs. Added tick + skip "
+                    "logging so a repeat is diagnosable instead of requiring another manual OANDA-vs-journal check."),
     ("2026-08-24", "Found via log review (not a pyramid bug -- ruled that out) that the circuit breaker tripped "
                     "on a routine 400 (CHF_SGD isn't a listed pair) and blocked every OTHER OANDA call for 20s, "
                     "skipping USD_CHF's scan all day. 400 now exempted from tripping it, same as 404."),
