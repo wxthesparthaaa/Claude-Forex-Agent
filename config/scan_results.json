@@ -1,37 +1,37 @@
 {
-  "scanned_at": "2026-08-24T23:23:10.443066+00:00",
+  "scanned_at": "2026-08-24T23:43:10.318553+00:00",
   "candidates": [
     {
       "instrument": "NZD_USD",
       "direction": "LONG",
-      "entry_price": 0.59609,
+      "entry_price": 0.5962,
       "stop_loss": 0.59556,
-      "take_profit": 0.59715,
-      "confidence_pct": 74.2,
+      "take_profit": 0.59748,
+      "confidence_pct": 72.8,
       "confidence_components": {
-        "breadth": 83.33333333333334,
+        "breadth": 100.0,
         "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 50.0
+        "candlestick": 85.0,
+        "news": 0.0
       },
-      "units": 57393,
+      "units": 47527,
       "unit_label": "units",
       "risk_amount": 38.639193999999996,
-      "notional_account_currency": 43457.02,
+      "notional_account_currency": 35994.71,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 83% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 56 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 59 (neutral range).",
+        "Candlestick pattern at this level: bullish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "News sentiment: works against this direction -- worth a second look."
       ],
       "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 6.3% > 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
-        "news": false
+        "candlestick": true,
+        "news": true
       }
     }
   ]
