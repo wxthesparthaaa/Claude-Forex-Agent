@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-24", "Found via log review (not a pyramid bug -- ruled that out) that the circuit breaker tripped "
+                    "on a routine 400 (CHF_SGD isn't a listed pair) and blocked every OTHER OANDA call for 20s, "
+                    "skipping USD_CHF's scan all day. 400 now exempted from tripping it, same as 404."),
     ("2026-08-24", "Added auto-cancel of all open trades 10 min before the weekend close (on by default), so "
                     "nothing carries gap risk into Monday. Reuses the same 'Cancel all trades' path the manual "
                     "button already uses, deduped on the close's own timestamp, not a calendar date."),

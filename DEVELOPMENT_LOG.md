@@ -2055,3 +2055,50 @@ genuinely later Friday (proving the dedupe key doesn't wrongly persist
 across weeks). Full suite: 422 passed (up from 415).
 
 **Fixed**: 2026-08-24
+
+## 2026-08-24 (continued) — User asked whether a low trade count was caused by the pyramid feature; it wasn't, but review turned up a real circuit-breaker bug
+
+**Request**: User pasted a full day of Render logs after noticing only 2
+trades executed all day, asking whether the recently-shipped pyramid
+feature was responsible.
+
+**Analysis**: Ruled out the pyramid feature on two independent grounds --
+zero trace of it anywhere in the logs (no "Pyramid add-on executed"
+message, no pyramid-related warnings; it's off by default and nothing
+suggested it was ever toggled on), and structurally it can only ADD
+trades on top of an already-open position at +1R, never reduce or
+suppress the base scanner's own candidate count. The low count itself
+matches this project's own established baseline (the 2026-08-14 backtest
+found the base strategy's raw entry signal has no real, temporally-
+stable edge -- most scans genuinely finding nothing is expected, not new).
+
+**What the review DID find, real and unrelated to pyramid**: this exact
+sequence repeating every ~20 minutes, all day:
+```
+WARNING: pricing lookup failed for CHF_SGD: 400 Client Error: Bad Request
+WARNING: pricing lookup failed for SGD_CHF: OANDA API circuit breaker open...
+WARNING: pricing lookup failed for CHF_USD: OANDA API circuit breaker open...
+WARNING: pricing lookup failed for USD_CHF: OANDA API circuit breaker open...
+WARNING: scan failed for USD_CHF, skipping it: No conversion path found from CHF to SGD
+```
+CHF_SGD isn't a listed OANDA pair (no direct Swiss Franc / Singapore
+Dollar quote) -- a permanent, structural fact, not an outage. But the
+2026-08-23 circuit breaker only exempted 404 from tripping it, not 400.
+That one entirely expected 400 opened the breaker for 20s and blocked
+every OTHER OANDA call in that window -- unrelated pairs included --
+cascading through SGD_CHF/CHF_USD/USD_CHF/USD_SGD/SGD_USD and making
+USD_CHF's own conversion-rate resolution fail outright, skipping that
+instrument's scan every single time it came up all day.
+
+**Fix**: 400 is now exempted from tripping the breaker, same reasoning
+already applied to 404 -- it's a client-side "the request itself is
+invalid" classification, not evidence the API is unhealthy.
+
+**Solution**: 2 new tests in `tests/test_oanda_client.py` -- a 400
+doesn't trip the breaker (mirrors the existing 404 test exactly), and a
+direct proof of the cascading-failure bug: a 400 on CHF_SGD followed by
+a completely unrelated, healthy EUR_USD lookup confirms the second call
+actually goes out rather than being short-circuited. Full suite: 424
+passed (up from 422).
+
+**Fixed**: 2026-08-24
