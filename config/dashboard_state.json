@@ -45,12 +45,9 @@
     "BCO_USD": "2026-08-21T23:51:33.889322+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 1,
-  "interval_scanned_instruments_since_digest": [
-    "AUD_USD",
-    "NZD_USD"
-  ],
-  "last_scan_digest_sent_at": "2026-08-23T22:47:10.403849+00:00",
+  "interval_scan_count_since_digest": 0,
+  "interval_scanned_instruments_since_digest": [],
+  "last_scan_digest_sent_at": "2026-08-24T01:47:45.371898+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
     "USD_JPY": [
