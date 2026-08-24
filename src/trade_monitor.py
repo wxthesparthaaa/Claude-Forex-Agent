@@ -77,6 +77,18 @@ def check_open_trades(client: OandaClient = None, expiry_enabled: bool | None = 
     reverting a real OANDA close back to looking OPEN in the journal
     until the next pass re-derives it."""
     if not JOURNAL_LOCK.acquire(blocking=False):
+        # Real incident: a trade that had genuinely closed on OANDA sat
+        # stuck OPEN in the journal for 45+ minutes across ~9 scheduled
+        # ticks with zero explanation in the logs -- this function has
+        # no unconditional log line on ANY path (success, skip, or
+        # no-op all print nothing), so there was no way to tell whether
+        # it was even running, let alone why it kept failing to
+        # reconcile that one trade. Logging the skip specifically (not
+        # every call -- that would be constant noise from ordinary
+        # dashboard-page-load/scheduled-tick overlap) turns "silently
+        # lost the lock race" from invisible into directly diagnosable
+        # if it happens repeatedly in a row.
+        print("WARNING: check_open_trades skipped -- JOURNAL_LOCK held by another caller", flush=True)
         return []
     try:
         return _check_open_trades_unsafe(client, expiry_enabled)
@@ -90,6 +102,14 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
         expiry_enabled = load_state().trade_time_limit_enabled
     entries = load_journal()
     pending = open_entries(entries)
+    # Unconditional, same "prove this job is actually alive" reasoning
+    # as run_daily_dispatcher's own tick line -- every OTHER path below
+    # this point (found still open, found closed+reconciled, 404) prints
+    # nothing on success, so this was the only job with literally no way
+    # to distinguish "ran and had nothing to do" from "never ran" from
+    # "silently lost the lock race every single tick" in the logs.
+    print(f"INFO: check_open_trades tick at {datetime.now(timezone.utc).isoformat()} "
+          f"-- {len(pending)} pending", flush=True)
     if not pending:
         return []
 
