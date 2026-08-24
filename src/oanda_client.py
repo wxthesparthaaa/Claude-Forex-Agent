@@ -30,10 +30,16 @@ LIVE_URL = "https://api-fxtrade.oanda.com"
 # shape github_state_sync's own circuit breaker was built for. Same
 # fix: remember a recent genuine failure and fail fast (no network call)
 # for a short cooldown instead of re-paying that timeout on every
-# subsequent call while OANDA stays degraded. A 404 does NOT trip it --
-# get_trade() 404ing for a trade that's genuinely just not found via that
-# specific endpoint is routine, expected behavior on this account (see
-# trade_monitor.py's own 404-handling comment), not evidence of an outage.
+# subsequent call while OANDA stays degraded. A 400 or 404 does NOT trip
+# it -- get_trade() 404ing for a trade that's genuinely just not found via
+# that specific endpoint is routine, expected behavior on this account
+# (see trade_monitor.py's own 404-handling comment); pricing a pair OANDA
+# simply doesn't list (e.g. CHF_SGD, no direct Swiss Franc / Singapore
+# Dollar quote) 400s for the same structural "this doesn't exist" reason,
+# confirmed live -- neither is evidence the API itself is unhealthy, and
+# tripping the breaker on either used to block every OTHER, unrelated
+# OANDA call for the next 20s over a permanent, expected fact about one
+# specific pair.
 _circuit_open_until: Optional[datetime] = None
 CIRCUIT_BREAKER_COOLDOWN = timedelta(seconds=20)
 
@@ -80,8 +86,22 @@ class OandaClient:
             r = requests.request(method, url, headers=self._headers(), params=params, json=json, timeout=20)
             r.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            if e.response is not None and e.response.status_code == 404:
-                raise  # routine, expected outcome on this account -- not evidence of an outage
+            if e.response is not None and e.response.status_code in (400, 404):
+                # Real incident: pricing a pair OANDA simply doesn't list
+                # (e.g. CHF_SGD -- no direct Swiss Franc / Singapore
+                # Dollar quote exists) returns 400, not 404, but it's the
+                # exact same kind of routine, structural "this doesn't
+                # exist" response -- a permanent fact about this
+                # instrument, not evidence the API itself is unhealthy.
+                # Tripping the breaker on it meant one entirely expected
+                # 400 blocked every OTHER OANDA call (unrelated pairs
+                # included) for the next 20s, repeatedly, all day --
+                # confirmed live via cascading "circuit breaker open"
+                # warnings for SGD_CHF/CHF_USD/USD_CHF/USD_SGD/SGD_USD
+                # right after a single CHF_SGD 400, which then made
+                # USD_CHF's own conversion-rate lookup fail entirely and
+                # skip that instrument's scan on every single pass.
+                raise
             _trip_circuit_breaker()
             raise
         except requests.exceptions.RequestException:

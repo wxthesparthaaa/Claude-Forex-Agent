@@ -145,6 +145,59 @@ def test_circuit_breaker_is_not_tripped_by_a_404(mock_request):
 
 
 @patch("oanda_client.requests.request")
+def test_circuit_breaker_is_not_tripped_by_a_400(mock_request):
+    # Real incident: pricing CHF_SGD (no direct Swiss Franc / Singapore
+    # Dollar pair exists on OANDA) 400s -- a permanent, structural "this
+    # pair doesn't exist" fact, not evidence the API is unhealthy. This
+    # used to trip the breaker and block every OTHER OANDA call
+    # (unrelated pairs included) for the next 20s on every single scan
+    # that touched USD_CHF, confirmed live in Render's own logs.
+    _reset_circuit_breaker()
+    resp = MagicMock()
+    resp.status_code = 400
+    resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
+    mock_request.return_value = resp
+    client = _client()
+
+    for _ in range(2):
+        try:
+            client._request("GET", "/v3/accounts/x/pricing")
+        except requests.exceptions.HTTPError:
+            pass
+
+    assert mock_request.call_count == 2  # both calls actually went out -- breaker never opened
+
+
+@patch("oanda_client.requests.request")
+def test_a_400_on_one_pair_does_not_block_pricing_lookups_for_other_pairs(mock_request):
+    # Direct proof of the cascading-failure bug: CHF_SGD genuinely
+    # doesn't exist (400), but a completely unrelated, healthy pair
+    # (EUR_USD) queried right after must not get short-circuited by a
+    # breaker that should never have opened in the first place.
+    _reset_circuit_breaker()
+    chf_resp = MagicMock()
+    chf_resp.status_code = 400
+    chf_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=chf_resp)
+
+    eur_resp = MagicMock()
+    eur_resp.raise_for_status.return_value = None
+    eur_resp.json.return_value = {"prices": [{"bids": [{"price": "1.10"}], "asks": [{"price": "1.11"}]}]}
+
+    mock_request.side_effect = [chf_resp, eur_resp]
+    client = _client()
+
+    try:
+        client._request("GET", "/v3/accounts/x/pricing", params={"instruments": "CHF_SGD"})
+    except requests.exceptions.HTTPError:
+        pass
+
+    result = client._request("GET", "/v3/accounts/x/pricing", params={"instruments": "EUR_USD"})
+
+    assert result == {"prices": [{"bids": [{"price": "1.10"}], "asks": [{"price": "1.11"}]}]}
+    assert mock_request.call_count == 2  # EUR_USD's lookup actually went out, wasn't short-circuited
+
+
+@patch("oanda_client.requests.request")
 def test_circuit_breaker_clears_on_the_next_success(mock_request):
     _reset_circuit_breaker()
     oc._circuit_open_until = datetime.now(timezone.utc) - timedelta(seconds=1)  # cooldown elapsed, allow a try
