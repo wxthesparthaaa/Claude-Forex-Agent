@@ -1531,10 +1531,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-08-24T08:16:55.309346+00:00",
+    "exit_price": 0.71602,
+    "realized_pnl": -43.6295,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
