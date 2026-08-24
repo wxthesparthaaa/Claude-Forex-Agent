@@ -1538,5 +1538,44 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1130",
+    "instrument": "GBP_USD",
+    "direction": "LONG",
+    "units": 50571,
+    "entry_price": 1.36478,
+    "stop_loss": 1.36413,
+    "take_profit": 1.36608,
+    "confidence_pct": 80.0,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 55 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: no GBP-relevant headlines in the latest fetch (neutral)."
+    ],
+    "opened_at": "2026-08-24T07:02:57.989978+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 41.732168,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
