@@ -1696,5 +1696,44 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1152",
+    "instrument": "WTICO_USD",
+    "direction": "SHORT",
+    "units": -30,
+    "entry_price": 85.8,
+    "stop_loss": 86.881,
+    "take_profit": 83.638,
+    "confidence_pct": 75.0,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 41 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-24T14:28:29.906323+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 41.732168,
+    "confidence_components": {
+      "breadth": 85.71428571428571,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
