@@ -1499,5 +1499,44 @@
     "closed_at": "2026-08-23T22:12:55.857773+00:00",
     "exit_price": 4616.385,
     "realized_pnl": 8.2201
+  },
+  {
+    "trade_id": "1126",
+    "instrument": "AUD_USD",
+    "direction": "LONG",
+    "units": 27867,
+    "entry_price": 0.7172,
+    "stop_loss": 0.71602,
+    "take_profit": 0.71956,
+    "confidence_pct": 65.0,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+      "RSI is 55 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: no AUD-relevant headlines in the latest fetch (neutral)."
+    ],
+    "opened_at": "2026-08-24T00:02:54.056349+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 41.732168,
+    "confidence_components": {
+      "breadth": 57.14285714285714,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
