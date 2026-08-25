@@ -1728,10 +1728,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-08-25T09:06:41.916494+00:00",
+    "exit_price": 83.633,
+    "realized_pnl": 80.4007,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
