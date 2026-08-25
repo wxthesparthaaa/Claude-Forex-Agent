@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-25T03:03:14.245376+00:00",
-  "candidates": [
-    {
-      "instrument": "USD_JPY",
-      "direction": "LONG",
-      "entry_price": 159.36,
-      "stop_loss": 159.097,
-      "take_profit": 159.886,
-      "confidence_pct": 61.2,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 64.8348878170404,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 18423,
-      "unit_label": "units",
-      "risk_amount": 38.639193999999996,
-      "notional_account_currency": 23411.82,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 72 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 6.3% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": true,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-25T03:23:11.219395+00:00",
+  "candidates": []
 }
