@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-08-25T17:53:09.712414+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-25T18:13:09.856205+00:00",
+  "candidates": [
+    {
+      "instrument": "USD_CAD",
+      "direction": "SHORT",
+      "entry_price": 1.38311,
+      "stop_loss": 1.38412,
+      "take_profit": 1.38109,
+      "confidence_pct": 68.7,
+      "confidence_components": {
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 64.81481481481481
+      },
+      "units": -44259,
+      "unit_label": "units",
+      "risk_amount": 41.02531200000001,
+      "notional_account_currency": 56179.82,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 35 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: works against this direction -- worth a second look."
+      ],
+      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.7% > 6.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    }
+  ]
 }
