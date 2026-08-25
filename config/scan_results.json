@@ -1,28 +1,28 @@
 {
-  "scanned_at": "2026-08-25T08:03:12.752502+00:00",
+  "scanned_at": "2026-08-25T08:23:12.731939+00:00",
   "candidates": [
     {
       "instrument": "USD_JPY",
       "direction": "LONG",
-      "entry_price": 159.445,
+      "entry_price": 159.454,
       "stop_loss": 159.315,
-      "take_profit": 159.705,
-      "confidence_pct": 72.6,
+      "take_profit": 159.732,
+      "confidence_pct": 69.1,
       "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 90.25656037160431,
+        "breadth": 71.42857142857143,
+        "rsi": 96.57825637844269,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 37281,
+      "units": 34871,
       "unit_label": "units",
       "risk_amount": 38.639193999999996,
-      "notional_account_currency": 47390.37,
+      "notional_account_currency": 44323.88,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 67 (neutral range).",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 66 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
@@ -30,7 +30,7 @@
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": true
       }
     }
