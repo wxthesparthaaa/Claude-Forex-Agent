@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-25T20:33:09.661808+00:00",
-  "candidates": [
-    {
-      "instrument": "WTICO_USD",
-      "direction": "SHORT",
-      "entry_price": 81.4,
-      "stop_loss": 83.219,
-      "take_profit": 77.762,
-      "confidence_pct": 67.6,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 50.588558986268595,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": -17,
-      "unit_label": "barrels",
-      "risk_amount": 41.02531200000001,
-      "notional_account_currency": 1756.12,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 25 (oversold -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.7% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    }
-  ]
+  "scanned_at": "2026-08-25T20:53:09.217807+00:00",
+  "candidates": []
 }
