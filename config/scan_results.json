@@ -1,4 +1,71 @@
 {
-  "scanned_at": "2026-08-25T13:03:16.210030+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-25T13:23:16.734686+00:00",
+  "candidates": [
+    {
+      "instrument": "XAG_USD",
+      "direction": "SHORT",
+      "entry_price": 67.564,
+      "stop_loss": 68.2375,
+      "take_profit": 66.217,
+      "confidence_pct": 85.2,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 100.0,
+        "candlestick": 85.0,
+        "news": 50.0
+      },
+      "units": -45,
+      "unit_label": "oz",
+      "risk_amount": 38.639193999999996,
+      "notional_account_currency": 3861.12,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 37 (neutral range).",
+        "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": true,
+        "news": false
+      }
+    },
+    {
+      "instrument": "USD_CAD",
+      "direction": "SHORT",
+      "entry_price": 1.38482,
+      "stop_loss": 1.38628,
+      "take_profit": 1.3819,
+      "confidence_pct": 81.6,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 56.25
+      },
+      "units": -28856,
+      "unit_label": "units",
+      "risk_amount": 38.639193999999996,
+      "notional_account_currency": 36648.45,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 41 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: neutral."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    }
+  ]
 }
