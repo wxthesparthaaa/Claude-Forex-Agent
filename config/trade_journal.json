@@ -1852,5 +1852,44 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1177",
+    "instrument": "XAU_USD",
+    "direction": "LONG",
+    "units": 1,
+    "entry_price": 4650.255,
+    "stop_loss": 4629.495,
+    "take_profit": 4691.775,
+    "confidence_pct": 80.0,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 59 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-25T15:53:20.960962+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 38.639193999999996,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
