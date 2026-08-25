@@ -1,4 +1,71 @@
 {
-  "scanned_at": "2026-08-25T11:43:11.113104+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-25T12:03:15.911281+00:00",
+  "candidates": [
+    {
+      "instrument": "WTICO_USD",
+      "direction": "SHORT",
+      "entry_price": 82.792,
+      "stop_loss": 83.495,
+      "take_profit": 81.386,
+      "confidence_pct": 57.9,
+      "confidence_components": {
+        "breadth": 71.42857142857143,
+        "rsi": 51.75595260167064,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": -43,
+      "unit_label": "barrels",
+      "risk_amount": 38.639193999999996,
+      "notional_account_currency": 4522.48,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 25 (oversold -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": false
+      }
+    },
+    {
+      "instrument": "BCO_USD",
+      "direction": "SHORT",
+      "entry_price": 90.226,
+      "stop_loss": 91.042,
+      "take_profit": 88.594,
+      "confidence_pct": 57.4,
+      "confidence_components": {
+        "breadth": 71.42857142857143,
+        "rsi": 49.63324433752824,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": -37,
+      "unit_label": "barrels",
+      "risk_amount": 38.639193999999996,
+      "notional_account_currency": 4240.89,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 25 (oversold -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": false
+      }
+    }
+  ]
 }
