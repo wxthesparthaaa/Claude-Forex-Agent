@@ -1735,5 +1735,44 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1163",
+    "instrument": "XAG_USD",
+    "direction": "SHORT",
+    "units": -45,
+    "entry_price": 67.564,
+    "stop_loss": 68.2375,
+    "take_profit": 66.217,
+    "confidence_pct": 85.2,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 37 (neutral range).",
+      "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-25T13:23:18.142581+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 38.639193999999996,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 100.0,
+      "candlestick": 85.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": true,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
