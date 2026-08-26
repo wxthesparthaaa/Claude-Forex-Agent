@@ -2153,4 +2153,42 @@ doesn't self-heal once the new logging deploys.
 **Solution**: `tests/test_trade_monitor.py` unaffected (33 passed).
 Full suite: 424 passed.
 
+## 2026-08-26 — Backtested a 5m-entry/1h-higher-timeframe variant; no better than the live 15m/4h setup
+
+**Request**: Following the check_open_trades investigation, user asked
+whether the live strategy's 15m entry / 4h higher-timeframe combo was
+the right choice, and specifically whether a faster 5-minute entry
+(paired with 1h as the higher timeframe, since 5m calls for a nearer
+higher timeframe than 4h) would win more often.
+
+**Backtest**: Built `scripts/backtest_5m_entry_1h_higher.py`, reusing
+backtest_entry_filter.py's fetch/confidence helpers (both already
+granularity-agnostic) rather than duplicating them. Same funnel
+(entry_allowed + structure-break + derive_trade_levels + min-stop-
+distance, simulated at the live 2:1 R:R), same fixed bar counts
+(BARS_FOR_SWINGS=60, BARS_FOR_STRENGTH_HISTORY=150) live_scan.py itself
+uses regardless of timeframe -- faithfully reproduces what actually
+flipping ENTRY_TIMEFRAME/HIGHER_TIMEFRAMES to 5m/1h would do. Matched
+~270 days of real history (78000 5m bars) to the 15m backtest's own
+window, ~833 days of 1h warmup.
+
+**Result: no better, same failure mode as the 2026-08-14 finding.**
+Overall win rate 33.1% (breakeven for 2:1 R:R is 33.3%), expectancy
+-0.006R -- essentially flat. Temporal stability split flips sign
+(+0.007R first half, -0.017R second half), the same "looks fine in
+aggregate, doesn't survive a stability check" pattern every other
+variant tested in this project has shown. Only 3/11 instruments
+(XAU_USD, USD_CAD, XAG_USD) clear breakeven AND stay stable across both
+halves; USD_JPY and NZD_USD looked good overall but flipped when split.
+Raw directional accuracy: 47.9-49.1% at 1h/2h/5h horizons (below coin
+flip, matching the 15m/4h backtest's own 46-49%), 50.4%/51.0% at
+10h/24h -- nominally "beats coin flip" but the margin (0.4-1.0 points
+on ~6860 samples) is noise, not signal.
+
+**Conclusion**: a second independent confirmation (different timeframe,
+same structure-break logic) that the raw signal has no real, temporally
+-stable edge -- not specific to 15m/4h. 5m/1h buys ~3x the scan volume
+for the same lack of edge. Not implemented; documented as a research
+finding.
+
 **Fixed**: 2026-08-24
