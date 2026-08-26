@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-26T11:23:11.415053+00:00",
-  "candidates": [
-    {
-      "instrument": "USD_CHF",
-      "direction": "LONG",
-      "entry_price": 0.80432,
-      "stop_loss": 0.8035,
-      "take_profit": 0.80596,
-      "confidence_pct": 66.9,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 37.5
-      },
-      "units": 31679,
-      "unit_label": "units",
-      "risk_amount": 41.02531200000001,
-      "notional_account_currency": 40240.13,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 64 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: works against this direction -- worth a second look."
-      ],
-      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 5.9% > 4.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-26T11:43:11.314687+00:00",
+  "candidates": []
 }
