@@ -1,37 +1,36 @@
 {
-  "scanned_at": "2026-08-26T22:05:29.947969+00:00",
+  "scanned_at": "2026-08-26T22:25:29.846693+00:00",
   "candidates": [
     {
       "instrument": "AUD_USD",
       "direction": "LONG",
-      "entry_price": 0.71766,
+      "entry_price": 0.71761,
       "stop_loss": 0.71676,
-      "take_profit": 0.71946,
-      "confidence_pct": 81.3,
+      "take_profit": 0.71931,
+      "confidence_pct": 73.0,
       "confidence_components": {
-        "breadth": 100.0,
+        "breadth": 85.71428571428571,
         "rsi": 100.0,
-        "candlestick": 50.0,
+        "candlestick": 20.0,
         "news": 60.0
       },
-      "units": 35850,
+      "units": 37960,
       "unit_label": "units",
       "risk_amount": 41.02531200000001,
-      "notional_account_currency": 32712.91,
+      "notional_account_currency": 34635.18,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 60 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.1) -- higher reversal risk than usual.",
+        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 58 (neutral range).",
+        "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
         "News sentiment: neutral."
       ],
-      "rejected_reason": null,
+      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.9% > 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": true
       }
     }
