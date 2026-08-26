@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-26", "Backtested 1h entry / Daily higher-timeframe -- worse than 15m/4h and 5m/1h, not better: "
+                    "31.0% win rate, -0.071R expectancy, negative in BOTH halves of the split. 3/3 timeframe combos "
+                    "now show the same coin-flip pattern; the signal itself, not the timeframe, is the bottleneck."),
     ("2026-08-26", "Backtested 5m entry / 1h higher-timeframe (vs the live 15m/4h) after being asked if it'd win "
                     "more -- it doesn't. 33.1% win rate (breakeven 33.3%), expectancy flips sign between halves "
                     "(+0.007R / -0.017R). Same no-stable-edge finding as 2026-08-14, just on a different timeframe."),

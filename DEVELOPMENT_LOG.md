@@ -2191,4 +2191,39 @@ same structure-break logic) that the raw signal has no real, temporally
 for the same lack of edge. Not implemented; documented as a research
 finding.
 
+## 2026-08-26 (continued) — 1h/Daily backtest: worse than both, closing out the timeframe question
+
+**Request**: Follow-up to the 5m/1h result -- asked whether any other
+timeframe combo was worth testing. Recommended 1h entry / Daily higher
+timeframe specifically because it's a genuinely different regime (real
+swing trading, far less intraday noise) rather than another close
+intraday variant, since 15m and 5m already bracketed that range with
+the same null result.
+
+**Backtest**: `scripts/backtest_1h_entry_daily_higher.py`, same funnel
+and fixed bar counts as the 5m/1h script, entry window extended to
+~1250 days (20000 H1 bars) since hourly bars are far sparser and would
+otherwise starve the trade sample.
+
+**Result: worse than either intraday variant, not better.** 31.0% win
+rate (breakeven 33.3%), expectancy -0.071R. Unlike 5m/1h's sign-flip
+between halves, both halves here stayed net-negative (-0.123R, -0.024R)
+-- arguably cleaner evidence of no edge, since it didn't get lucky in
+either half. Zero instruments were both profitable and stable across
+the temporal split (XAU_USD and USD_JPY cleared breakeven overall but
+flipped when split: 24.7%->41.4% and 36.1%->31.2%). Directional accuracy
+46.8-50.5% across all 8 horizons tested (1h through 10d) -- the same
+coin-flip band as the 15m/4h and 5m/1h results.
+
+**Conclusion, closing out this line of inquiry**: three independent
+timeframe combos (15m/4h, 5m/1h, 1h/Daily) have now all failed the exact
+same way -- win rate hugging the breakeven/coin-flip line, no instrument
+both clearing breakeven and staying stable across a temporal split. The
+bottleneck is the structure-break/pivot signal itself, not which
+timeframe it's computed on. Recommended not testing further timeframe
+permutations; if this strategy family is revisited, the 2026-08-14
+alternate-signal screen (EMA crossover, mean-reversion, breakout
+continuation) is the more promising direction than more timeframe
+slicing.
+
 **Fixed**: 2026-08-24
