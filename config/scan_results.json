@@ -1,23 +1,23 @@
 {
-  "scanned_at": "2026-08-26T23:25:30.604198+00:00",
+  "scanned_at": "2026-08-26T23:45:30.247164+00:00",
   "candidates": [
     {
       "instrument": "AUD_USD",
       "direction": "LONG",
-      "entry_price": 0.71816,
+      "entry_price": 0.71831,
       "stop_loss": 0.71676,
-      "take_profit": 0.72096,
-      "confidence_pct": 80.3,
+      "take_profit": 0.72141,
+      "confidence_pct": 80.1,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 91.3619692328296,
+        "rsi": 90.40850401724768,
         "candlestick": 50.0,
         "news": 60.0
       },
-      "units": 23047,
+      "units": 20818,
       "unit_label": "units",
       "risk_amount": 41.02531200000001,
-      "notional_account_currency": 21043.99,
+      "notional_account_currency": 19011.56,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
