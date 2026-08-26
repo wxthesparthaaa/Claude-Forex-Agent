@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-08-26T03:43:11.614548+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-26T04:03:11.908480+00:00",
+  "candidates": [
+    {
+      "instrument": "NZD_USD",
+      "direction": "SHORT",
+      "entry_price": 0.59572,
+      "stop_loss": 0.59669,
+      "take_profit": 0.59378,
+      "confidence_pct": 61.0,
+      "confidence_components": {
+        "breadth": 71.42857142857143,
+        "rsi": 64.11021517422249,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": -33307,
+      "unit_label": "units",
+      "risk_amount": 41.02531200000001,
+      "notional_account_currency": 25194.92,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 28 (oversold -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": false
+      }
+    }
+  ]
 }
