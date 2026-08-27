@@ -45,11 +45,16 @@
     "BCO_USD": "2026-08-27T20:20:32.514289+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 2,
+  "interval_scan_count_since_digest": 3,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
-    "USD_CHF"
+    "USD_CHF",
+    "USD_CAD",
+    "XAU_USD",
+    "XAG_USD",
+    "WTICO_USD",
+    "BCO_USD"
   ],
   "last_scan_digest_sent_at": "2026-08-27T12:05:22.915972+00:00",
   "paused_instruments": {},
