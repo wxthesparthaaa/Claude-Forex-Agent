@@ -1845,10 +1845,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-08-27T17:57:56.083307+00:00",
+    "exit_price": 91.327,
+    "realized_pnl": -38.8045,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
