@@ -38,23 +38,18 @@
     "EUR_USD": "2026-08-27T19:45:33.124735+08:00",
     "GBP_USD": "2026-08-27T19:45:33.124735+08:00",
     "USD_CHF": "2026-08-27T19:45:33.124735+08:00",
-    "USD_CAD": "2026-08-27T04:55:30.101181+08:00",
-    "XAU_USD": "2026-08-26T23:55:36.393892+08:00",
-    "XAG_USD": "2026-08-26T23:55:36.393892+08:00",
-    "WTICO_USD": "2026-08-27T04:55:30.101181+08:00",
-    "BCO_USD": "2026-08-26T23:55:36.393892+08:00"
+    "USD_CAD": "2026-08-27T20:00:33.446992+08:00",
+    "XAU_USD": "2026-08-27T20:00:33.446992+08:00",
+    "XAG_USD": "2026-08-27T20:00:33.446992+08:00",
+    "WTICO_USD": "2026-08-27T20:00:33.446992+08:00",
+    "BCO_USD": "2026-08-27T20:00:33.446992+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 4,
+  "interval_scan_count_since_digest": 3,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
-    "USD_CHF",
-    "USD_CAD",
-    "XAU_USD",
-    "XAG_USD",
-    "WTICO_USD",
-    "BCO_USD"
+    "USD_CHF"
   ],
   "last_scan_digest_sent_at": "2026-08-27T09:00:22.917838+00:00",
   "paused_instruments": {},
