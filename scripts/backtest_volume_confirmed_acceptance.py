@@ -68,7 +68,14 @@ from backtest_entry_filter import summarize, BREAKEVEN_WIN_RATE
 
 SWING_WINDOW = 60  # matches every other backtest's own BARS_FOR_SWINGS
 
-TEST_DAYS = 90            # the period baseline vs filtered are actually compared over
+TEST_DAYS = 270           # the period baseline vs filtered are actually compared over -- matches the
+                          # other backtests' own ~270-day window; a first 90-day run only produced 5
+                          # confirmed trades (98% of regime-passing candidates never reaccelerated
+                          # within the expiry window), too few to say anything statistically. Extending
+                          # to 270 days keeps the same ~1.8%-per-candidate confirmation rate but at
+                          # roughly 3x the candidate count -- still a thin sample (~15 trades), but the
+                          # cheapest way to find out if that's a real edge or noise before tuning
+                          # thresholds. The 1m fetch is proportionally larger (~432,000 bars/instrument).
 M1_WARMUP_DAYS = 30       # prior history for the volume time-of-day baseline (min_samples=20/bucket)
 M30_WARMUP_DAYS = 60      # prior history for the RV-percentile baseline
 SIGNAL_WARMUP_DAYS = 15   # buffer for the 15m swing-detection warmup
