@@ -18,6 +18,7 @@ CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "candle_cache"
 # Conservative chunk sizes (in days) that stay comfortably under OANDA's
 # per-request candle cap for each granularity.
 CHUNK_DAYS = {
+    "M1": 3,
     "M15": 45,
     "M30": 90,
     "H1": 180,
