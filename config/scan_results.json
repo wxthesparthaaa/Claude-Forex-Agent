@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-27T11:45:32.036833+00:00",
-  "candidates": [
-    {
-      "instrument": "EUR_USD",
-      "direction": "SHORT",
-      "entry_price": 1.16399,
-      "stop_loss": 1.16482,
-      "take_profit": 1.16233,
-      "confidence_pct": 56.5,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 95.9609409105466,
-        "candlestick": 50.0,
-        "news": 0.0
-      },
-      "units": -38869,
-      "unit_label": "units",
-      "risk_amount": 41.02531200000001,
-      "notional_account_currency": 57533.65,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 34 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.9% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-27T12:00:32.410807+00:00",
+  "candidates": []
 }
