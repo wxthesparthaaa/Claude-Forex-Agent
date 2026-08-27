@@ -2226,4 +2226,64 @@ alternate-signal screen (EMA crossover, mean-reversion, breakout
 continuation) is the more promising direction than more timeframe
 slicing.
 
+## 2026-08-27 — Volume-Confirmed Acceptance Entry: a much more elaborate timing filter, same result
+
+**Request**: User supplied a detailed strategy design (time-of-day-
+normalized volume z-score participation, an extension/displacement
+check, breakout-level acceptance, a volatility-regime percentile band,
+and an impulse-pullback-reacceleration entry trigger, chained
+sequentially) and asked for it to be translated into code and
+backtested the same way as everything else this session.
+
+**Built**: `src/timing_filter.py` (volume_zscore_series -- causal,
+time-of-day-bucketed; atr_series; rv_percentile_series -- causal; and
+find_confirmed_entry, the impulse->pullback->reacceleration state
+machine) plus `scripts/backtest_volume_confirmed_acceptance.py`, which
+layers the filter on the existing, UNCHANGED 15m/4h directional signal
+(three independent timeframe backtests already ruled out timeframe as
+the issue) and compares taking every signal immediately (baseline)
+against only taking it once the filter confirms.
+
+**Caveat surfaced before running anything**: OANDA's "volume" field is
+a tick-count proxy, not true traded notional -- retail FX has no
+consolidated tape. Every participation/volume gate in this design is
+really measuring price-update frequency, not institutional flow. A
+simpler volume filter already failed twice (2026-08-21/22).
+
+**Caught before touching real data**: writing tests for the new module
+found a real bug -- the reacceleration bar's own volume was being
+folded into the pullback stats used to judge itself, letting a strong
+volume spike inflate its own "was the pullback weak" denominator and
+defeat that exact check on the bar meant to pass it. Fixed; 8 new
+tests, one of which specifically pins this down.
+
+**Result (first pass, 90-day window)**: only 5 confirmed trades across
+all 11 instruments -- 98% of regime-passing candidates never
+reaccelerated within the 30-minute expiry. Too small a sample to say
+anything (a true 33% win rate still has a 13% chance of 5 straight
+losses); extended to 270 days on the user's own choice of next step.
+
+**Result (270-day window)**: 18 confirmed trades, 22.2% win rate,
+-0.333R expectancy -- BELOW the unfiltered baseline's own 30.9%/-0.074R,
+not above it, though the gap (8.7 points) is under 1 standard error at
+n=18 so not strongly significant either way. What IS clear: no evidence
+the filter found a better subset, and the confirmation rate stayed at
+~1% of all raw signals (roughly one trade per 15 days across the whole
+11-instrument portfolio) -- not a workable trading frequency even
+setting performance aside.
+
+**Conclusion**: this is the sixth independent experiment this session
+(RSI+volume pyramid trigger, RSI+volume base filter, 3 timeframe
+combos, now this) testing whether some added condition can extract an
+edge from the base structure-break signal. All six failed the same
+way. The base signal's own directional accuracy sits at 46-51%
+(coin-flip) across every timeframe tested -- no filter layered on top
+of a signal with no directional edge can manufacture one; filtering
+only changes WHEN a bet is taken, not whether the bet's own direction
+call is predictive. Recommending against further filter/timing-overlay
+experiments on this base signal; the 2026-08-14 alternate-signal screen
+remains the only untested direction that showed even preliminary
+promise (Bollinger mean-reversion on a cheap screen, though it didn't
+survive full walk-forward either).
+
 **Fixed**: 2026-08-24
