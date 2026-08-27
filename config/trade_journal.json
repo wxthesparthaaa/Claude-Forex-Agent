@@ -2003,10 +2003,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-08-27T13:26:27.129708+00:00",
+    "exit_price": 0.71946,
+    "realized_pnl": 80.2814,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
