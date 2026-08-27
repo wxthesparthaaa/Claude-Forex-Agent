@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-08-27T12:05:33.004850+00:00",
-  "candidates": []
+  "scanned_at": "2026-08-27T12:20:31.603847+00:00",
+  "candidates": [
+    {
+      "instrument": "BCO_USD",
+      "direction": "SHORT",
+      "entry_price": 89.479,
+      "stop_loss": 89.984,
+      "take_profit": 88.469,
+      "confidence_pct": 64.5,
+      "confidence_components": {
+        "breadth": 57.14285714285714,
+        "rsi": 97.86363867885015,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": -63,
+      "unit_label": "barrels",
+      "risk_amount": 41.02531200000001,
+      "notional_account_currency": 7166.57,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 56 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      ],
+      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.9% > 6.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": false
+      }
+    }
+  ]
 }
