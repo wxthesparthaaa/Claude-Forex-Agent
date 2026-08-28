@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-28", "Full walk-forward on EMA crossover/RSI mean-reversion/breakout: EMA and breakout show no "
+                    "real edge (noise or stably negative). RSI@1:1 R:R is the first result all session where "
+                    "BOTH halves independently clear breakeven (+0.011R) -- thin, uncosted, not yet confirmed."),
     ("2026-08-28", "8-way TP/SL backtest series: distance scaling (90-50%) changes holding time but NOT win "
                     "rate (flat ~31%); no R:R ratio (1:1/1.5:1/2:1) escapes negative expectancy; Bollinger "
                     "mean-reversion's tradeable fixed-R:R form is worse than the existing signal at every ratio."),

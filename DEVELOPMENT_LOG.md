@@ -2377,4 +2377,59 @@ untested direction remains a different SIGNAL family entirely (the
 2026-08-14 screen tested EMA crossover, RSI mean-reversion, breakout
 continuation, and Bollinger -- all four are now closed out).
 
+## 2026-08-28 (continued) — Full walk-forward on the 3 remaining alternate signal families: RSI mean-reversion is the first real lead all session
+
+**Request**: Following the 8-way TP/SL/Bollinger series (which closed
+out Bollinger with a full walk-forward test), user asked to screen the
+remaining 3 alternate families from the 2026-08-14 cheap directional
+screen (EMA crossover, RSI mean-reversion, 20-bar breakout) with the
+same full stop/TP walk-forward rigor.
+
+**Built**: `scripts/backtest_alternate_families_full.py` -- reuses the
+exact signal generators from backtest_signal_families.py, stop = 1.5x
+ATR(14) (none of the three has an obvious "natural" target the way
+Bollinger has "revert to the mean," so all three share one consistent
+design rather than bespoke logic per family), target = the same fixed
+R:R sweep [1.0, 1.5, 2.0, 2.5] backtest_bollinger_reversion.py already
+used, for directly comparable numbers.
+
+**EMA(12/26) crossover**: no real edge. Expectancy sits within a hair
+of zero at every R:R (-0.019R to +0.002R), and 3 of 4 R:R levels FLIP
+sign between the two halves of the 415-day period (1:1, 2:1, 2.5:1) --
+the scattered per-instrument/per-R:R "clears breakeven" tags are noise,
+not a real effect.
+
+**20-bar breakout continuation**: cleanly, confidently negative.
+Negative at every R:R tested (-0.046R to -0.039R), STABLE (both halves
+miss) at every single one. No ambiguity.
+
+**RSI(14) mean-reversion**: the first genuinely interesting result all
+session. At 1:1 R:R: 50.5% win rate, +0.011R expectancy, STABLE (both
+halves independently clear 50% -- 50.0% and 51.0%). The only result
+across the entire multi-day backtest series (structure-break and all
+its timeframe/TP-SL/pyramid/volume-filter variants, Bollinger, now EMA
+and breakout) where both halves of history land on the profitable side
+independently. Has a sensible mechanical story too -- edge decays
+cleanly as R:R widens (1.5:1: -0.004R, 2:1: -0.022R, 2.5:1: -0.044R),
+consistent with "a tight target is easy to reach on a genuine reversion,
+a wide one demands a full reversion which is less reliable" rather than
+looking like random noise across R:R levels.
+
+**Caveat, not yet resolved**: 50.5% is only 0.5 points above the 50%
+breakeven against a standard error of roughly 0.7 points at n=5417 --
+close enough to zero that it may still be noise, not a confirmed edge.
+None of this session's backtests model spread/slippage; a +0.011R
+average edge is small enough that realistic transaction costs could
+plausibly erase it entirely. This is the first result all session
+where that caveat is actually load-bearing to the conclusion (everywhere
+else the numbers were negative enough that costs were irrelevant).
+
+**Status**: not acted on. If pursued further, next steps would be a
+proper significance test (not just eyeballing SE), modeling realistic
+spread costs per instrument, and a genuinely out-of-sample validation
+period rather than the same in-sample split already used to discover
+it -- exactly the "don't trust a single walk-forward split that
+happened to find something" discipline this project's own backtesting
+culture has emphasized throughout.
+
 **Fixed**: 2026-08-24
