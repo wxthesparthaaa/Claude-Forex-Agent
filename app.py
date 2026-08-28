@@ -82,6 +82,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-28", "'Pre-evening health check failed / OANDA 401' fired twice in 2 days from a same-tick blip "
+                    "that had cleared by the time autopilot traded 30 min later. Now retries once, 25s later "
+                    "(past the circuit breaker's own cooldown), before alerting -- a genuinely dead token still "
+                    "alerts after both attempts fail."),
     ("2026-08-27", "Backtested a much more elaborate volume/acceptance/reacceleration timing filter (user-"
                     "designed) on top of the existing signal -- 18 confirmed trades in 270 days, 22.2% win rate, "
                     "below the 30.9% baseline. 6th straight experiment finding no edge; filtering can't fix a "

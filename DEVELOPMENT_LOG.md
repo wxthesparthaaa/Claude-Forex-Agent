@@ -2286,4 +2286,35 @@ remains the only untested direction that showed even preliminary
 promise (Bollinger mean-reversion on a cheap screen, though it didn't
 survive full walk-forward either).
 
+## 2026-08-28 — Pre-evening health check false-alarming on a self-resolving OANDA 401
+
+**Problem**: User flagged "Pre-evening health check failed... OANDA
+connectivity: 401 Client Error: Unauthorized" firing twice on
+2026-08-27 and twice on 2026-08-28. Render logs around the 9:00pm SGT
+firing showed the scheduler itself healthy the whole time (dispatcher
+ticks and the autopilot interval scan both ran normally in the exact
+same 5-minute window), and autopilot placed a real trade (SHORT XAU_USD)
+cleanly 30 minutes after the alert fired -- the 401 was a same-tick
+transient blip that had already cleared, not a broken or revoked token.
+
+**Fix**: `run_pre_evening_health_check` now retries the OANDA
+connectivity check once, 25 seconds after the first failure --
+deliberately just past oanda_client's own 20s circuit breaker cooldown
+(a 401 trips that breaker, so retrying sooner would only hit the
+breaker's own synthetic "still open" error, not a real second attempt).
+A genuinely broken/expired token still fails both attempts and still
+alerts; this only absorbs the class of blip that clears within seconds,
+which is exactly what was observed. 2 new tests. Full suite: 433 passed.
+
+**Not yet resolved**: the underlying cause of the OANDA-side 401 itself
+is still unknown -- this fix reduces false-alarm noise from a
+self-resolving blip, it doesn't explain why OANDA's practice API is
+occasionally rejecting the token for a few seconds around this exact
+time of day, twice in two days. If the retry-absorbed alert stops
+appearing entirely, that's enough evidence it really was this class of
+blip; if a "failed after retry" alert appears even once, that's a
+genuinely different, more persistent problem worth escalating (check
+the OANDA account for any token/security changes -- outside what logs
+alone can diagnose).
+
 **Fixed**: 2026-08-24
