@@ -2317,4 +2317,64 @@ genuinely different, more persistent problem worth escalating (check
 the OANDA account for any token/security changes -- outside what logs
 alone can diagnose).
 
+## 2026-08-28 (continued) — 8-way TP/SL and Bollinger backtest series, all null or negative
+
+**Request**: User's observation that trades take a long while to hit TP
+prompted a request for 8 backtests: 5 TP/SL distance scales (90/80/70/
+60/50% of the live 2:1 stop/target, same ratio, smaller absolute size),
+2 alternate R:R ratios (1:1, 1.5:1) against the full unscaled stop, and
+a re-run of the existing Bollinger mean-reversion backtest.
+
+**Built**: `scripts/backtest_tp_sl_distance_sweep.py` for the first 7
+(same unchanged 15m/4h signal, only trade management varies -- three
+independent timeframe backtests already ruled out timeframe as the
+issue). `scripts/backtest_bollinger_reversion.py` already existed from
+the original 2026-08-14 signal-family screen; verified it still
+compiles/imports cleanly, no changes needed.
+
+**Distance scale result**: holding time drops almost exactly
+proportionally with scale (16.9h at 100% -> 4.6h at 50%, matching the
+~3.7x distance reduction), confirming a tighter target IS reached
+faster. But win rate stays flat at ~31% across every single scale
+(31.1/31.1/30.9/31.3/30.6/31.2%, no trend) and expectancy stays
+negative throughout (-0.06R to -0.08R). Directly refutes the user's own
+hypothesis: shrinking the trade does not make it more likely to
+succeed, only faster to resolve (the same losing outcome, sooner).
+
+**R:R ratio result (structure-break signal)**: win rate rises as the
+ratio tightens (47.1% at 1:1, 37.0% at 1.5:1, 31.1% at 2:1, all as
+expected) but never catches its own breakeven -- every ratio sits ~2-3
+points below what it needs. The 1:1 result is the most telling: at 1:1
+R:R, win rate is essentially a direct read of raw directional accuracy,
+and 47.1% lands almost exactly in the 46-51% coin-flip band this
+project has now found independently at least four separate times
+(the original screen, plus all three timeframe backtests) -- strong
+cross-confirmation from a completely different methodology (real
+simulated execution, not a fixed-horizon directional check).
+
+**Bollinger mean-reversion result**: the "target = the mean" version
+shows a thin +0.025R aggregate expectancy (13.1% win rate, large but
+rare wins) -- but this isn't directly tradeable with how the live
+system actually places orders (fixed stopLossOnFill/takeProfitOnFill
+set once at entry, not a continuously-moving target), so even a real
+edge here wouldn't be a drop-in win. The practically-tradeable
+fixed-R:R version (same entries/stops, a set target instead) is clearly
+and stably negative at every ratio tested (1:1 through 2.5:1, all
+"STABLE both miss" across both halves of the 414-day period) --
+NEGATIVE, and worse than the structure-break signal's own R:R sweep at
+every comparable ratio (e.g. 1:1: -0.311R vs -0.057R). Confirms the
+2026-08-14 finding precisely, and adds that it's not just "no edge" but
+actively worse than what's already running.
+
+**Conclusion**: this is now the 8th-through-14th individual backtest
+variant across this session's series, and every one of them lands on
+the same root cause -- the directional signal's own accuracy sits at
+46-51% (coin-flip), and no amount of trade-management tuning (distance,
+R:R ratio, mean-reversion target) can fix a bet whose direction call
+isn't predictive. Recommending against further TP/SL or trade-
+management experiments on this base signal; the only genuinely
+untested direction remains a different SIGNAL family entirely (the
+2026-08-14 screen tested EMA crossover, RSI mean-reversion, breakout
+continuation, and Bollinger -- all four are now closed out).
+
 **Fixed**: 2026-08-24
