@@ -2160,10 +2160,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "CANCELLED",
+    "closed_at": "2026-08-28T20:51:38.114767+00:00",
+    "exit_price": 4458.305,
+    "realized_pnl": 122.0967,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
@@ -2200,10 +2200,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "CANCELLED",
+    "closed_at": "2026-08-28T20:51:38.114767+00:00",
+    "exit_price": 84.022,
+    "realized_pnl": -13.9062,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
