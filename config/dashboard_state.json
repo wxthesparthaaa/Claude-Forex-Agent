@@ -100,5 +100,5 @@
   "trade_time_limit_enabled": false,
   "pyramid_mode_enabled": true,
   "friday_preclose_cancel_enabled": true,
-  "last_friday_preclose_cancel_at": null
+  "last_friday_preclose_cancel_at": "2026-08-28T17:00:00-04:00"
 }
