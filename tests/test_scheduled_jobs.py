@@ -1431,9 +1431,10 @@ def test_health_check_stays_quiet_when_everything_is_fine(mock_send, mock_gh_con
     mock_send.assert_not_called()
 
 
+@patch("scheduled_jobs.time.sleep")
 @patch("scheduled_jobs.get_github_config")
 @patch("scheduled_jobs.send_message")
-def test_health_check_alerts_on_oanda_failure(mock_send, mock_gh_config):
+def test_health_check_alerts_on_oanda_failure(mock_send, mock_gh_config, mock_sleep):
     mock_gh_config.return_value = None  # GitHub not configured -- only checking OANDA here
 
     class FailingOandaClient(ScanFakeClient):
@@ -1447,6 +1448,39 @@ def test_health_check_alerts_on_oanda_failure(mock_send, mock_gh_config):
     assert "OANDA" in problems[0]
     mock_send.assert_called_once()
     assert "health check failed" in mock_send.call_args[0][0]
+    mock_sleep.assert_called_once_with(scheduled_jobs.OANDA_RETRY_DELAY_SECONDS)  # retried once before alerting
+
+
+@patch("scheduled_jobs.time.sleep")
+@patch("scheduled_jobs.get_github_config")
+@patch("scheduled_jobs.send_message")
+def test_health_check_does_not_alert_on_a_transient_oanda_blip_that_clears_on_retry(mock_send, mock_gh_config, mock_sleep):
+    # Real incident: a "Pre-evening health check failed" alert fired from
+    # a 401 that had already cleared by the time autopilot placed a trade
+    # 30 minutes later -- a same-tick transient blip, not a broken
+    # credential. One retry (past the circuit breaker's own 20s cooldown)
+    # should absorb exactly this class of self-resolving failure instead
+    # of alerting on it every time.
+    mock_gh_config.return_value = None
+
+    class FlakyOandaClient(ScanFakeClient):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.calls = 0
+
+        def get_account_summary(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise Exception("401 Unauthorized")
+            return {"NAV": "2000", "currency": "SGD"}
+
+    client = FlakyOandaClient(summary={}, closed_trades=[])
+    problems = scheduled_jobs.run_pre_evening_health_check(client)
+
+    assert problems == []
+    mock_send.assert_not_called()
+    assert client.calls == 2
+    mock_sleep.assert_called_once_with(scheduled_jobs.OANDA_RETRY_DELAY_SECONDS)
 
 
 @patch("scheduled_jobs.pull_state_from_github")

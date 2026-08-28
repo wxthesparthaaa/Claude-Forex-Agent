@@ -17,6 +17,7 @@ if used directly.
 from __future__ import annotations
 
 import threading
+import time
 import traceback
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -641,6 +642,9 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     return stats
 
 
+OANDA_RETRY_DELAY_SECONDS = 25  # just past oanda_client's own 20s circuit breaker cooldown -- see docstring below
+
+
 def run_pre_evening_health_check(client: OandaClient = None) -> list:
     """~30 min before the evening scan window opens (21:00 SGT) --
     verifies OANDA and GitHub connectivity are actually working right
@@ -656,14 +660,32 @@ def run_pre_evening_health_check(client: OandaClient = None) -> list:
     token (a real incident: get_account_summary() started 401ing with
     no code change on our end), with enough lead time to fix it before
     the window opens instead of finding out from a failed scan at
-    9:30pm. Returns the list of problems found (empty if all clear)."""
+    9:30pm. Returns the list of problems found (empty if all clear).
+
+    OANDA_RETRY_DELAY_SECONDS between the two attempts is deliberately
+    just past oanda_client's own 20s circuit breaker cooldown -- a
+    401/5xx trips that breaker, so retrying sooner would just hit the
+    breaker's own synthetic "still open" error instead of a real second
+    attempt against OANDA. Real incident: this alert fired from a 401
+    that self-resolved within the hour (autopilot traded normally both
+    before and after) -- a single retry filters out that class of
+    sub-minute blip without weakening the alert for a genuinely broken
+    token, which will still fail both attempts."""
     problems = []
 
     client = client or OandaClient()
-    try:
-        client.get_account_summary()
-    except Exception as e:
-        problems.append(f"OANDA connectivity: {e}")
+    oanda_error = None
+    for attempt in range(2):
+        try:
+            client.get_account_summary()
+            oanda_error = None
+            break
+        except Exception as e:
+            oanda_error = e
+            if attempt == 0:
+                time.sleep(OANDA_RETRY_DELAY_SECONDS)
+    if oanda_error is not None:
+        problems.append(f"OANDA connectivity: {oanda_error}")
 
     if get_github_config() is not None:
         try:
