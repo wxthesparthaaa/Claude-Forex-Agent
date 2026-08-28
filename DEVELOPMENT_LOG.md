@@ -2432,4 +2432,46 @@ it -- exactly the "don't trust a single walk-forward split that
 happened to find something" discipline this project's own backtesting
 culture has emphasized throughout.
 
+## 2026-08-28 (continued) — RSI@1:1 rigor check: the lead does not survive, closing out the entire signal-family investigation
+
+**Request**: Follow-up to the RSI mean-reversion @1:1 R:R lead -- user
+asked to build the significance/cost check proposed as the next step.
+
+**Built**: `scripts/rsi_mean_reversion_significance_check.py` -- re-runs
+the exact same trades (not a re-implementation), then: (1) a one-sided
+z-test + Wilson confidence interval against the 50% breakeven, (2) a
+block bootstrap resampling whole calendar days (pooled across all
+instruments) rather than individual trades, since same-day signals
+across instruments are plausibly correlated and the naive z-test
+assumes independence, (3) cost-adjusted expectancy using REAL current
+OANDA bid/ask spread per instrument, each trade's own stored entry/stop
+recovering its exact risk distance.
+
+**Result -- all three checks failed the lead**:
+1. z=0.79, p=0.2153 (need <0.05) -- not significant. 95% Wilson CI for
+   the true win rate: [49.20%, 51.87%], comfortably containing 50%.
+2. Block-bootstrap 95% CI for mean R-multiple: [-0.0239R, +0.0456R] --
+   spans zero widely. The original "STABLE both halves" verdict was
+   itself likely an artifact of treating correlated same-day trades as
+   independent.
+3. Decisive: raw +0.0107R -> cost-adjusted **-0.0969R** after real
+   spread -- roughly 9x the original edge's size, now negative. Only
+   USD_JPY stays marginally positive post-cost (+0.0191R); every other
+   instrument is solidly negative, several badly (NZD_USD -0.1977R,
+   USD_CHF -0.1786R, XAG_USD -0.1657R).
+
+**Conclusion, closing out the entire multi-day signal-family
+investigation**: this was the last open thread from the 2026-08-14
+screen (EMA crossover, RSI mean-reversion, Bollinger, breakout
+continuation) and it does not survive rigor -- noise that happened to
+land on the profitable side of a coin flip in both halves of history,
+and never economically viable once real transaction costs are counted.
+All 5 signal families tested this session (structure-break and its
+many timeframe/TP-SL/pyramid/volume-filter variants, plus all 4
+alternates) have now failed under proper walk-forward + significance +
+cost scrutiny. No further signal-family or trade-management experiments
+are recommended on this line of research without a genuinely new idea
+-- everything reachable by varying entry timing, timeframe, R:R, or
+signal family within this project's existing toolkit has been tried.
+
 **Fixed**: 2026-08-24
