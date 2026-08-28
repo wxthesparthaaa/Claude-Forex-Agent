@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-28T10:05:16.976747+00:00",
-  "candidates": [
-    {
-      "instrument": "EUR_USD",
-      "direction": "SHORT",
-      "entry_price": 1.16408,
-      "stop_loss": 1.16488,
-      "take_profit": 1.16248,
-      "confidence_pct": 65.8,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 33.333333333333336
-      },
-      "units": -39772,
-      "unit_label": "units",
-      "risk_amount": 40.435566,
-      "notional_account_currency": 58837.31,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 38 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": "Daily loss limit reached: 7.1% >= 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-28T10:25:16.547123+00:00",
+  "candidates": []
 }
