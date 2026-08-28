@@ -45,7 +45,7 @@
     "BCO_USD": "2026-08-27T23:47:42.216162+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 5,
+  "interval_scan_count_since_digest": 6,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
