@@ -2127,5 +2127,45 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1225",
+    "instrument": "XAU_USD",
+    "direction": "SHORT",
+    "units": -1,
+    "entry_price": 4556.625,
+    "stop_loss": 4631.98,
+    "take_profit": 4405.915,
+    "confidence_pct": 73.0,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 32 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "Caution: the broader currency move looks stretched (z=2.3) -- higher reversal risk than usual.",
+      "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+    ],
+    "opened_at": "2026-08-28T14:30:22.891279+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.435566,
+    "confidence_components": {
+      "breadth": 100.0,
+      "rsi": 86.39760785107491,
+      "candlestick": 50.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
