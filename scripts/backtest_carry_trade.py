@@ -38,6 +38,13 @@ Mechanics:
   3. Reports price-only return, annualized return, max drawdown, and a
      Sharpe-like ratio for both variants, plus the separate estimated-
      rollover line described above.
+  4. Breaks the same price-only result down by CALENDAR YEAR (each year
+     computed independently, not compounded across years) -- the
+     aggregate multi-year number alone can't distinguish "consistently
+     positive across distinct rate regimes" from "one dominant stretch
+     carried the whole result." Year boundaries are fixed ahead of time
+     rather than eyeballed from the price chart, so they can't be
+     accused of being placed to flatter the result either way.
 
 Read-only (get_candles/get_instruments only, no orders).
 """
@@ -54,6 +61,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), encoding="utf
 from oanda_client import OandaClient
 from candle_history import fetch_history, closes_from_candles
 from timing_filter import rv_percentile_series
+
+
+def _parse_time(c):
+    return datetime.fromisoformat(c["time"].replace("Z", "+00:00"))
 
 # The 7 existing FX majors (commodities excluded -- their OANDA
 # financing reflects cost-of-carry/storage, not an interest-rate
@@ -137,9 +148,10 @@ def backtest_pair(client, instrument, direction):
     start = end - timedelta(days=DAILY_BAR_COUNT_DAYS)
     candles = fetch_history(client, instrument, "D", start, end)
     closes = closes_from_candles(candles)
+    times = [_parse_time(c) for c in candles]
     n = len(closes)
     if n < RV_BASELINE_WINDOW + RV_WINDOW + 10:
-        return None
+        return None, None
 
     sign = 1 if direction == "LONG" else -1
     daily_returns = [sign * (closes[i] / closes[i - 1] - 1) for i in range(1, n)]
@@ -149,6 +161,9 @@ def backtest_pair(client, instrument, direction):
     filtered_cum = [1.0]
     days_held_always = 0
     days_held_filtered = 0
+    # (date, daily_return_if_always_held, was_held_under_the_filter) -- the
+    # raw material for slicing into calendar-year sub-regimes below.
+    per_day = []
     for i in range(1, n):
         r = daily_returns[i - 1]
         always_cum.append(always_cum[-1] * (1 + r))
@@ -162,7 +177,9 @@ def backtest_pair(client, instrument, direction):
             filtered_cum.append(filtered_cum[-1] * (1 + r))
             days_held_filtered += 1
 
-    return {
+        per_day.append((times[i], r, not risk_off))
+
+    stats = {
         "n_days": n - 1,
         "always_total_return": always_cum[-1] - 1,
         "always_max_dd": max_drawdown(always_cum),
@@ -174,6 +191,40 @@ def backtest_pair(client, instrument, direction):
         "std_daily_return": (sum((r - sum(daily_returns) / len(daily_returns)) ** 2
                                    for r in daily_returns) / len(daily_returns)) ** 0.5,
     }
+    return stats, per_day
+
+
+def yearly_breakdown(per_day: list) -> list:
+    """Splits per-day records into calendar-year buckets -- chosen
+    specifically because year boundaries are fixed ahead of time and
+    can't be accused of being placed to make the result look better or
+    worse, unlike picking "regime" boundaries by eye from the price
+    chart itself. Returns one row per year: total return and max
+    drawdown for both always-held and filtered, computed independently
+    within that year only (each year restarts from 1.0 -- this asks
+    "was THIS year good on its own," not "how did the running total
+    look," which a single multi-year compounding number can't answer)."""
+    by_year = {}
+    for date, r, held_filtered in per_day:
+        by_year.setdefault(date.year, []).append((r, held_filtered))
+
+    rows = []
+    for year in sorted(by_year):
+        records = by_year[year]
+        always_cum = [1.0]
+        filtered_cum = [1.0]
+        for r, held_filtered in records:
+            always_cum.append(always_cum[-1] * (1 + r))
+            filtered_cum.append(filtered_cum[-1] * (1 + r) if held_filtered else filtered_cum[-1])
+        rows.append({
+            "year": year,
+            "n_days": len(records),
+            "always_return": always_cum[-1] - 1,
+            "always_max_dd": max_drawdown(always_cum),
+            "filtered_return": filtered_cum[-1] - 1,
+            "filtered_max_dd": max_drawdown(filtered_cum),
+        })
+    return rows
 
 
 def annualize(total_return, n_days):
@@ -195,7 +246,7 @@ def main():
           f"{'always_ret':>11s} {'always_dd':>10s}  {'filt_ret':>10s} {'filt_dd':>9s}  {'daily_rate':>10s}")
 
     for instrument, (direction, daily_rate) in viable.items():
-        result = backtest_pair(client, instrument, direction)
+        result, per_day = backtest_pair(client, instrument, direction)
         if result is None:
             print(f"{instrument:10s}  (insufficient daily history, skipped)")
             continue
@@ -219,6 +270,22 @@ def main():
         print(f"           price + estimated rollover: "
               f"always={100*(result['always_total_return']+est_rollover_always):+.1f}%  "
               f"filtered={100*(result['filtered_total_return']+est_rollover_filtered):+.1f}%")
+
+        years = yearly_breakdown(per_day)
+        # Partial first/last calendar years (however many days of history
+        # happen to fall in them) are included as-is, labeled with their
+        # day count, rather than dropped -- silently discarding partial
+        # years would bias the sub-regime picture toward whichever years
+        # happened to be complete.
+        always_positive_years = sum(1 for y in years if y["always_return"] > 0)
+        filtered_positive_years = sum(1 for y in years if y["filtered_return"] > 0)
+        print(f"           by calendar year (price-only, each year independent, not compounded across years):")
+        for y in years:
+            print(f"             {y['year']}  (n={y['n_days']:3d}d)  "
+                  f"always={100*y['always_return']:+7.1f}% (dd={100*y['always_max_dd']:+6.1f}%)   "
+                  f"filtered={100*y['filtered_return']:+7.1f}% (dd={100*y['filtered_max_dd']:+6.1f}%)")
+        print(f"           positive years: always={always_positive_years}/{len(years)}  "
+              f"filtered={filtered_positive_years}/{len(years)}")
         print()
 
 
