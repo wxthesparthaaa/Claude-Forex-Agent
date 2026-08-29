@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Found+fixed a same-tick bug: trend_addon reused a stale account snapshot across a whole "
+                    "tick, so 2 pairs sharing a currency could BOTH bypass the exposure cap if they signaled "
+                    "together. Fixed by reloading fresh per-pair; also added durable risk-skip recording."),
     ("2026-08-30", "Shipped trend-following (13 pairs, SMA-200) as a live Settings toggle, replacing carry "
                     "entirely -- carry's own edge on AUD_JPY/CAD_JPY turned out to BE this same trend signal. "
                     "Wide backstop stop only, no risk-off filter; a flip closes now, reopens next 5-min tick."),

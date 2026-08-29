@@ -3204,3 +3204,54 @@ shell has no OANDA credentials, so `check_trend_opportunities` has only
 run against fake/mocked clients. Toggle ships off by default; the user
 should watch the dashboard/Telegram after deploying with it on, on the
 practice account, before ever considering `OANDA_ENV=live`.
+
+## 2026-08-30 (continued) -- Fixed a same-tick exposure-cap bypass; risk skips now recorded durably
+
+**Request**: after fixing a close-reason logging gap, asked to keep
+auditing "all aspects of how the trade of all the currency pairs will
+function" and look for further journal gaps.
+
+**Found a real bug**: `trend_addon.py` loaded the journal once at the
+top of each 5-minute tick and reused that same snapshot for every
+pair's `risk_engine.validate_trade()` call. Two pairs sharing a
+currency leg that both signal in the SAME tick -- e.g. two of the 7
+JPY crosses during a genuine regime shift, precisely the scenario the
+module's own docstring exists to describe -- could each independently
+pass the per-currency exposure check against a stale account state that
+hadn't yet seen the other one's position placed earlier in that same
+loop pass. This directly undermined the exposure-cap protection the
+whole 13-pair, correlation-aware design was supposed to guarantee.
+**Fixed** by reloading the journal fresh immediately before each pair's
+risk check, so every later pair in the same tick sees every trade
+already placed. Verified the fix is real, not just "the test happens to
+pass," by temporarily reverting it and confirming the new regression
+test genuinely fails without it (both pairs open instead of one) before
+restoring it.
+
+**Related pre-existing gap found, not fixed**: `trade_execution.
+auto_execute_candidates` (the base signal-prediction strategy's own
+batch-execution path, unrelated to this session's carry/trend work) has
+a narrower version of the same class of bug -- it already tracks
+running `trades_today`/`open_risk_amount` counters across a batch
+specifically to avoid this exact problem, but never updates
+`currency_net_exposure_pct` the same way, so multiple candidates
+sharing a currency within one autopilot scan could still each pass
+independently. Currently live, higher blast radius than trend_addon's
+own (off-by-default) fix -- left for the user to decide whether/when to
+address separately.
+
+**Durable risk-skip recording**: `DashboardState.trend_risk_skips`
+(`{instrument: {count, last_reason, last_at}}`, surfaced on the
+dashboard) now records every time the risk engine rejects a trend entry
+-- previously only a `print()` statement, the exact kind of thing this
+project has already been burned by trusting once before (see this log's
+own 2026-08-24 entry: a stuck trade went unnoticed for 45+ minutes
+because a job had no durable log line at all). This is what actually
+lets "did the exposure cap bind during a real regime move, how often,
+which pairs" be answered from the dashboard weeks later, not inferred
+from however long Render happens to retain logs.
+
+**Tests**: 2 new tests in `test_trend_addon.py` -- the same-tick
+sequencing regression (confirmed to fail without the fix, confirmed to
+pass with it) and the risk-skip durable-recording check. Full suite:
+467 passed.
