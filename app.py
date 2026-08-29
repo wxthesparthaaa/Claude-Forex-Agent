@@ -82,6 +82,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Commodities/indices trend-following survives cost modeling too (Sharpe 2.35->2.27 at 3x "
+                    "live spread) -- even better proportionally than FX. Still missing: out-of-sample check, "
+                    "and this account's data only goes back to 2019 (one long equity/gold bull run), so may not "
+                    "be possible -- a calendar-year breakdown is the next best substitute."),
     ("2026-08-30", "Same bug, different file: auto_execute_candidates (base autopilot, currently LIVE) tracked "
                     "running trades/heat across a batch but never currency exposure -- 2 candidates sharing a "
                     "currency could both bypass the cap. Fixed with a running exposure dict, same as trend_addon."),

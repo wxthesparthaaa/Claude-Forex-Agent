@@ -3287,3 +3287,50 @@ belongs in conversation/this log, not on every page load.
 
 **Tests**: 1 new regression test in `test_trade_execution.py`. Full
 suite: 468 passed.
+
+## 2026-08-30 (continued) -- Commodities/indices trend-following survives cost modeling cleanly
+
+**Request**: cost-model the commodities+index-CFD trend-following
+result found earlier (Sharpe 2.48, +36.23%/yr own-universe, moderate
++0.347 correlation with the FX trend portfolio) -- the same 1x/2x/3x
+live-spread stress test the FX universe already went through, expected
+to matter more here since index/commodity spreads run wider.
+
+**Built**: `scripts/trend_following_commodities_indices_cost_modeled.py`,
+reusing `backtest_trend_following_cost_modeled.py`'s generic helpers
+directly. Hit and fixed a real crash: `trend_positions_and_returns` only
+guards "fetched fine but too few candles" (returns None), not "OANDA
+rejected the instrument outright" (raises) -- `DE40_EUR` isn't listed on
+this account (already known from the earlier significance-check run,
+which had its own guard) and crashed the whole sweep the first time
+through before being wrapped in a try/except.
+
+**Result**: the edge survives comfortably, proportionally even better
+than FX did. No-cost baseline: +32.20%/yr, Sharpe 2.35. At 3x live
+spread (the conservative case): +31.00%/yr, Sharpe 2.27 -- about a 1.2
+point annualized give-up, a smaller relative hit than FX's own 3x
+result (Sharpe 2.48 -> 2.21). Two instruments show meaningfully higher
+cost sensitivity than the rest -- `SG30_SGD` (widest spread, 15.75bps,
+79 flips, cumulative cost 12.4% -> 37.3% across the 1x-3x range) and
+`XAG_USD` (10.85bps, cost 7.2% -> 21.5%) -- but both stay strongly net
+positive even at 3x, just with more of their raw return eaten by cost
+than the group average.
+
+**Conclusion**: transaction costs are not what would kill this result
+either, same as FX. This closes the SECOND of the two follow-up checks
+flagged when the commodities/indices universe was first found. **The
+first one -- genuine out-of-sample confirmation -- remains open and
+may not be answerable at all**: unlike the FX pairs (real history back
+to 2007), OANDA's own history for most of these instruments only starts
+around 2019, so there's no older, untouched stretch to test against the
+way the FX threshold sweep and the FX extended-history check both used.
+This matters more here than it did for FX specifically because the
+2019-2026 window covers one of the most sustained secular bull markets
+in US/global equities on record plus a strong multi-year gold run --
+exactly the kind of single-dominant-regime concern that a real out-of-
+sample test would normally rule out, and can't be ruled out here for
+lack of older data. A calendar-year or split-half breakdown of the
+existing window (matching the discipline already used for carry) is
+the best available substitute given the data ceiling, and is the
+natural next check before trusting this figure the way FX's was
+eventually trusted.
