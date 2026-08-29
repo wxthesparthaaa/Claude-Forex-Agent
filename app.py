@@ -82,6 +82,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Built a profit-decay time exit (user's idea): cut a loser at 2h if still negative, cut a "
+                    "winner at any later hourly checkpoint if it's below the PRIOR checkpoint (not the peak). "
+                    "Reports paired baseline-vs-decay delta per trade, since either side's own number can mislead."),
+    ("2026-08-29", "Index CFD test (Ledger #1): 15/17 candidates available, 4004 signals/679 days, 32.8% WR, "
+                    "-0.016R, 47-50% directional accuracy -- identical failure signature to FX. Confirms it's "
+                    "the signal, not the asset class."),
     ("2026-08-28", "RSI@1:1 lead does NOT survive rigor: not statistically significant (p=0.22), CI spans zero "
                     "once day-level correlation is accounted for, and real spread flips +0.011R to -0.097R. "
                     "Closes out the entire signal-family investigation -- all 5 families tested, all fail."),

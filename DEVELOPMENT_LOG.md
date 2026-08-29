@@ -2474,4 +2474,46 @@ are recommended on this line of research without a genuinely new idea
 -- everything reachable by varying entry timing, timeframe, R:R, or
 signal family within this project's existing toolkit has been tried.
 
+## 2026-08-29 — Index CFD test (Ledger #1): same signature as FX, confirms it's the signal not the asset
+
+**Request**: First of the three "new direction" tests from the Ledger
+artifact -- point the unchanged structure-break funnel at index CFDs
+instead of the FX/commodity universe, to isolate whether the problem is
+the SIGNAL or the specific ASSET class it's been tested on.
+
+**Result**: 15 of 17 candidate index tickers were available on this
+account (US30, SPX500, NAS100, US2000, UK100, DE30, EU50, FR40, NL25,
+CH20, JP225, AU200, HK33, SG30, CN50 -- DE40_EUR and IN50_USD were not).
+4,004 signals over 679 days. Overall: 32.8% win rate, -0.016R
+expectancy, temporal stability FLIPPED (33.9% -> 32.4%). Directional
+accuracy 47.1-50.2% across every horizon -- the same coin-flip band as
+every FX/commodity test. Only 6/15 instruments nominally cleared
+breakeven, matching the exact "looks selective in aggregate, don't
+trust it without a stability check" pattern already seen everywhere
+else this session.
+
+**Conclusion**: it's the signal, not the asset. The structure-break
+funnel produces the identical failure signature on a completely
+different market (equity indices vs FX/commodities) -- confirms the
+Ledger's own root-cause read rather than opening a new lead. Ledger
+recommendation #3 (carry trade) and #2 (COT positioning) remain queued.
+
+## 2026-08-29 (continued) — User's own idea: a profit-decay time exit
+
+**Request**: A new trade-management rule, side-tracked from the asset/
+data/style roadmap: cut a losing trade at the 2-hour mark if still
+negative; cut a winning trade at any LATER hourly checkpoint if its
+unrealized P&L is lower than the immediately PRIOR checkpoint's (not
+lower than its peak) -- user's own worked example: 2h=$50, 3h=$45,
+45<50 so cancel even though still profitable.
+
+**Built**: `src/profit_decay_exit.py` (simulate_trade_with_decay_exit,
+7 tests including the user's own example verbatim and a specific check
+that the rule compares against the prior checkpoint, not the peak) and
+`scripts/backtest_profit_decay_exit.py`, which runs baseline (hold to
+SL/TP) and the decay exit in parallel from the same entries and reports
+the PAIRED per-trade delta -- the number that actually answers whether
+this helps, since either side's own standalone expectancy can mislead.
+Full suite: 440 passed (up from 433). Not run against real data yet.
+
 **Fixed**: 2026-08-24
