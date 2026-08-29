@@ -86,6 +86,10 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
     assert changed[0]["status"] == tj.SUCCESSFUL
     assert changed[0]["realized_pnl"] == 35.0
     mock_send.assert_not_called()  # SL/TP closes don't need a Telegram ping here
+    # A closed-reason marker distinguishing "OANDA's own SL/TP fired" from
+    # a feature module's own deliberate close (e.g. trend_addon's flip
+    # close) -- otherwise there's no durable record of which one happened.
+    assert "stop-loss or take-profit fired" in changed[0]["rationale"][-1]
 
 
 def test_normalize_oanda_timestamp_matches_pythons_own_isoformat_convention():
@@ -211,6 +215,7 @@ def test_check_open_trades_marks_lost_when_oanda_has_no_record_of_the_trade(mock
     assert client.find_closed_trade_calls == ["832"]  # the fallback was tried, not skipped
     entries = tj.load_journal()
     assert entries[0]["status"] == tj.LOST  # no longer stuck OPEN
+    assert "vanished from OANDA" in entries[0]["rationale"][-1]
 
 
 @patch("trade_monitor.send_message")
@@ -268,6 +273,7 @@ def test_check_open_trades_recovers_real_outcome_via_transaction_history_when_ge
     entries = tj.load_journal()
     assert entries[0]["status"] == tj.SUCCESSFUL
     assert entries[0]["realized_pnl"] == 2.2434
+    assert "recovered via transaction history" in entries[0]["rationale"][-1]
 
 
 @patch("trade_monitor.send_message")

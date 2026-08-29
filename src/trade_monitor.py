@@ -167,6 +167,10 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
                         close_time = fallback.get("time")
                         entry["closed_at"] = _normalize_oanda_timestamp(close_time) if close_time else now.isoformat()
                         entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
+                        entry["rationale"].append(
+                            f"Closed on OANDA (stop-loss/take-profit or manual), recovered via transaction "
+                            f"history after a 404 on direct lookup. P&L {pnl:+.2f}."
+                        )
                         changed.append(entry)
                         print(f"INFO: trade {trade_id} not found via get_trade() (404) but recovered "
                               f"via transaction history -- real P&L {pnl:+.2f}", flush=True)
@@ -183,6 +187,10 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
                         entry["exit_price"] = None
                         entry["closed_at"] = now.isoformat()
                         entry["status"] = LOST
+                        entry["rationale"].append(
+                            "Marked LOST -- vanished from OANDA with no record in the trade resource or "
+                            "transaction history (e.g. a demo account reset). Real P&L unrecoverable."
+                        )
                         changed.append(entry)
                         print(f"WARNING: trade {trade_id} not found on OANDA (404, and not in "
                               f"transaction history either) -- marking LOST, real P&L unrecoverable",
@@ -215,6 +223,20 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             close_time = closed.get("closeTime")
             entry["closed_at"] = _normalize_oanda_timestamp(close_time) if close_time else now.isoformat()
             entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
+            # This branch only ever fires for a close OANDA itself
+            # initiated (the trade's own stop-loss or take-profit
+            # firing) -- any close a feature module (trend_addon.py,
+            # cancel_all_open_trades, etc) triggers itself already
+            # updates the journal entry's status before this reconciler
+            # ever sees it as still OPEN. Worth recording explicitly,
+            # not just inferring it from the absence of another
+            # rationale note -- e.g. for trend_addon's wide backstop
+            # stop, this is the only place "did the stop actually bind"
+            # ever gets written down anywhere.
+            entry["rationale"].append(
+                f"Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature "
+                f"module). P&L {pnl:+.2f}."
+            )
             changed.append(entry)
             save_journal(entries)
 
