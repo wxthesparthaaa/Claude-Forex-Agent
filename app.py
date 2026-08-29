@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Reconstructed real historical rate differentials, closing out the carry investigation: "
+                    "EUR_JPY had a NEGATIVE ECB-BOJ differential 2018-2021 (not a real carry trade until 2022's "
+                    "hiking cycle); AUD_JPY/CAD_JPY stayed positive throughout -- the more credible candidates."),
     ("2026-08-29", "Carry stress-tested by calendar year: AUD_JPY/CAD_JPY/EUR_JPY show real persistence (positive "
                     "EVERY year 2020-2026), USD_JPY was concentrated in just 2021-2024, CHF_JPY lost money EVERY "
                     "single year (0/9) -- the aggregate number alone hid all of this nuance."),

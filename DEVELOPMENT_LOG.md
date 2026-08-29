@@ -2654,4 +2654,60 @@ everywhere -> rate-differentiated), not multiple independent cycles, so
 nuanced positive finding across the entire backtest series this
 session. Not shipped.
 
+## 2026-08-29 (continued) — Real historical rate reconstruction closes out Ledger #3
+
+**Request**: User's final follow-up on the carry line of investigation
+-- reconstruct actual historical rate differentials for AUD_JPY,
+CAD_JPY, EUR_JPY (rather than the flat "today's rate" approximation) to
+clarify remaining doubts before moving to Ledger #2 (COT).
+
+**Built**: `scripts/backtest_carry_historical_rates.py` -- hand-compiled
+RBA/BOC/ECB/BOJ policy-rate histories from public rate-decision records
+as step functions, with an explicit RATE_CONFIDENCE_CUTOFF
+(2025-06-30): high confidence through 2024, lower-confidence
+approximation for 2025, everything after holds flat with a printed
+warning rather than silently extrapolating. 8 tests -- one of which
+caught a wrong assumption in the test itself (see below) before it
+could hide a real finding.
+
+**Real finding, caught by the test suite catching my own bad
+assumption**: a test asserting "AUD/CAD/EUR always beat BOJ" failed for
+EUR pre-2022 -- the ECB deposit rate (-0.40%/-0.50%) was genuinely MORE
+NEGATIVE than BOJ's (-0.10%) for the entire 2016-2022 stretch. "Long
+EUR_JPY" was NOT actually carry-favorable by rates until the ECB's 2022
+hiking cycle flipped the sign. AUD and CAD stayed above BOJ throughout,
+no flip, confirmed both by the corrected tests and the real backtest
+run.
+
+**Real backtest result**: the flat-rate approximation OVERSTATED real
+rollover for AUD_JPY (+19.6% flat vs +12.9% real, 6.8pp too generous)
+and EUR_JPY (+10.2% vs +6.4%, 3.8pp too generous) -- both had much
+thinner differentials in 2020-2021 than today's rate implies. CAD_JPY
+was nearly exact (+13.1% vs +13.5%). Combining the real differential
+with the earlier price-only year-by-year: EUR_JPY's 2020 (+3.6% price)
+and 2021 (+3.7% price) were NOT genuine carry income -- the
+differential was negative those years (-0.40%/yr), meaning the position
+was paying to be held and only worked because the price move covered
+the cost. AUD_JPY and CAD_JPY never had this problem -- their
+differentials stayed positive (if thin) throughout.
+
+**Caveat**: the reconstructed "current" differential (raw ECB-BOJ
+policy spread, +1.75%/yr for EUR_JPY) doesn't match the live OANDA-
+quoted rate from the earlier backtest (~+0.58%/yr implied) -- expected,
+not a bug, since OANDA's tradeable swap rate reflects real market
+pricing and broker markup on top of the raw policy differential. Exact
+magnitudes here aren't precise; the shape of the story (thin-to-
+negative pre-2022, real from 2022 on) is the trustworthy part.
+
+**Conclusion, closing out Ledger #3**: AUD_JPY and CAD_JPY are the most
+credible carry candidates from this entire session -- positive
+direction throughout 8+ years, strengthening materially from 2022,
+7/9 positive calendar years on price alone, never fighting a rate
+headwind. EUR_JPY is real but younger (genuine carry only since 2022);
+its earlier "positive" years were price bets that happened to cover a
+carry cost, not carry income. Not shipped -- this is the ceiling of
+what can be verified without OANDA's actual historical financing data
+(which doesn't exist) or a second independent rate-regime cycle to
+test against. Moving to Ledger #2 (COT positioning) next.
+
 **Fixed**: 2026-08-24
