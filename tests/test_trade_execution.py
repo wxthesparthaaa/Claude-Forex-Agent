@@ -191,6 +191,32 @@ def test_auto_execute_second_candidate_blocked_by_first_within_same_batch(mock_s
 
 
 @patch("trade_execution.send_message")
+def test_auto_execute_second_candidate_blocked_by_currency_exposure_within_same_batch(
+        mock_send, tmp_path, monkeypatch):
+    # Real bug: running_trades_today/running_open_risk were tracked
+    # across a batch, but currency_net_exposure_pct never was -- two
+    # candidates sharing a currency (EUR_USD and GBP_USD are both net
+    # USD-short) could each independently pass the exposure check
+    # against the pre-batch snapshot. Portfolio heat is left generous
+    # here specifically so IT can't be what blocks the second candidate
+    # -- only the per-currency cap should.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()
+    state = PhaseState(phase="autopilot")
+    risk_config = RiskConfig(autopilot_confidence_threshold_pct=50.0,
+                              max_portfolio_heat_pct=50.0, max_currency_exposure_pct=4.0)
+    account = clean_account(equity=2000.0, open_risk_amount=0.0)
+    candidates = [
+        candidate(instrument="EUR_USD", confidence_pct=80.0, risk_amount=70.0),  # 3.5% USD-short, fine alone
+        candidate(instrument="GBP_USD", confidence_pct=80.0, risk_amount=70.0),  # combined 7% USD -> breaches 4% cap
+    ]
+    executed = trade_execution.auto_execute_candidates(client, candidates, state, risk_config, account)
+    assert len(executed) == 1
+    assert executed[0]["instrument"] == "EUR_USD"
+    assert client.orders_placed == ["EUR_USD"]
+
+
+@patch("trade_execution.send_message")
 def test_auto_execute_one_oanda_rejection_does_not_abort_the_rest_of_the_batch(mock_send, tmp_path, monkeypatch):
     # Regression test: place_and_record used to be called with no
     # try/except -- one instrument's OANDA rejection/timeout would raise

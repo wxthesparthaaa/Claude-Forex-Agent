@@ -56,15 +56,24 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
     each one against a RUNNING account state that accounts for trades
     already placed earlier in this same batch, not just the pre-scan
     snapshot every candidate was originally scored against. Without
-    this, three candidates that individually looked fine before the
-    scan started could all fire even if, taken together, they'd blow
-    through the portfolio-heat or trades/day cap."""
+    this, candidates that individually looked fine before the scan
+    started could all fire even if, taken together, they'd blow through
+    the portfolio-heat, trades/day, or per-currency exposure cap.
+
+    currency_net_exposure_pct is tracked as a running dict for the same
+    reason trades_today/open_risk_amount are -- real bug this fixes: two
+    candidates sharing a currency (e.g. EUR_USD and GBP_USD, both net
+    USD-short) could each independently pass the exposure check against
+    the pre-batch snapshot, since it was never updated as the batch
+    placed trades, even though trades_today/open_risk_amount already
+    were."""
     if not is_auto_execute_mode(phase_state):
         return []
 
     executed = []
     running_trades_today = account.trades_today
     running_open_risk = account.open_risk_amount
+    running_currency_exposure = dict(account.currency_net_exposure_pct)
 
     for c in candidates:
         cd = asdict(c)
@@ -77,11 +86,12 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
             equity=account.equity, peak_equity=account.peak_equity,
             daily_realized_pnl=account.daily_realized_pnl, weekly_realized_pnl=account.weekly_realized_pnl,
             open_risk_amount=running_open_risk, trades_today=running_trades_today,
-            currency_net_exposure_pct=account.currency_net_exposure_pct,
+            currency_net_exposure_pct=running_currency_exposure,
         )
+        currency_deltas = currency_deltas_for_trade(cd["instrument"], cd["direction"])
         proposed = ProposedTrade(
             instrument=cd["instrument"], direction=cd["direction"], risk_amount=cd["risk_amount"],
-            currency_deltas=currency_deltas_for_trade(cd["instrument"], cd["direction"]),
+            currency_deltas=currency_deltas,
         )
         try:
             validate_trade(proposed, fresh_account, risk_config)
@@ -108,6 +118,17 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
         executed.append(cd)
         running_trades_today += 1
         running_open_risk += cd["risk_amount"]
+        # Same signed-net formula risk_engine.validate_trade uses
+        # internally (current_pct + delta_fraction * risk_pct_of_equity)
+        # -- kept in a running dict here since this batch bypasses that
+        # function's own account-state build (which reconstructs
+        # exposure fresh from ALL open positions) and must accumulate it
+        # incrementally instead.
+        risk_pct_of_equity = 100 * cd["risk_amount"] / account.equity
+        for currency, delta_fraction in currency_deltas.items():
+            running_currency_exposure[currency] = (
+                running_currency_exposure.get(currency, 0.0) + delta_fraction * risk_pct_of_equity
+            )
         try:
             send_message(
                 f"🤖 <b>Autopilot executed</b>: {cd['direction']} {cd['instrument']} -- "
