@@ -152,6 +152,21 @@ class DashboardState:
     # opt-in, same posture the removed carry/pyramid toggles used. See
     # trend_addon.check_trend_opportunities for the actual rule.
     trend_mode_enabled: bool = False
+    # {instrument: {"count": int, "last_reason": str, "last_at": iso
+    # timestamp}} -- durable record of every time trend_addon wanted to
+    # open a position but risk_engine.validate_trade() rejected it (most
+    # often the per-currency exposure cap, given 7 of the 13 trend pairs
+    # share a JPY leg and 7 share USD). Without this, the only evidence a
+    # skip ever happened was a print() statement -- exactly the kind of
+    # thing this bot has already been burned by trusting once before
+    # (see DEVELOPMENT_LOG.md 2026-08-24, a stuck trade going unnoticed
+    # for 45+ minutes because a job had no durable log line at all). This
+    # is specifically what lets "did the exposure cap actually bind
+    # during a real regime move, and how often" be answered from the
+    # dashboard weeks later, not just inferred from Render's log
+    # retention. See trend_addon.check_trend_opportunities for where
+    # this is read/written.
+    trend_risk_skips: dict = field(default_factory=dict)
     # Explicit user request: cancel every open trade 10 minutes before
     # forex closes for the weekend (Friday 5pm New York), so nothing
     # carries weekend gap risk into Monday's reopen. On by default --

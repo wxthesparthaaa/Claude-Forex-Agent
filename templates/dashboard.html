@@ -423,6 +423,14 @@
           intended, not a malfunction. A day when several pairs flip at once could also bump
           into the daily trade-count limit above, shared across every strategy.
         </p>
+        {% if trend_risk_skips %}
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          <strong>Blocked by the risk engine so far:</strong>
+          {% for instrument, skip in trend_risk_skips.items() %}
+            {{ instrument }} ({{ skip.count }}x, last: {{ skip.last_reason }}){{ ", " if not loop.last else "" }}
+          {% endfor %}
+        </p>
+        {% endif %}
         <div class="toggle-row">
           <span>Cancel all trades before weekend close</span>
           <label class="switch">

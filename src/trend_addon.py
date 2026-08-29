@@ -76,7 +76,7 @@ from datetime import datetime, timezone
 
 from oanda_client import OandaClient
 from dashboard_state import (
-    load_state, risk_config_from_state, phase_state_from_state, account_state_from_tracked_capital,
+    load_state, save_state, risk_config_from_state, phase_state_from_state, account_state_from_tracked_capital,
 )
 from trade_journal import load_journal, save_journal, open_entries, JOURNAL_LOCK, SUCCESSFUL, FAILED
 from trade_execution import place_and_record
@@ -176,6 +176,8 @@ def _check_trend_opportunities_unsafe(client: OandaClient = None, trend_enabled:
     }
 
     actions = []
+    risk_skips = dict(state.trend_risk_skips)
+    risk_skips_changed = False
 
     for instrument in TREND_PAIRS:
         try:
@@ -268,6 +270,18 @@ def _check_trend_opportunities_unsafe(client: OandaClient = None, trend_enabled:
         take_profit_r = float(round_price(meta, take_profit))
 
         risk_config = risk_config_from_state(state)
+        # Reloaded fresh here, NOT the entries snapshot from the top of
+        # this function -- without this, two pairs sharing a currency
+        # leg (e.g. two of the 7 JPY crosses signaling together in a
+        # real regime shift, exactly the scenario this module's own
+        # docstring says the exposure cap exists to catch) could each
+        # independently pass validate_trade() against a stale account
+        # state that hasn't yet seen the other one's position placed
+        # earlier in this same loop pass -- silently letting combined
+        # exposure blow past max_currency_exposure_pct despite each
+        # individual check "passing." Reassigns the shared `entries`
+        # variable so every later pair in this same tick also sees it.
+        entries = load_journal()
         account = account_state_from_tracked_capital(state, entries)
 
         def get_price(pair_name, _client=client):
@@ -298,7 +312,17 @@ def _check_trend_opportunities_unsafe(client: OandaClient = None, trend_enabled:
             # 2-pair carry feature -- see module docstring's currency-
             # concentration note. A skip here is the risk engine working
             # as intended during a broad regime move, not a malfunction.
+            # Recorded durably (not just printed) so "did the exposure
+            # cap actually bind, how often, for which pairs" can be
+            # answered from the dashboard later -- see
+            # DashboardState.trend_risk_skips's own comment.
             print(f"INFO: trend entry for {instrument} would violate risk limits, skipping: {e}", flush=True)
+            prev_count = risk_skips.get(instrument, {}).get("count", 0)
+            risk_skips[instrument] = {
+                "count": prev_count + 1, "last_reason": str(e),
+                "last_at": datetime.now(timezone.utc).isoformat(),
+            }
+            risk_skips_changed = True
             continue
 
         side = "above" if direction == "LONG" else "below"
@@ -335,5 +359,9 @@ def _check_trend_opportunities_unsafe(client: OandaClient = None, trend_enabled:
         except Exception as e:
             print(f"WARNING: trend open notification failed for {instrument} "
                   f"(trade already placed and journaled): {e}", flush=True)
+
+    if risk_skips_changed:
+        state.trend_risk_skips = risk_skips
+        save_state(state)
 
     return actions

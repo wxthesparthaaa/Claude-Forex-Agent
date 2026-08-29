@@ -167,6 +167,35 @@ def test_unconfirmed_direction_does_nothing_for_that_pair(tmp_path, monkeypatch)
     assert client.placed_orders == []
 
 
+# --- RiskViolation skips are durably recorded, not just printed ---
+
+@patch("trend_addon.send_message")
+@patch("trend_addon.fetch_instrument_metadata", return_value=META)
+def test_risk_violation_skip_is_recorded_durably(mock_meta, mock_send, tmp_path, monkeypatch):
+    # Same setup as the same-tick sequencing test: AUD_JPY opens first
+    # and succeeds, CAD_JPY is rejected by the exposure cap -- this time
+    # asserting the rejection itself leaves a durable record in
+    # DashboardState.trend_risk_skips, not just a print() statement.
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.risk_config["risk_per_trade_pct"] = 3.0
+    ds.save_state(state)
+
+    client = FakeClient(mid_price=95.0)
+    monkeypatch.setattr(trend_addon, "_trend_direction",
+                          lambda c, i: "LONG" if i in ("AUD_JPY", "CAD_JPY") else None)
+    monkeypatch.setattr(trend_addon, "_wide_stop_distance", lambda c, i: 5.0)
+
+    trend_addon.check_trend_opportunities(client)
+
+    skips = ds.load_state().trend_risk_skips
+    assert "CAD_JPY" in skips
+    assert skips["CAD_JPY"]["count"] == 1
+    assert "exposure" in skips["CAD_JPY"]["last_reason"].lower()
+    assert skips["CAD_JPY"]["last_at"]  # a real timestamp was recorded
+    assert "AUD_JPY" not in skips  # the one that succeeded isn't recorded as a skip
+
+
 # --- opening a new position ---
 
 @patch("trend_addon.send_message")
@@ -238,6 +267,38 @@ def test_flip_closes_the_open_position_and_does_not_reopen_same_call(mock_send, 
     assert entries[0]["status"] == tj.FAILED
     assert entries[0]["realized_pnl"] == -8.25
     assert "flip" in entries[0]["rationale"][-1].lower()
+
+
+# --- same-tick sequencing: two pairs sharing a currency must see each other ---
+
+@patch("trend_addon.send_message")
+@patch("trend_addon.fetch_instrument_metadata", return_value=META)
+def test_two_jpy_crosses_signaling_in_the_same_tick_do_not_both_bypass_the_exposure_cap(
+        mock_meta, mock_send, tmp_path, monkeypatch):
+    # Neither AUD_JPY nor CAD_JPY has any pre-existing position -- both
+    # become eligible to open in the SAME check_trend_opportunities()
+    # call (exactly the "several JPY crosses signal together in one
+    # regime shift" scenario this module's own docstring describes).
+    # risk_per_trade_pct=3.0 means each trade alone is under the 4.0%
+    # default exposure cap, but the two COMBINED (6.0% shared JPY) would
+    # breach it -- proving the risk check for the second pair actually
+    # sees the first pair's position placed earlier in this same loop
+    # pass, not a stale pre-loop snapshot.
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.risk_config["risk_per_trade_pct"] = 3.0
+    ds.save_state(state)
+
+    client = FakeClient(mid_price=95.0)
+    monkeypatch.setattr(trend_addon, "_trend_direction",
+                          lambda c, i: "LONG" if i in ("AUD_JPY", "CAD_JPY") else None)
+    monkeypatch.setattr(trend_addon, "_wide_stop_distance", lambda c, i: 5.0)
+
+    actions = trend_addon.check_trend_opportunities(client)
+
+    opened = [a for a in actions if a["action"] == "opened"]
+    assert len(opened) == 1  # exactly one JPY cross opens, not both
+    assert len(client.placed_orders) == 1
 
 
 # --- the correlated-JPY-exposure protection actually works for this larger pair set ---

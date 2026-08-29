@@ -422,7 +422,7 @@ def dashboard():
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
-        trend_mode_enabled=state.trend_mode_enabled,
+        trend_mode_enabled=state.trend_mode_enabled, trend_risk_skips=state.trend_risk_skips,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
