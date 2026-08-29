@@ -81,7 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # full history lives in DEVELOPMENT_LOG.md (linked below this list on the
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
-DEVELOPER_NOTES = [
+("2026-08-29", "Profit-decay exit result: real improvement (-0.046R vs baseline's -0.067R, +0.02R/trade) but "
+                    "still net negative -- reduces the bleeding, doesn't fix it, because the underlying signal "
+                    "still has no edge. Also fixed a reporting bug: the backtest's own summary was WIN/LOSS-only "
+                    "and silently excluded 70% of trades from its 'decay exit' line."),
     ("2026-08-29", "Built a profit-decay time exit (user's idea): cut a loser at 2h if still negative, cut a "
                     "winner at any later hourly checkpoint if it's below the PRIOR checkpoint (not the peak). "
                     "Reports paired baseline-vs-decay delta per trade, since either side's own number can mislead."),

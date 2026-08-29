@@ -2516,4 +2516,28 @@ the PAIRED per-trade delta -- the number that actually answers whether
 this helps, since either side's own standalone expectancy can mislead.
 Full suite: 440 passed (up from 433). Not run against real data yet.
 
+**Result**: ran against real data, 2,666 signals over 414 days. Caught
+a real bug in the script's own reporting on the first run: the
+standalone "decay exit" summary line reused summarize() (WIN/LOSS-only
+filtering, borrowed from backtest_bollinger_reversion.py), which
+silently excluded the 1,857 of 2,666 trades that ended in TIME_CUT_LOSS
+or TIME_DECAY -- it was only ever describing the 808 trades where the
+new rule never fired, reporting -0.142R as if that were the whole
+strategy. Fixed to treat every non-OPEN_AT_END outcome as genuinely
+resolved. The REAL full-strategy expectancy is -0.046R, vs baseline's
+-0.067R -- a genuine ~+0.02R/trade improvement (matches the paired-
+delta figure, +0.0206R, which was correct all along). Breakdown:
+TIME_CUT_LOSS trades (914, cut at 2h) averaged -0.304R vs -0.380R had
+they been held to SL/TP; TIME_DECAY trades (937, cut on a later
+decline) averaged +0.288R vs +0.303R had they been held -- giving back
+a little on the winners to cut losers meaningfully faster. Decay beat
+baseline on 47% of trades, lost on 22%.
+
+**Conclusion**: a real, measurable improvement in trade management --
+and still net negative overall (-0.046R), because it's layered on the
+same structure-break signal that has shown zero directional edge in
+17 other tests this session. Reduces the bleeding, doesn't stop it.
+Not shipped -- the underlying signal is still the blocker, and this
+result doesn't change that.
+
 **Fixed**: 2026-08-24
