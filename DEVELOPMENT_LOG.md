@@ -3019,3 +3019,48 @@ fixed entry/exit, position direction itself changes over time). Not
 shipped -- next step is deciding whether to pursue this further
 (extended-history check, cost modeling) or treat it as a documented,
 promising lead for a future session.
+
+## 2026-08-29 (continued) -- Trend-following survives real transaction costs too
+
+**Request**: the significance check above left two open questions before
+trend-following could be trusted: no transaction-cost modeling at all,
+and only ~7.8 years of history (a limited number of distinct macro
+regimes). Asked to build the cost-modeled version first.
+
+**Built**: `scripts/backtest_trend_following_cost_modeled.py` -- fetches
+each pair's CURRENT live bid/ask spread (OANDA has no historical spread
+time series, same "only today's snapshot" caveat this project applies to
+financing rates -- flagged as MORE suspect here, since spreads have
+structurally narrowed over the last decade as electronic liquidity grew,
+so today's tight spread likely UNDERSTATES real historical cost,
+especially in the backtest's earlier years). Charges that spread once on
+every day the trend position changes (the exit of the old leg + entry of
+the new one, modeled as a single round-trip crossing), at 1x/2x/3x
+today's live spread as a deliberate stress test rather than a single
+point estimate.
+
+**Result**: the edge barely erodes. No-cost baseline: annualized=
++11.68%/yr, Sharpe=2.48. At 1x live spread: +11.23%/yr, Sharpe 2.39.
+At 3x (the conservative stress case): +10.34%/yr, Sharpe 2.21 -- roughly
+5% of the reported edge given up, not the kind of collapse that would
+mean the whole result was a costs-ignored illusion. Flip frequency is
+naturally low (45-95 flips per pair over ~8.5 years, ~5-9 per 200-day
+window) because a 200-day SMA trades rarely by construction -- exactly
+why this survived where the earlier, much-more-frequently-trading signal
+families (RSI@1:1, structure-break) would have been far more cost-
+sensitive. AUD_USD and NZD_USD (widest live spreads, 8-9bps, plus
+above-average flip counts) show the most compression under the 3x
+scenario (NZD_USD Sharpe 1.11 -> 0.93) but stay solidly positive; JPY
+crosses with tighter spreads and fewer flips (CHF_JPY, CAD_JPY) barely
+move at all.
+
+**Conclusion**: transaction costs are not what would kill this idea.
+Trend-following has now survived BOTH open checks from the previous
+entry (significance/robustness, and cost modeling) -- the only remaining
+item from that list is the limited-macro-regime-count concern (extending
+the same significance check back to 2006, the way the earlier carry
+out-of-sample check did), plus the separate, larger architectural
+question of what building a flip-signed long/short system live would
+actually require (no fixed entry/exit, unlike everything else this bot
+trades). Not shipped -- still a documented lead pending a decision on
+next steps, but a meaningfully stronger one than it was two entries ago.
