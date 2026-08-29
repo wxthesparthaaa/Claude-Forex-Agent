@@ -2540,4 +2540,33 @@ same structure-break signal that has shown zero directional edge in
 Not shipped -- the underlying signal is still the blocker, and this
 result doesn't change that.
 
+## 2026-08-29 (continued) — 1h vs 2h loss-cut: the original 2h calibration wins
+
+**Request**: User's own follow-up variant -- move the loss-check from
+2h to 1h, keep decay-watching starting at 3h either way (hour 2 becomes
+a silent baseline reading in the 1h version, mirroring exactly how hour
+2 behaved in the original). Generalized simulate_trade_with_decay_exit
+to take independent loss_check_hour/decay_start_hour parameters (3 new
+tests, all 7 original tests still pass unchanged) and re-ran both
+variants side by side plus a direct head-to-head.
+
+**Result**: the original 2h/3h version is clearly better. 2h/3h:
+-0.0457R (+0.0206R over baseline's -0.0669R). 1h/3h: -0.0632R (+0.0040R
+over baseline -- barely anything). Head-to-head: 2h/3h beats 1h/3h by
++0.0174R/trade.
+
+**Why**: the TIME_CUT_LOSS breakdown makes it concrete. Cutting at 2h
+improves +0.076R on average over those same trades held to SL/TP; 
+cutting at 1h is actually -0.021R WORSE than holding on average. A
+trade still negative after just 60 minutes is often ordinary short-term
+noise that would have recovered by hour 2 -- cutting that early locks
+in losses on trades that weren't really dying yet. The 1h version also
+cuts far more trades this way (1,160 vs 915), compounding the effect.
+
+**Conclusion**: a genuinely useful, concrete trade-management finding
+even though neither variant makes the underlying strategy profitable --
+2 hours is a better-calibrated loss-check point than 1 hour for this
+signal, not an arbitrary choice. Neither shipped; the signal itself
+remains the blocker.
+
 **Fixed**: 2026-08-24

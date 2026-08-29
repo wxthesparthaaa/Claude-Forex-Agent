@@ -81,7 +81,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # full history lives in DEVELOPMENT_LOG.md (linked below this list on the
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
-("2026-08-29", "Profit-decay exit result: real improvement (-0.046R vs baseline's -0.067R, +0.02R/trade) but "
+DEVELOPER_NOTES = [
+    ("2026-08-29", "1h vs 2h loss-cut head-to-head: 2h wins clearly (+0.0174R/trade better). Cutting at 1h locks "
+                    "in losses on trades that were just short-term noise and would've recovered by 2h -- 2 hours "
+                    "is a real, better-calibrated cutoff, not an arbitrary one."),
+    ("2026-08-29", "Profit-decay exit result: real improvement (-0.046R vs baseline's -0.067R, +0.02R/trade) but "
                     "still net negative -- reduces the bleeding, doesn't fix it, because the underlying signal "
                     "still has no edge. Also fixed a reporting bug: the backtest's own summary was WIN/LOSS-only "
                     "and silently excluded 70% of trades from its 'decay exit' line."),
