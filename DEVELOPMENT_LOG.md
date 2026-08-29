@@ -2710,4 +2710,60 @@ what can be verified without OANDA's actual historical financing data
 (which doesn't exist) or a second independent rate-regime cycle to
 test against. Moving to Ledger #2 (COT positioning) next.
 
+## 2026-08-29 (continued) — CFTC COT positioning backtest (Ledger #2): thin, does not survive significance testing
+
+**Request**: The last of the three Ledger "new direction" tests --
+does CFTC speculative positioning data contain a real signal? First
+signal family this session built on an independent external data
+source rather than a transform of OANDA price/volume.
+
+**Built**: `src/cot_data.py` fetches the CFTC's public Commitment of
+Traders (Legacy Futures Only) report via its Socrata API
+(publicreporting.cftc.gov, dataset 6dca-aqww) -- confirmed LIVE against
+the real API before writing the parser: field names, JSON-string value
+types, and market-name variants that drifted mid-window for GBP
+("BRITISH POUND STERLING" pre-2024 -> "BRITISH POUND" from 2024) and
+NZD (same pattern) -- both prefixes matched per currency so a
+2018-2026 fetch doesn't go quiet partway through. Direction sign
+flipped for USD_JPY/USD_CAD/USD_CHF (USD is the OANDA pair's base
+currency for these three, opposite of the futures contract's own
+quoting convention). Publish date = report date + 3 days (the real
+CFTC release lag), so the backtest can't act on a reading before it
+existed. `src/cot_signal.py` adds a causal 52-week z-score (caught and
+fixed the same std-floor bug already hit in timing_filter.py, before
+it touched real data) exposing BOTH contrarian and momentum
+interpretations, since academic literature disagrees on which is real.
+`scripts/backtest_cot_positioning.py` walks Daily OANDA candles,
+sweeping 2 modes x 3 thresholds, reporting an EQUAL-WEIGHT PORTFOLIO
+across all 7 mapped currencies (not one cherry-picked pair).
+
+**Result**: contrarian beat momentum at every threshold tested
+(mirror-image returns, as expected for opposite bets on the same
+signal) -- best config contrarian@1.0: +7.2% total, +0.77%/yr
+annualized, Sharpe 0.29, 6/9 positive calendar years. But per-
+instrument detail showed heavy concentration: NZD_USD (+38.1%) and
+USD_CAD (+32.7%) drove nearly all of it, while EUR_USD (-22.1%) and
+AUD_USD (-7.8%) were actively negative.
+
+**Significance check** (`scripts/cot_significance_check.py`, same
+"thin Sharpe needs scrutiny" discipline as the RSI@1:1 check, adapted
+to this result's own structure -- a weekly block bootstrap rather than
+daily, since this strategy's position is held constant for a full
+week between COT updates, and a leave-one-currency-out sensitivity
+given the concentration already observed): one-sample test p=0.19, not
+significant. Weekly bootstrap 95% CI for total return: [-9.5%,
++27.3%] -- comfortably spans zero. Leave-one-out never flips the sign
+negative, but excluding NZD_USD or USD_CAD roughly HALVES the Sharpe
+(0.29 -> 0.11-0.13), confirming the concentration without it being
+literally all-or-nothing.
+
+**Conclusion, closing out the full 3-direction Ledger investigation**:
+COT positioning does not survive scrutiny, joining RSI@1:1 in "looked
+interesting, didn't hold up." Final scorecard across all three new
+directions: index CFDs confirmed it's the signal not the asset (no
+edge), carry trade (AUD_JPY/CAD_JPY specifically) is the one result
+that held up under real scrutiny (multi-year persistence, not a single
+lucky stretch), COT positioning is thin and statistically
+indistinguishable from noise. Not shipped.
+
 **Fixed**: 2026-08-24
