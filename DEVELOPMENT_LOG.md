@@ -2958,3 +2958,64 @@ than it was for the earlier fast signal-family tests). Not yet subjected
 to the significance/robustness rigor RSI@1:1 and COT positioning went
 through before being trusted or distrusted -- that's the natural next
 step before this goes anywhere near being built live.
+
+## 2026-08-29 (continued) -- Pure trend-following is the first result all session to survive full rigor
+
+**Request**: subject the pure trend-following result (13/13 pairs
+positive in both halves, Sharpe 1.35 average) to the same
+significance/robustness check RSI@1:1 and COT positioning went through --
+both of which looked promising and did NOT survive it.
+
+**Built**: `scripts/trend_following_significance_check.py` -- one-sample
+test on the equal-weight 13-pair portfolio; block bootstrap at BOTH
+monthly and quarterly block lengths (unlike COT's crisp weekly cycle, a
+200-day SMA trend has no single obviously-correct block length, so both
+are reported to check whether the result depends on that choice);
+leave-one-pair-out sensitivity; and a new check specific to this result's
+own structure -- average pairwise correlation across the 13 pairs, since
+6 share a JPY leg and 7 share a USD leg, so "13/13 positive" could really
+be far fewer independent confirmations than it looks.
+
+**Result -- this is the first strategy all session to pass every check**:
+  - Portfolio: 1976 days (~7.8yr), total=+160.0%, annualized=+12.96%/yr,
+    Sharpe=2.61.
+  - One-sample test: t=7.29, p<0.0001 (though this specific number
+    overstates confidence -- it assumes independent daily draws, which
+    the checks below exist precisely because that's not really true).
+  - Monthly block bootstrap 95% CI: [+103.6%, +231.6%] -- zero excluded
+    by a wide margin.
+  - Quarterly block bootstrap 95% CI: [+112.5%, +219.4%] -- nearly
+    identical width to the monthly CI (0.84x) -- the result does NOT
+    depend on the block-length choice, unlike a result that only looks
+    significant under one arbitrary bootstrap setup.
+  - Leave-one-pair-out: remarkably flat. Excluding any single pair moves
+    annualized return only between +12.69%/yr and +13.37%/yr (baseline
+    +12.96%/yr) -- no pair is carrying the result, a sharp contrast to
+    COT positioning where NZD_USD/USD_CAD alone drove nearly everything.
+  - Average pairwise correlation: +0.220, effective independent bets
+    ~4.5 of 13 -- the one real caveat. "13/13 pairs positive" is genuine
+    breadth but fewer truly independent confirmations than the headline
+    number suggests (a handful of correlated JPY/USD macro trends, not
+    13 unrelated bets). This doesn't undermine the return/Sharpe number
+    itself (the block bootstrap already correctly handles portfolio-
+    level time-series inference regardless of cross-sectional
+    correlation) -- it tempers how much "universality" to read into the
+    pair count specifically.
+
+**Conclusion**: unlike RSI@1:1 (failed the one-sample/bootstrap check)
+and COT positioning (bootstrap CI spanned zero, heavy concentration in
+2 currencies), pure trend-following survives cleanly on every axis
+tested. Real caveats remain before this goes anywhere near live: spread/
+slippage still isn't modeled at all (though a ~200-day filter trades
+rarely, so cost drag should matter far less than for the faster signal
+families tested earlier); ~7.8 years is a limited number of truly
+distinct macro trend regimes even though the bootstrap's own math is
+sound over that window (the earlier out-of-sample carry work already
+confirmed these pairs have real history back to 2006 -- extending this
+same test that far back would be the natural next check on regime
+count, not just resampling); and this is a flip-signed long/short
+system, architecturally a bigger lift to build live than carry was (no
+fixed entry/exit, position direction itself changes over time). Not
+shipped -- next step is deciding whether to pursue this further
+(extended-history check, cost modeling) or treat it as a documented,
+promising lead for a future session.
