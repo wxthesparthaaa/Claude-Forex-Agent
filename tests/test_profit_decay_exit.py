@@ -94,6 +94,53 @@ def test_steadily_rising_trade_reaches_take_profit_normally_decay_rule_never_fir
     assert result.outcome == "WIN"
 
 
+def test_1hr_loss_check_cuts_a_full_hour_earlier_than_the_default():
+    # Same shape as test_negative_at_the_2hr_checkpoint_cuts_immediately
+    # but the loss check now fires at hour 1 -- confirms the trade is
+    # cut a full hour sooner given the same price path.
+    candles = [_candle(100)] + [_candle(99), _candle(98), _candle(97.5), _candle(97)] + _flat_run(10, 97)
+    result = simulate_trade_with_decay_exit(candles, 0, "LONG", 100, 90, 120,
+                                              bars_per_hour=BARS_PER_HOUR, loss_check_hour=1, decay_start_hour=3)
+    assert result.outcome == "TIME_CUT_LOSS"
+    assert result.exit_index == 4  # 1hr mark = bar 4, not bar 8
+
+
+def test_hour_2_is_a_silent_baseline_when_decay_watching_starts_at_hour_3():
+    # loss_check_hour=1 (positive, so it survives), decay_start_hour=3:
+    # hour 2 must NOT trigger a cut even though it's lower than hour 1 --
+    # it's purely recorded as the baseline hour 3 gets compared against.
+    candles = (
+        [_candle(100)]
+        + _flat_run(3, 100) + [_candle(105)]   # bar 4 = 1hr: pnl_r=0.5, positive, survives (loss check only)
+        + _flat_run(3, 105) + [_candle(102)]   # bar 8 = 2hr: pnl_r=0.2, LOWER than 0.5 -- must NOT cut here
+        + _flat_run(3, 102) + [_candle(103)]   # bar 12 = 3hr: pnl_r=0.3, HIGHER than hour 2's 0.2 -- continue
+    )
+    result = simulate_trade_with_decay_exit(candles, 0, "LONG", 100, 90, 120,
+                                              bars_per_hour=BARS_PER_HOUR, loss_check_hour=1, decay_start_hour=3)
+    assert result.outcome == "OPEN_AT_END"  # ran out of data -- never cut, confirming hour 2 didn't trigger
+
+
+def test_hour_3_decay_check_compares_against_hour_2_not_hour_1():
+    # loss_check_hour=1, decay_start_hour=3: hour 1=0.5 (survives),
+    # hour 2=0.2 (recorded silently, not compared), hour 3=0.15 (LOWER
+    # than hour 2's 0.2 -- cut). If the comparison baseline were hour 1
+    # instead of hour 2, 0.15 < 0.5 would ALSO cut, so this alone
+    # wouldn't prove which baseline is used -- the discriminating case
+    # is covered by the "must NOT cut at hour 2" test above; this one
+    # confirms the hour-3 cut fires against the correct (hour 2) value.
+    candles = (
+        [_candle(100)]
+        + _flat_run(3, 100) + [_candle(105)]   # bar 4 = 1hr: pnl_r=0.5
+        + _flat_run(3, 105) + [_candle(102)]   # bar 8 = 2hr: pnl_r=0.2 (silent baseline)
+        + _flat_run(3, 102) + [_candle(101.5)]  # bar 12 = 3hr: pnl_r=0.15 < 0.2 -- cut
+    )
+    result = simulate_trade_with_decay_exit(candles, 0, "LONG", 100, 90, 120,
+                                              bars_per_hour=BARS_PER_HOUR, loss_check_hour=1, decay_start_hour=3)
+    assert result.outcome == "TIME_DECAY"
+    assert result.exit_index == 12
+    assert round(result.r_multiple, 3) == 0.15
+
+
 def test_short_direction_is_mirrored_correctly():
     # SHORT: entry 100, stop 110 (risk=10), profit means price falling.
     # 2hr close=97 -> pnl_r=(100-97)/10=0.3 (positive, continue).
