@@ -3490,3 +3490,14 @@ parameter set (21-day formation, 21-day holding, top/bottom 3) --
 deliberately not a grid search, given what the threshold sweep already
 demonstrated about tuning against the same data used to validate a
 result.
+
+**Result**: flat-to-negative. 2100 traded days, total=-3.2%,
+annualized=-0.39%/yr, Sharpe=-0.05. Split-half disagrees with itself
+(first half -1.42%/yr, second half +0.65%/yr) -- not even a stable
+sign, let alone a stable magnitude. **Not pursued further via parameter
+tuning** (formation/holding length, top/bottom-K) -- doing so would be
+exactly the same trap the threshold sweep already demonstrated. Closed
+out as a clean negative: 1-month relative-value momentum has no edge on
+this pair universe, joining the coin-flip base strategy, RSI@1:1, COT,
+index CFDs, pyramid, and trend-following (both absolute and relative-
+value versions now) as tested and ruled out.
