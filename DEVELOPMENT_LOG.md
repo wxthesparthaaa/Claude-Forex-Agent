@@ -2611,4 +2611,47 @@ a repeatable, forward-looking premium. Not shipped. If pursued further,
 the honest next step is testing across genuinely distinct historical
 rate regimes (not just this one window) before trusting it operationally.
 
+## 2026-08-29 (continued) — Carry stress-tested by calendar year: nuance in both directions
+
+**Request**: User's own follow-up to the carry result -- break the same
+backtest down by calendar year to check whether the aggregate 8-year
+number reflects persistent performance or one dominant stretch.
+
+**Built**: added yearly_breakdown() to backtest_carry_trade.py --
+buckets the same price-only daily-return series by calendar year (fixed
+boundaries, not eyeballed from the chart), each year computed
+independently from 1.0 rather than as a running compound, reporting
+return/drawdown per year plus a "positive years: X/N" count for both
+always-held and filtered variants.
+
+**Result -- four clear tiers emerged**:
+- STRONG, persistent: AUD_JPY, CAD_JPY, EUR_JPY (7/9 positive years).
+  Negative/weak 2018-2019, then positive EVERY year 2020 through 2026
+  (EUR_JPY: 7 straight) -- genuine multi-year persistence spanning the
+  hiking cycle AND its aftermath, not one lucky stretch.
+- CONCENTRATED, not persistent: USD_JPY (5/9 unfiltered). Negative
+  2018-2020, strongly positive ONLY 2021-2024, flat 2025 -- closer to
+  the original worry (one dominant window). The risk-off filter fixed
+  this dramatically (5/9 -> 8/9).
+- WEAK, coin-flip: GBP_USD, USD_CAD, NZD_USD, USD_CHF (4-5/9 either
+  way) -- confirms the "today's rate doesn't represent the whole
+  period's carry-favorable direction" caveat exactly as predicted for
+  these rate-regime-flip-flopping pairs.
+- DEFINITIVELY BROKEN: CHF_JPY -- 0/9 positive years unfiltered, 1/9
+  filtered. Every single calendar year lost money, not an aggregate
+  artifact. CHF's own safe-haven status apparently held up even better
+  than JPY's against the currencies that actually hiked.
+
+The risk-off filter's effect on year-by-year consistency is genuinely
+mixed, not a free upgrade either way: fixed USD_JPY (5/9->8/9) and
+GBP_USD (5/9->7/9), but hurt GBP_JPY (7/9->5/9) and EUR_JPY (7/9->6/9).
+
+**Conclusion**: AUD_JPY/CAD_JPY/EUR_JPY are meaningfully more credible
+than the aggregate number alone suggested -- 6-7 consecutive positive
+years is real persistence. Still one big regime transition (ultra-low-
+everywhere -> rate-differentiated), not multiple independent cycles, so
+"proven" remains too strong -- but this is the most substantive,
+nuanced positive finding across the entire backtest series this
+session. Not shipped.
+
 **Fixed**: 2026-08-24
