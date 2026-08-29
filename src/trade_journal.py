@@ -91,14 +91,15 @@ class JournalEntry:
     exit_price: float | None = None
     realized_pnl: float | None = None
     # True once this (base, non-add-on) trade has already spawned a
-    # pyramid add-on -- see pyramid_addon.py. Prevents adding to the same
-    # trade twice; an add-on trade never sets this on ITSELF (chaining
-    # add-on-of-an-add-on is deliberately not supported).
+    # pyramid add-on. The pyramid feature itself was removed 2026-08-30
+    # (no real edge -- see DEVELOPMENT_LOG.md) but this field stays so
+    # historical journal entries that used it keep reading/exporting
+    # correctly; nothing sets it anymore.
     pyramided: bool = False
-    # None for every normal trade. "PYRAMID_ADDON" for a trade opened by
-    # pyramid_addon.py -- lets the journal/export isolate the
-    # experiment's own trades from the base strategy's, per the explicit
-    # request to track its effectiveness separately.
+    # None for every normal trade. Was "PYRAMID_ADDON" for a trade opened
+    # by the now-removed pyramid feature; reused as "CARRY_TRADE" for the
+    # carry strategy (see carry_addon.py) -- lets the journal/export
+    # isolate an experiment's own trades from the base strategy's.
     experiment_tag: str | None = None
     # The base trade's own trade_id, for a PYRAMID_ADDON entry only --
     # ties the add-on back to what it was added to.

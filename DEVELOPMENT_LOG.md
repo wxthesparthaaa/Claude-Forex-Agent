@@ -2767,3 +2767,82 @@ lucky stretch), COT positioning is thin and statistically
 indistinguishable from noise. Not shipped.
 
 **Fixed**: 2026-08-24
+
+## 2026-08-29 (continued) — Shipped carry trade live, removed the 2hr time limit and pyramid toggles
+
+**Request**: Build the AUD_JPY/CAD_JPY carry strategy (Ledger #3, the
+one direction that survived scrutiny above) as a live Settings toggle.
+Remove the 2hr time limit and pyramid toggles -- both retested negative
+across this entire session and no longer relevant. Also asked whether
+the new strategy had been layered with real risk protection ("cover
+our bases"), not just the bare backtested rule.
+
+**Design decisions** (confirmed with the user before writing any code,
+given this is the first time this bot places live orders on a strategy
+type -- rate-collection, not price-direction -- it has never traded):
+exit via a risk-off realized-volatility filter plus a wide ATR stop as
+a rare catastrophic backstop only (not a fixed take-profit); one
+combined "Carry mode" toggle governs both pairs together, not two
+independent switches; full position size immediately, no phased
+risk-per-trade ramp-up.
+
+**Removed**: `src/pyramid_addon.py` and its test file, deleted
+entirely -- the momentum-pyramid idea backtested at -0.011R/trade net
+effect back on 2026-08-21 and never recovered a real edge. The 2-hour
+force-close mechanism in `trade_monitor.py` (`expiry_enabled`, the
+`is_expired()` branch, the "Auto-closes in" column) is gone the same
+way; `EXPIRY_HOURS`/`is_expired()`/the `EXPIRED` journal status stay in
+`trade_journal.py` untouched so historical journal entries that used
+them still read and export correctly -- nothing new will ever set that
+status again.
+
+**Built**: `src/carry_addon.py`, structured as a direct sibling of the
+now-deleted pyramid module (same non-blocking lock, same
+autopilot-phase + kill-switch gate every other automated order path in
+this app already uses). Per tick, for each of AUD_JPY/CAD_JPY: reads
+OANDA's live `financing.longRate`/`shortRate` (the same live-rate
+discovery the backtest scripts already validated) to find which side
+currently pays positive rollover; if a position is open, closes it
+early on either a realized-vol spike (RV percentile, reusing
+`timing_filter.py`'s existing `atr_series`/`rv_percentile_series`
+rather than reimplementing them) or the financing direction reversing;
+if flat and carry-favorable and calm, opens one sized normally through
+the existing `risk_engine`/`position_sizing` pipeline, stop/target set
+at 8x ATR(20) on Daily candles (wide enough to almost never be the
+real exit). The risk-off threshold uses a persisted hysteresis band
+(`DashboardState.carry_standdown`, enter above the 85th percentile,
+don't re-open until back under the 70th) so a reading sitting right at
+one cutoff can't flip the position open/closed/open on consecutive
+ticks.
+
+**The "cover our bases" question**: both pairs share a JPY-short leg,
+so a broad yen-strengthening shock (the real August 2024 carry-unwind
+is the concrete precedent) would hit both at once. Rather than add new
+correlated-pair-specific code, this routes through the account's
+existing per-currency net exposure cap (`max_currency_exposure_pct`,
+`currency_exposure.py`) -- every trade in this app already declares its
+currency deltas, so opening AUD_JPY then CAD_JPY naturally stacks their
+JPY exposure against one shared limit. Proved this actually works,
+not just in theory: a test pre-opens an AUD_JPY position sized to most
+of the exposure cap, then attempts CAD_JPY (also JPY-short) and asserts
+the real (non-mocked) `risk_engine.validate_trade()` rejects it.
+
+**Tests**: `tests/test_carry_addon.py`, 18 tests -- financing-direction
+discovery, RV-percentile and ATR-stop wiring into `timing_filter.py`,
+all three gates (toggle off / non-autopilot / kill switch) short-
+circuiting to no orders, opening on a favorable+calm read, declining to
+open into an already-risk-off regime or when neither side pays
+positive financing, closing on risk-off (and setting standdown) vs. on
+a direction flip (not setting standdown), both hysteresis directions,
+and the shared-JPY-exposure-cap rejection above. `test_trade_monitor.py`
+rewritten to drop 7 tests tied to the deleted expiry mechanism; the one
+covering "a per-entry save must survive a later crash" was redesigned
+around a generic flaky-save simulation instead of a corrupted
+expiry timestamp, so it no longer depends on removed code. Full suite:
+470 passed.
+
+**Not yet verified**: real OANDA order placement -- this session's
+shell has no OANDA credentials, so `check_carry_opportunities` has only
+run against fake/mocked clients. Toggle ships off by default; the user
+should watch the dashboard/Telegram after deploying with it on, on the
+practice account, before ever considering `OANDA_ENV=live`.

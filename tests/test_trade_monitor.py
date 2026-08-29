@@ -290,38 +290,42 @@ def test_check_open_trades_recovered_loss_via_fallback_classifies_as_failed_not_
 @patch("trade_monitor.send_message")
 def test_check_open_trades_persists_a_fallback_recovery_immediately_not_batched_at_loop_end(
         mock_send, tmp_path, monkeypatch):
-    # Same "immediate save, not batched at the very end" reasoning as the
-    # expiry branch's own regression test -- this branch's classification
-    # (recovered via transaction history, or genuinely given up on) is a
-    # final conclusion about the trade, not a transient retry state, so a
-    # crash while processing a LATER, unrelated entry must not lose it.
-    # Simulated here via a second entry whose corrupted opened_at makes
-    # is_expired() raise -- unguarded, so it propagates out of the whole
-    # function, standing in for a real mid-pass crash/restart (same
-    # technique already proven for the expiry branch's own test).
+    # "Immediate save, not batched at the very end" regression test: this
+    # branch's classification (recovered via transaction history) is a
+    # final conclusion about the trade, so a crash anywhere AFTER it must
+    # not lose it. Simulated by making the safety-net save_journal() call
+    # at the very end of the pass raise, while the entry's OWN save
+    # (right after it resolves, inside the loop) is left to genuinely
+    # succeed -- stands in for a real mid-process crash/restart landing
+    # just after the per-entry save already did its job.
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("922", candidate(instrument="NZD_USD"))
-    tj.record_open_trade("999", candidate(instrument="GBP_USD"))
-
-    entries = tj.load_journal()
-    entries[1]["opened_at"] = "not-a-real-timestamp"  # makes is_expired() raise for entry 999
-    tj.save_journal(entries)
 
     client = FakeClient(
-        open_trades=[{"id": "999", "instrument": "GBP_USD"}],  # still "open" so it reaches is_expired()
+        open_trades=[],
         not_found_ids=["922"],
         transaction_history={"922": {"realizedPL": "2.2434", "price": "0.59078",
                                       "time": "2026-08-17T17:14:15.420843922Z"}},
     )
 
+    real_save = trade_monitor.save_journal
+    calls = {"n": 0}
+
+    def flaky_save(entries):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            real_save(entries)  # the per-entry save, inside the loop -- must genuinely land on disk
+        else:
+            raise Exception("simulated crash on the end-of-pass safety-net save")
+
+    monkeypatch.setattr(trade_monitor, "save_journal", flaky_save)
+
     with pytest.raises(Exception):
-        trade_monitor.check_open_trades(client, expiry_enabled=True)
+        trade_monitor.check_open_trades(client)
 
     entries_on_disk = tj.load_journal()
-    by_id = {e["trade_id"]: e for e in entries_on_disk}
-    assert by_id["922"]["status"] == tj.SUCCESSFUL  # already saved before the crash on entry 999
-    assert by_id["922"]["realized_pnl"] == 2.2434
-    assert by_id["999"]["status"] == tj.OPEN  # never reached
+    assert entries_on_disk[0]["status"] == tj.SUCCESSFUL  # already saved before the safety-net crash
+    assert entries_on_disk[0]["realized_pnl"] == 2.2434
 
 
 @patch("trade_monitor.send_message")
@@ -343,78 +347,6 @@ def test_check_open_trades_leaves_entry_open_on_a_non_404_lookup_error(mock_send
     assert changed == []
     entries = tj.load_journal()
     assert entries[0]["status"] == tj.OPEN
-
-
-@patch("trade_monitor.send_message")
-def test_check_open_trades_force_closes_and_notifies_after_expiry(mock_send, tmp_path, monkeypatch):
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate())
-
-    entries = tj.load_journal()
-    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
-    tj.save_journal(entries)
-
-    client = FakeClient(
-        open_trades=[{"id": "101", "instrument": "EUR_USD"}],  # still open on OANDA
-        close_trade_result={"orderFillTransaction": {"pl": "-3.5", "price": "1.098"}},
-    )
-    changed = trade_monitor.check_open_trades(client, expiry_enabled=True)
-
-    assert client.closed_ids == ["101"]
-    assert changed[0]["status"] == tj.EXPIRED
-    assert changed[0]["realized_pnl"] == -3.5
-    mock_send.assert_called_once()
-    assert "2 hours" in mock_send.call_args[0][0]
-
-
-@patch("trade_monitor.send_message")
-def test_check_open_trades_never_force_closes_when_time_limit_disabled(mock_send, tmp_path, monkeypatch):
-    # Explicit user request: let SL/TP alone decide when a trade closes,
-    # not this app's own 2-hour force-close. A trade well past the old
-    # expiry, but still genuinely open on OANDA (SL/TP hasn't fired),
-    # must be left untouched -- no close_trade() call, no status change.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate())
-
-    entries = tj.load_journal()
-    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
-    tj.save_journal(entries)
-
-    client = FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD"}])
-    changed = trade_monitor.check_open_trades(client, expiry_enabled=False)
-
-    assert changed == []
-    assert client.closed_ids == []
-    mock_send.assert_not_called()
-    entries = tj.load_journal()
-    assert entries[0]["status"] == tj.OPEN
-
-
-@patch("trade_monitor.send_message")
-def test_check_open_trades_reads_time_limit_setting_from_dashboard_state_by_default(mock_send, tmp_path, monkeypatch):
-    # Real wiring test: neither app.py's dashboard route nor the
-    # scheduled job passes expiry_enabled explicitly -- both rely on the
-    # None default resolving from dashboard_state.trade_time_limit_enabled
-    # at call time, so a Settings change takes effect on the very next
-    # check with no code changes needed at either call site.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate())
-
-    entries = tj.load_journal()
-    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
-    tj.save_journal(entries)
-
-    state = ds.default_state()
-    state.trade_time_limit_enabled = True
-    ds.save_state(state)
-
-    client = FakeClient(
-        open_trades=[{"id": "101", "instrument": "EUR_USD"}],
-        close_trade_result={"orderFillTransaction": {"pl": "-3.5", "price": "1.098"}},
-    )
-    changed = trade_monitor.check_open_trades(client)  # no expiry_enabled passed
-
-    assert changed[0]["status"] == tj.EXPIRED
 
 
 def test_check_open_trades_skips_a_second_concurrent_call_instead_of_racing(tmp_path, monkeypatch):
@@ -481,115 +413,6 @@ def test_record_open_trade_waits_for_a_concurrent_journal_write_instead_of_racin
 
 
 @patch("trade_monitor.send_message")
-def test_check_open_trades_one_failed_force_close_does_not_drop_other_reclassifications(mock_send, tmp_path, monkeypatch):
-    # Regression test: the expiry-close branch used to call
-    # client.close_trade() with no try/except, unlike the 404-handling
-    # branch right above it. An exception there used to propagate out of
-    # the whole function, meaning save_journal() (called once, after the
-    # entire loop) never ran -- silently discarding any OTHER trade's
-    # reclassification already computed earlier in that same pass.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate(instrument="EUR_USD"))  # will classify SUCCESSFUL this pass
-    tj.record_open_trade("102", candidate(instrument="GBP_USD"))  # will hit the expiry branch and fail to close
-
-    entries = tj.load_journal()
-    entries[1]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
-    tj.save_journal(entries)
-
-    class FlakyCloseClient(FakeClient):
-        def close_trade(self, trade_id):
-            raise Exception("trade already closed by a concurrent call")
-
-    client = FlakyCloseClient(
-        open_trades=[{"id": "102", "instrument": "GBP_USD"}],  # 101 NOT listed -- already closed on OANDA
-        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "5.0",
-                         "averageClosePrice": "1.105", "closeTime": "2026-08-16T10:00:00.000000000Z"}],
-    )
-
-    changed = trade_monitor.check_open_trades(client, expiry_enabled=True)  # must not raise
-
-    assert [c["trade_id"] for c in changed] == ["101"]
-    entries = tj.load_journal()
-    by_id = {e["trade_id"]: e for e in entries}
-    assert by_id["101"]["status"] == tj.SUCCESSFUL  # persisted despite 102's failure
-    assert by_id["102"]["status"] == tj.OPEN  # left OPEN, to retry next pass -- not lost, not crashed
-
-
-@patch("trade_monitor.send_message")
-def test_check_open_trades_persists_an_expiry_close_immediately_not_batched_at_loop_end(
-        mock_send, tmp_path, monkeypatch):
-    # Regression test for a real incident: close_trade() is IRREVERSIBLE
-    # on OANDA's side the instant it succeeds, but the old code only
-    # called save_journal() once, after the whole loop finished. A crash
-    # anywhere later in that same pass -- including while processing a
-    # LATER, unrelated entry -- silently reverted an already-genuinely-
-    # closed trade back to looking OPEN in the journal. The next pass
-    # would then find it missing from OANDA's open-trades list and
-    # misclassify it as LOST (unrecoverable P&L), even though its real
-    # outcome was known and computed the whole time.
-    #
-    # Simulated here via a SECOND entry whose corrupted opened_at makes
-    # is_expired() raise -- unguarded, so it propagates out of the whole
-    # function, standing in for a real mid-pass crash/restart. The FIRST
-    # entry must already be persisted to disk as EXPIRED despite the
-    # function never returning normally.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
-    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
-
-    entries = tj.load_journal()
-    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
-    entries[1]["opened_at"] = "not-a-real-timestamp"  # makes is_expired() raise for entry 102
-    tj.save_journal(entries)
-
-    client = FakeClient(
-        open_trades=[{"id": "101", "instrument": "EUR_USD"}, {"id": "102", "instrument": "GBP_USD"}],
-        close_trade_result={"orderFillTransaction": {"pl": "-3.5", "price": "1.098"}},
-    )
-
-    with pytest.raises(Exception):
-        trade_monitor.check_open_trades(client, expiry_enabled=True)
-
-    # 101 was processed (and its close_trade() call already happened on
-    # OANDA -- irreversible) before the crash hit 102. Its EXPIRED status
-    # must have survived, not been lost with the rest of the batch.
-    assert client.closed_ids == ["101"]
-    entries_on_disk = tj.load_journal()
-    by_id = {e["trade_id"]: e for e in entries_on_disk}
-    assert by_id["101"]["status"] == tj.EXPIRED
-    assert by_id["101"]["realized_pnl"] == -3.5
-    assert by_id["102"]["status"] == tj.OPEN  # never reached
-
-
-@patch("trade_monitor.send_message")
-def test_check_open_trades_marks_expired_with_best_effort_pnl_on_malformed_fill_response(
-        mock_send, tmp_path, monkeypatch):
-    # A malformed OANDA fill response after a successful close_trade()
-    # call must still resolve the entry as closed (best-effort P&L)
-    # rather than silently leaving it OPEN despite the close already
-    # being irreversible on OANDA's side.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate())
-
-    entries = tj.load_journal()
-    entries[0]["opened_at"] = (datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)).isoformat()
-    tj.save_journal(entries)
-
-    client = FakeClient(
-        open_trades=[{"id": "101", "instrument": "EUR_USD"}],
-        close_trade_result={"orderFillTransaction": {"pl": "not-a-number", "price": "1.098"}},
-    )
-    changed = trade_monitor.check_open_trades(client, expiry_enabled=True)
-
-    assert client.closed_ids == ["101"]
-    assert changed[0]["status"] == tj.EXPIRED
-    assert changed[0]["realized_pnl"] == 0.0
-    entries_on_disk = tj.load_journal()
-    assert entries_on_disk[0]["status"] == tj.EXPIRED  # not stuck OPEN
-    mock_send.assert_called_once()
-
-
-@patch("trade_monitor.send_message")
 def test_check_open_trades_leaves_fresh_open_trades_untouched(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())
@@ -613,25 +436,12 @@ def test_live_trades_view_enriches_with_live_price_and_pnl(tmp_path, monkeypatch
     tj.record_open_trade("101", candidate())
 
     client = FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD", "price": "1.102", "unrealizedPL": "12.5"}])
-    rows = trade_monitor.live_trades_view(client, expiry_enabled=True)
+    rows = trade_monitor.live_trades_view(client)
 
     assert len(rows) == 1
     assert rows[0]["current_price"] == "1.102"
     assert rows[0]["unrealized_pnl"] == 12.5
-    assert rows[0]["hours_remaining"] <= 2.0
-
-
-def test_live_trades_view_hours_remaining_is_none_when_time_limit_disabled(tmp_path, monkeypatch):
-    # Explicit user request: a trade this app no longer force-closes must
-    # not show a misleading "0.0h" (which reads as "about to auto-close")
-    # once past the old 2-hour mark.
-    _isolate(tmp_path, monkeypatch)
-    tj.record_open_trade("101", candidate())
-
-    client = FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD", "price": "1.102", "unrealizedPL": "12.5"}])
-    rows = trade_monitor.live_trades_view(client, expiry_enabled=False)
-
-    assert rows[0]["hours_remaining"] is None
+    assert rows[0]["hours_open"] >= 0.0
 
 
 def test_cancel_all_open_trades_noop_when_nothing_open(tmp_path, monkeypatch):

@@ -792,7 +792,7 @@ def check_friday_preclose_cancel(now: datetime = None, client: OandaClient = Non
     wording so the Telegram summary doesn't read as if a human clicked
     it. Applies regardless of phase or the kill switch -- this is a
     protective action reducing risk, not a new-trade path, so it's not
-    gated the way auto_execute_candidates/pyramid_addon are.
+    gated the way auto_execute_candidates/carry_addon are.
 
     Opt-out via Settings (DashboardState.friday_preclose_cancel_enabled,
     on by default -- unlike the pyramid toggle, this is risk-reducing,

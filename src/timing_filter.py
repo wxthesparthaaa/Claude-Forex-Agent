@@ -17,8 +17,8 @@ retail FX has no consolidated tape, so there is no such thing as real
 market-wide volume available here. Every "volume"/"participation" gate
 below is really testing tick-update frequency, a much weaker and noisier
 proxy for institutional participation than the strategy design assumes.
-This is the same proxy pyramid_addon.py's own RSI+volume confirmation
-already uses (see its own docstring) -- and that simpler volume filter
+This is the same proxy the (now-removed) pyramid add-on's own RSI+
+volume confirmation already used -- and that simpler volume filter
 already backtested net-negative twice (2026-08-21/22, both as a pyramid
 trigger and as a base-entry filter). This is a materially different
 (and much more elaborate) test, but that prior result is relevant

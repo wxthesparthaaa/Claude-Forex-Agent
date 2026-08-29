@@ -64,7 +64,7 @@ from trade_journal import (
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
-from pyramid_addon import check_pyramid_opportunities
+from carry_addon import check_carry_opportunities
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
@@ -82,6 +82,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Shipped carry trade (AUD_JPY/CAD_JPY) as a live Settings toggle, replacing the 2hr time "
+                    "limit and pyramid toggles (both retested negative all session, no longer relevant). Exits "
+                    "on a risk-off RV-percentile filter (hysteresis band) or a financing-direction flip, wide "
+                    "ATR stop as a rare backstop only -- the existing per-currency exposure cap already caps "
+                    "the two pairs' shared JPY-short risk, proven end-to-end by a real (non-mocked) test."),
     ("2026-08-29", "COT positioning (Ledger #2, final direction): thin result (Sharpe 0.29) does NOT survive "
                     "significance testing -- p=0.19, weekly bootstrap CI [-9.5%,+27.3%] spans zero. Closes out "
                     "the 3-direction investigation: only carry (AUD_JPY/CAD_JPY) held up under real scrutiny."),
@@ -341,10 +346,9 @@ def dashboard():
         summary = client.get_account_summary()
         broker_balance = float(summary.get("NAV", summary.get("balance", 0)))
         account_currency = summary.get("currency", "")
-        # detect SL/TP closures + force-close anything past 2 hours, if that's still enabled
-        check_open_trades(client, expiry_enabled=state.trade_time_limit_enabled)
+        check_open_trades(client)  # detect SL/TP closures
         reconcile_orphan_trades(client)  # catch any OANDA position this app never journaled
-        live_trades = live_trades_view(client, expiry_enabled=state.trade_time_limit_enabled)
+        live_trades = live_trades_view(client)
     except Exception as e:
         print(f"WARNING: could not fetch OANDA account summary: {e}", flush=True)
 
@@ -400,7 +404,7 @@ def dashboard():
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
-        trade_time_limit_enabled=state.trade_time_limit_enabled, pyramid_mode_enabled=state.pyramid_mode_enabled,
+        carry_mode_enabled=state.carry_mode_enabled,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -674,17 +678,11 @@ def settings():
         if kill_switch_on and not phase_state.kill_switch_engaged:
             flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
 
-        # Explicit user request: let SL/TP alone decide when a trade
-        # closes, no forced close at 2 hours -- a plain checkbox toggle
-        # like autopilot/kill_switch above, not clamped/validated against
-        # anything since it's just a bool.
-        state.trade_time_limit_enabled = request.form.get("trade_time_limit_enabled") == "on"
-
-        # Experimental, explicit user request after seeing the backtest
-        # (net negative, -0.011R/trade -- see pyramid_addon.py) -- they
-        # want to watch it live and judge for themselves. Same plain
-        # checkbox pattern as the toggle above.
-        state.pyramid_mode_enabled = request.form.get("pyramid_mode_enabled") == "on"
+        # Explicit user request, 2026-08-30: a live carry-trade strategy
+        # on AUD_JPY/CAD_JPY -- see carry_addon.py for the actual rule.
+        # Off by default (a brand-new strategy type this bot has never
+        # traded live); same plain checkbox pattern as the toggles below.
+        state.carry_mode_enabled = request.form.get("carry_mode_enabled") == "on"
 
         # Explicit user request: cancel every open trade 10 min before
         # the weekend close so nothing carries gap risk into Monday. On
@@ -769,12 +767,13 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # Experimental, off by default (Settings) -- see pyramid_addon.py's
-    # own docstring for the backtest this is based on and why it's
-    # opt-in. Scheduler-only, never triggered by a page load: this
-    # places real orders, same "only a deliberate trigger, not a passive
-    # view, gets to do that" discipline auto_execute_candidates follows.
-    scheduler.add_job(check_pyramid_opportunities, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Off by default (Settings) -- see carry_addon.py's own docstring for
+    # the backtest this is based on (the one direction that held up under
+    # real scrutiny this project's whole backtest series). Scheduler-
+    # only, never triggered by a page load: this places real orders, same
+    # "only a deliberate trigger, not a passive view, gets to do that"
+    # discipline auto_execute_candidates follows.
+    scheduler.add_job(check_carry_opportunities, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 

@@ -1,14 +1,18 @@
 """
 Watches every OPEN journal entry: detects trades OANDA already closed
-(SL or TP fired) and classifies them, and force-closes anything still
-open past the 2-hour expiry -- the safeguard requested explicitly so a
-trade that never reaches SL/TP doesn't just sit open indefinitely.
+(SL or TP fired) and classifies them.
 
-Runs both as a scheduled job (every 5 minutes, so the 2-hour close
-happens even with nobody looking) and on every dashboard page load (so
-the UI never shows stale status) -- same "always reflects live state"
-principle the sibling project's dashboard uses for its own snapshot.
-"""
+Runs both as a scheduled job (every 5 minutes) and on every dashboard
+page load (so the UI never shows stale status) -- same "always reflects
+live state" principle the sibling project's dashboard uses for its own
+snapshot.
+
+The 2-hour force-close safeguard this file used to also enforce was
+removed 2026-08-30 (explicit user request -- SL/TP alone decide when a
+trade closes now, for every trade, no toggle). EXPIRY_HOURS/is_expired/
+EXPIRED still exist in trade_journal.py purely so historical journal
+entries with that status keep reading/exporting correctly; nothing here
+sets it anymore."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -18,8 +22,8 @@ import requests
 
 from oanda_client import OandaClient
 from trade_journal import (
-    load_journal, save_journal, open_entries, is_expired, hours_open, EXPIRY_HOURS,
-    SUCCESSFUL, FAILED, EXPIRED, CANCELLED, LOST, JournalEntry, JOURNAL_LOCK,
+    load_journal, save_journal, open_entries, hours_open,
+    SUCCESSFUL, FAILED, CANCELLED, LOST, JournalEntry, JOURNAL_LOCK,
 )
 from telegram_notifier import send_message
 
@@ -53,16 +57,8 @@ def _normalize_oanda_timestamp(ts: str) -> str:
     return datetime.fromisoformat(ts).isoformat()
 
 
-def check_open_trades(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
+def check_open_trades(client: OandaClient = None) -> list:
     """Returns the list of entries that changed status this call.
-
-    expiry_enabled: whether the 2-hour force-close applies at all --
-    None (the default, used by both real call sites: app.py's dashboard
-    route and the scheduled job) means "read dashboard_state.trade_time_limit_enabled
-    at call time," so a Settings change takes effect on the very next
-    check without either caller needing to thread it through by hand.
-    Tests pass True/False explicitly instead, to stay isolated from
-    whatever's on local disk in config/dashboard_state.json.
 
     Acquires trade_journal.JOURNAL_LOCK non-blockingly -- this runs both
     from a 5-minute scheduled tick AND on every dashboard page load, so
@@ -91,15 +87,12 @@ def check_open_trades(client: OandaClient = None, expiry_enabled: bool | None = 
         print("WARNING: check_open_trades skipped -- JOURNAL_LOCK held by another caller", flush=True)
         return []
     try:
-        return _check_open_trades_unsafe(client, expiry_enabled)
+        return _check_open_trades_unsafe(client)
     finally:
         JOURNAL_LOCK.release()
 
 
-def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
-    if expiry_enabled is None:
-        from dashboard_state import load_state
-        expiry_enabled = load_state().trade_time_limit_enabled
+def _check_open_trades_unsafe(client: OandaClient = None) -> list:
     entries = load_journal()
     pending = open_entries(entries)
     # Unconditional, same "prove this job is actually alive" reasoning
@@ -118,7 +111,6 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
 
     now = datetime.now(timezone.utc)
     changed = []
-    expiry_notifications = []  # (instrument, direction, pnl, currency) -- sent AFTER save_journal below
 
     for entry in entries:
         if entry["status"] != "OPEN":
@@ -195,13 +187,13 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
                         print(f"WARNING: trade {trade_id} not found on OANDA (404, and not in "
                               f"transaction history either) -- marking LOST, real P&L unrecoverable",
                               flush=True)
-                    # Same "save right after resolving THIS entry" reasoning
-                    # as the expiry branch below -- this classification is
-                    # a genuine, final conclusion about the trade (found via
-                    # transaction history, or genuinely given up on), not a
-                    # transient retry state, so it shouldn't ride on the
-                    # single batched save at the very end of the loop
-                    # outliving whatever else this pass still has to do.
+                    # Save right after resolving THIS entry -- this
+                    # classification is a genuine, final conclusion about
+                    # the trade (found via transaction history, or
+                    # genuinely given up on), not a transient retry state,
+                    # so it shouldn't ride on the single batched save at
+                    # the very end of the loop outliving whatever else
+                    # this pass still has to do.
                     save_journal(entries)
                 else:
                     print(f"WARNING: could not look up trade {trade_id}: {e}", flush=True)
@@ -226,94 +218,11 @@ def _check_open_trades_unsafe(client: OandaClient = None, expiry_enabled: bool |
             changed.append(entry)
             save_journal(entries)
 
-        elif expiry_enabled and is_expired(entry, now):
-            try:
-                result = client.close_trade(trade_id)
-            except Exception as e:
-                # Same "don't let one bad lookup abort the whole pass"
-                # reasoning as the 404-handling branch above -- e.g. this
-                # trade was already closed by an overlapping call, or a
-                # transient OANDA error. Skip it this pass rather than raising,
-                # which used to abort save_journal() below entirely and
-                # silently drop every other reclassification already
-                # computed earlier in this same loop.
-                print(f"WARNING: failed to force-close expired trade {trade_id}: {e}", flush=True)
-                continue
-            # close_trade() above already did something IRREVERSIBLE on
-            # OANDA's side by this point -- wrapping the response
-            # parsing too, not just the call itself, because a malformed
-            # fill response here must still result in this entry getting
-            # marked closed (best-effort P&L) rather than silently
-            # falling through to the next loop iteration with the entry
-            # still "OPEN" locally despite genuinely being closed on
-            # OANDA -- the exact gap the incremental save below exists
-            # to close, which only helps if this entry actually reaches it.
-            try:
-                fill = result.get("orderFillTransaction", {})
-                pnl = float(fill.get("pl", 0))
-                entry["realized_pnl"] = pnl
-                fill_price = fill.get("price")
-                entry["exit_price"] = float(fill_price) if fill_price is not None else None
-            except (TypeError, ValueError) as e:
-                print(f"WARNING: trade {trade_id} closed on OANDA but its fill response couldn't be "
-                      f"parsed ({e}) -- marking closed with unknown P&L rather than leaving it OPEN", flush=True)
-                entry["realized_pnl"] = 0.0
-                entry["exit_price"] = None
-            entry["closed_at"] = now.isoformat()
-            entry["status"] = EXPIRED
-            changed.append(entry)
-
-            # Real incident: close_trade() above just did something
-            # IRREVERSIBLE on OANDA's side -- the position is genuinely
-            # closed now, no undoing that. The OLD code only called
-            # save_journal() once, after this entire loop finished
-            # processing every OPEN entry. On a day with frequent
-            # restarts (a degraded GitHub API repeatedly crashing the
-            # process, since fixed, but the underlying "batch save at
-            # the very end" gap was still live), a kill anywhere between
-            # this successful close and that single end-of-loop save --
-            # including while processing a LATER, unrelated entry in the
-            # same pass -- lost this entry's already-real close from the
-            # local (and GitHub-synced) journal. It reverted to looking
-            # "still OPEN" even though OANDA had already closed it. The
-            # NEXT pass would then find it missing from OANDA's open-
-            # trades list and try to look up its close details via
-            # get_trade() -- which can itself 404 if, by then, something
-            # about that lookup no longer resolves cleanly, misclassifying
-            # a trade that genuinely ran its full lifecycle as LOST with
-            # unrecoverable P&L, when the real outcome was known and
-            # available the whole time, one line above.
-            #
-            # Saving immediately -- right after THIS entry's own
-            # irreversible action, not batched with however many OTHER
-            # entries this pass still has left to process -- bounds the
-            # crash window to just this one entry instead of the whole
-            # batch.
-            save_journal(entries)
-            # Real incident (scheduled_jobs.run_evening_scan_and_notify
-            # had the same class of bug): sending before the journal is
-            # persisted means a process killed in between has already
-            # notified but has no record of it -- the next pass would
-            # find OANDA already shows this trade closed too, but a
-            # crash-then-retry sequence around this exact window is
-            # exactly what produced duplicate sends elsewhere today.
-            # Collecting the notification and sending it only after the
-            # save just above (now per-entry, not batched at the very
-            # end of the loop) means a mid-flight kill fails safe.
-            expiry_notifications.append((entry["instrument"], entry["direction"], entry["realized_pnl"],
-                                          entry.get("account_currency", "")))
-
     # Every branch above now saves immediately after resolving its own
     # entry, so this is a pure safety net (a harmless redundant write if
     # everything already landed) rather than the sole save it used to be.
     if changed:
         save_journal(entries)
-
-    for instrument, direction, pnl, currency in expiry_notifications:
-        send_message(
-            f"⏱ <b>{instrument} {direction} closed automatically</b> "
-            f"after 2 hours without hitting SL/TP.\nP&L: {pnl:+.2f} {currency}"
-        )
 
     return changed
 
@@ -436,21 +345,10 @@ def reconcile_orphan_trades(client: OandaClient = None) -> list:
         return [asdict(e) for e in new_entries]
 
 
-def live_trades_view(client: OandaClient = None, expiry_enabled: bool | None = None) -> list:
+def live_trades_view(client: OandaClient = None) -> list:
     """Display-ready rows for the dashboard's "Live trades" section --
     journal entries still OPEN, enriched with OANDA's current
-    unrealized P&L/price (the journal itself only has entry-time data)
-    and how close each is to the 2-hour expiry.
-
-    expiry_enabled: same resolution rule as check_open_trades -- None
-    reads dashboard_state.trade_time_limit_enabled at call time. When
-    disabled, "hours_remaining" is None (not a clamped 0.0h, which would
-    misleadingly read as "about to auto-close" for a trade this app no
-    longer force-closes at all)."""
-    if expiry_enabled is None:
-        from dashboard_state import load_state
-        expiry_enabled = load_state().trade_time_limit_enabled
-
+    unrealized P&L/price (the journal itself only has entry-time data)."""
     client = client or OandaClient()
     entries = open_entries(load_journal())
     if not entries:
@@ -474,6 +372,5 @@ def live_trades_view(client: OandaClient = None, expiry_enabled: bool | None = N
             "unrealized_pnl": float(live.get("unrealizedPL", 0)) if live else None,
             "account_currency": entry.get("account_currency", ""),
             "hours_open": round(elapsed, 1),
-            "hours_remaining": round(max(0.0, EXPIRY_HOURS - elapsed), 1) if expiry_enabled else None,
         })
     return rows
