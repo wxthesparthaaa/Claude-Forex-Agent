@@ -3426,3 +3426,67 @@ has survived full scrutiny. The manual scan-and-approve workflow, the
 risk engine, and all protective/reporting infrastructure remain
 unaffected and still have real value independent of any strategy's own
 edge.
+
+## 2026-08-30 (continued) -- Look-ahead audit of every other backtest: all clean
+
+**Request**: before exploring new signal ideas, audit every other
+backtest script this session for the same same-bar-decides-same-bar-
+outcome bug just found in trend-following, since none of the rigor
+already applied (significance, cost modeling, out-of-sample) could
+have detected a bias baked into the primitive signal-generation step
+itself.
+
+**Audited** (via 3 parallel research passes, full-file reads, not
+docstring skims): `backtest_signal_families.py`, `backtest_alternate_
+families_full.py`, `backtest_bollinger_reversion.py`, `backtest_price_
+action_strategy.py`, `backtest_entry_filter.py`, `backtest_momentum_
+addon.py`, `backtest_profit_decay_exit.py`, `backtest_rsi_volume_entry_
+filter.py`, `backtest_volume_confirmed_acceptance.py`, `backtest_tp_sl_
+distance_sweep.py`, `backtest_1h_entry_daily_higher.py`, `backtest_5m_
+entry_1h_higher.py`, `backtest_cot_positioning.py`, `cot_significance_
+check.py`, `backtest_index_cfds.py`, `rsi_mean_reversion_significance_
+check.py` -- plus every shared dependency (`src/trade_simulator.py`,
+`src/cot_signal.py`, `src/cot_data.py`, `src/pivot_detection.py`,
+`src/timing_filter.py`, `src/profit_decay_exit.py`).
+
+**Result: all 16 files clean.** Every discrete-entry backtest in this
+codebase resolves trades through the shared `trade_simulator.simulate_
+trade` utility, which only ever walks bars strictly AFTER the entry bar
+(`range(entry_index + 1, end)`) -- safe by construction, not by
+discipline, since every script built on top of it inherits the same
+guarantee automatically. The CFTC publish-date lag (`REPORTING_LAG_
+DAYS = 3`) is a real computation applied to every row, not just a
+comment; the COT z-score baseline correctly appends each week's own
+value AFTER computing that week's score, never before. One script
+(`backtest_volume_confirmed_acceptance.py`) was found to be MORE
+conservative than strictly necessary at a 1m/15m timeframe boundary,
+discarding real information rather than leaking any.
+
+**Conclusion**: the trend-following bug was specific to that one
+signal's particular construction (a continuous position tied to a
+moving average that structurally includes the current bar), not a
+systemic pattern. This confirms the earlier "no real edge" verdicts on
+the base signal families, RSI@1:1, COT positioning, index CFDs,
+pyramid, the timing filters, and the profit-decay exits were not
+artifacts of a hidden bug -- they're genuinely clean conclusions. The
+coin-flip situation is real, not something a bug fix dissolves; a
+genuinely different signal mechanism is needed, not a re-audit of what
+already failed honestly.
+
+**Built**: `scripts/backtest_fx_cross_sectional_momentum.py` -- the
+first genuinely new mechanism this session: relative-value momentum
+instead of absolute direction. Ranks all 13 pairs by trailing 21-day
+return, goes long the top 3 / short the bottom 3, holds for the next
+21 trading days, then re-ranks (classic Jegadeesh-Titman-style
+formation/holding split). Chosen specifically because formation and
+holding windows are non-overlapping BY CONSTRUCTION, making it
+structurally immune to the bug class just audited for -- not merely
+disciplined about avoiding it. Verified directly with a synthetic case:
+an instrument with a real +4500% move during the holding window but
+ordinary (excluded-from-selection) formation-period momentum
+contributes EXACTLY 0.0 to the portfolio, proving the ranking cannot
+see into the future window it's predicting. One fixed, pre-specified
+parameter set (21-day formation, 21-day holding, top/bottom 3) --
+deliberately not a grid search, given what the threshold sweep already
+demonstrated about tuning against the same data used to validate a
+result.

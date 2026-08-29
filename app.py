@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Audited all 16 other backtest scripts for the same look-ahead bug that broke trend-following "
+                    "-- all clean (trade_simulator.py's shared resolve-from-next-bar-only pattern protects them "
+                    "structurally). Coin-flip verdicts stand. Built cross-sectional FX momentum as new territory."),
     ("2026-08-30", "CORRECTION: trend-following's entire edge was a look-ahead bug (SMA computed inclusive of "
                     "today's own close). Honestly lagged: Sharpe 2.61->-0.07 (FX), 2.48->0.12 (comm/indices). "
                     "Retired trend_addon.py entirely. Base strategy remains the only signal, already a coin flip."),
