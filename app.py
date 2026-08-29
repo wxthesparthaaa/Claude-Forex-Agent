@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Day-of-week seasonality: found a real, specific 'JPY weakens on Mondays' pattern (all 7 JPY "
+                    "pairs individually significant, bootstrap excludes zero) -- but split-half fails (weak "
+                    "2018-22, strong 2022-26, ties to the BOJ-Fed rate gap but untestable). Ruled out."),
     ("2026-08-30", "Audited all 16 other backtest scripts for the same look-ahead bug that broke trend-following "
                     "-- all clean (trade_simulator.py's shared resolve-from-next-bar-only pattern protects them "
                     "structurally). Coin-flip verdicts stand. Built cross-sectional FX momentum as new territory."),

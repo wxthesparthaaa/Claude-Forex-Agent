@@ -3513,3 +3513,63 @@ filter to salvage the bad half would be the exact same after-the-fact
 tuning trap already avoided elsewhere, not a real fix. Closed out as
 another clean negative -- both cross-sectional variants (momentum and
 reversal) now ruled out alongside everything else.
+
+## 2026-08-30 (continued) -- Day-of-week seasonality: a real, specific, but ultimately unstable finding
+
+**Request**: build a day-of-week calendar-effect test -- a genuinely
+different KIND of hypothesis (no price-technical signal, no look-ahead
+question at all, since the day of the week is always known in advance).
+
+**Built**: `scripts/backtest_fx_day_of_week_seasonality.py` -- equal-
+weight 13-pair portfolio, two-sided one-sample test per weekday, with a
+Bonferroni-adjusted threshold (0.05/5) to guard against the multiple-
+comparison risk of testing 5 buckets. First run surfaced a real bug
+(not a data gap): Friday showed under 30 observations vs ~426 for every
+other day. Root cause: OANDA Daily candles are timestamped at OPEN, and
+the FX trading day rolls over at 5pm New York (`src/market_hours.py`'s
+own already-documented convention) -- the candle for the session
+everyone calls "Monday" opens Sunday evening UTC, so every session's
+raw open-timestamp weekday was one day earlier than the session it
+represented, and the real Monday data was sitting mislabeled under
+Sunday. Fixed with a +1 (mod 7) shift, confirmed by the corrected run
+showing all 5 weekdays with healthy, roughly equal sample counts.
+
+**Result after the fix**: Monday showed a real, Bonferroni-significant
+effect (mean +0.0518%/Monday, t=+3.63, p=0.0003, survives p<0.01).
+Split-half check: same sign both halves (passes the sign-flip bar that
+disqualified reversal) but a large magnitude asymmetry -- first half
++0.019% (not significant), second half +0.085% (highly significant).
+
+**Refinement, `scripts/fx_monday_effect_significance_check.py`**: the
+per-pair breakdown was decisive. All 7 JPY-quoted pairs (USD_JPY + 6
+JPY crosses) came back positive and mostly individually significant,
+tightly clustered (+0.065% to +0.115%); all 6 non-JPY majors were weak
+and individually insignificant (p from 0.06 to 0.87). Since JPY is the
+quote currency in all 7, this is one coherent claim -- JPY broadly
+weakens on Mondays -- not a vague 13-pair average.
+
+**`scripts/fx_jpy_monday_effect_check.py`, restricted to just the 7 JPY
+pairs**: full-sample result held (mean +0.0811%, t=+3.52, p=0.0004),
+bootstrap CI excludes zero comfortably ([+0.036%, +0.126%]), leave-one-
+out is flat across all 7 (no single pair drives it) -- but **the
+split-half magnitude asymmetry did NOT resolve**, and is essentially
+unchanged from the 13-pair version (4.24x vs ~4.5x). The hypothesis
+that non-JPY pairs were diluting the signal was wrong -- the instability
+is intrinsic to the JPY effect itself. First half +0.031% (p=0.34, not
+significant); second half +0.131% (p=0.0001).
+
+**Conclusion**: fails the same standing bar that disqualified cross-
+sectional reversal -- a bootstrap CI and leave-one-out check robustness
+to WHICH pairs are included, not robustness ACROSS TIME, and the
+split-half check that actually tests the latter fails here just as
+clearly. Not treated as stable evidence of a tradeable effect. One
+honest, non-rationalizing note for the record: the weak first half
+(2018-2022) and strong second half (2022-2026) split lines up closely
+with when the BOJ-Fed rate differential became historically extreme --
+a real, falsifiable hypothesis (JPY funding-currency flow effects
+scaling with the differential) that can't be tested here, since OANDA
+exposes no historical financing-rate series (the same data ceiling
+that limited the carry investigation). Not pursued further without
+that data. Closed out alongside the coin-flip base strategy, RSI@1:1,
+COT, index CFDs, pyramid, trend-following, and both cross-sectional
+variants as tested and ruled out.
