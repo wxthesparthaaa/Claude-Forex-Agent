@@ -109,6 +109,24 @@ def _current_rv_percentile(client: OandaClient, instrument: str) -> float | None
     return percentiles[-1]
 
 
+def _financing_rate_for_direction(client: OandaClient, instrument: str, direction: str) -> float | None:
+    """The annual financing rate (fraction, e.g. 0.02 for 2%/yr) OANDA is
+    currently paying for holding `direction` on this pair -- for
+    rationale/journal logging only, so a closed carry trade's own record
+    shows what rate justified it rather than just "it was positive."
+    Does not affect any trading decision -- that's still
+    _financing_direction's job."""
+    info = client.get_instruments([instrument])
+    if not info:
+        return None
+    financing = info[0].get("financing", {})
+    key = "longRate" if direction == "LONG" else "shortRate"
+    try:
+        return float(financing.get(key, 0))
+    except (TypeError, ValueError):
+        return None
+
+
 def _wide_stop_distance(client: OandaClient, instrument: str) -> float | None:
     candles = client.get_candles(instrument, "D", count=DAILY_CANDLE_COUNT)
     candles = [c for c in candles if c.get("complete", True)]
@@ -187,6 +205,12 @@ def _check_carry_opportunities_unsafe(client: OandaClient = None, carry_enabled:
                     print(f"WARNING: carry position {instrument} closed but its fill response couldn't be "
                           f"parsed ({e}) -- marking closed with unknown P&L rather than leaving it OPEN", flush=True)
                     pnl, exit_price = 0.0, None
+                close_note = f"Carry close ({reason})"
+                if risk_off and percentile is not None:
+                    close_note += f": RV percentile {percentile:.0f} (risk-off cutoff {RISK_OFF_ENTER_PERCENTILE})"
+                if direction_flipped:
+                    close_note += f": financing flipped from {open_entry['direction']} to {live_direction}"
+                close_note += f". P&L {pnl:+.2f}."
                 with JOURNAL_LOCK:
                     fresh_entries = load_journal()
                     for fe in fresh_entries:
@@ -195,6 +219,7 @@ def _check_carry_opportunities_unsafe(client: OandaClient = None, carry_enabled:
                             fe["exit_price"] = float(exit_price) if exit_price is not None else None
                             fe["closed_at"] = datetime.now(timezone.utc).isoformat()
                             fe["status"] = SUCCESSFUL if pnl > 0 else FAILED
+                            fe["rationale"].append(close_note)
                             break
                     save_journal(fresh_entries)
                 if risk_off:
@@ -302,12 +327,19 @@ def _check_carry_opportunities_unsafe(client: OandaClient = None, carry_enabled:
             print(f"INFO: carry entry for {instrument} would violate risk limits, skipping: {e}", flush=True)
             continue
 
+        try:
+            entry_rate = _financing_rate_for_direction(client, instrument, direction)
+        except Exception:
+            entry_rate = None
+        rate_str = f"{entry_rate * 100:.2f}%/yr" if entry_rate is not None else "unknown rate"
+
         candidate = {
             "instrument": instrument, "direction": direction,
             "entry_price": entry_price_r, "stop_loss": stop_loss_r, "take_profit": take_profit_r,
             "confidence_pct": 0.0,
             "rationale": [
-                f"Carry trade: {instrument} currently pays positive financing {direction.lower()}. "
+                f"Carry trade: {instrument} currently pays positive financing {direction.lower()} "
+                f"({rate_str}). RV percentile {percentile:.0f} (risk-off cutoff {RISK_OFF_ENTER_PERCENTILE}). "
                 f"Stop/target are a {STOP_ATR_MULTIPLE:.0f}x-ATR(20) catastrophic backstop, not the "
                 f"real exit -- the position is meant to be closed by the risk-off/direction-flip check, "
                 f"not by hitting either level.",

@@ -219,6 +219,25 @@ def test_does_not_open_into_an_already_risk_off_regime(mock_send, tmp_path, monk
     assert client.placed_orders == []
 
 
+@patch("carry_addon.send_message")
+@patch("carry_addon.fetch_instrument_metadata", return_value=META)
+def test_open_rationale_includes_financing_rate_and_rv_percentile(mock_meta, mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    client = FakeClient(financing={"AUD_JPY": {"longRate": "0.035", "shortRate": "-0.045"},
+                                     "CAD_JPY": {"longRate": "-0.01", "shortRate": "-0.02"}})  # CAD_JPY inert
+    monkeypatch.setattr(carry_addon, "_current_rv_percentile", lambda c, i: 42.0)
+    monkeypatch.setattr(carry_addon, "_wide_stop_distance", lambda c, i: 5.0)
+
+    carry_addon.check_carry_opportunities(client)
+
+    entries = tj.load_journal()
+    aud_jpy = next(e for e in entries if e["instrument"] == "AUD_JPY")
+    rationale_text = " ".join(aud_jpy["rationale"])
+    assert "3.50%/yr" in rationale_text
+    assert "42" in rationale_text
+
+
 # --- closing an open position ---
 
 @patch("carry_addon.send_message")
@@ -270,6 +289,30 @@ def test_closes_an_open_position_on_direction_flip_without_setting_standdown(moc
     assert "reversed" in closed[0]["reason"]
     state = ds.load_state()
     assert state.carry_standdown.get("AUD_JPY") is not True  # direction-flip closes don't trigger hysteresis
+
+
+@patch("carry_addon.send_message")
+def test_close_appends_a_rationale_note_with_reason_and_pnl(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    tj.record_open_trade("101", _candidate(instrument="AUD_JPY", rationale=["opened for some reason"]))
+
+    client = FakeClient(
+        financing={"AUD_JPY": {"longRate": "0.03", "shortRate": "-0.04"}},
+        open_trades=[{"id": "101", "instrument": "AUD_JPY"}],
+        close_trade_result={"orderFillTransaction": {"pl": "-12.5", "price": "93.0"}},
+    )
+    monkeypatch.setattr(carry_addon, "_current_rv_percentile", lambda c, i: carry_addon.RISK_OFF_ENTER_PERCENTILE)
+
+    carry_addon.check_carry_opportunities(client)
+
+    entries = tj.load_journal()
+    rationale = entries[0]["rationale"]
+    assert rationale[0] == "opened for some reason"  # original entry preserved, not overwritten
+    close_note = rationale[-1]
+    assert "risk-off" in close_note
+    assert str(carry_addon.RISK_OFF_ENTER_PERCENTILE) in close_note
+    assert "-12.50" in close_note
 
 
 # --- hysteresis ---
