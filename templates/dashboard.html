@@ -404,7 +404,9 @@
           </label>
         </div>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default (autopilot only). A genuinely different strategy from everything else
+          Off by default. This toggle only arms the strategy -- it still won't place a trade
+          unless the bot's overall phase is also Autopilot (same rule as every other automated
+          trade path here). A genuinely different strategy from everything else
           this bot trades: instead of predicting price direction, it goes long whichever of
           AUD_JPY / CAD_JPY currently pays positive daily rollover (OANDA's live financing
           rate), and holds for weeks -- not hours -- collecting that rate differential.
