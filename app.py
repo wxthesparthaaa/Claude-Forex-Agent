@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Carry+momentum 'fix' for CHF_JPY was trend-following in disguise (proved via an unconstrained "
+                    "trend test beating it on 12/12 pairs incl. one with no carry side at all). Not shipped -- but "
+                    "surfaces pure trend-following (Sharpe 1.35, 13/13 pairs robust) as its own lead worth vetting."),
     ("2026-08-29", "Swept the carry trade's risk-off hysteresis/RV thresholds (108 configs) -- found the live "
                     "defaults aren't robust on the recent 8yr window, but the 'better' config failed a real "
                     "out-of-sample test on 2006-2018 data. Not shipped -- an in-sample winner, not a real edge."),

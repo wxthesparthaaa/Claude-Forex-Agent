@@ -2899,3 +2899,62 @@ strong enough evidence to override the out-of-sample check, and it
 wasn't. Closes out this investigation, joining RSI@1:1 and COT
 positioning as "looked promising in-sample, didn't survive scrutiny" --
 the exact discipline this session has applied everywhere else.
+
+## 2026-08-29 (continued) -- Carry+momentum was trend-following in disguise; surfaces a much bigger unrelated finding
+
+**Request**: CHF_JPY lost money in every calendar year tested (0/9) under
+plain carry. Asked whether a momentum/trend filter (only take the carry
+side when price is ALSO trending that way) could rescue it and the other
+weak JPY crosses.
+
+**Built**: `scripts/backtest_carry_momentum_filter.py` -- 4 variants
+(always / risk-off-only / momentum-only / risk-off+momentum combined)
+across all 13 carry candidates, momentum = price vs its own 200-day SMA
+in the (today's-live-rate-derived) carry direction, one fixed
+pre-specified MA length, not tuned on this data (see the threshold-sweep
+overfit two entries up -- deliberately not repeating that mistake here).
+
+**First result looked extraordinary**: EVERY SINGLE one of the 12 viable
+pairs improved, often dramatically -- CHF_JPY flipped from -46.1% total
+(0/9 positive years, Sharpe -0.93) to +16.1% total (6/9 positive years,
+Sharpe +0.71). That uniformity across an entire currency universe, with
+zero misses, was itself the tell that something structural was going on,
+not a real carry-specific insight.
+
+**Root cause, confirmed by `scripts/backtest_trend_following_unconstrained.py`**:
+carry direction in every script this session has always been TODAY's
+live financing rate applied retroactively across ~9 years of history
+(OANDA has no historical rate time series). JPY policy has been in one
+persistent regime (BOJ ultra-loose, broad yen weakness) for most of that
+window, so today's "carry-favorable direction" on every JPY cross is
+ALSO the direction that's been trending for years -- the same macro
+regime determined both at once, they were never independent. Built a
+PURE trend-following variant (position flips sign with a 200-day SMA,
+zero carry-direction constraint, works even on AUD_USD which has no
+viable carry side at all today) and it beat the carry-constrained
+version on **12/12 pairs**, often by 2x+ (CHF_JPY: +11.95%/yr pure vs
++2.23%/yr carry-constrained; USD_CHF: +10.95%/yr vs +4.20%/yr).
+AUD_USD -- literally no carry story today -- still returned +12.70%/yr,
+Sharpe 1.31, right in line with the "carry-favorable" pairs. Carry adds
+nothing here; the momentum filter was just rediscovering the trend that
+already existed independent of any interest-rate differential, then the
+long-only carry-direction constraint actively LIMITED it to half of that
+trend's profit (missing every down-leg the pair could have shorted).
+
+**Conclusion**: carry+momentum as a carry-trade refinement is closed out
+-- not shipped, not a real synergy, joins the threshold sweep as a
+result that looked good and wasn't the real mechanism. **But this
+surfaced something bigger**: pure trend-following (SMA-200, long/short,
+no carry angle at all) is positive in BOTH halves of history for all
+13/13 candidates tested, average +11.65%/yr, Sharpe 1.35 -- the cleanest,
+most universal result across ANY strategy family tried this entire
+session (stronger and more consistent than carry, RSI@1:1, COT, or index
+CFDs). That cleanliness is itself a reason for caution, not excitement --
+a dead-simple 200-day SMA producing Sharpe >1.2 on essentially every FX
+pair tested is unusually strong for something this simple, and this
+price-only backtest still hasn't modeled spread/slippage (though a
+~200-day trend filter trades rarely, so cost drag should be far smaller
+than it was for the earlier fast signal-family tests). Not yet subjected
+to the significance/robustness rigor RSI@1:1 and COT positioning went
+through before being trusted or distrusted -- that's the natural next
+step before this goes anywhere near being built live.
