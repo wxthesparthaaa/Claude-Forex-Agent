@@ -93,9 +93,22 @@ def main():
     print(f"\n{len(portfolio)} portfolio-days across {len(aligned)} pairs "
           f"({common_dates[0]} to {common_dates[-1]})\n")
 
+    # OANDA Daily candles are timestamped at OPEN, and the FX trading day
+    # rolls over at 5pm New York (see src/market_hours.py's own
+    # documented convention: "forex opens Sunday ~5pm New York time").
+    # The candle for the session everyone calls "Monday" therefore OPENS
+    # Sunday evening UTC -- its raw open-timestamp weekday() is 6
+    # (Sunday), not 0. Every session's raw open-weekday is one day
+    # earlier than the session it actually represents; +1 (mod 7)
+    # corrects this so "Monday" here means the Monday trading session,
+    # not "candles that happened to open on a UTC Monday" (which would
+    # actually be Tuesday's session, and would leave "Friday" nearly
+    # empty since almost no candle opens Friday evening -- exactly the
+    # suspicious pattern the uncorrected version produced).
     by_weekday = defaultdict(list)
     for d, r in portfolio.items():
-        by_weekday[d.weekday()].append(r)
+        session_weekday = (d.weekday() + 1) % 7
+        by_weekday[session_weekday].append(r)
 
     print(f"{'='*70}\nEQUAL-WEIGHT PORTFOLIO RETURN BY WEEKDAY\n{'='*70}")
     print(f"{'weekday':10s} {'n':>6s} {'mean':>10s} {'std':>9s} {'t':>7s} {'p':>8s}  significant?")
