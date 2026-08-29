@@ -2569,4 +2569,46 @@ even though neither variant makes the underlying strategy profitable --
 signal, not an arbitrary choice. Neither shipped; the signal itself
 remains the blocker.
 
+## 2026-08-29 (continued) — Carry trade result (Ledger #3): first genuinely positive finding all session, with real caveats
+
+**Request**: Third Ledger direction -- a carry trade with a risk-off
+filter, structurally different from everything else tested since its
+expected return doesn't depend on predicting price direction.
+
+**Result**: 12 of 13 candidates (7 FX majors + 6 JPY-funded crosses)
+were carry-viable today. The JPY crosses dominate: USD_JPY +45.1%,
+GBP_JPY +46.8%, EUR_JPY +43.0%, AUD_JPY +37.2%, CAD_JPY +35.8%,
+NZD_JPY +22.5% price-only return over ~8.4 years, all long -- this
+tracks real, well-documented macro history (Japan held near-zero rates
+through most of this window while the rest of the world hiked hard in
+2022-23). CHF_JPY was the opposite: -46.1%, because CHF's own
+persistently-low rate made it carry-favorable SHORT (short CHF, long
+JPY) -- fighting the dominant "JPY weakens against everything" trend
+rather than riding it. The risk-off filter (flat at/above the 85th RV
+percentile) cut max drawdown in 10/12 pairs, sometimes substantially
+(EUR_USD -21.9%->-12.8%, NZD_USD -24.6%->-14.7%), but cost real return
+on the 4 strongest JPY trending pairs (AUD_JPY +37.2%->+25.3%, GBP_JPY
++46.8%->+21.8%) -- some of the best trending days happened during the
+exact volatility spikes the filter sits out.
+
+**Caveats that matter more here than anywhere else this session**:
+(1) one continuous 8-year era, not multiple independent regimes -- a
+single historical realization, not statistical proof of a repeatable
+premium; (2) "today's live carry direction" applied retroactively is
+far shakier for the non-JPY pairs, whose rate regimes have flipped
+several times over the window (near-zero everywhere 2020-21, aggressive
+hikes 2022-23), vs JPY's comparatively stable near-zero stance --
+their weaker, more mixed results (EUR_USD -2.8%, USD_CHF -18.0%
+unfiltered) are correspondingly less trustworthy; (3) rollover income
+is ALSO only estimated from today's live rate applied across the whole
+period, not a true historical rate path.
+
+**Conclusion**: the first result all session worth taking seriously
+rather than filing under "no edge" -- but it reads more like "this
+account's currently-carry-favorable JPY positioning happened to align
+with one well-documented multi-year trend" than confirmed evidence of
+a repeatable, forward-looking premium. Not shipped. If pursued further,
+the honest next step is testing across genuinely distinct historical
+rate regimes (not just this one window) before trusting it operationally.
+
 **Fixed**: 2026-08-24
