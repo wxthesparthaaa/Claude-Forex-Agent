@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Swept the carry trade's risk-off hysteresis/RV thresholds (108 configs) -- found the live "
+                    "defaults aren't robust on the recent 8yr window, but the 'better' config failed a real "
+                    "out-of-sample test on 2006-2018 data. Not shipped -- an in-sample winner, not a real edge."),
     ("2026-08-29", "Shipped carry trade (AUD_JPY/CAD_JPY) as a live Settings toggle, replacing the 2hr time "
                     "limit and pyramid toggles (both retested negative all session, no longer relevant). Exits "
                     "on a risk-off RV-percentile filter (hysteresis band) or a financing-direction flip, wide "

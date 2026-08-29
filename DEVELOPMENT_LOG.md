@@ -2846,3 +2846,56 @@ shell has no OANDA credentials, so `check_carry_opportunities` has only
 run against fake/mocked clients. Toggle ships off by default; the user
 should watch the dashboard/Telegram after deploying with it on, on the
 practice account, before ever considering `OANDA_ENV=live`.
+
+## 2026-08-29 (continued) -- Risk-off threshold sweep: a real robustness gap in the live defaults, but the "fix" doesn't survive out-of-sample
+
+**Request**: `carry_addon.py`'s hysteresis band and RV lookback (enter=85,
+exit=70, rv_window=20, rv_baseline=250) were carried straight over from
+`backtest_carry_trade.py`'s own single BARE threshold check, which never
+modeled hysteresis at all. Asked to sweep those parameters for a better
+config, then confirm any winner out-of-sample before touching anything live.
+
+**Built**: `scripts/backtest_carry_threshold_sweep.py` simulates the exact
+hysteresis state machine `carry_addon.py` runs live (stand down at/above
+the enter percentile, only re-enter once back under the LOWER exit
+percentile -- the real thing, not a bare re-check) day-by-day over real
+Daily history for AUD_JPY/CAD_JPY specifically (not the full 13-pair
+carry-candidate universe), across a 108-config grid of (enter, exit,
+rv_window, rv_baseline). Every config scored on both halves of history
+independently; only configs positive in every half for every pair count
+as "robust."
+
+**First result** (~8.2-year window, matching the original carry
+backtest's own lookback): the LIVE DEFAULT itself is NOT robust by this
+bar -- worst-half annualized across both pairs' both halves = -0.35%/yr,
+despite a fine-looking +3.39%/yr full-period aggregate. The top candidate
+(enter=85, exit=75, rv_window=30, rv_baseline=250) reached +3.30%/yr
+worst-half, +4.14%/yr average full-period.
+
+**Out-of-sample confirmation** (`scripts/backtest_carry_threshold_sweep_outofsample.py`):
+AUD_JPY/CAD_JPY actually have Daily history back to 2006-09-02 --
+6.5 years further than the 3000-day window the original sweep used. Split
+at the original window's own start date (2018-06-12) and re-tested the
+live default plus the top 3 candidates on the older, genuinely untouched
+2006-2018 stretch (~11.7 years, never seen by the config search):
+  - AUD_JPY: top candidate edges out the live default (+2.27%/yr vs
+    +2.06%/yr) -- a small enough gap to plausibly be noise.
+  - CAD_JPY: top candidate is MUCH WORSE than the live default (+0.71%/yr
+    vs +1.97%/yr, less than half), and the 2nd candidate (which had
+    looked "robust" in-sample) goes outright NEGATIVE (-0.59%/yr).
+  - The live default was the best or co-best performer on BOTH pairs
+    across this much longer period, despite failing the in-sample
+    robustness bar on the shorter recent window.
+
+**Conclusion**: the original sweep's "winner" was an overfit to the
+specific recent window it was tuned on and does not generalize -- the
+negative worst-half the live defaults showed on the recent window looks
+like one rough CAD_JPY-specific patch, not a structural flaw, since the
+SAME parameters recover fine over the much longer available history.
+**Not shipped -- `carry_addon.py`'s constants are unchanged.** This
+threshold isn't where this strategy's edge is waiting to be found; a
+108-config grid search against ~8 years of 2 pairs was never going to be
+strong enough evidence to override the out-of-sample check, and it
+wasn't. Closes out this investigation, joining RSI@1:1 and COT
+positioning as "looked promising in-sample, didn't survive scrutiny" --
+the exact discipline this session has applied everywhere else.
