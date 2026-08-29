@@ -47,9 +47,19 @@ def main():
           f"({len(NEW_UNIVERSE)} candidates)...\n")
     per_instrument = {}
     for instrument in NEW_UNIVERSE:
-        result = trend_positions_and_returns(client, instrument)
+        try:
+            result = trend_positions_and_returns(client, instrument)
+        except Exception as e:
+            # Not every candidate in NEW_UNIVERSE is actually listed on
+            # this account (confirmed by the earlier significance-check
+            # run -- DE40_EUR 400s) -- trend_positions_and_returns itself
+            # only guards against "fetched fine but too few candles," not
+            # "OANDA rejected the instrument outright," so that has to be
+            # caught here instead of letting it crash the whole sweep.
+            print(f"  {instrument:10s}  not available ({e})")
+            continue
         if result is None:
-            print(f"  {instrument:10s}  not available or insufficient daily history, skipped")
+            print(f"  {instrument:10s}  insufficient daily history, skipped")
             continue
         dates, raw_returns, positions = result
         spread_fraction = fetch_spread_fraction(client, instrument)
