@@ -53,6 +53,21 @@ WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturd
 BONFERRONI_ALPHA = 0.05 / 5  # 5 buckets tested (weekdays only -- FX daily candles rarely span real weekends)
 
 
+def two_sided_test(returns: list):
+    """(mean, std, t, two-sided p-value) against zero. Two-sided since a
+    calendar effect could run positive or negative -- distinct from the
+    one-sided one_sample_test used for directional strategies elsewhere
+    this session."""
+    n_obs = len(returns)
+    mean = sum(returns) / n_obs
+    var = sum((r - mean) ** 2 for r in returns) / n_obs
+    std = var ** 0.5
+    se = std / (n_obs ** 0.5) if n_obs > 0 else 0.0
+    t = mean / max(se, 1e-12)
+    p = 2 * (1 - 0.5 * (1 + math.erf(abs(t) / math.sqrt(2))))
+    return mean, std, t, p
+
+
 def build_equal_weight_daily_returns(common_dates: list, aligned_closes: dict) -> dict:
     """{date: mean raw close-to-close return across all pairs that day} --
     same equal-weight averaging convention as build_portfolio elsewhere
@@ -113,27 +128,34 @@ def main():
     print(f"{'='*70}\nEQUAL-WEIGHT PORTFOLIO RETURN BY WEEKDAY\n{'='*70}")
     print(f"{'weekday':10s} {'n':>6s} {'mean':>10s} {'std':>9s} {'t':>7s} {'p':>8s}  significant?")
     any_significant = False
+    bucket_stats = {}
     for wd in range(5):
         returns = by_weekday.get(wd, [])
         if len(returns) < 30:
             print(f"{WEEKDAY_NAMES[wd]:10s}  (fewer than 30 observations, skipped)")
             continue
-        # one_sample_test (imported above) is one-sided (H1: mean > 0);
-        # a calendar effect could go either direction, so this runs the
-        # two-sided version inline instead of reusing that helper as-is.
-        n_obs = len(returns)
-        mean = sum(returns) / n_obs
-        var = sum((r - mean) ** 2 for r in returns) / n_obs
-        std = var ** 0.5
-        se = std / (n_obs ** 0.5) if n_obs > 0 else 0.0
-        t = mean / max(se, 1e-12)
-        p_two_sided = 2 * (1 - 0.5 * (1 + math.erf(abs(t) / math.sqrt(2))))
+        mean, std, t, p_two_sided = two_sided_test(returns)
+        bucket_stats[wd] = returns
         sig_raw = "raw p<0.05" if p_two_sided < 0.05 else ""
         sig_bonf = "SURVIVES Bonferroni (p<0.01)" if p_two_sided < BONFERRONI_ALPHA else ""
         if sig_bonf:
             any_significant = True
         flag = sig_bonf or sig_raw or "no"
-        print(f"{WEEKDAY_NAMES[wd]:10s} {n_obs:6d} {100*mean:+9.4f}% {100*std:8.3f}% {t:+7.2f} {p_two_sided:8.4f}  {flag}")
+        print(f"{WEEKDAY_NAMES[wd]:10s} {len(returns):6d} {100*mean:+9.4f}% {100*std:8.3f}% {t:+7.2f} {p_two_sided:8.4f}  {flag}")
+
+    print(f"\n{'='*70}\nSPLIT-HALF CHECK (first half vs second half of EACH weekday's own "
+          f"observations, independent)\n{'='*70}")
+    for wd in range(5):
+        returns = bucket_stats.get(wd)
+        if not returns:
+            continue
+        half = len(returns) // 2
+        mean1, _, _, p1 = two_sided_test(returns[:half])
+        mean2, _, _, p2 = two_sided_test(returns[half:])
+        same_sign = (mean1 > 0) == (mean2 > 0)
+        note = "same sign both halves" if same_sign else "SIGN FLIPS between halves"
+        print(f"{WEEKDAY_NAMES[wd]:10s}  first_half mean={100*mean1:+8.4f}% (p={p1:.4f})   "
+              f"second_half mean={100*mean2:+8.4f}% (p={p2:.4f})   {note}")
 
     print(f"\nBonferroni-adjusted threshold for 5 comparisons: p < {BONFERRONI_ALPHA:.3f}")
     if any_significant:
