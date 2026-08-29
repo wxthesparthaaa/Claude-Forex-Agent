@@ -3501,3 +3501,15 @@ out as a clean negative: 1-month relative-value momentum has no edge on
 this pair universe, joining the coin-flip base strategy, RSI@1:1, COT,
 index CFDs, pyramid, and trend-following (both absolute and relative-
 value versions now) as tested and ruled out.
+
+**Medium-term reversal result**: full period looked mediocre-but-real
+(total +15.7%, annualized +1.86%/yr, Sharpe 0.36), but the split-half
+check fails outright -- first half -1.61%/yr (Sharpe -0.29), second
+half +5.45%/yr (Sharpe 0.93). This session's own standing bar (both
+halves must independently hold up before deeper significance testing
+is even worth running -- the same bar RSI@1:1 and carry both had to
+clear first) is not met. **Not pursued further**: adding a regime
+filter to salvage the bad half would be the exact same after-the-fact
+tuning trap already avoided elsewhere, not a real fix. Closed out as
+another clean negative -- both cross-sectional variants (momentum and
+reversal) now ruled out alongside everything else.
