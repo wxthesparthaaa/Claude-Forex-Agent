@@ -64,7 +64,7 @@ from trade_journal import (
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
-from carry_addon import check_carry_opportunities
+from trend_addon import check_trend_opportunities
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Shipped trend-following (13 pairs, SMA-200) as a live Settings toggle, replacing carry "
+                    "entirely -- carry's own edge on AUD_JPY/CAD_JPY turned out to BE this same trend signal. "
+                    "Wide backstop stop only, no risk-off filter; a flip closes now, reopens next 5-min tick."),
     ("2026-08-29", "Trend-following extended-history check: holds up on 11+ years (2007-2018) it never saw "
                     "before, OOS ann. actually HIGHER (+16.5%/yr) than the original window. Cleared every check "
                     "run on any strategy this session. Not shipped -- next is a live-architecture design decision."),
@@ -419,7 +422,7 @@ def dashboard():
         invested=invested, week_gain=week_gain, week_gain_pct=week_gain_pct, weekly_gain_target=WEEKLY_GAIN_TARGET,
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
-        carry_mode_enabled=state.carry_mode_enabled,
+        trend_mode_enabled=state.trend_mode_enabled,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -693,11 +696,13 @@ def settings():
         if kill_switch_on and not phase_state.kill_switch_engaged:
             flash("Kill switch engaged -- Autopilot will not place any new trades until it's switched off.", "error")
 
-        # Explicit user request, 2026-08-30: a live carry-trade strategy
-        # on AUD_JPY/CAD_JPY -- see carry_addon.py for the actual rule.
-        # Off by default (a brand-new strategy type this bot has never
-        # traded live); same plain checkbox pattern as the toggles below.
-        state.carry_mode_enabled = request.form.get("carry_mode_enabled") == "on"
+        # Explicit user request, 2026-08-30: a live trend-following
+        # strategy across 13 pairs -- see trend_addon.py for the actual
+        # rule. Replaces the earlier carry-trade toggle (carry's own
+        # apparent edge turned out to BE this same trend signal, not an
+        # interest-rate effect). Off by default; same plain checkbox
+        # pattern as the toggles below.
+        state.trend_mode_enabled = request.form.get("trend_mode_enabled") == "on"
 
         # Explicit user request: cancel every open trade 10 min before
         # the weekend close so nothing carries gap risk into Monday. On
@@ -782,13 +787,13 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # Off by default (Settings) -- see carry_addon.py's own docstring for
-    # the backtest this is based on (the one direction that held up under
-    # real scrutiny this project's whole backtest series). Scheduler-
-    # only, never triggered by a page load: this places real orders, same
-    # "only a deliberate trigger, not a passive view, gets to do that"
-    # discipline auto_execute_candidates follows.
-    scheduler.add_job(check_carry_opportunities, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Off by default (Settings) -- see trend_addon.py's own docstring for
+    # the backtest this is based on (the most rigorously validated result
+    # of this project's entire backtest series). Scheduler-only, never
+    # triggered by a page load: this places real orders, same "only a
+    # deliberate trigger, not a passive view, gets to do that" discipline
+    # auto_execute_candidates follows.
+    scheduler.add_job(check_trend_opportunities, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 

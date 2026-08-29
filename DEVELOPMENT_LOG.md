@@ -3122,3 +3122,85 @@ with a fixed entry/exit), and possibly a portfolio-construction
 rethink given the ~3-independent-bets finding (a smaller, deliberately
 less-correlated subset of pairs might be a better design than an
 equal-weight book of all 13). That's the natural next conversation.
+
+## 2026-08-30 -- Shipped trend-following live, retired carry entirely
+
+**Request**: build the trend-following result as a live Settings toggle.
+Design conversation settled four questions: exit is a wide catastrophic-
+backstop stop only (matches exactly what was backtested -- the backtest
+itself never modeled a stop at all); all 13 pairs, exactly as validated,
+not a curated subset; trend-following REPLACES carry entirely (carry
+only ever traded AUD_JPY/CAD_JPY, both among the 13 trend pairs, and
+carry's own apparent edge on those two turned out to be this same trend
+signal); full size immediately, no phased rollout.
+
+**Removed**: `src/carry_addon.py` and its test file, deleted entirely.
+`DashboardState.carry_mode_enabled`/`carry_standdown` removed (the
+field-filtering in `load_state()` makes this safe against old persisted
+JSON, no migration needed). `CARRY_TRADE_TAG` moved into
+`trade_journal.py` next to the already-retired `PYRAMID_ADDON_TAG` --
+both are now purely historical-compat constants so old journal entries'
+`experiment_tag` values stay documented even though nothing sets them
+anymore.
+
+**Built**: `src/trend_addon.py`, structured as carry_addon.py's direct
+successor (same non-blocking lock, same autopilot-phase + kill-switch
+gate, same hand-rolled close-and-journal pattern -- no shared close
+helper exists anywhere in this codebase, confirmed by grep, so this is
+a fifth independent copy of that pattern, following the established one
+exactly rather than extracting a premature abstraction). Genuinely
+different mechanics: direction comes from a 200-day SMA on Daily
+closes (LONG above, SHORT below), computed only from `complete=True`
+candles so the live position can only change once a day at a completed-
+candle boundary -- never on an intraday price wobbling around the
+average, reproducing the backtest's own day-alignment convention even
+though the job still polls every 5 minutes like everything else. There
+is no risk-off filter and no separate real exit, matching the "wide
+backstop only" decision -- the ONLY thing that closes a position is the
+trend itself reversing. A flip closes the old position now and does
+NOT reopen in the same pass (mirrors carry's own loop structure
+exactly: `continue` past the open-logic entirely on a close); the next
+scheduled tick, 5 minutes later, opens the new direction. This was the
+deliberate resolution to an architecture question this log's own prior
+entry had flagged as open (the bot's whole existing design assumes
+discrete trades with a fixed entry/exit; trend-following instead
+reverses an always-in-the-market position) -- one tick of being flat is
+immaterial against a signal that changes once a day and holds for
+months.
+
+**Currency concentration is bigger and more expected here than it was
+for carry's 2 pairs**: of the 13 pairs, JPY appears in 7 and USD in 7.
+A genuine broad-dollar or broad-yen regime -- exactly what this
+strategy is built to ride -- can plausibly put most of one currency's
+crosses into agreement at once, and `risk_engine.max_currency_exposure_pct`
+(4.0% default) will very likely block some of them from opening. This
+is the existing risk cap working as intended, documented plainly in
+both the module docstring and the Settings copy so it reads as expected
+behavior during a real regime shift, not a malfunction -- proven
+end-to-end by a test that pre-opens AUD_JPY near the cap and confirms a
+same-direction CAD_JPY candidate is genuinely rejected by the real
+(non-mocked) risk engine.
+
+**The wide stop's exact multiple (12x ATR(20), vs carry's 8x) is an
+honest placeholder**, not derived from real data -- the backtest itself
+never modeled any stop, so there's no historical "how close did this
+ever get" number to calibrate against yet. Recalibrating from real
+max-adverse-excursion data once this has run live for a while is a
+natural follow-up, the same way carry's own threshold sweep happened
+after carry shipped, not before.
+
+**Tests**: `tests/test_trend_addon.py`, 13 tests -- SMA direction math
+(None on insufficient history, LONG/SHORT correctly derived), gating
+(disabled toggle / non-autopilot / kill switch / unconfirmed direction
+all no-op), opening when flat, no-op when already positioned in the
+confirmed direction, the flip-closes-without-reopening-same-call
+behavior (the one most worth pinning down, given it's the deliberate
+architecture-question resolution above), and the shared-JPY-exposure
+rejection test. Full suite: 465 passed (452 after removing carry's 20
+tests, + 13 new).
+
+**Not yet verified**: real OANDA order placement -- this session's
+shell has no OANDA credentials, so `check_trend_opportunities` has only
+run against fake/mocked clients. Toggle ships off by default; the user
+should watch the dashboard/Telegram after deploying with it on, on the
+practice account, before ever considering `OANDA_ENV=live`.

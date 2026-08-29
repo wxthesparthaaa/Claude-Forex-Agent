@@ -97,17 +97,25 @@ class JournalEntry:
     # correctly; nothing sets it anymore.
     pyramided: bool = False
     # None for every normal trade. Was "PYRAMID_ADDON" for a trade opened
-    # by the now-removed pyramid feature; reused as "CARRY_TRADE" for the
-    # carry strategy (see carry_addon.py) -- lets the journal/export
-    # isolate an experiment's own trades from the base strategy's.
+    # by the now-removed pyramid feature, "CARRY_TRADE" for the now-
+    # removed carry feature; reused as "TREND_FOLLOWING" for the current
+    # trend-following strategy (see trend_addon.py) -- lets the journal/
+    # export isolate an experiment's own trades from the base strategy's.
     experiment_tag: str | None = None
     # The base trade's own trade_id, for a PYRAMID_ADDON entry only --
     # ties the add-on back to what it was added to.
     parent_trade_id: str | None = None
 
 
-# See JournalEntry.experiment_tag's own comment.
+# See JournalEntry.experiment_tag's own comment. Both PYRAMID_ADDON_TAG
+# and CARRY_TRADE_TAG are purely historical-compat now -- their modules
+# were removed after retesting showed no real edge of their own (see
+# DEVELOPMENT_LOG.md 2026-08-30 and 2026-08-29 respectively), but old
+# journal entries still carry these tag strings and should have a
+# documented constant to reference, not a bare magic string, even though
+# nothing sets either anymore.
 PYRAMID_ADDON_TAG = "PYRAMID_ADDON"
+CARRY_TRADE_TAG = "CARRY_TRADE"
 
 
 def load_journal() -> list:

@@ -397,28 +397,31 @@
           by their own SL/TP. Switch off to resume.
         </p>
         <div class="toggle-row">
-          <span style="color:var(--accent); font-weight:600;">Carry trade: AUD_JPY / CAD_JPY</span>
+          <span style="color:var(--accent); font-weight:600;">Trend following: 13 pairs</span>
           <label class="switch">
-            <input type="checkbox" name="carry_mode_enabled" {{ 'checked' if carry_mode_enabled else '' }}>
-            <span class="switch-track" style="{{ 'background:var(--accent);' if carry_mode_enabled else '' }}"></span>
+            <input type="checkbox" name="trend_mode_enabled" {{ 'checked' if trend_mode_enabled else '' }}>
+            <span class="switch-track" style="{{ 'background:var(--accent);' if trend_mode_enabled else '' }}"></span>
           </label>
         </div>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
           Off by default. This toggle only arms the strategy -- it still won't place a trade
           unless the bot's overall phase is also Autopilot (same rule as every other automated
-          trade path here). A genuinely different strategy from everything else
-          this bot trades: instead of predicting price direction, it goes long whichever of
-          AUD_JPY / CAD_JPY currently pays positive daily rollover (OANDA's live financing
-          rate), and holds for weeks -- not hours -- collecting that rate differential.
-          Backtested against a real historical rate reconstruction (not just today's rate):
-          both pairs positive in 6-7 of the last 9 calendar years on price alone. Exits are
-          NOT a fixed take-profit -- a scheduled check closes the position when realized
-          volatility spikes into a risk-off regime (a hysteresis band prevents flip-flopping
-          open/closed right at that threshold), or if the live rate direction itself reverses.
-          A wide stop-loss is still attached to every order as a rare disaster backstop only.
-          Both pairs share a "short JPY" leg -- a sudden broad yen strengthening (the real
-          August 2024 carry unwind is the precedent) would hit both at once, which is exactly
-          what this account's existing per-currency exposure cap already limits.
+          trade path here). Replaces the earlier carry-trade toggle: carry's own apparent edge
+          on AUD_JPY/CAD_JPY turned out to BE this same price-trend signal, not an interest-rate
+          effect. The rule itself has no interest-rate angle at all -- long whichever direction
+          a pair's price is trading relative to its own 200-day average, across 13 major/cross
+          pairs, holding for months and reversing direction (not closing flat) whenever that
+          flips. The most rigorously tested result of this bot's whole backtest history: Sharpe
+          2.61 on the equal-weight portfolio, survives a 3x-live-spread cost stress test, and
+          held up -- actually stronger -- on 11+ years of history it was never tuned on. A wide
+          stop-loss is attached to every order as a rare disaster backstop only, not the real
+          exit (it isn't derived from the backtest, which never modeled a stop at all -- an
+          honest placeholder pending real-world calibration). One real caveat: these 13 pairs
+          are really closer to 3 independent bets, since 7 share a JPY leg and 7 share a USD
+          leg -- the existing per-currency exposure cap will visibly and correctly block some
+          pairs from opening during a broad dollar or yen move, which is that cap working as
+          intended, not a malfunction. A day when several pairs flip at once could also bump
+          into the daily trade-count limit above, shared across every strategy.
         </p>
         <div class="toggle-row">
           <span>Cancel all trades before weekend close</span>

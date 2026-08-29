@@ -139,24 +139,19 @@ class DashboardState:
     # only ever ratchets upward. Without this, the breaker has nothing
     # to measure a drawdown against (see account_state_from_tracked_capital).
     peak_tracked_equity: float | None = None
-    # Explicit user request, 2026-08-30: a live carry-trade strategy on
-    # AUD_JPY/CAD_JPY, the one direction that held up under real scrutiny
-    # this project's whole backtest series (see DEVELOPMENT_LOG.md
-    # 2026-08-29 -- a real historical rate reconstruction, not just
-    # today's snapshot, confirmed 6-7 of the last 7 calendar years
-    # positive on price alone for both pairs). Off by default -- a
-    # brand-new strategy type this bot has never traded live needs an
-    # explicit opt-in, same posture the removed pyramid toggle used. See
-    # carry_addon.check_carry_opportunities for the actual rule.
-    carry_mode_enabled: bool = False
-    # Internal state, not a user-facing setting: per-instrument hysteresis
-    # for the carry strategy's risk-off exit. Set True the moment a carry
-    # position is closed for being risk-off; a pair stays flat (even if
-    # volatility dips back under the entry threshold) until it drops
-    # under carry_addon's own, lower re-entry threshold -- prevents
-    # flip-flopping open/closed right at one boundary. See
-    # carry_addon.check_carry_opportunities for where this is read/set.
-    carry_standdown: dict = field(default_factory=dict)
+    # Explicit user request, 2026-08-30: a live trend-following strategy
+    # across 13 major/cross pairs -- the most rigorously validated result
+    # of this project's entire backtest series (see DEVELOPMENT_LOG.md
+    # 2026-08-29: Sharpe 2.61 on the equal-weight portfolio, survives a
+    # 3x-spread cost stress test, and holds up -- actually strengthens --
+    # on 11+ years of out-of-sample history). Replaces the earlier carry-
+    # trade toggle: carry's own apparent edge on AUD_JPY/CAD_JPY turned
+    # out to BE this same trend signal, not an interest-rate effect (see
+    # the same date's carry+momentum entry). Off by default -- a brand-
+    # new strategy type this bot has never traded live needs an explicit
+    # opt-in, same posture the removed carry/pyramid toggles used. See
+    # trend_addon.check_trend_opportunities for the actual rule.
+    trend_mode_enabled: bool = False
     # Explicit user request: cancel every open trade 10 minutes before
     # forex closes for the weekend (Friday 5pm New York), so nothing
     # carries weekend gap risk into Monday's reopen. On by default --
