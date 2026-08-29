@@ -143,8 +143,28 @@ def main():
     summarize("baseline", [(et, b) for _, et, b, _ in all_paired], 33.3)
 
     print("\n=== Decay exit: cut losers at 2h, cut winners on any hourly decline after that ===")
-    summarize("decay exit", [(et, d) for _, et, _, d in all_paired], 33.3)
-    temporal_split("decay exit stability", [(et, d) for _, et, _, d in all_paired], midpoint, breakeven_pct=33.3)
+    print("  (summarize() below only counts WIN/LOSS -- see full-strategy line for the real aggregate,")
+    print("   since TIME_CUT_LOSS/TIME_DECAY exits are real resolved outcomes with their own r_multiple,")
+    print("   not unresolved trades to exclude the way OPEN_AT_END is)")
+    summarize("decay exit (WIN/LOSS subset only)", [(et, d) for _, et, _, d in all_paired], 33.3)
+    full_decay = [(et, d) for _, et, _, d in all_paired if d.outcome != "OPEN_AT_END"]
+    n_full = len(full_decay)
+    if n_full:
+        full_expectancy = sum(d.r_multiple for _, d in full_decay) / n_full
+        print(f"  {'decay exit (full strategy)':28s} {n_full:4d} trades  expectancy={full_expectancy:+.3f}R")
+        # temporal_split() is also WIN/LOSS-only (same reason as summarize() above),
+        # so the full-strategy stability check needs its own expectancy-based split.
+        first = [d.r_multiple for et, d in full_decay if et < midpoint]
+        second = [d.r_multiple for et, d in full_decay if et >= midpoint]
+        exp1 = sum(first) / len(first) if first else None
+        exp2 = sum(second) / len(second) if second else None
+        exp1_s = f"{exp1:+.3f}R" if exp1 is not None else "n/a"
+        exp2_s = f"{exp2:+.3f}R" if exp2 is not None else "n/a"
+        both_neg = exp1 is not None and exp1 < 0 and exp2 is not None and exp2 < 0
+        both_pos = exp1 is not None and exp1 > 0 and exp2 is not None and exp2 > 0
+        verdict = "STABLE (both negative)" if both_neg else ("STABLE (both positive)" if both_pos else "FLIPPED")
+        print(f"  {'decay exit stability (full)':28s} 1st_half={exp1_s} (n={len(first)})  "
+              f"2nd_half={exp2_s} (n={len(second)})  {verdict}")
 
     print("\n  -- outcome breakdown, decay exit --")
     outcome_counts = {}
