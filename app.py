@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Same bug, different file: auto_execute_candidates (base autopilot, currently LIVE) tracked "
+                    "running trades/heat across a batch but never currency exposure -- 2 candidates sharing a "
+                    "currency could both bypass the cap. Fixed with a running exposure dict, same as trend_addon."),
     ("2026-08-30", "Found+fixed a same-tick bug: trend_addon reused a stale account snapshot across a whole "
                     "tick, so 2 pairs sharing a currency could BOTH bypass the exposure cap if they signaled "
                     "together. Fixed by reloading fresh per-pair; also added durable risk-skip recording."),

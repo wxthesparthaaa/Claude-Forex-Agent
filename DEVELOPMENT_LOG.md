@@ -3255,3 +3255,35 @@ from however long Render happens to retain logs.
 sequencing regression (confirmed to fail without the fix, confirmed to
 pass with it) and the risk-skip durable-recording check. Full suite:
 467 passed.
+
+## 2026-08-30 (continued) -- Fixed the same bug class in the base autopilot batch path
+
+**Request**: fix the related gap flagged in the entry above --
+`trade_execution.auto_execute_candidates` (the base signal-prediction
+strategy's own batch-execution path, currently live) had a narrower
+version of the same same-tick exposure staleness bug just fixed in
+`trend_addon.py`.
+
+**Confirmed and fixed**: `auto_execute_candidates` already tracked
+running `trades_today`/`open_risk_amount` counters across a batch
+specifically so candidates that individually looked fine couldn't
+combine past the portfolio-heat or trades/day cap -- but never did the
+same for `currency_net_exposure_pct`, which stayed frozen at the
+pre-batch snapshot for the whole batch. Two candidates sharing a
+currency (e.g. EUR_USD and GBP_USD, both net USD-short) could each
+independently pass the per-currency exposure check. Fixed with a
+running currency-exposure dict, updated after each placement using the
+exact signed-net formula `risk_engine.validate_trade` computes
+internally (`current_pct + delta_fraction * risk_pct_of_equity`).
+Verified real the same way as the trend_addon fix: temporarily reverted
+it, confirmed the new regression test genuinely fails without it (both
+candidates execute instead of one), then restored it.
+
+**Also**: shortened the trend-following toggle's dashboard copy from a
+dense multi-sentence paragraph (Sharpe ratios, cost-modeling detail,
+exposure-cap mechanics) down to one plain-language line, per explicit
+user feedback that it was too long for a Settings toggle -- that detail
+belongs in conversation/this log, not on every page load.
+
+**Tests**: 1 new regression test in `test_trade_execution.py`. Full
+suite: 468 passed.
