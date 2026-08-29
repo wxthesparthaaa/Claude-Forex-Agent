@@ -82,6 +82,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-29", "Trend-following extended-history check: holds up on 11+ years (2007-2018) it never saw "
+                    "before, OOS ann. actually HIGHER (+16.5%/yr) than the original window. Cleared every check "
+                    "run on any strategy this session. Not shipped -- next is a live-architecture design decision."),
     ("2026-08-29", "Trend-following survives cost modeling too: even at 3x today's live spread (a deliberate "
                     "stress test), Sharpe only drops 2.48->2.21, ann. 11.68%->10.34%/yr. Low flip frequency "
                     "(5-9/200d) is why -- unlike the earlier fast signal families, this barely trades."),

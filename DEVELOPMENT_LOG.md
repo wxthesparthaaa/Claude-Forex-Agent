@@ -3064,3 +3064,61 @@ question of what building a flip-signed long/short system live would
 actually require (no fixed entry/exit, unlike everything else this bot
 trades). Not shipped -- still a documented lead pending a decision on
 next steps, but a meaningfully stronger one than it was two entries ago.
+
+## 2026-08-29 (continued) -- Extended-history check: trend-following holds up on 11+ years it never saw before
+
+**Request**: the last open question from the significance/cost-modeling
+work above -- was Sharpe >2 built on a genuinely broad set of distinct
+macro regimes, or a fairly short recent window that happened to contain
+1-2 dominant trends? These pairs have real OANDA history back to
+2007-04 (18+ years), not just the ~7.8 years used so far.
+
+**Built**: `scripts/trend_following_significance_check_extended_history.py`
+-- reruns the exact same four-part battery (one-sample test, monthly +
+quarterly block bootstrap, leave-one-pair-out, average pairwise
+correlation) from trend_following_significance_check.py, in two views:
+the FULL 2007-2026 history, and OUT-OF-SAMPLE ONLY -- strictly the
+portion older than the original check's own window start (2018-06-12),
+data that check never touched at all, the same boundary-split discipline
+that caught the carry threshold sweep's overfit.
+
+**Result -- holds up cleanly on both, and the out-of-sample view is
+if anything stronger**:
+  - Full history (2007-2026, 5633 days): Sharpe=2.13, annualized=
+    +15.00%/yr, total=+2175.8%. Now spans the 2008 financial crisis, the
+    2010s, the 2020 COVID crash, and the 2022-2023 hiking cycle --
+    genuinely distinct regimes the original window mostly missed.
+  - Out-of-sample only (2007-04 to 2018-06, 3458 days, NEVER seen by the
+    original significance check): Sharpe=2.04, annualized=+16.50%/yr --
+    higher annualized return than either the original ~7.8yr window
+    (+11.68%/yr) or the full extended history. This is the opposite of
+    what happened to the threshold-sweep "winner," which collapsed
+    out-of-sample -- here the result strengthens on data it never saw.
+  - Both bootstrap CIs (monthly and quarterly) exclude zero by a wide
+    margin in both views.
+  - Leave-one-pair-out stays remarkably flat in both views (full:
+    14.69-15.38%/yr; OOS: 15.99-16.91%/yr) -- still no single pair
+    driving the result.
+  - Average pairwise correlation: 0.304 (full) / 0.330 (OOS) --
+    effective independent bets ~3-3.3 of 13, consistent with the
+    original check's ~4.5 finding. This looks like a stable, structural
+    feature of FX correlation (not an artifact of one period): the real
+    number of independent macro-trend factors here is roughly 3 (a
+    broad JPY trend, a broad USD trend, plausibly a commodity-bloc
+    factor), not 13. A real, permanent caveat on how much "universality"
+    to credit the pair count -- not a flaw in the return estimate.
+
+**Conclusion**: pure trend-following has now cleared every check applied
+to any strategy this session -- significance (twice, on two different
+windows), cost modeling (survives a 3x spread stress test), and genuine
+out-of-sample confirmation on 11+ years of data untouched by any prior
+step, where it held up AND strengthened rather than collapsing. Nothing
+else tested this entire session (carry, RSI@1:1, COT, index CFDs,
+carry+momentum, the threshold sweep) survived this much scrutiny. Not
+yet shipped -- still requires a real design decision on what building a
+flip-signed, always-in-the-market long/short system live would actually
+require (this bot's whole architecture is built around discrete trades
+with a fixed entry/exit), and possibly a portfolio-construction
+rethink given the ~3-independent-bets finding (a smaller, deliberately
+less-correlated subset of pairs might be a better design than an
+equal-weight book of all 13). That's the natural next conversation.
