@@ -225,14 +225,13 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
             entry["status"] = SUCCESSFUL if pnl > 0 else FAILED
             # This branch only ever fires for a close OANDA itself
             # initiated (the trade's own stop-loss or take-profit
-            # firing) -- any close a feature module (trend_addon.py,
-            # cancel_all_open_trades, etc) triggers itself already
-            # updates the journal entry's status before this reconciler
-            # ever sees it as still OPEN. Worth recording explicitly,
-            # not just inferring it from the absence of another
-            # rationale note -- e.g. for trend_addon's wide backstop
-            # stop, this is the only place "did the stop actually bind"
-            # ever gets written down anywhere.
+            # firing) -- any close a feature module (cancel_all_open_trades,
+            # etc) triggers itself already updates the journal entry's
+            # status before this reconciler ever sees it as still OPEN.
+            # Worth recording explicitly, not just inferring it from the
+            # absence of another rationale note -- this is the only place
+            # "did a wide backstop stop actually bind" ever gets written
+            # down anywhere, for whichever strategy attached one.
             entry["rationale"].append(
                 f"Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature "
                 f"module). P&L {pnl:+.2f}."

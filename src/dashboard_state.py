@@ -139,34 +139,20 @@ class DashboardState:
     # only ever ratchets upward. Without this, the breaker has nothing
     # to measure a drawdown against (see account_state_from_tracked_capital).
     peak_tracked_equity: float | None = None
-    # Explicit user request, 2026-08-30: a live trend-following strategy
-    # across 13 major/cross pairs -- the most rigorously validated result
-    # of this project's entire backtest series (see DEVELOPMENT_LOG.md
-    # 2026-08-29: Sharpe 2.61 on the equal-weight portfolio, survives a
-    # 3x-spread cost stress test, and holds up -- actually strengthens --
-    # on 11+ years of out-of-sample history). Replaces the earlier carry-
-    # trade toggle: carry's own apparent edge on AUD_JPY/CAD_JPY turned
-    # out to BE this same trend signal, not an interest-rate effect (see
-    # the same date's carry+momentum entry). Off by default -- a brand-
-    # new strategy type this bot has never traded live needs an explicit
-    # opt-in, same posture the removed carry/pyramid toggles used. See
-    # trend_addon.check_trend_opportunities for the actual rule.
-    trend_mode_enabled: bool = False
-    # {instrument: {"count": int, "last_reason": str, "last_at": iso
-    # timestamp}} -- durable record of every time trend_addon wanted to
-    # open a position but risk_engine.validate_trade() rejected it (most
-    # often the per-currency exposure cap, given 7 of the 13 trend pairs
-    # share a JPY leg and 7 share USD). Without this, the only evidence a
-    # skip ever happened was a print() statement -- exactly the kind of
-    # thing this bot has already been burned by trusting once before
-    # (see DEVELOPMENT_LOG.md 2026-08-24, a stuck trade going unnoticed
-    # for 45+ minutes because a job had no durable log line at all). This
-    # is specifically what lets "did the exposure cap actually bind
-    # during a real regime move, and how often" be answered from the
-    # dashboard weeks later, not just inferred from Render's log
-    # retention. See trend_addon.check_trend_opportunities for where
-    # this is read/written.
-    trend_risk_skips: dict = field(default_factory=dict)
+    # Trend-following (SMA-200 across 13 pairs) was shipped live 2026-08-30
+    # on a backtest that turned out to be look-ahead biased: the signal
+    # computed each day's moving average INCLUDING that day's own close,
+    # decided that day's position from it, then scored that same day's
+    # own return with it. Once corrected to a genuinely lagged signal
+    # (decide from yesterday's data only), the "Sharpe 2.61" FX result
+    # collapsed to Sharpe -0.07, and the commodities/indices result's
+    # "positive in every calendar year" flipped to 3 of 8 years positive
+    # -- the entire apparent edge was the bias, not a real trend signal.
+    # Retired 2026-08-30 (see DEVELOPMENT_LOG.md that date) -- fields
+    # removed rather than kept the way PYRAMID_ADDON_TAG/CARRY_TRADE_TAG
+    # were, since there's no `trend_mode_enabled`/`trend_risk_skips`-
+    # shaped data worth a historical-compat placeholder the way a journal
+    # tag string is.
     # Explicit user request: cancel every open trade 10 minutes before
     # forex closes for the weekend (Friday 5pm New York), so nothing
     # carries weekend gap risk into Monday's reopen. On by default --

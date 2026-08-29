@@ -87,8 +87,8 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
     assert changed[0]["realized_pnl"] == 35.0
     mock_send.assert_not_called()  # SL/TP closes don't need a Telegram ping here
     # A closed-reason marker distinguishing "OANDA's own SL/TP fired" from
-    # a feature module's own deliberate close (e.g. trend_addon's flip
-    # close) -- otherwise there's no durable record of which one happened.
+    # a feature module's own deliberate close -- otherwise there's no
+    # durable record of which one happened.
     assert "stop-loss or take-profit fired" in changed[0]["rationale"][-1]
 
 

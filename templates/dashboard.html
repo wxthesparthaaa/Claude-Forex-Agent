@@ -397,26 +397,6 @@
           by their own SL/TP. Switch off to resume.
         </p>
         <div class="toggle-row">
-          <span style="color:var(--accent); font-weight:600;">Trend following: 13 pairs</span>
-          <label class="switch">
-            <input type="checkbox" name="trend_mode_enabled" {{ 'checked' if trend_mode_enabled else '' }}>
-            <span class="switch-track" style="{{ 'background:var(--accent);' if trend_mode_enabled else '' }}"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default (needs Autopilot too). Follows each of 13 currency pairs' own
-          price trend for months at a time, replacing the carry-trade toggle -- carry's real
-          edge turned out to be this same trend signal all along.
-        </p>
-        {% if trend_risk_skips %}
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          <strong>Blocked by the risk engine so far:</strong>
-          {% for instrument, skip in trend_risk_skips.items() %}
-            {{ instrument }} ({{ skip.count }}x, last: {{ skip.last_reason }}){{ ", " if not loop.last else "" }}
-          {% endfor %}
-        </p>
-        {% endif %}
-        <div class="toggle-row">
           <span>Cancel all trades before weekend close</span>
           <label class="switch">
             <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>

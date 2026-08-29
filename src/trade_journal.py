@@ -96,26 +96,28 @@ class JournalEntry:
     # historical journal entries that used it keep reading/exporting
     # correctly; nothing sets it anymore.
     pyramided: bool = False
-    # None for every normal trade. Was "PYRAMID_ADDON" for a trade opened
-    # by the now-removed pyramid feature, "CARRY_TRADE" for the now-
-    # removed carry feature; reused as "TREND_FOLLOWING" for the current
-    # trend-following strategy (see trend_addon.py) -- lets the journal/
-    # export isolate an experiment's own trades from the base strategy's.
+    # None for every normal trade. Was "PYRAMID_ADDON" for the removed
+    # pyramid feature, "CARRY_TRADE" for the removed carry feature,
+    # "TREND_FOLLOWING" for the removed trend-following feature -- lets
+    # the journal/export isolate an experiment's own trades from the
+    # base strategy's.
     experiment_tag: str | None = None
     # The base trade's own trade_id, for a PYRAMID_ADDON entry only --
     # ties the add-on back to what it was added to.
     parent_trade_id: str | None = None
 
 
-# See JournalEntry.experiment_tag's own comment. Both PYRAMID_ADDON_TAG
-# and CARRY_TRADE_TAG are purely historical-compat now -- their modules
-# were removed after retesting showed no real edge of their own (see
-# DEVELOPMENT_LOG.md 2026-08-30 and 2026-08-29 respectively), but old
-# journal entries still carry these tag strings and should have a
-# documented constant to reference, not a bare magic string, even though
-# nothing sets either anymore.
+# See JournalEntry.experiment_tag's own comment. All three of these are
+# purely historical-compat now -- their modules were each removed after
+# retesting showed no real edge of their own (see DEVELOPMENT_LOG.md
+# 2026-08-30, 2026-08-29, and 2026-08-30 respectively -- trend-following's
+# own removal is the most consequential: its backtest turned out to be
+# look-ahead biased, not just thin), but old journal entries still carry
+# these tag strings and should have a documented constant to reference,
+# not a bare magic string, even though nothing sets any of them anymore.
 PYRAMID_ADDON_TAG = "PYRAMID_ADDON"
 CARRY_TRADE_TAG = "CARRY_TRADE"
+TREND_FOLLOWING_TAG = "TREND_FOLLOWING"
 
 
 def load_journal() -> list:
