@@ -169,25 +169,30 @@ def main():
                 if price2 is None:
                     continue
                 continuation_return = direction * (price2 - price1) / price1
-                continuation_by_horizon[h].append(continuation_return)
+                continuation_by_horizon[h].append((release, continuation_return))
         print(f"  {pair:10s}  {n_events_used}/{len(nfp_dates)} events usable")
 
     print(f"\n{'='*72}\nCONTINUATION (trade the direction of the initial reaction)\n{'='*72}")
     print(f"{'hold':>8s} {'n':>6s} {'mean_return':>12s} {'t':>7s} {'p':>8s}  significant?")
+    survives_bonferroni = []
     for h in HOLD_HORIZONS_MINUTES:
-        returns = continuation_by_horizon[h]
+        entries = sorted(continuation_by_horizon[h], key=lambda e: e[0])  # chronological, for split-half below
+        returns = [r for _, r in entries]
         n = len(returns)
         if n < 30:
             print(f"{h:>8d}  (fewer than 30 usable events, skipped)")
             continue
         mean, std, t, p = two_sided_test(returns)
-        sig = "SURVIVES Bonferroni" if p < BONFERRONI_ALPHA else ("raw p<0.05" if p < 0.05 else "no")
+        sig_bonf = "SURVIVES Bonferroni" if p < BONFERRONI_ALPHA else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        if sig_bonf:
+            survives_bonferroni.append(h)
         print(f"{h:>8d} {n:6d} {100*mean:+11.4f}% {t:+7.2f} {p:8.4f}  {sig}")
 
     print(f"\n{'='*72}\nFADE (bet against the initial reaction -- exactly the negative of continuation)\n{'='*72}")
     print(f"{'hold':>8s} {'n':>6s} {'mean_return':>12s} {'t':>7s} {'p':>8s}  significant?")
     for h in HOLD_HORIZONS_MINUTES:
-        returns = [-r for r in continuation_by_horizon[h]]
+        returns = [-r for _, r in continuation_by_horizon[h]]
         n = len(returns)
         if n < 30:
             continue
@@ -196,6 +201,21 @@ def main():
         print(f"{h:>8d} {n:6d} {100*mean:+11.4f}% {t:+7.2f} {p:8.4f}  {sig}")
 
     print(f"\nBonferroni-adjusted threshold for {len(HOLD_HORIZONS_MINUTES)} horizons: p < {BONFERRONI_ALPHA:.4f}")
+
+    if survives_bonferroni:
+        print(f"\n{'='*72}\nSPLIT-HALF CHECK on the horizon(s) that survived Bonferroni "
+              f"(chronological by NFP date, first half vs second half)\n{'='*72}")
+        for h in survives_bonferroni:
+            entries = sorted(continuation_by_horizon[h], key=lambda e: e[0])
+            half = len(entries) // 2
+            first = [r for _, r in entries[:half]]
+            second = [r for _, r in entries[half:]]
+            m1, _, t1, p1 = two_sided_test(first)
+            m2, _, t2, p2 = two_sided_test(second)
+            same_sign = (m1 > 0) == (m2 > 0)
+            print(f"  hold={h}min:  first_half mean={100*m1:+.4f}% (p={p1:.4f})   "
+                  f"second_half mean={100*m2:+.4f}% (p={p2:.4f})   "
+                  f"{'same sign both halves' if same_sign else 'SIGN FLIPS between halves'}")
 
 
 if __name__ == "__main__":
