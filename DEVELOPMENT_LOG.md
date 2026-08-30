@@ -4688,3 +4688,44 @@ awaiting a fourth pass from the user. If this still survives at n~90,
 that's real, hard-to-explain-away evidence; if it doesn't, that
 tells us how much of the apparent edge was really shared macro-day
 correlation across the universe rather than a per-instrument effect.
+
+## 2026-08-30 (continued) -- Fourth run: survives the strictest check too -- the most rigorously tested result this session, but NOT ready to ship
+
+Calendar-day-pooled result (all 5 instruments combined per date, ~65
+independent trading days over the 90-day window): day win rate
+92.3-98.5%, mean_R +0.38 to +0.51, t=12.4-16.1, all three stop-buffer
+levels survive Bonferroni. The effect barely moved between 325
+instrument-days (t=13-22) and 65 calendar days (t=12-16) -- if the
+whole thing were really just shared macro-day correlation across the
+universe, pooling across instruments should have made it MUCH weaker
+than it did. It didn't. This is now the most thoroughly
+cross-examined result of the entire session: two real bug fixes (self-
+referential baseline, bar-count-vs-real-time hold cap) that didn't move
+the numbers, a pseudo-replication fix that dropped t from 43 to
+13-22 while the effect held, and a cross-instrument-correlation check
+that dropped it further to 12-16 while STILL holding. Every mechanism
+checked for inflating the result has been ruled out or shown not to be
+the driver.
+
+**Still not ready to ship, and not for a statistical reason this time
+-- an execution-architecture one.** The backtest assumes entry fills
+within 1 REAL MINUTE of a signal firing (the next 1-minute bar's own
+open). Every existing live add-on in this app (Range Confluence, ORB
+Fade, the base strategy) runs on a uniform 5-minute scheduler cadence,
+because none of them needed anything faster -- Range Confluence holds
+40 trading days, ORB Fade holds up to 8 hours. This strategy holds a
+median position for well under the 30-minute cap, sized on stop/target
+distances of only 1-2 standard deviations of a rolling deviation that
+was itself measured a full 5 minutes stale by the time a 5-minute poll
+would even notice the signal. Deploying this through the existing
+scheduler wouldn't be executing a slightly-delayed version of what was
+backtested -- it would be executing a meaningfully DIFFERENT, untested
+strategy (arbitrary-minutes-late entries against a stale target/stop),
+which is exactly the kind of live/backtest mismatch this session's own
+discipline exists to prevent. This needs a materially faster poll
+cadence (or a different execution model entirely) before it could be
+deployed at all, a genuinely new kind of infrastructure work none of
+this session's other add-ons required. Presented to the user as: the
+statistics are now about as solid as this session produces, but
+shipping needs solving the execution-latency problem first, not just
+flipping a toggle.
