@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Regime segmentation (session/volatility) of the base signal: nothing survives Bonferroni -- "
+                    "closes out the ENTIRE post-coin-flip investigation. Momentum, reversal, seasonality, regime "
+                    "splits all ruled out. No validated edge found in this account's current instruments/data."),
     ("2026-08-30", "Day-of-week seasonality: found a real, specific 'JPY weakens on Mondays' pattern (all 7 JPY "
                     "pairs individually significant, bootstrap excludes zero) -- but split-half fails (weak "
                     "2018-22, strong 2022-26, ties to the BOJ-Fed rate gap but untestable). Ruled out."),

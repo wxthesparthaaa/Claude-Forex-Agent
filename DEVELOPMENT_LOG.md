@@ -3573,3 +3573,50 @@ that limited the carry investigation). Not pursued further without
 that data. Closed out alongside the coin-flip base strategy, RSI@1:1,
 COT, index CFDs, pyramid, trend-following, and both cross-sectional
 variants as tested and ruled out.
+
+## 2026-08-30 (continued) -- Regime-segmented re-analysis: the coin flip is uniform, not hiding an edge
+
+**Request**: the last item on the post-coin-flip brainstorm list --
+does the base entry funnel's ~48-51% aggregate accuracy hide a real,
+narrower edge in a specific session or volatility regime, diluted by
+lumping everything together?
+
+**Built**: `scripts/backtest_base_signal_regime_segmentation.py`,
+reusing `backtest_entry_filter.py`'s own `backtest_instrument` directly
+(independently confirmed clean in the earlier look-ahead audit).
+Limited to two pre-specified dimensions -- session (3 UTC-hour blocks)
+and causal RV-percentile volatility tercile (computed strictly from the
+bar before each trade's own entry, verified with a synthetic bisect
+case) -- six total comparisons, with a Bonferroni-adjusted threshold
+(0.05/6) reported alongside the raw p-value, specifically because
+slicing existing results after the fact is itself a data-dredging risk
+this session hasn't had to guard against to the same degree elsewhere.
+
+**Result**: overall accuracy re-confirms at 49.25% (n=2662), consistent
+with the original ~48-51% coin-flip finding -- a good sanity check that
+this re-derivation is sound. All 3 session buckets: unremarkable,
+p=0.39/0.93/0.68. Volatility terciles: medium and high show nothing
+(p=0.74, 0.23); low volatility shows 46.28% (BELOW 50%, z=-2.22,
+p=0.0266) -- clears "raw p<0.05" but does NOT survive the Bonferroni-
+adjusted threshold, and even if it had, it's a negative deviation (the
+signal doing slightly worse than a coin flip in that bucket), not a
+hidden edge to exploit. Exactly what pure noise across 6 independent
+tests looks like.
+
+**This closes out the entire post-coin-flip investigation.** Every
+idea explored after the trend-following look-ahead discovery --
+cross-sectional momentum, medium-term cross-sectional reversal, day-of-
+week seasonality (including the specific, economically coherent JPY
+Monday effect that ultimately failed its own split-half check), and
+now regime segmentation of the existing signal -- has been ruled out by
+the same standard applied throughout: real robustness checks, not just
+a good-looking headline number. Combined with everything tested earlier
+in the session (the 5 base signal-family variants, RSI@1:1, pyramid,
+the 2h/1h time-cut exits, the elaborate timing filter, index CFDs,
+carry, COT positioning, and trend-following itself), this account's
+currently accessible instruments and data do not contain a validated,
+tradeable directional edge. That is a genuine, hard-won finding from a
+thorough and honest investigation, not a gap in the investigation
+itself -- the manual scan-and-approve workflow, the risk engine, and
+all protective/reporting infrastructure remain fully functional and
+independently valuable regardless.
