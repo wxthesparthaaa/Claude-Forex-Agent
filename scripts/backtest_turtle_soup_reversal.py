@@ -65,6 +65,19 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), encoding="utf
 from oanda_client import OandaClient
 from candle_history import fetch_history, closes_from_candles, highs_from_candles, lows_from_candles
 from backtest_carry_trade import CARRY_CANDIDATES, _parse_time, DAILY_BAR_COUNT_DAYS
+from universe import COMMODITIES
+
+# CARRY_CANDIDATES (13 FX pairs, includes every JPY cross) + COMMODITIES
+# (gold/silver/WTI/Brent) -- the original Turtle system this pattern is
+# the mirror image of was never FX-only; it traded a deliberately
+# diversified book spanning currencies, metals, and energies. Testing
+# this FX-only (as the first version of this script did) was an
+# inherited-convention gap, not a deliberate choice -- see
+# DEVELOPMENT_LOG.md's 2026-08-30 entry on this. Using CARRY_CANDIDATES
+# rather than universe.ALL_INSTRUMENTS keeps every JPY-cross pair the
+# first run already covered instead of narrowing back down to the 7
+# majors ALL_INSTRUMENTS defines on its own.
+UNIVERSE = CARRY_CANDIDATES + COMMODITIES
 
 LOOKBACK = 20          # matches the Turtle system's own 20-day channel this pattern fades
 STALENESS_DAYS = 4     # Raschke's own rule: the broken level must be at least this many sessions old
@@ -159,11 +172,11 @@ def main():
     _selftest()
     client = OandaClient()
 
-    print(f"Fetching {len(CARRY_CANDIDATES)} pairs for the Turtle Soup signal test (Daily candles)...")
+    print(f"Fetching {len(UNIVERSE)} instruments for the Turtle Soup signal test (Daily candles)...")
     all_returns = {h: [] for h in HOLD_HORIZONS_DAYS}
     per_instrument_counts = {}
 
-    for instrument in CARRY_CANDIDATES:
+    for instrument in UNIVERSE:
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=DAILY_BAR_COUNT_DAYS)
         try:
