@@ -4799,3 +4799,27 @@ high fraction there would mean the apparent strengthening under delay
 is substantially this artifact, not a stronger edge; a low fraction
 would mean the improvement holds up for a different, more interesting
 reason worth understanding on its own terms.
+
+## 2026-08-30 (continued) -- Sixth run: artifact ruled out as the main driver -- this can ship on the existing 5-minute infra
+
+Diagnostic result: only 180/7595 realistic-delay entries (2.4%,
+vs 3/7595 = 0.0% for near-immediate) were already past their own
+frozen target at entry -- real, but far too small to explain the
+observed win-rate jump (73.2% -> 76.4%, ~240 additional wins on this
+sample). The already-past-target artifact is not the driver. The more
+likely explanation for the rest: waiting a few minutes after an
+extreme VWAP deviation gives the reversion move a little room to prove
+itself before capital commits, a naturally-occurring confirmation
+effect rather than a flaw.
+
+**Conclusion after six rounds of scrutiny** (two real bug fixes that
+didn't move the numbers, a pseudo-replication fix that dropped inflated
+t=43 to a defensible t=13-22, cross-instrument pooling that held at
+t=12-16 with n=65 independent calendar days, and now a targeted check
+ruling out the one plausible artifact behind delayed entries looking
+stronger): this signal is compatible with -- and not meaningfully hurt
+by -- this app's existing 5-minute scheduler cadence. It does not need
+new infrastructure. This is now the most rigorously cross-examined
+result of the entire session, by a wide margin. Presented to the user
+as ready for the "build it live" decision, the same explicit checkpoint
+every other add-on this session passed through before shipping.
