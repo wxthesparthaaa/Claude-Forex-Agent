@@ -4574,3 +4574,52 @@ requires real OANDA credentials this environment doesn't have, same as
 every other backtest script this session; awaiting the user to run it
 and paste the output back. Full suite (497 tests) passes;
 `py_compile` verified on every touched file before commit.
+
+## 2026-08-30 (continued) -- First VWAP scalp run: implausibly strong, two bugs found and fixed before trusting it
+
+User ran the script. Real-data result across the 5-pair universe, 7557
+candidate signals:
+
+| stop_buf | n | win rate | mean R | t | p |
+|---|---|---|---|---|---|
+| 1.0 | 7467 | 73.2% | +0.4942 | +43.45 | 0.0000 |
+| 1.5 | 7352 | 71.3% | +0.4462 | +37.13 | 0.0000 |
+| 2.0 | 7162 | 69.7% | +0.3933 | +35.63 | 0.0000 |
+
+All three survive Bonferroni and split-half with the same sign both
+halves. **Not treated as a validated result** -- this is roughly an
+order of magnitude stronger than anything else this session found
+(Range Confluence's own "strongest result" was ~11 sigma across 130
+holdout tests; t=43 on a single test, on noisier 1-minute data over
+just 90 days, is exactly the kind of number that should trigger an
+audit for a backtest bug rather than celebration. Two real issues were
+found on inspection, both fixed before asking for a re-run:
+
+1. **Look-ahead in the z-score's own baseline**: `compute_vwap_signals`
+   appended bar i's own deviation to the rolling window BEFORE scoring
+   bar i's z-score against that window -- meaning a bar's own extreme
+   deviation was part of what "normal" looked like when judging how
+   extreme it was. Every other percentile/z-score helper in this
+   codebase (e.g. range_confluence_addon._percentile_rank) enforces
+   "baseline never includes the current observation"; this one didn't.
+   Fixed by trimming and scoring the window first, appending the
+   current bar's own deviation only afterward, for future bars' use.
+2. **Bar-count hold cap instead of a real time cap**: MAX_HOLD_BARS=30
+   was passed straight to simulate_scalp_trade as `max_bars=30` --
+   array positions, not real minutes. OANDA's 1-minute feed isn't
+   perfectly gap-free; any missing minute between entry and exit would
+   silently let a trade run for MORE than 30 real minutes, handing a
+   mean-reversion trade extra, unintended chances to reach its target
+   for a reason that has nothing to do with the signal itself. Fixed
+   with a new `_minutes_bar_count` helper that walks forward by actual
+   timestamp and converts the desired 30-real-minute cap into however
+   many bars that actually spans for each individual trade -- verified
+   with a self-test using a feed with a real gap in it.
+
+Neither fix is proven to be THE reason the first run's numbers were
+this extreme -- that can only be answered by re-running on the fixed
+code -- but both are real, independently-justifiable correctness
+issues regardless of their effect on the outcome, and this session's
+own discipline says fix and re-test before trusting an
+implausibly-strong number, not rationalize it. Awaiting a second run
+from the user on the corrected script.

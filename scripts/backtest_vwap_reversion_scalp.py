@@ -60,12 +60,22 @@ MECHANICAL RULES:
      swept at STOP_Z_BUFFER = [1.0, 1.5, 2.0] extra stdevs (matching this
      session's own RR_SWEEP convention -- pre-specified, not tuned after
      seeing results).
-  7. MAX_HOLD_BARS = 30 (minutes) -- if neither stop nor target fires,
-     exit at market. A tight cap matching genuine scalp psychology (quick
-     in, quick out), unlike ORB's 8-hour same-session cap. After taking a
-     signal, the next MAX_HOLD_BARS bars are skipped before scanning for
-     another one, so all 3 swept stop distances are compared from an
-     identical, non-overlapping set of entries.
+  7. MAX_HOLD_BARS = 30 REAL MINUTES -- if neither stop nor target
+     fires, exit at market. A tight cap matching genuine scalp
+     psychology (quick in, quick out), unlike ORB's 8-hour same-session
+     cap. Enforced by _minutes_bar_count walking forward by actual
+     timestamp, not a flat 30-bar count -- OANDA's 1-minute feed isn't
+     perfectly gap-free (a quiet minute can have no candle at all), so a
+     bar-count cap would silently let a trade run for MORE than 30 real
+     minutes whenever a gap falls between entry and exit, handing it
+     extra, unintended chances to reach its target. The SIGNAL-SPACING
+     cooldown in find_scalp_signals (skip MAX_HOLD_BARS array positions
+     before scanning for the next candidate) is still a flat bar count,
+     not time-based -- a real gap there only means two scan windows
+     could occasionally sit closer together in wall-clock time than
+     intended, a much smaller concern than the trade RESOLUTION window
+     itself silently running long, which is what actually determines
+     whether a trade counts as a win or a loss.
   8. Resolved via spread_aware_trade_simulator.simulate_scalp_trade --
      LONG exits check the BID, SHORT exits check the ASK, exactly the
      real mechanical cost of a round trip.
@@ -179,7 +189,17 @@ def compute_vwap_signals(candles: list):
         v = cum_pv / cum_vol
         vwap[i] = v
         dev = mids[i] - v
-        deviations.append((times[i], dev))
+
+        # Trim the trailing window to bars STRICTLY BEFORE bar i first,
+        # then compute bar i's own z-score against that already-trimmed,
+        # bar-i-EXCLUDING baseline -- only afterward does bar i's own
+        # deviation get appended, for later bars' use. Getting this
+        # order backwards (append-then-score) would let a bar's own
+        # extreme deviation inflate the very stdev used to judge how
+        # extreme it is, the same "baseline must never include the
+        # current observation" causal discipline every other percentile/
+        # z-score helper in this codebase already enforces (see
+        # range_confluence_addon._percentile_rank).
         cutoff = times[i] - timedelta(minutes=ROLLING_WINDOW_MINUTES)
         while deviations and deviations[0][0] < cutoff:
             deviations.pop(0)
@@ -193,7 +213,29 @@ def compute_vwap_signals(candles: list):
                 dev_stdev[i] = std
                 z[i] = dev / std
 
+        deviations.append((times[i], dev))
+
     return times, vwap, dev_stdev, z
+
+
+def _minutes_bar_count(times: list, start_index: int, minutes: int) -> int:
+    """How many bars after start_index fall within `minutes` of
+    times[start_index], by real elapsed wall-clock time -- NOT a flat
+    bar-count. OANDA's 1-minute feed is not perfectly gap-free (a quiet
+    minute can simply have no candle at all), so a flat `max_bars=30`
+    passed straight to simulate_scalp_trade would silently let a trade
+    run for far longer than 30 real minutes whenever gaps exist between
+    entry and exit -- more elapsed time gives a mean-reversion trade
+    more chances to reach its target, which would inflate results for a
+    reason that has nothing to do with the signal itself. Walking
+    forward by real timestamp instead makes the hold window immune to
+    that regardless of how gappy the underlying feed is."""
+    n = len(times)
+    cutoff = times[start_index] + timedelta(minutes=minutes)
+    j = start_index
+    while j + 1 < n and times[j + 1] <= cutoff:
+        j += 1
+    return j - start_index
 
 
 def find_scalp_signals(times: list, z: list):
@@ -262,6 +304,17 @@ def _selftest():
     _, _, _, z2 = compute_vwap_signals(two_day_candles)
     assert all(v is None for v in z2[30:35]), "day 2's first few bars shouldn't have a z-score yet (session reset)"
 
+    # _minutes_bar_count must cap by REAL ELAPSED TIME, not bar count --
+    # a bar 35 minutes after entry must be excluded from a 30-minute
+    # window even though it's only the feed's 3rd array element; a flat
+    # bar-count cap (e.g. max_bars=2) would have wrongly included it.
+    gappy_times = [watch_base, watch_base + timedelta(minutes=5), watch_base + timedelta(minutes=35)]
+    assert _minutes_bar_count(gappy_times, 0, 30) == 1, \
+        "a bar 35 real minutes after entry must not count toward a 30-minute hold window"
+    dense_times = [watch_base + timedelta(minutes=i) for i in range(40)]
+    assert _minutes_bar_count(dense_times, 0, 30) == 30, \
+        "a gap-free feed should still cap at exactly 30 bars for a 30-minute window"
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -297,6 +350,9 @@ def backtest_instrument(client, instrument, meta):
         target = vwap[signal_index]
         std_at_signal = dev_stdev[signal_index]
         entry_time = times[entry_index]
+        max_bars = _minutes_bar_count(times, entry_index, MAX_HOLD_BARS)
+        if max_bars <= 0:
+            continue  # not enough real time remains in the fetched data to size a genuine hold window
 
         for buf in STOP_Z_BUFFER_SWEEP:
             if direction == "LONG":
@@ -305,11 +361,15 @@ def backtest_instrument(client, instrument, meta):
                 stop_loss = target + (Z_ENTRY + buf) * std_at_signal
 
             result = simulate_scalp_trade(candles, entry_index, direction, entry_price,
-                                           stop_loss, target, max_bars=MAX_HOLD_BARS)
+                                           stop_loss, target, max_bars=max_bars)
             if result.outcome in ("WIN", "LOSS"):
                 results_by_buffer[buf].append((entry_time, result.r_multiple))
 
-    return len(signals), results_by_buffer
+    spreads_pips = [(float(c["ask"]["c"]) - float(c["bid"]["c"])) / float(meta.pip_size)
+                    for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
+    avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
+
+    return len(signals), results_by_buffer, avg_spread_pips
 
 
 def main():
@@ -328,10 +388,11 @@ def main():
         if result is None:
             print(f"  {instrument:10s}  insufficient history, skipped")
             continue
-        n_signals, results_by_buffer = result
+        n_signals, results_by_buffer, avg_spread_pips = result
         total_signals += n_signals
         resolved = sum(len(v) for v in results_by_buffer.values()) // max(1, len(STOP_Z_BUFFER_SWEEP))
-        print(f"  {instrument:10s}  {n_signals} signals, ~{resolved} resolved per stop level")
+        spread_str = f"{avg_spread_pips:.2f} pips avg spread" if avg_spread_pips is not None else "no spread data"
+        print(f"  {instrument:10s}  {n_signals} signals, ~{resolved} resolved per stop level, {spread_str}")
         for buf in STOP_Z_BUFFER_SWEEP:
             all_returns[buf].extend(results_by_buffer[buf])
 
