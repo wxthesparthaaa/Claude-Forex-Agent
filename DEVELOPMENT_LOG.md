@@ -3789,3 +3789,52 @@ account's real data, simply isn't there. Ruled out. Moving to candidate
 #2, a Bollinger Band squeeze breakout (volatility-contraction-conditioned,
 distinct from the plain Donchian breakout already tested via the Turtle
 trailing-exit candidate).
+
+## 2026-08-30 (continued) -- Trader-book round 2, candidate #2: Bollinger squeeze breakout, ruled out
+
+Built `scripts/backtest_bollinger_squeeze_breakout.py`: classic 20-period/
+2-std Bollinger Bands, a "squeeze" flagged when today's band width ties or
+sets a new trailing-126-day (~6 month) low, then watch up to 10 days for
+the first close outside the bands as the breakout entry -- a volatility-
+contraction PRECONDITION on top of a breakout, distinct from the
+unconditional Turtle-style channel breakout already tested. Verified
+look-ahead-safe with 4 synthetic cases, including one proving the squeeze
+precondition actually gates the signal (a breakout with steadily GROWING
+volatility beforehand, never a trailing low, correctly produces no
+signal even though the breakout itself is just as sharp).
+
+**Result**: 168 signals across all 13 pairs. Tested raw forward return
+in the breakout direction at 5 pre-specified holding horizons (3/5/10/
+20/40 days), Bonferroni-adjusted (0.05/5 = 0.01):
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 3 | 168 | +0.0124% | +0.17 | 0.8656 |
+| 5 | 168 | +0.0293% | +0.30 | 0.7604 |
+| 10 | 168 | +0.0577% | +0.45 | 0.6561 |
+| 20 | 168 | +0.0886% | +0.45 | 0.6541 |
+| 40 | 165 | +0.4290% | +1.73 | 0.0834 |
+
+The 40-day horizon is the closest anything has come to "interesting"
+without actually clearing even the unadjusted 0.05 threshold, let alone
+Bonferroni's 0.01 -- a directionally positive drift that isn't
+statistically distinguishable from noise at this sample size (n=165).
+Ruled out; no split-half check needed since nothing survived the first
+hurdle. Two of two round-2 trader-book candidates now ruled out.
+
+**Side note surfaced by the user mid-thread**: every trader-book script
+this round and last round (Ichimoku, Turtle trailing exit, NFP, Turtle
+Soup, this Bollinger squeeze) tested only the 13 FX pairs from
+`backtest_carry_trade.py`'s `CARRY_CANDIDATES` list -- commodities were
+never included. That list was purpose-built for the carry-trade
+hypothesis specifically, where commodities are deliberately excluded
+because OANDA's commodity financing reflects cost-of-carry/storage, not
+an interest-rate differential the carry logic depends on. It got reused
+as the default universe for every later trader-book script purely
+because it was the precedent at hand, not because those later hypotheses
+(all pure price-technical patterns) have any actual reason to exclude
+commodities. `src/universe.py` already defines a broader `ALL_INSTRUMENTS`
+(`MAJOR_PAIRS + COMMODITIES`, where `COMMODITIES = [XAU_USD, XAG_USD,
+WTICO_USD, BCO_USD]`) that this session's earlier trend-following work
+already used successfully. Worth widening the universe for the next
+trader-book candidate going forward.
