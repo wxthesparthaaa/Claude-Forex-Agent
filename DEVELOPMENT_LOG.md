@@ -4510,3 +4510,67 @@ breakout watch window) as well as elapsed time (the 8-hour cap), neither
 of which Range Confluence's daily-signal design ever needed to fake.
 Full suite (487 tests) passes; `py_compile` + `import app` verified
 before commit, per this session's own established discipline.
+
+## 2026-08-30 (continued) -- Resumed the scalping thread: built the first genuine scalp candidate, not yet run
+
+The ORB build had paused earlier on a direct question: does any of this
+session's ~27 backtests actually consider scalp trading? The honest
+answer at the time was no -- finest granularity anywhere else this
+session was 15 minutes, and NOTHING modeled spread cost at all, an
+approximation that's harmless when a target is tens of pips and wrong
+when it's a handful. With ORB and ORB Fade now shipped, resumed that
+thread by building the infrastructure a genuine scalp test actually
+needs, plus a first real candidate on top of it.
+
+**New shared infrastructure** (kept separate from every existing
+backtest dependency, not modifying any of it):
+- `src/spread_aware_trade_simulator.py` -- a sibling to
+  `trade_simulator.py`, never touching it. Resolves SL/TP against the
+  REAL side of the spread a round-trip actually pays: a LONG closes by
+  selling, so its exits are checked against the BID; a SHORT closes by
+  buying, so its exits are checked against the ASK. Same conservative
+  SL-first tie-break as the original. 8 new tests in
+  `tests/test_spread_aware_trade_simulator.py`.
+- `src/candle_history.py` extended (backward compatible, `price="M"`
+  default preserved for every existing caller) to accept OANDA's
+  `price` parameter, so bid/ask candles can be fetched and cached
+  alongside the existing mid-only cache -- cache files are keyed by
+  price now (`_MBA` suffix for non-default requests) specifically so a
+  bid/ask fetch can never silently collide with or overwrite an
+  existing mid-only cache file for the same instrument/granularity. 2
+  new tests.
+
+**The candidate**: `scripts/backtest_vwap_reversion_scalp.py` --
+session-anchored VWAP standard-deviation-band mean reversion, a real,
+widely-documented intraday/scalp technique (not invented for this
+test). Each UTC day's VWAP resets at 00:00; a trailing 30-minute rolling
+stdev of (price - VWAP) turns that into a z-score; a trade fades back
+toward VWAP when |z| >= 2.0, only during 07:00-20:00 UTC (London+NY
+liquid hours). Entry fills at the NEXT 1-minute bar's OPEN (not the
+signal bar's own close, unlike every coarser backtest this session --
+a materially bigger assumption at 1-minute resolution), on the correct
+side of the spread (LONG pays the ask, SHORT receives the bid). Target
+is VWAP itself at signal time (the one non-arbitrary level the thesis
+implies); stop is swept at STOP_Z_BUFFER=[1.0, 1.5, 2.0] additional
+stdevs beyond the entry threshold, matching this session's own RR_SWEEP
+convention. MAX_HOLD_BARS=30 minutes -- a real scalp-length cap, not
+ORB's 8-hour same-session window. Universe deliberately narrowed to the
+5 tightest-spread majors (EUR_USD/GBP_USD/USD_JPY/AUD_USD/USD_CAD) --
+crosses/commodities have wider typical spreads that would make this a
+different, worse bet, worth testing separately only if this shows
+promise first. 90 days of 1-minute mid+bid+ask candles per instrument
+(~129,600 bars/instrument) -- a first feasibility scale, matching
+`backtest_volume_confirmed_acceptance.py`'s own precedent for treating
+a fetch this size as reasonable rather than this session's usual
+~270-day standard.
+
+Self-tests verify: a flat session never fires (deviation stdev is
+exactly 0), a real deviation fires the correctly-signed fade direction,
+and -- the one most worth pinning down -- a session reset (a huge
+overnight jump) does NOT let the new day's VWAP/stdev inherit any of
+the prior day's extremity; the new session needs its own
+MIN_SESSION_SAMPLES bars from scratch. Not yet run against real data --
+requires real OANDA credentials this environment doesn't have, same as
+every other backtest script this session; awaiting the user to run it
+and paste the output back. Full suite (497 tests) passes;
+`py_compile` verified on every touched file before commit.

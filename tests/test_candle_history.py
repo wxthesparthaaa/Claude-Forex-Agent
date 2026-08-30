@@ -84,6 +84,37 @@ def test_fetch_history_cached_uses_cache_when_present(tmp_path, monkeypatch):
     assert first == second
 
 
+def test_fetch_history_forwards_price_param():
+    class PriceRecordingClient(FakeClient):
+        def __init__(self):
+            super().__init__()
+            self.price_calls = []
+
+        def get_candles(self, instrument, granularity, count=None, from_time=None, to_time=None, price="M"):
+            self.price_calls.append(price)
+            return super().get_candles(instrument, granularity, count, from_time, to_time, price)
+
+    client = PriceRecordingClient()
+    ch.fetch_history(client, "EUR_USD", "D", datetime(2026, 1, 1), datetime(2026, 1, 3), price="MBA")
+    assert all(p == "MBA" for p in client.price_calls)
+
+
+def test_cache_keys_are_separated_by_price(tmp_path, monkeypatch):
+    monkeypatch.setattr(ch, "CACHE_DIR", str(tmp_path))
+    mid_candles = [{"time": "t1", "mid": {"c": "1.1"}}]
+    bidask_candles = [{"time": "t1", "mid": {"c": "1.1"}, "bid": {"c": "1.0999"}, "ask": {"c": "1.1001"}}]
+
+    ch.save_to_cache("EUR_USD", "M1", mid_candles, price="M")
+    ch.save_to_cache("EUR_USD", "M1", bidask_candles, price="MBA")
+
+    assert ch.load_from_cache("EUR_USD", "M1", price="M") == mid_candles
+    assert ch.load_from_cache("EUR_USD", "M1", price="MBA") == bidask_candles
+    # the default-price cache file keeps its original, pre-existing name
+    # (no suffix) so callers that predate this parameter stay unaffected
+    assert os.path.exists(os.path.join(str(tmp_path), "EUR_USD_M1.json"))
+    assert os.path.exists(os.path.join(str(tmp_path), "EUR_USD_M1_MBA.json"))
+
+
 def test_ohlc_extraction_helpers():
     candles = [{"mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.15"}}]
     assert ch.closes_from_candles(candles) == [1.15]

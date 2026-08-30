@@ -27,22 +27,33 @@ CHUNK_DAYS = {
 }
 
 
-def _cache_path(instrument: str, granularity: str) -> str:
+def _cache_path(instrument: str, granularity: str, price: str = "M") -> str:
     os.makedirs(CACHE_DIR, exist_ok=True)
-    return os.path.join(CACHE_DIR, f"{instrument}_{granularity}.json")
+    # "M" keeps the original, pre-existing filename (no suffix) so every
+    # cache file already on disk for the mid-only callers stays valid --
+    # only a non-default price (e.g. "MBA" for the scalping bid/ask
+    # research thread) gets its own, separately-keyed cache file, since
+    # reusing the same file for two different price selections would
+    # silently serve the wrong data to whichever caller asked second.
+    suffix = "" if price == "M" else f"_{price}"
+    return os.path.join(CACHE_DIR, f"{instrument}_{granularity}{suffix}.json")
 
 
-def fetch_history(client, instrument: str, granularity: str, from_date: datetime, to_date: datetime) -> list:
+def fetch_history(client, instrument: str, granularity: str, from_date: datetime, to_date: datetime,
+                   price: str = "M") -> list:
     """Walks [from_date, to_date) in chunks, deduplicating on candle
     time. `client` is an OandaClient (or a test double with a matching
-    get_candles signature)."""
+    get_candles signature). `price` matches OandaClient.get_candles's
+    own parameter -- "M" (default, mid only) for every existing caller;
+    "B"/"A"/"BA"/"MBA" fetches real bid/ask candles too, needed for
+    spread-aware backtesting (see spread_aware_trade_simulator.py)."""
     chunk_days = CHUNK_DAYS.get(granularity, 45)
     all_candles = {}
     cursor = from_date
     while cursor < to_date:
         chunk_end = min(cursor + timedelta(days=chunk_days), to_date)
         candles = client.get_candles(
-            instrument, granularity,
+            instrument, granularity, price=price,
             from_time=cursor.strftime("%Y-%m-%dT%H:%M:%SZ"),
             to_time=chunk_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
@@ -53,15 +64,15 @@ def fetch_history(client, instrument: str, granularity: str, from_date: datetime
     return [all_candles[t] for t in sorted(all_candles.keys())]
 
 
-def save_to_cache(instrument: str, granularity: str, candles: list) -> str:
-    path = _cache_path(instrument, granularity)
+def save_to_cache(instrument: str, granularity: str, candles: list, price: str = "M") -> str:
+    path = _cache_path(instrument, granularity, price)
     with open(path, "w") as f:
         json.dump(candles, f)
     return path
 
 
-def load_from_cache(instrument: str, granularity: str) -> list | None:
-    path = _cache_path(instrument, granularity)
+def load_from_cache(instrument: str, granularity: str, price: str = "M") -> list | None:
+    path = _cache_path(instrument, granularity, price)
     if not os.path.exists(path):
         return None
     with open(path) as f:
@@ -69,13 +80,13 @@ def load_from_cache(instrument: str, granularity: str) -> list | None:
 
 
 def fetch_history_cached(client, instrument: str, granularity: str, from_date: datetime,
-                          to_date: datetime, force_refresh: bool = False) -> list:
+                          to_date: datetime, force_refresh: bool = False, price: str = "M") -> list:
     if not force_refresh:
-        cached = load_from_cache(instrument, granularity)
+        cached = load_from_cache(instrument, granularity, price)
         if cached:
             return cached
-    candles = fetch_history(client, instrument, granularity, from_date, to_date)
-    save_to_cache(instrument, granularity, candles)
+    candles = fetch_history(client, instrument, granularity, from_date, to_date, price)
+    save_to_cache(instrument, granularity, candles, price)
     return candles
 
 
