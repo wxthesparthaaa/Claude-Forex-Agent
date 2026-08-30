@@ -160,7 +160,7 @@ def main():
                     future_close = closes[idx]
                     if future_close != closes[i]:
                         correct = (future_close > closes[i]) == (direction == "LONG")
-                        all_directional[h].append(correct)
+                        all_directional[h].append((times[i], correct))
 
     total_signals = sum(per_instrument_counts.values())
     print(f"\n{total_signals} total Ichimoku signals across {len(per_instrument_counts)} instruments\n")
@@ -168,18 +168,40 @@ def main():
         print("No signals found -- nothing to test.")
         return
 
+    bonferroni_alpha = 0.05 / len(DIRECTION_HORIZONS)
     print(f"{'='*72}\nDIRECTIONAL ACCURACY AT FIXED FORWARD HORIZONS\n{'='*72}")
     print(f"{'horizon':>10s} {'n':>6s} {'accuracy':>10s} {'t':>7s} {'p':>8s}  significant?")
+    survives_bonferroni = []
     for h in DIRECTION_HORIZONS:
-        outcomes = [1.0 if c else 0.0 for c in all_directional[h]]
+        entries = sorted(all_directional[h], key=lambda e: e[0])  # chronological, for the split-half check below
+        outcomes = [1.0 if c else 0.0 for _, c in entries]
         n = len(outcomes)
         if n < 30:
             print(f"{h:>10d}  (fewer than 30 resolved signals, skipped)")
             continue
         mean, std, t, p = two_sided_test([o - 0.5 for o in outcomes])  # center on 0 for a 2-sided test vs 50%
         accuracy = mean + 0.5
-        sig = "raw p<0.05" if p < 0.05 else "no"
+        sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        if sig_bonf:
+            survives_bonferroni.append(h)
         print(f"{h:>10d} {n:6d} {100*accuracy:9.2f}% {t:+7.2f} {p:8.4f}  {sig}")
+    print(f"\nBonferroni-adjusted threshold for {len(DIRECTION_HORIZONS)} horizons: p < {bonferroni_alpha:.4f}")
+
+    if survives_bonferroni:
+        print(f"\n{'='*72}\nSPLIT-HALF CHECK on the horizon(s) that survived Bonferroni "
+              f"(chronological, first half vs second half)\n{'='*72}")
+        for h in survives_bonferroni:
+            entries = sorted(all_directional[h], key=lambda e: e[0])
+            half = len(entries) // 2
+            first = [1.0 if c else 0.0 for _, c in entries[:half]]
+            second = [1.0 if c else 0.0 for _, c in entries[half:]]
+            m1, _, t1, p1 = two_sided_test([o - 0.5 for o in first])
+            m2, _, t2, p2 = two_sided_test([o - 0.5 for o in second])
+            same_sign = (m1 > 0) == (m2 > 0)
+            print(f"  horizon={h}:  first_half accuracy={100*(m1+0.5):6.2f}% (p={p1:.4f})   "
+                  f"second_half accuracy={100*(m2+0.5):6.2f}% (p={p2:.4f})   "
+                  f"{'same sign both halves' if same_sign else 'SIGN FLIPS between halves'}")
 
 
 if __name__ == "__main__":
