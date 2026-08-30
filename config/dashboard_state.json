@@ -111,8 +111,7 @@
     "news": 0.25
   },
   "peak_tracked_equity": 2090.0896,
-  "trade_time_limit_enabled": false,
-  "pyramid_mode_enabled": true,
   "friday_preclose_cancel_enabled": true,
-  "last_friday_preclose_cancel_at": "2026-08-28T17:00:00-04:00"
+  "last_friday_preclose_cancel_at": "2026-08-28T17:00:00-04:00",
+  "range_confluence_enabled": true
 }
