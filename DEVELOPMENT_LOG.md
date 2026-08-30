@@ -3838,3 +3838,41 @@ commodities. `src/universe.py` already defines a broader `ALL_INSTRUMENTS`
 WTICO_USD, BCO_USD]`) that this session's earlier trend-following work
 already used successfully. Worth widening the universe for the next
 trader-book candidate going forward.
+
+## 2026-08-30 (continued) -- Universe audit + Turtle Soup re-run with commodities included, still ruled out
+
+User asked whether a famous book covers commodities specifically, which
+led to actually checking each trader-book script's instrument universe
+rather than assuming. Findings: `backtest_turtle_trailing_exit.py`
+already used `universe.ALL_INSTRUMENTS` (7 FX majors + gold/silver/WTI/
+Brent) from the day it was built -- no gap there. `backtest_turtle_soup_
+reversal.py` was the one script actually restricted to the FX-only
+`CARRY_CANDIDATES` (13 pairs), which mattered specifically for this
+pattern since it's the direct mirror of the ORIGINAL Turtle system --
+and that system was never FX-only; Richard Dennis's Turtles traded a
+deliberately diversified book spanning currencies, metals, energies,
+grains, and bonds precisely for the diversification benefit. Fixed by
+switching to `CARRY_CANDIDATES + universe.COMMODITIES` (17 instruments
+total -- keeps every JPY-cross pair the original run covered, adds the
+4 commodities).
+
+**Re-run result**: 1142 signals across 17 instruments (up from 921
+across 13). Same 5 pre-specified horizons, same Bonferroni threshold:
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 1142 | +0.0569% | +1.94 | 0.0519 |
+| 3 | 1142 | +0.0372% | +0.75 | 0.4503 |
+| 5 | 1142 | +0.0270% | +0.40 | 0.6909 |
+| 10 | 1140 | -0.1454% | -1.46 | 0.1432 |
+| 20 | 1139 | -0.1977% | -1.53 | 0.1269 |
+
+The 1-day horizon comes the closest of any Turtle Soup result to
+significance (p=0.0519) but still misses the raw, unadjusted 0.05
+threshold, let alone Bonferroni's 0.01. Adding commodities materially
+changed the numbers (13-pair run had all 5 horizons comfortably north
+of p=0.29) but didn't change the verdict. Ruled out, now on the more
+faithful, commodities-inclusive universe. Bollinger squeeze breakout
+remains untested on the wider universe -- left as-is for now since
+round 2 is moving to a third candidate; can be revisited the same way
+if useful later.

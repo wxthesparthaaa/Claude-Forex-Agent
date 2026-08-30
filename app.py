@@ -81,6 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Turtle Soup re-run with commodities added (17 instruments, was FX-only 13): 1142 signals, "
+                    "closest horizon (1d) still misses raw p=0.05 (p=0.0519). Ruled out on the more faithful "
+                    "universe too. Turtle trailing exit already used ALL_INSTRUMENTS, no gap there. Moving to a "
+                    "third round-2 candidate next."),
     ("2026-08-30", "Trader-book round 2, candidate #2 (Bollinger squeeze breakout): 168 signals, best horizon "
                     "(40d) only reaches p=0.08 -- short of even raw significance. Ruled out. User flagged that "
                     "every trader-book script has FX-only universe (inherited from carry's CARRY_CANDIDATES); "
