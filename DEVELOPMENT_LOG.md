@@ -3876,3 +3876,43 @@ faithful, commodities-inclusive universe. Bollinger squeeze breakout
 remains untested on the wider universe -- left as-is for now since
 round 2 is moving to a third candidate; can be revisited the same way
 if useful later.
+
+## 2026-08-30 (continued) -- Trader-book round 2, candidate #3: Oops gap reversal, ruled out -- closes round 2
+
+Built `scripts/backtest_oops_gap_reversal.py`: Larry Williams' single-bar
+opening-gap failure pattern (a genuinely different trigger from both
+prior round-2 candidates -- not a multi-day extreme, not a volatility
+precondition, just today's open beyond yesterday's high/low followed by
+a same-day close back inside that range). Adapted from its original
+equities/futures form (which assumes real intraday gaps) to FX by using
+Williams' own literal trigger condition rather than assuming which
+calendar day a gap would fall on -- avoids repeating the exact
+off-by-one weekday mistake the day-of-week seasonality script had to
+fix earlier this session. Added `opens_from_candles()` to
+`candle_history.py` (the only accessor this session's patterns hadn't
+needed yet). Verified look-ahead-safe with 4 synthetic cases, including
+one proving a same-range open with no gap correctly produces no signal
+regardless of where price closes. Ran on the same 17-instrument
+(13 FX + 4 commodities) universe Turtle Soup was corrected to use.
+
+**Result**: 524 signals across 17 instruments. Same 5 pre-specified
+horizons, same Bonferroni threshold:
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 524 | -0.0584% | -0.96 | 0.3384 |
+| 3 | 524 | -0.0959% | -0.86 | 0.3893 |
+| 5 | 524 | -0.1139% | -0.61 | 0.5400 |
+| 10 | 524 | -0.0658% | -0.24 | 0.8076 |
+| 20 | 521 | -0.4597% | -1.16 | 0.2477 |
+
+Nothing survives even the raw p<0.05 threshold at any horizon. Ruled
+out; no split-half check needed. **This closes out round 2 of the
+trader-book thread** (Turtle Soup, Bollinger squeeze breakout, Oops gap
+reversal -- 3 candidates, mirroring round 1's 3). Combined with round
+1 (Ichimoku Cloud, Turtle trailing exit, NFP event reaction) and the
+original 15 statistical hypotheses, that's 21 distinct, rigorously
+tested ideas across two research strategies (pure statistics, and
+translating documented trader philosophies into mechanical rules),
+none producing a validated, stable, tradeable edge on this account's
+currently accessible instruments and data.
