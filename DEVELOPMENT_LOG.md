@@ -3990,3 +3990,55 @@ the sign is NEGATIVE (confirmed reversal trades tend to lose at 10
 days), the same "the documented pattern's own predicted direction is
 wrong, not just absent" shape Ichimoku's 96-bar result showed, just not
 strong enough to clear the higher bar this time. Ruled out.
+
+## 2026-08-30 (continued) -- Trader-book round 3, candidate #3: pivot point fade, ruled out -- closes round 3
+
+User had no specific book in mind for a third round-3 candidate, so
+went with John L. Person's floor-trader pivot points ("Candlestick and
+Pivot Point Trading Triggers", "Forex Conquered") -- weaker "famous
+author" attribution than the others (more a floor-trading convention
+Person popularized than a single strategy he invented), flagged
+honestly to the user before building. Genuinely different construction
+from everything else this session: R1/S1/R2/S2 come from a fixed
+arithmetic formula on the PRIOR day's own H/L/C (PP=(H+L+C)/3,
+R1=2*PP-L, S1=2*PP-H, R2=PP+(H-L), S2=PP-(H-L)), not a rolling extreme,
+a retracement ratio, a band width, a gap, or candle shape. Traded as
+the classic "fade unless broken" rule: a level tested but not closed
+through is faded/bounced; a level closed through is a real breakout,
+no trade. Verified look-ahead-safe with 5 synthetic cases, including
+proving a genuine close-through breakout produces no fade signal. Ran
+on the 17-instrument commodities-inclusive universe, pooling all four
+levels (R1 fade, S1 bounce, R2 fade, S2 bounce) into one direction-sign
+test per horizon, this session's established convention for pattern
+sub-variants.
+
+**Result**: 21720 signals across 17 instruments (7615 R1, 7916 S1, 2977
+R2, 3212 S2) -- by far the highest signal count of any candidate this
+session, as expected for a level that gets tested on a large fraction
+of all trading days. Same 5 pre-specified horizons, same Bonferroni
+threshold:
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 21704 | -0.0055% | -0.69 | 0.4881 |
+| 3 | 21688 | -0.0298% | -2.05 | 0.0407 |
+| 5 | 21673 | -0.0129% | -0.69 | 0.4897 |
+| 10 | 21630 | +0.0018% | +0.07 | 0.9437 |
+| 20 | 21525 | -0.0847% | -2.27 | 0.0232 |
+
+Two horizons (3d, 20d) clear raw p<0.05 but neither survives the
+Bonferroni-adjusted threshold (0.01) -- ruled out without a split-half
+check, on the same standard applied to every candidate this session.
+Both significant-looking horizons are negative (the fade trades lose,
+on net), consistent with the pattern seen in candlestick reversal and
+Ichimoku's 96-bar result: where this session's price-technical patterns
+get CLOSE to significance, it's usually in the wrong direction relative
+to what the documented strategy predicts, not a near-miss in the right
+one.
+
+**This closes round 3** (Fibonacci retracement pullback, candlestick
+reversal, pivot point fade -- 3 candidates, mirroring rounds 1 and 2).
+Combined tally: 24 distinct, rigorously tested hypotheses this session
+(15 statistical + 9 trader-book across 3 rounds), none producing a
+validated, stable, tradeable edge on this account's currently
+accessible instruments and data.
