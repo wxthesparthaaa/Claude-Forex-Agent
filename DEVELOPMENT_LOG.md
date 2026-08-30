@@ -3741,3 +3741,51 @@ independently present in both. That consistency across 18 unrelated
 hypotheses is itself informative: it's what a genuinely disciplined
 search through a market with no exploitable edge looks like, not a
 methodology problem.
+
+## 2026-08-30 (continued) -- Trader-book round 2, candidate #1: Turtle Soup (Raschke/Connors), ruled out cleanly
+
+User asked to keep pursuing different trader-book angles rather than step
+back from the search. Researched further afield this time (Turtle Soup,
+Larry Williams' "Oops!" gap reversal, Bollinger Band squeeze breakouts,
+Jesse Livermore's pivotal-point pyramiding) and picked **Turtle Soup**
+(Linda Raschke & Laurence Connors, *Street Smarts*, 1996) as the first
+new candidate -- a genuinely different signal construction from anything
+tried before: not an unconditional statistical tendency (RSI extremes,
+cross-sectional reversal) but a specific conditional event -- a stale
+20-day extreme gets broken, and the breakout immediately fails and
+reclaims the old level. It's explicitly the mirror image of the Turtle
+system's own 20-day breakout, which is exactly why Raschke named it
+what she did.
+
+Built `scripts/backtest_turtle_soup_reversal.py`: setup requires today's
+low/high to break the 20-day extreme AND that extreme to have been set
+at least 4 sessions ago (staleness -- filters out a market making a
+fresh sequence of new extremes, i.e. an actual trend, which is not this
+pattern's target). Entry only if the very next session's close reclaims
+the broken level ("Turtle Soup Plus One"); no reclaim, no trade. Verified
+look-ahead-safe with 4 synthetic cases: fires on a genuine stale
+break+reclaim, stays silent with no reclaim, stays silent when the level
+isn't stale, and mirrors correctly on the short side.
+
+**Result**: 921 signals across all 13 pairs (Daily candles, full
+history). Tested raw forward return in the signaled direction at 5
+pre-specified holding horizons (1/3/5/10/20 days), Bonferroni-adjusted
+(0.05/5 = 0.01):
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 921 | +0.0125% | +0.71 | 0.4756 |
+| 3 | 921 | -0.0032% | -0.11 | 0.9133 |
+| 5 | 921 | -0.0266% | -0.64 | 0.5192 |
+| 10 | 919 | -0.0404% | -0.74 | 0.4615 |
+| 20 | 918 | +0.0832% | +1.06 | 0.2910 |
+
+Nothing survives even the raw p<0.05 threshold at any horizon, let alone
+the Bonferroni-adjusted one -- the cleanest, least ambiguous null result
+of the entire session (no split-half check was even necessary, since
+nothing survived the first hurdle). A well-documented, mechanically
+precise, decades-proven-by-its-author pattern, tested honestly on this
+account's real data, simply isn't there. Ruled out. Moving to candidate
+#2, a Bollinger Band squeeze breakout (volatility-contraction-conditioned,
+distinct from the plain Donchian breakout already tested via the Turtle
+trailing-exit candidate).
