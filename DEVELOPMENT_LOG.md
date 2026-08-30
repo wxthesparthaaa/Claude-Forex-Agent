@@ -3695,3 +3695,49 @@ here.
 **Conclusion**: ruled out on the same split-half standard as everything
 else. Second of three trader-book candidates closed out; moving to #3
 (Kathy Lien-style event-driven / scheduled-release trading).
+
+## 2026-08-30 (continued) -- Trader-book candidate #3, NFP event reaction: ruled out, closing the trader-book thread
+
+**Request**: does the reaction to a scheduled, publicly-known event
+(US Non-Farm Payrolls, first Friday of each month, 8:30am ET) predict
+the direction of the following few hours to a day -- a completely
+different signal category from every price-technical or macro-
+positioning idea tested. Built `scripts/backtest_nfp_event_reaction.py`,
+forming the signal from [release, release+15min] and scoring strictly
+from [release+15min, release+15min+hold] -- non-overlapping windows,
+three pre-specified hold horizons (1h/4h/24h), Bonferroni-adjusted.
+
+**First result looked like the most internally consistent candidate all
+session**: 1h showed nothing (p=0.85), but 4h (+0.0351%, p=0.0076) AND
+24h (+0.0367%, p=0.0094) both survived the 3-horizon Bonferroni
+correction, in the same direction, with closely matching magnitude --
+unlike every prior candidate, which only ever had ONE horizon/bucket
+clear significance.
+
+**Split-half check dissolved it anyway**: the 4h horizon outright flips
+sign (first half -0.0010% p=0.94, second half +0.0710% p=0.0012). The
+24h horizon keeps the same sign but shows the identical pattern that
+already disqualified reversal, the JPY Monday effect, and Ichimoku:
+first half is pure noise (+0.0020%, p=0.90), and 100% of the
+significance comes from the second half alone. Two horizons agreeing
+in the full sample turned out to be two horizons independently having
+the same "one half carries it all" problem, not two confirmations of a
+real, stable effect.
+
+**Conclusion**: ruled out on the same standard as everything else.
+This closes out ALL THREE trader-book candidates (Ichimoku Cloud,
+Turtle-style trailing exit, NFP event reaction) -- the entire
+"translate documented trading philosophies into testable hypotheses"
+thread, which was explicitly pursued as a genuinely different research
+approach after the pure statistical search (15 hypotheses) was
+exhausted. Combined total: 18 distinct, rigorously-tested hypotheses
+across both threads, none producing a validated, stable, tradeable
+edge on this account's currently accessible instruments and data. Every
+single "looked promising" result across the entire session -- carry,
+trend-following, cross-sectional reversal, the JPY Monday effect,
+Ichimoku, the NFP 24h drift -- failed at the exact same hurdle: real in
+aggregate, but carried entirely by one half of history, not
+independently present in both. That consistency across 18 unrelated
+hypotheses is itself informative: it's what a genuinely disciplined
+search through a market with no exploitable edge looks like, not a
+methodology problem.
