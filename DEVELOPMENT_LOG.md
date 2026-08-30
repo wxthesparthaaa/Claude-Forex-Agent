@@ -4402,3 +4402,51 @@ just found," the exact after-the-fact-slicing risk this session's
 discipline has avoided everywhere else (e.g. Turtle exit's FX/
 commodities split, noted but not chased). Flagged to the user rather
 than built unilaterally.
+
+## 2026-08-30 (continued) -- ORB fade real-data run: the same finding, now expressed as a tradeable setup
+
+User asked to build it anyway. Result: 4223 breakout events faded
+across 17 instruments.
+
+| RR | n | win rate | mean R | t | p |
+|---|---|---|---|---|---|
+| 1.0 | 2443 | 50.9% | +0.0176 | +0.87 | 0.3842 |
+| 1.5 | 1955 | 66.4% | +0.1074 | +6.04 | 0.0000 |
+| 2.0 | 1719 | 76.5% | +0.1475 | +9.61 | 0.0000 |
+
+RR=1.5 and RR=2.0 both survive Bonferroni and pass split-half (RR=1.5:
++0.1737/+0.0412, same sign though the second half alone isn't
+independently significant at p=0.11; RR=2.0: +0.1892/+0.1058, BOTH
+halves independently significant).
+
+**Important, honest caveat about what kind of evidence this is**: the n
+values (2443/1955/1719) are IDENTICAL to the original breakout test's
+own resolved counts, and the win rates are near-exact complements
+(66.4% ~ 100-33.2%, 76.5% ~ 100-23.3%). This is not a coincidence -- a
+fade trade's stop sits exactly where the breakout's own target was, and
+its target sits exactly where the breakout's own stop was, so a trade
+resolves in the fade version if and only if it resolved in the original,
+with win/loss simply swapped. This means the fade's statistical
+significance is a MATHEMATICAL CONSEQUENCE of how decisively the
+original result already failed, not a second, independent piece of
+confirming evidence -- the split-half check here was always going to
+pass given the original's own split-half already passed (same logical
+necessity, not new information). This is the same finding as before,
+now expressed as something tradeable, not two separate discoveries.
+
+That doesn't diminish the result's practical value -- RR=2.0 in
+particular (both halves independently significant, 76.5% win rate,
++0.1475 mean R) is one of the strongest raw setups found this session
+by magnitude -- but the "how many truly independent findings does this
+session have" count should NOT be incremented for this entry the way
+it would for a genuinely fresh hypothesis. 29 distinct
+hypotheses/approaches tested this session total; this makes 2 (the ORB
+pair) that are really one finding counted once, not twice.
+
+Presented to the user with the recommendation to decide whether this
+is worth shipping live (mirroring Range Confluence's own deployment)
+before doing so -- not shipped unilaterally. One real difference from
+Range Confluence worth weighing: this is validated over ~270 days of
+15-minute history per instrument (the practical ceiling for a fast,
+single-request-scale M15 pull), a much shorter and less regime-diverse
+window than Range Confluence's multi-year Daily-bar validation.

@@ -82,6 +82,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "ORB FADE result: RR=2.0 mean_R=+0.1475, 76.5% win rate, both split-half halves "
+                    "independently significant -- one of the strongest raw setups all session. Caveat: n and "
+                    "win rate are exact mathematical mirrors of the breakout test's own failure, not a second "
+                    "independent confirmation. Only ~270 days of history (M15 pull ceiling). Not shipped -- "
+                    "presented to user to decide."),
     ("2026-08-30", "London ORB breakout: RULED OUT with the cleanest significance all session -- RR=1.5/2.0 "
                     "both survive Bonferroni AND split-half (same negative sign both halves), win rates below "
                     "breakeven. The breakout direction is wrong more often than chance, not just absent. Fading "
