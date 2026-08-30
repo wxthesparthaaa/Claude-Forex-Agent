@@ -4623,3 +4623,40 @@ issues regardless of their effect on the outcome, and this session's
 own discipline says fix and re-test before trusting an
 implausibly-strong number, not rationalize it. Awaiting a second run
 from the user on the corrected script.
+
+## 2026-08-30 (continued) -- Second run: numbers barely moved, found the REAL reason -- pseudo-replication
+
+User re-ran the fixed script. Results were essentially unchanged
+(stop_buf=1.0: win rate 73.2%, mean_R +0.5272 vs the first run's
++0.4942; every other level within noise) -- confirming neither bug
+fixed above was the actual driver of the extreme t-statistic. Average
+spread came back realistic (1.3-1.8 pips across the 5 majors), ruling
+out degenerate/zero spread data as an explanation too.
+
+**The real issue**: pseudo-replication. This signal fires ~17
+times/day/instrument -- individual trades on the same day are NOT
+independent draws for a plain t-test's purposes. They share the same
+intraday volatility regime, the same session trend, frequently
+overlapping conditions. Treating ~7500 trades as 7500 independent
+observations (what the original per-trade t-test did) manufactures a
+sample size that doesn't exist -- the real number of independent units
+is at most instruments x days (450), not thousands of individual
+scalps. This is exactly why t=35-43 looked so far beyond anything else
+validated this session: the STANDARD ERROR the t-test computed was
+based on a wildly inflated effective n.
+
+**Fix**: added `daily_aggregate` -- collapses every (instrument,
+calendar day) into ONE mean R-multiple before any significance test or
+split-half check runs. The script now reports BOTH numbers explicitly:
+the raw per-trade stat (kept only for effect size/win-rate reference,
+clearly labeled "not the number to trust for significance") and the
+new per-instrument-day re-test (the one that should actually be
+trusted, with its own Bonferroni threshold and its own split-half
+check run on day-level means). Self-test added for the new bucketing
+logic (same-day/same-instrument trades average into one bucket;
+same-day/different-instrument trades stay separate, since they're
+different markets, not repeated draws of the same one).
+
+Not yet re-run with this change -- awaiting a third run from the user
+so the per-instrument-day numbers can actually be read. Full suite (497
+tests) passes; self-test verified locally before commit.

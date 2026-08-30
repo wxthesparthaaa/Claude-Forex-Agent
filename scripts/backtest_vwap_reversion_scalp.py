@@ -80,6 +80,21 @@ MECHANICAL RULES:
      LONG exits check the BID, SHORT exits check the ASK, exactly the
      real mechanical cost of a round trip.
 
+STATISTICAL DISCIPLINE SPECIFIC TO THIS SCRIPT, learned the hard way
+after the first real run came back implausibly strong (t=43 on a single
+test -- an order of magnitude beyond anything else this session
+validated): at ~17 signals/day/instrument, individual trades on the
+same day are NOT independent draws -- they share the same intraday
+volatility regime, the same session trend, often overlapping market
+conditions. A plain per-trade t-test (still printed, for the effect
+size) badly overstates how certain this result is, since its apparent
+sample size (thousands of trades) is nowhere close to the real number
+of independent observations (at most instruments x days).
+daily_aggregate collapses every (instrument, calendar day) into ONE
+mean R-multiple BEFORE the significance test and split-half check ever
+see it -- this is the number that should actually be trusted, not the
+raw per-trade one.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -153,6 +168,26 @@ def two_sided_test(returns: list):
     t = mean / max(se, 1e-12)
     p = 2 * (1 - 0.5 * (1 + math.erf(abs(t) / math.sqrt(2))))
     return mean, std, t, p
+
+
+def daily_aggregate(entries: list) -> list:
+    """entries: [(entry_time, instrument, r_multiple), ...]. Averages
+    r_multiple within each (instrument, calendar day) bucket into ONE
+    observation before any significance test sees it. At ~17 signals/
+    day/instrument, individual scalp trades on the same day plainly
+    share the same intraday volatility regime and trend -- they are not
+    independent draws, and a t-test that treats each one as if it were
+    massively overstates significance (the raw per-trade sample size
+    looks like thousands; the real number of independent observations
+    is at most instruments x days). Returns [(date, mean_r), ...]
+    sorted chronologically."""
+    buckets = {}
+    for entry_time, instrument, r in entries:
+        key = (instrument, entry_time.date())
+        buckets.setdefault(key, []).append(r)
+    daily = [(day, sum(rs) / len(rs)) for (instrument, day), rs in buckets.items()]
+    daily.sort(key=lambda d: d[0])
+    return daily
 
 
 def compute_vwap_signals(candles: list):
@@ -315,6 +350,22 @@ def _selftest():
     assert _minutes_bar_count(dense_times, 0, 30) == 30, \
         "a gap-free feed should still cap at exactly 30 bars for a 30-minute window"
 
+    # daily_aggregate must collapse same-(instrument,day) trades into
+    # ONE mean observation, and keep different instruments on the same
+    # calendar day as SEPARATE observations (they're different markets,
+    # not repeated draws of the same one).
+    d0 = datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)
+    d1 = datetime(2026, 1, 6, 9, 0, tzinfo=timezone.utc)
+    sample_entries = [
+        (d0, "EUR_USD", 1.0), (d0 + timedelta(minutes=30), "EUR_USD", -1.0),  # same day/instrument -> averages to 0.0
+        (d0, "GBP_USD", 2.0),                                                 # same day, DIFFERENT instrument -> own bucket
+        (d1, "EUR_USD", 3.0),                                                 # different day -> own bucket
+    ]
+    daily = daily_aggregate(sample_entries)
+    assert len(daily) == 3, f"expected 3 independent (instrument, day) buckets, got {len(daily)}"
+    values = sorted(v for _, v in daily)
+    assert values == [0.0, 2.0, 3.0], f"expected bucket means [0.0, 2.0, 3.0], got {values}"
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -363,7 +414,7 @@ def backtest_instrument(client, instrument, meta):
             result = simulate_scalp_trade(candles, entry_index, direction, entry_price,
                                            stop_loss, target, max_bars=max_bars)
             if result.outcome in ("WIN", "LOSS"):
-                results_by_buffer[buf].append((entry_time, result.r_multiple))
+                results_by_buffer[buf].append((entry_time, instrument, result.r_multiple))
 
     spreads_pips = [(float(c["ask"]["c"]) - float(c["bid"]["c"])) / float(meta.pip_size)
                     for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
@@ -402,34 +453,58 @@ def main():
         return
 
     bonferroni_alpha = 0.05 / len(STOP_Z_BUFFER_SWEEP)
-    print(f"{'='*76}\nSCALP R-MULTIPLE AT EACH PRE-SPECIFIED STOP-BUFFER LEVEL\n{'='*76}")
-    print(f"{'stop_buf':>9s} {'n':>6s} {'win_rate':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
-    survives_bonferroni = []
+    print(f"{'='*76}\nRAW PER-TRADE R-MULTIPLE (each of the ~1500 signals/instrument treated as its "
+          f"own independent draw)\n{'='*76}")
+    print("NOT the number to trust for significance -- see the per-INSTRUMENT-DAY re-test below. At "
+          "~17 signals/day/instrument, trades on the same day plainly share the same intraday volatility "
+          "regime and are not independent observations; a plain t-test over raw trades badly overstates "
+          "how certain this result really is. Shown here only for the effect size (mean_R, win rate).")
+    print(f"{'stop_buf':>9s} {'n':>6s} {'win_rate':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}")
     for buf in STOP_Z_BUFFER_SWEEP:
-        entries = sorted(all_returns[buf], key=lambda e: e[0])  # chronological, for split-half below
-        r_multiples = [r for _, r in entries]
+        entries = all_returns[buf]
+        r_multiples = [r for _, _, r in entries]
         n_obs = len(r_multiples)
         if n_obs < 30:
             print(f"{buf:>9.1f}  (fewer than 30 resolved trades, skipped)")
             continue
         win_rate = sum(1 for r in r_multiples if r > 0) / n_obs
         mean, std, t, p = two_sided_test(r_multiples)
+        print(f"{buf:>9.1f} {n_obs:6d} {100*win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}")
+
+    print(f"\n{'='*76}\nPER-INSTRUMENT-DAY RE-TEST (the number that actually matters)\n{'='*76}")
+    print("Every trade's R-multiple for a given (instrument, calendar day) is averaged into ONE "
+          "observation first -- treating a trading day as the independent unit, not each individual "
+          "scalp -- then the same significance test runs on those day-level means instead of raw trades. "
+          "This is the honest sample size: 5 instruments x <=90 days, not thousands of trades.")
+    print(f"{'stop_buf':>9s} {'n_days':>7s} {'day_win%':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
+    survives_bonferroni = []
+    daily_series_by_buf = {}
+    for buf in STOP_Z_BUFFER_SWEEP:
+        daily = daily_aggregate(all_returns[buf])  # [(date, mean_r), ...] sorted chronologically
+        daily_series_by_buf[buf] = daily
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        if n_days < 30:
+            print(f"{buf:>9.1f}  (fewer than 30 instrument-days, skipped)")
+            continue
+        day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+        mean, std, t, p = two_sided_test(day_means)
         sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
         sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
         if sig_bonf:
             survives_bonferroni.append(buf)
-        print(f"{buf:>9.1f} {n_obs:6d} {100*win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
+        print(f"{buf:>9.1f} {n_days:7d} {100*day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
     print(f"\nBonferroni-adjusted threshold for {len(STOP_Z_BUFFER_SWEEP)} stop-buffer levels: "
           f"p < {bonferroni_alpha:.4f}")
 
     if survives_bonferroni:
         print(f"\n{'='*76}\nSPLIT-HALF CHECK on the level(s) that survived Bonferroni "
-              f"(chronological, first half vs second half)\n{'='*76}")
+              f"(chronological instrument-days, first half vs second half)\n{'='*76}")
         for buf in survives_bonferroni:
-            entries = sorted(all_returns[buf], key=lambda e: e[0])
-            half = len(entries) // 2
-            first = [r for _, r in entries[:half]]
-            second = [r for _, r in entries[half:]]
+            daily = daily_series_by_buf[buf]
+            half = len(daily) // 2
+            first = [r for _, r in daily[:half]]
+            second = [r for _, r in daily[half:]]
             m1, _, t1, p1 = two_sided_test(first)
             m2, _, t2, p2 = two_sided_test(second)
             same_sign = (m1 > 0) == (m2 > 0)
@@ -437,7 +512,8 @@ def main():
                   f"second_half mean_R={m2:+.4f} (p={p2:.4f})   "
                   f"{'same sign both halves' if same_sign else 'SIGN FLIPS -- discarded'}")
     else:
-        print("\nNo stop-buffer level survived Bonferroni -- no split-half check to run.")
+        print("\nNo stop-buffer level survived Bonferroni on the per-instrument-day re-test -- no "
+              "split-half check to run.")
 
 
 if __name__ == "__main__":
