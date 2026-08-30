@@ -3916,3 +3916,42 @@ tested ideas across two research strategies (pure statistics, and
 translating documented trader philosophies into mechanical rules),
 none producing a validated, stable, tradeable edge on this account's
 currently accessible instruments and data.
+
+## 2026-08-30 (continued) -- Trader-book round 3, candidate #1: Fibonacci retracement pullback, ruled out
+
+User asked to keep going. Picked Fibonacci retracement pullback trading
+as the first round-3 candidate -- arguably the single most FX-specific
+technique researched this session (unlike Ichimoku/Turtle/candlestick
+patterns, which originated in equities or futures markets and were
+later adopted by FX traders). Built `scripts/backtest_fibonacci_pullback.py`,
+reusing this codebase's own already-audited `pivot_detection.find_swing_points`
+rather than reimplementing swing detection: finds a confirmed impulse
+leg (swing low -> higher swing high, or the mirror), then watches for
+price to pull back into the 38.2%-61.8% "golden zone" and print a
+reversal candle (bullish close for a long continuation, bearish for a
+short), invalidating the setup if price breaches the 78.6% retracement
+level first. Verified look-ahead-safe with 4 synthetic cases, including
+one proving a non-reversal candle inside the zone with no later
+confirmation correctly stays silent. Ran on the 17-instrument
+commodities-inclusive universe.
+
+**Result**: 1682 signals across all 17 instruments -- by far the
+highest signal count of any candidate this session, as expected for a
+pattern this common. Same 5 pre-specified horizons, same Bonferroni
+threshold:
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 1682 | -0.0123% | -0.49 | 0.6225 |
+| 3 | 1682 | -0.0277% | -0.59 | 0.5543 |
+| 5 | 1682 | +0.0996% | +1.64 | 0.1015 |
+| 10 | 1682 | +0.1197% | +1.45 | 0.1460 |
+| 20 | 1671 | +0.2156% | +1.79 | 0.0739 |
+
+The 20-day horizon is directionally positive and the closest to
+significance of anything in round 3 so far, but still misses the raw
+0.05 threshold (p=0.0739), let alone Bonferroni's 0.01. Ruled out; no
+split-half check needed. Moving to a second round-3 candidate:
+Nison-style candlestick reversal patterns (candle SHAPE as the trigger,
+a genuinely different construction from every retracement/extreme/
+volatility-based pattern tested so far).

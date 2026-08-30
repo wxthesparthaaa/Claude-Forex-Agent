@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Trader-book round 3, candidate #1 (Fibonacci retracement pullback): 1682 signals (highest "
+                    "count all session), best horizon (20d) closest yet to significance but still misses raw "
+                    "p=0.05 (p=0.0739). Ruled out. Moving to Nison candlestick reversal patterns next."),
     ("2026-08-30", "Trader-book round 2, candidate #3 (Oops gap reversal -- Larry Williams): 524 signals, "
                     "nothing survives even raw p<0.05 at any of 5 horizons. Ruled out -- CLOSES round 2 (Turtle "
                     "Soup, Bollinger squeeze, Oops gap). 21 hypotheses tested this session total, none survived."),
