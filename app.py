@@ -82,6 +82,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "London ORB breakout: RULED OUT with the cleanest significance all session -- RR=1.5/2.0 "
+                    "both survive Bonferroni AND split-half (same negative sign both halves), win rates below "
+                    "breakeven. The breakout direction is wrong more often than chance, not just absent. Fading "
+                    "it is tempting but flagged, not built -- would be informed by seeing this exact result."),
     ("2026-08-30", "Shipped Range Confluence (src/range_confluence_addon.py) as a live Settings toggle, off by "
                     "default: dist_sma100/dist_from_252_high/dist_from_252_low, >=2-of-3 agree, wide backstop "
                     "stop, 40-trading-day time-based exit (not reversal-based). This is forward-tracking a "

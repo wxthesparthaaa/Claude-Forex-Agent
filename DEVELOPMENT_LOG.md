@@ -4358,3 +4358,47 @@ untouched data left to test this against without reusing evidence
 already seen. Shipping it live, with real (if small, risk-per-trade-
 sized) orders, is the deliberate, honest next test: does it hold up on
 data that does not exist yet.
+
+## 2026-08-30 (continued) -- London opening-range breakout: ruled out with the cleanest significance of the session (in the wrong direction)
+
+After a sidetrack on scalping (clarified: nothing tested this session
+is scalping -- finest granularity anywhere was 15m; a genuine
+minute-level scalping test would need spread costs modeled into the
+simulation from the start and was deliberately deferred as a bigger,
+separate build), the user chose to finish the London opening-range
+breakout first -- the first TIME-OF-DAY based hypothesis this session.
+
+Built `scripts/backtest_orb_session_breakout.py`: Asian-session range
+(00:00-06:45 UTC) high/low, watch 08:00-15:45 UTC for the first 15m
+bar closing beyond that range, stop/target sized off the range's own
+width at 3 pre-specified RR multiples (1.0/1.5/2.0), resolved via
+`trade_simulator.simulate_trade` capped at 8 hours. Verified
+look-ahead-safe with 4 synthetic cases.
+
+**Result**: 4223 signals across 17 instruments.
+
+| RR | n | win rate | mean R | t | p |
+|---|---|---|---|---|---|
+| 1.0 | 2443 | 48.8% | -0.0242 | -1.19 | 0.2325 |
+| 1.5 | 1955 | 33.2% | -0.1688 | -6.34 | 0.0000 |
+| 2.0 | 1719 | 23.3% | -0.3019 | -9.87 | 0.0000 |
+
+RR=1.5 and RR=2.0 both survive Bonferroni (0.05/3=0.0167) by an enormous
+margin, AND both pass split-half with the same negative sign in both
+halves (RR=1.5: -0.2656 / -0.0721; RR=2.0: -0.3818 / -0.2221) -- this is
+the single most statistically decisive result of the entire session,
+just decisively negative. The win rates are notably BELOW the breakeven
+threshold each RR needs (40% and 33.3% respectively), meaning the
+breakout direction is wrong more often than chance alone would predict,
+not merely absent. Ruled out as documented.
+
+**A tension worth naming rather than quietly acting on**: a strategy
+that fades intraday breakouts (bets they're false, reverts) is also a
+real, independently documented technique -- but proposing it now would
+be directly informed by having just seen this exact result go
+decisively the other way. Testing it today would blur the line between
+"an independently motivated hypothesis" and "flip the sign of what I
+just found," the exact after-the-fact-slicing risk this session's
+discipline has avoided everywhere else (e.g. Turtle exit's FX/
+commodities split, noted but not chased). Flagged to the user rather
+than built unilaterally.
