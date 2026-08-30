@@ -4124,3 +4124,69 @@ correct survivors on a worked example, and the feature arithmetic
 bogus value) checks out. Whether anything actually survives all three
 layers can only be answered by the real run -- awaiting real-data
 output.
+
+## 2026-08-30 (continued) -- Pattern discovery real-data run: the three-layer design caught exactly what it was built to catch
+
+Real run across 17 instruments (discovery ~1490 days, holdout ~640 days
+per instrument). Full results:
+
+**Stage 1** (Benjamini-Hochberg FDR, q=0.05, across 80 comparisons):
+48 survive. Almost all of these are ONE underlying phenomenon measured
+through 8 highly-correlated proxies (mom_60/90/120/252, dist_sma50/
+100/200, dist_from_252_high all just measure "how far has price run
+recently" at slightly different windows) -- not 48 independent
+discoveries. Direction: recent big winners underperform, recent
+laggards outperform, at 40-60 day horizons (reversal, not momentum).
+`dist_from_252_low`, `mom_10`, `mom_20`@{5,10,20}d also appear but
+flip sign in Stage 2 and are discarded there.
+
+**Stage 2** (split-half within discovery): most of the reversal
+cluster passes -- same sign in both discovery halves, looking robust.
+
+**Stage 3 (the real test) inverted almost the entire cluster.** On data
+genuinely never touched until this stage: `mom_60`@60d discovery
+-4.25% -> holdout **+0.86%**; `dist_sma50`@60d discovery -2.79% ->
+holdout **+2.15%** (p=0.0000, a statistically significant flip);
+`dist_from_252_high`@60d, `dist_sma20`@60d, `mom_20`@60d all show the
+same inversion. A reversal effect that survived split-half completely
+flipped sign on genuinely fresh data -- this is precisely the failure
+mode the true holdout (distinct from split-half, never touched during
+screening) exists to catch, and it worked exactly as designed.
+
+**Only 3 of 33 Stage-3 tests actually validated** (same sign as
+discovery + p<0.05): `mom_90`@60d (p=0.0165), `rv_percentile`@20d
+(p=0.0374), `rv_percentile`@40d (p=0.0019). Honest base-rate check: at
+p<0.05 across 33 one-shot tests, ~1.65 false positives are expected by
+chance alone, and P(3+ hits | nothing real) is roughly 22% -- 3
+survivors is suggestive, not proof. `mom_90`@60d is a lone survivor
+from a cluster where every close cousin (mom_60/120/252@60d) failed or
+flipped -- reads as noise, not a distinguishable finding, given how
+correlated those features are with each other.
+
+`rv_percentile` (a causal realized-vol percentile, reusing
+`timing_filter.rv_percentile_series`) is the one thread worth naming
+as mildly credible rather than dismissing outright: the SAME feature
+survives at two adjacent horizons (20d, 40d) with a consistent,
+economically coherent direction (elevated recent volatility precedes
+higher subsequent returns -- a documented volatility-risk-premium
+pattern in other markets). Still far from proven at these p-values and
+this many shots taken. Critically, there is no more untouched history
+left to confirm it retrospectively -- discovery and holdout have both
+now been looked at. The only honest next step, if pursued, is tracking
+it forward in real time rather than re-slicing this same data again.
+
+**Overall verdict**: the hypothesis-free scan did not produce a
+validated, tradeable edge. It did produce a genuinely useful result of
+a different kind -- concrete proof that a broad medium-term reversal
+effect in this account's instruments, which looked real even under
+split-half, is regime-dependent and inverted in the most recent ~30%
+of history. That regime shift is consistent with other findings this
+session (the JPY Monday effect's weak-then-strong split tied to the
+BOJ-Fed rate gap; gold's multi-year bull run flagged earlier as
+untested-out-of-sample risk). 26 distinct hypotheses/approaches tested
+this session (15 statistical + 9 trader-book + multi-factor confluence
++ this discovery pipeline), none producing a validated, stable edge --
+but this run is the clearest illustration yet of WHY: whatever
+technical relationships exist in this data don't hold their sign
+across time, which a single-window backtest (however careful) can't
+see without a genuine, untouched holdout.

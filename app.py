@@ -81,6 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Pattern discovery real run: a big reversal cluster (48/80 FDR survivors, mostly correlated "
+                    "momentum/SMA-distance proxies) passed split-half but INVERTED on the true holdout -- exactly "
+                    "the failure mode this design exists to catch. Only rv_percentile@20d/40d mildly credible "
+                    "(2 shots of 33, base rate ~22% by chance). No validated edge. 26 hypotheses tested total."),
     ("2026-08-30", "Built pattern-discovery pipeline (no prior hypothesis): true 70/30 holdout, 16 features x 5 "
                     "horizons screened with Benjamini-Hochberg FDR (not the usual 5-comparison Bonferroni), then "
                     "split-half, then ONE-SHOT holdout test. Stricter than anything so far. Awaiting real-data run."),
