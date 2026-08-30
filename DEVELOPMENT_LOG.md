@@ -4660,3 +4660,31 @@ different markets, not repeated draws of the same one).
 Not yet re-run with this change -- awaiting a third run from the user
 so the per-instrument-day numbers can actually be read. Full suite (497
 tests) passes; self-test verified locally before commit.
+
+## 2026-08-30 (continued) -- Third run: much saner, one more correlation channel worth closing first
+
+Per-instrument-day re-test result: n=325 instrument-days, day win rate
+84.9-89.9%, mean_R +0.37 to +0.51, t=13.4-21.7, all three survive
+Bonferroni, same sign both split-half halves. A huge improvement over
+the raw per-trade t=35-43 -- pseudo-replication really was doing most
+of the work inflating the earlier numbers.
+
+Still one channel not yet closed: the 5-instrument universe isn't 5
+independent bets even at the day level. EUR_USD/GBP_USD/AUD_USD in
+particular plainly tend to move together on shared risk-on/risk-off
+macro days, so 5 same-day instrument-observations aren't fully
+independent of EACH OTHER either -- the true independent unit could be
+closer to ~90 calendar days than 325 instrument-days (the exact same
+"N pairs isn't N independent bets" caveat the trend-following backtest
+found for its own 13-pair, shared-JPY/USD-leg universe earlier this
+session, applied here to same-day cross-instrument correlation instead
+of shared currency legs).
+
+Added `calendar_day_aggregate` -- pools ALL instruments' trades on a
+given date into one observation, the strictest reading this script can
+produce (~90 independent units at most). Reported as a third, final
+layer after the per-instrument-day split-half check. Not yet run --
+awaiting a fourth pass from the user. If this still survives at n~90,
+that's real, hard-to-explain-away evidence; if it doesn't, that
+tells us how much of the apparent edge was really shared macro-day
+correlation across the universe rather than a per-instrument effect.

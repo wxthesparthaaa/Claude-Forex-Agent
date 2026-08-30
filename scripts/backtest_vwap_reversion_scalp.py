@@ -190,6 +190,25 @@ def daily_aggregate(entries: list) -> list:
     return daily
 
 
+def calendar_day_aggregate(entries: list) -> list:
+    """Like daily_aggregate, but pools ALL instruments on a given
+    calendar day into ONE observation instead of one per instrument.
+    A stricter, more conservative unit than daily_aggregate's own
+    (instrument, day) bucketing: several of this universe's 5 majors
+    (EUR_USD/GBP_USD/AUD_USD in particular) plainly tend to move
+    together on shared risk-on/risk-off macro days, so even
+    "instrument-days" aren't fully independent of each other on the
+    SAME date. Pooling across instruments too answers the question
+    directly instead of assuming it away. Returns [(date, mean_r), ...]
+    sorted chronologically."""
+    buckets = {}
+    for entry_time, instrument, r in entries:
+        buckets.setdefault(entry_time.date(), []).append(r)
+    daily = [(day, sum(rs) / len(rs)) for day, rs in buckets.items()]
+    daily.sort(key=lambda d: d[0])
+    return daily
+
+
 def compute_vwap_signals(candles: list):
     """Returns (times, vwap, dev_stdev, z), one entry per candle. vwap/
     dev_stdev/z are None until enough same-UTC-day-session history
@@ -366,6 +385,14 @@ def _selftest():
     values = sorted(v for _, v in daily)
     assert values == [0.0, 2.0, 3.0], f"expected bucket means [0.0, 2.0, 3.0], got {values}"
 
+    # calendar_day_aggregate is stricter still -- EUR_USD's and GBP_USD's
+    # same-day trades (1.0, -1.0, 2.0) must pool into ONE bucket for that
+    # date, not stay split by instrument.
+    cal_daily = calendar_day_aggregate(sample_entries)
+    assert len(cal_daily) == 2, f"expected 2 independent calendar-day buckets, got {len(cal_daily)}"
+    cal_values = sorted(v for _, v in cal_daily)
+    assert cal_values == [2.0 / 3, 3.0], f"expected bucket means [0.667, 3.0], got {cal_values}"
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -514,6 +541,26 @@ def main():
     else:
         print("\nNo stop-buffer level survived Bonferroni on the per-instrument-day re-test -- no "
               "split-half check to run.")
+
+    print(f"\n{'='*76}\nCALENDAR-DAY RE-TEST (all 5 instruments pooled -- the strictest check)\n{'='*76}")
+    print("Several of these 5 majors (EUR_USD/GBP_USD/AUD_USD especially) plainly tend to move together "
+          "on shared risk-on/risk-off macro days, so even the per-instrument-day units above aren't fully "
+          "independent of EACH OTHER on the same date. This pools every trade from every instrument on a "
+          "given calendar day into ONE observation -- at most ~90 independent units, the most conservative "
+          "reading this script can produce.")
+    print(f"{'stop_buf':>9s} {'n_cal_days':>10s} {'day_win%':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
+    for buf in STOP_Z_BUFFER_SWEEP:
+        cal_daily = calendar_day_aggregate(all_returns[buf])
+        day_means = [r for _, r in cal_daily]
+        n_days = len(day_means)
+        if n_days < 30:
+            print(f"{buf:>9.1f}  (fewer than 30 calendar days, skipped)")
+            continue
+        day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+        mean, std, t, p = two_sided_test(day_means)
+        sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        print(f"{buf:>9.1f} {n_days:10d} {100*day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
 
 
 if __name__ == "__main__":
