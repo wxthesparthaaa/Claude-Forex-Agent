@@ -414,6 +414,21 @@
           On by default. Closes every open trade 10 minutes before forex closes for the
           weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
         </p>
+        <div class="toggle-row">
+          <span>Range Confluence (experimental)</span>
+          <label class="switch">
+            <input type="checkbox" name="range_confluence_enabled" {{ 'checked' if range_confluence_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default. A signal built from this session's own data-mining research (not a named
+          trader's strategy): trades when at least 2 of 3 range/trend-position readings agree, holds
+          for a fixed 40 trading days regardless of what the signal does in between, and uses a wide
+          stop purely as a disaster backstop. This is a forward test of a research finding, not a
+          confirmed edge -- every trade it places is tagged "Range Confluence" in the journal and on
+          Telegram so its real impact is easy to track separately from the base strategy.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

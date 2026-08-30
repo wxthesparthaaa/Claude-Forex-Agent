@@ -168,6 +168,15 @@ class DashboardState:
     # proof across restarts/re-reads, no separate "which Friday was
     # this" bookkeeping needed.
     last_friday_preclose_cancel_at: str | None = None
+    # Range Confluence: the first live strategy built from this session's
+    # pattern-discovery/combination-search research (not a named trader's
+    # book). Off by default -- every layer of retrospective validation
+    # this session used (discovery screen, split-half, one-shot holdout)
+    # has now been applied to all of this account's available history, so
+    # there is no more untouched data left to confirm it against; shipping
+    # it live is deliberately the next honest test, not a confirmed edge.
+    # See src/range_confluence_addon.py and DEVELOPMENT_LOG.md 2026-08-30.
+    range_confluence_enabled: bool = False
 
 
 def default_state() -> DashboardState:

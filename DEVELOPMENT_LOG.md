@@ -4295,3 +4295,66 @@ but this run is the clearest illustration yet of WHY: whatever
 technical relationships exist in this data don't hold their sign
 across time, which a single-window backtest (however careful) can't
 see without a genuine, untouched holdout.
+
+## 2026-08-30 (continued) -- Shipped Range Confluence: forward-tracking the clustered search's finding live
+
+User asked for the natural next step after the clustered combination
+search's finding (dist_sma100 + dist_from_252_high + dist_from_252_low,
+>=2-of-3 agreement -- the one result this session that survived
+discovery, split-half, AND a genuine one-shot holdout): build a live
+forward-tracking mechanism, with REAL orders placed so its actual
+impact is visible, not a silent paper-only log. Named the strategy
+**Range Confluence**.
+
+Built `src/range_confluence_addon.py`, off by default via a new
+Settings toggle (`range_confluence_enabled`, `dashboard_state.py`).
+Mechanically:
+  - Same 3 features and >=2-of-3 threshold the backtest validated, with
+    each feature's DIRECTION (bearish/bearish/bullish) fixed exactly as
+    the backtest found it -- not re-derived live, since re-deriving
+    direction from live outcomes would mean re-running the research
+    pipeline in production.
+  - Cutoffs (what counts as "extreme") are NOT hardcoded from the fixed
+    historical discovery sample -- that would go stale as the market's
+    level/volatility drifts. Instead computed as a walk-forward rolling
+    percentile against a trailing 500-day baseline, reusing the exact
+    causal, append-after-ranking discipline `timing_filter.rv_percentile_series`
+    already uses elsewhere in this codebase.
+  - Exit is TIME-BASED (40 trading days, ~56 calendar days), not
+    signal-reversal-based like every prior add-on (carry/trend) --
+    deliberately, because the backtest measured a FIXED-horizon forward
+    return, so a fixed hold is what was actually validated. A wide
+    ATR(20)-based stop/backstop-TP pair is attached only because OANDA
+    requires both on every order; neither is derived from the backtest,
+    which modeled no stop or target at all.
+  - Universe: the same 17 instruments (13 FX + gold/silver/WTI/Brent)
+    the research was validated against.
+  - Every trade is tagged `RANGE_CONFLUENCE` in the journal and names
+    "Range Confluence" explicitly in its Telegram message, both on open
+    (with which features agreed and the composite score) and on close
+    (with realized P&L) -- the explicit point being to make this
+    strategy's real, separate impact visible and auditable, not blended
+    into the base strategy's numbers.
+
+Verified with 16 tests: exact percentile-rank and ATR arithmetic, the
+composite/direction decision logic tested directly with hand-specified
+bucket combinations (a monotonic synthetic price path structurally
+makes dist_from_252_low OPPOSE the other two features, so genuine
+2-or-3-of-3 agreement is a real market condition, not something a
+simple synthetic trend reliably produces -- discovered this firsthand
+while writing the tests, which is itself a small confirmation of the
+backtest's own "dist_from_252_low doesn't agree with anything on its
+own" finding), full gating (disabled/non-autopilot/kill-switch), opens
+when flat and a signal fires, no-ops while a position is held (even if
+another pair has a fresh signal), and closes-without-reopening-same-tick
+once the hold period elapses. Full suite (470 tests) green, wired into
+`app.py`'s scheduler at the same uniform 5-minute cadence as every
+other job, and into the dashboard toggle UI.
+
+**This is explicitly NOT a confirmed, validated edge.** Every layer of
+this session's retrospective research discipline has now been applied
+to all of this account's available history -- there is no more
+untouched data left to test this against without reusing evidence
+already seen. Shipping it live, with real (if small, risk-per-trade-
+sized) orders, is the deliberate, honest next test: does it hold up on
+data that does not exist yet.

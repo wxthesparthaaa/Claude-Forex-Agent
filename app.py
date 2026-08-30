@@ -67,6 +67,7 @@ from trade_execution import place_and_record, instrument_already_open, auto_exec
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
+from range_confluence_addon import check_range_confluence_opportunities
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -81,6 +82,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Shipped Range Confluence (src/range_confluence_addon.py) as a live Settings toggle, off by "
+                    "default: dist_sma100/dist_from_252_high/dist_from_252_low, >=2-of-3 agree, wide backstop "
+                    "stop, 40-trading-day time-based exit (not reversal-based). This is forward-tracking a "
+                    "research finding, not a confirmed edge -- no more untouched historical data exists to test "
+                    "it against retrospectively. Telegram messages and journal entries tag every trade clearly."),
     ("2026-08-30", "CLUSTERED combination search: strongest result all session. 7 correlation-collapsed features "
                     "(11/16 were one redundant momentum/SMA cluster), 130 holdout tests, ~35 validated vs ~6.5 "
                     "expected by chance (~11 sigma). EVERY validated combo includes dist_from_252_low -- but it "
@@ -495,6 +501,7 @@ def dashboard():
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
+        range_confluence_enabled=state.range_confluence_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -798,6 +805,11 @@ def settings():
         # checkbox pattern as the toggles above.
         state.friday_preclose_cancel_enabled = request.form.get("friday_preclose_cancel_enabled") == "on"
 
+        # Range Confluence: off by default -- see src/range_confluence_addon.py
+        # and DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it
+        # ships as a live forward test rather than a confirmed edge.
+        state.range_confluence_enabled = request.form.get("range_confluence_enabled") == "on"
+
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
             state.autopilot_scan_interval_minutes = int(interval)
@@ -875,6 +887,14 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Range Confluence: off by default via Settings. Same uniform 5-minute
+    # cadence as every other job here even though the underlying Daily-
+    # candle signal only changes once a day -- the function itself short-
+    # circuits quickly on every tick where nothing needs to open or close,
+    # matching this codebase's own established convention (see
+    # src/range_confluence_addon.py's module docstring).
+    scheduler.add_job(check_range_confluence_opportunities,
+                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 
