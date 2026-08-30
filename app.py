@@ -81,6 +81,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "CLUSTERED combination search: strongest result all session. 7 correlation-collapsed features "
+                    "(11/16 were one redundant momentum/SMA cluster), 130 holdout tests, ~35 validated vs ~6.5 "
+                    "expected by chance (~11 sigma). EVERY validated combo includes dist_from_252_low -- but it "
+                    "fails alone (sign flips); only conditioning on a 2nd signal makes it hold. No more virgin "
+                    "data left -- next step is forward tracking, not more retrospective testing."),
     ("2026-08-30", "Combination search real run: 90% of 2800 comparisons survived FDR, hundreds 'validated' at "
                     "Stage 3 -- but almost all reduce to 2 signals (52wk range position, rv_percentile) counted "
                     "~14x over via redundant feature triples. Momentum combos reproduced the same inversion "

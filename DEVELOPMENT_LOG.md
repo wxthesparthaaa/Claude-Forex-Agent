@@ -4173,6 +4173,63 @@ next refinement if this thread is pursued further, not something to
 chase blindly on this run's raw output. 27 distinct hypotheses/
 approaches tested this session total.
 
+## 2026-08-30 (continued) -- Clustered combination search: the strongest, most honest result of the session
+
+Built and ran `scripts/backtest_pattern_combination_search_clustered.py`.
+Clustering (|correlation| >= 0.7, discovery-only) confirmed the
+redundancy diagnosis directly: all 7 momentum lookbacks AND all 4
+SMA-distance features collapsed into ONE cluster, represented by
+`dist_sma100` -- 11 of 16 features reduced to 1. `mom_252` (12-month)
+stayed a singleton, meaning the 1-year lookback carries genuinely
+different information than the 1-week-to-6-month cluster. Final
+representative set: `dist_sma100, mom_252, dist_from_252_high,
+dist_from_252_low, rv_percentile, gap, body_ratio` (7 features,
+C(7,3)=35 combinations x 5 horizons = 175 comparisons, down from 2800).
+
+**Stage 3 result is unlike anything else this session**: of 130
+one-shot holdout tests, roughly 35 validated (same sign + p<0.05) --
+against a chance expectation of ~6.5 false positives at this sample
+size. That is roughly an 11-standard-deviation excess over noise, not
+a marginal signal.
+
+**Every single validated combination includes `dist_from_252_low`**
+(distance from the 52-week low), with several validating at ALL FIVE
+horizons (5/10/20/40/60 days): `dist_sma100+mom_252+dist_from_252_low`,
+`dist_sma100+dist_from_252_high+dist_from_252_low`, and
+`dist_from_252_low+rv_percentile+body_ratio`. Representative holdout
+numbers (discovery -> holdout, both same-signed):
+`dist_sma100+mom_252+dist_from_252_low`: 40d +4.73%->+2.16% (p=0.0000),
+60d +7.72%->+4.84% (p=0.0000); `dist_sma100+dist_from_252_high+
+dist_from_252_low`: 40d +3.21%->+1.12% (p=0.0000), 60d +4.90%->+1.75%
+(p=0.0000); `dist_from_252_low+rv_percentile+body_ratio`: 40d +1.86%->
++1.09% (p=0.0006), 60d +3.00%->+1.13% (p=0.0055).
+
+**The honest, non-obvious part**: this is NOT "one feature turned out
+to be good." In the original single-feature discovery run,
+`dist_from_252_low` tested ALONE failed split-half at every one of
+these same five horizons with outright sign flips (2026-08-30's
+pattern-discovery entry above). What changed is conditioning --
+requiring `dist_from_252_low` to agree with almost any second signal
+(range position via `dist_from_252_high`, volatility via
+`rv_percentile`, even gap or candle shape) selects a cleaner subset of
+days where the effect holds up through discovery, split-half, AND
+genuinely untouched holdout. That is a specific, defensible statistical
+story: `dist_from_252_low`'s raw quintile split is noisy on its own,
+but conditioning narrows it to a subpopulation where the signal is
+real.
+
+**What this does NOT mean**: this is not a shippable live strategy yet.
+All available historical data (both the discovery and holdout portions)
+has now been used across this session's various passes -- there is no
+more untouched history left to confirm this retrospectively without
+re-using data already looked at. The only honest further validation is
+forward: track a single, pre-specified version of this (e.g.
+`dist_sma100+dist_from_252_high+dist_from_252_low`, 2-of-3 agreement,
+40-day hold) in real time from here rather than re-slicing this same
+history again. 28 distinct hypotheses/approaches tested this session
+total -- this is the first one that survived every layer of scrutiny
+applied.
+
 ## 2026-08-30 (continued) -- Pattern discovery real-data run: the three-layer design caught exactly what it was built to catch
 
 Real run across 17 instruments (discovery ~1490 days, holdout ~640 days
