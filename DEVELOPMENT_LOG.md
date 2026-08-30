@@ -4450,3 +4450,63 @@ Range Confluence worth weighing: this is validated over ~270 days of
 15-minute history per instrument (the practical ceiling for a fast,
 single-request-scale M15 pull), a much shorter and less regime-diverse
 window than Range Confluence's multi-year Daily-bar validation.
+
+## 2026-08-30 (continued) -- Shipped ORB Fade live, the same way as Range Confluence
+
+User asked to ship it live "the same way" Range Confluence was shipped.
+Built `src/orb_fade_addon.py` following that module's exact architectural
+pattern (own non-blocking lock, public wrapper delegating to an `_unsafe`
+function, same gating order: toggle -> autopilot phase -> kill switch,
+same candidate-dict shape feeding `trade_execution.place_and_record`,
+hand-rolled close-and-journal since no shared close helper exists in
+this codebase) -- but genuinely different underneath, since this is an
+intraday, same-session strategy rather than Range Confluence's daily-
+signal/40-day-hold cycle.
+
+**Mechanics shipped, RR=2.0 only** (the single validated level, not a
+sweep): today's Asian range (00:00-06:45 UTC, from 15-minute bars) ->
+watch 08:00-15:45 UTC for the first bar whose close breaks that range ->
+fade it (opposite direction), stop and target mirrored around the LIVE
+entry price using the range's own width, exactly reusing the
+`fade_trade_levels` mirroring logic from the backtest (reimplemented in
+`src/`, not imported from `scripts/`, matching this codebase's own
+convention that add-ons never depend on backtest scripts) -> force-
+closed after 8 hours if neither the real stop nor the real target has
+fired yet (the same MAX_HOLD_BARS=32-bar cap the backtest itself used).
+One fade per pair per day: a per-instrument "already acted today" check
+looks at ALL journal entries (open or closed) tagged ORB_FADE, not just
+open ones, so a position that resolves earlier in the day doesn't
+trigger a second entry on the same breakout.
+
+**One live-execution adaptation, stated plainly in the module docstring**:
+the backtest entered at the breakout bar's own historical close; a live
+order fills at the current market price by the time a 5-minute check
+notices a completed bar, which can differ slightly from that bar's
+close. Ordinary execution slippage relative to the backtest, not a
+data-quality issue -- the Asian range and breakout detection themselves
+are otherwise identical to the backtest, just scoped to today only.
+
+**A deliberate difference from Range Confluence's notification
+convention**: natural stop/take-profit fills are picked up and journaled
+by the existing `trade_monitor.check_open_trades` job like any other
+trade, with no Telegram ping -- matching this bot's own established
+"no notification on routine SL/TP closes" convention, since for ORB
+Fade (unlike Range Confluence) the SL/TP levels are the PRIMARY, real,
+risk-managed exit mechanism, not a rare disaster backstop. This module
+only sends a Telegram message for actions it itself takes: opening a
+position, and the 8-hour force-close.
+
+Off by default via a new `orb_fade_enabled` toggle in
+`src/dashboard_state.py`, wired into `app.py` (import, `/settings`,
+dashboard context, a 5-minute scheduler job matching every other add-on's
+cadence) and `templates/dashboard.html` (its own toggle row and
+explanatory copy, restating the "same finding, not independent
+confirmation" caveat for the user reading Settings, not just this log).
+17 new tests in `tests/test_orb_fade_addon.py`, mirroring
+`test_range_confluence_addon.py`'s conventions -- notably a frozen-clock
+pattern (subclassing `datetime` to fix `.now()`) since this module,
+unlike Range Confluence, gates real behavior on wall-clock hour (the
+breakout watch window) as well as elapsed time (the 8-hour cap), neither
+of which Range Confluence's daily-signal design ever needed to fake.
+Full suite (487 tests) passes; `py_compile` + `import app` verified
+before commit, per this session's own established discipline.

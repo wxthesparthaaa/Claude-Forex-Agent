@@ -429,6 +429,22 @@
           confirmed edge -- every trade it places is tagged "Range Confluence" in the journal and on
           Telegram so its real impact is easy to track separately from the base strategy.
         </p>
+        <div class="toggle-row">
+          <span>ORB Fade (experimental)</span>
+          <label class="switch">
+            <input type="checkbox" name="orb_fade_enabled" {{ 'checked' if orb_fade_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default. Fades the first London-session breakout of the overnight Asian range (00:00-06:45
+          UTC), taking the opposite side with stop and target mirrored around entry at RR=2.0, force-closed
+          after 8 hours if neither fires first. Honest caveat: this is the SAME finding as a backtest that
+          decisively ruled out trading WITH that breakout, expressed as a trade rather than an independent
+          new discovery, and it was validated on a shorter ~270-day window of 15-minute data than Range
+          Confluence's multi-year daily history. Every trade it places is tagged "ORB Fade" in the journal
+          and on Telegram.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

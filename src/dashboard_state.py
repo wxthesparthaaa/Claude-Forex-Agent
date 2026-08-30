@@ -177,6 +177,16 @@ class DashboardState:
     # it live is deliberately the next honest test, not a confirmed edge.
     # See src/range_confluence_addon.py and DEVELOPMENT_LOG.md 2026-08-30.
     range_confluence_enabled: bool = False
+    # ORB Fade: the second live strategy built from this session's own
+    # research -- fades a London-session Asian-range breakout, which this
+    # account's own backtest (scripts/backtest_orb_session_breakout.py)
+    # found decisively loses money when traded WITH the breakout instead.
+    # Honest caveat: fading a proven failure is the SAME finding, not an
+    # independent second discovery, and it was validated on a shorter
+    # ~270-day 15-minute window than Range Confluence's multi-year Daily
+    # data. Off by default. See src/orb_fade_addon.py and
+    # DEVELOPMENT_LOG.md 2026-08-30.
+    orb_fade_enabled: bool = False
 
 
 def default_state() -> DashboardState:

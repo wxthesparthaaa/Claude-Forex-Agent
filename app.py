@@ -68,6 +68,7 @@ from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
 from range_confluence_addon import check_range_confluence_opportunities
+from orb_fade_addon import check_orb_fade_opportunities
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -82,11 +83,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
-    ("2026-08-30", "ORB FADE result: RR=2.0 mean_R=+0.1475, 76.5% win rate, both split-half halves "
-                    "independently significant -- one of the strongest raw setups all session. Caveat: n and "
-                    "win rate are exact mathematical mirrors of the breakout test's own failure, not a second "
-                    "independent confirmation. Only ~270 days of history (M15 pull ceiling). Not shipped -- "
-                    "presented to user to decide."),
+    ("2026-08-30", "Shipped ORB Fade (src/orb_fade_addon.py) as a live Settings toggle, off by default: fades "
+                    "the first London-session breakout of the overnight Asian range, RR=2.0 mirrored stop/target, "
+                    "8-hour time cap if neither fires. Caveat stated plainly in the module and to the user: this "
+                    "is the SAME finding as the ruled-out breakout test, expressed as a trade, not an independent "
+                    "second discovery, and validated on a shorter ~270-day M15 window than Range Confluence."),
     ("2026-08-30", "London ORB breakout: RULED OUT with the cleanest significance all session -- RR=1.5/2.0 "
                     "both survive Bonferroni AND split-half (same negative sign both halves), win rates below "
                     "breakeven. The breakout direction is wrong more often than chance, not just absent. Fading "
@@ -511,6 +512,7 @@ def dashboard():
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         range_confluence_enabled=state.range_confluence_enabled,
+        orb_fade_enabled=state.orb_fade_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -819,6 +821,11 @@ def settings():
         # ships as a live forward test rather than a confirmed edge.
         state.range_confluence_enabled = request.form.get("range_confluence_enabled") == "on"
 
+        # ORB Fade: off by default -- see src/orb_fade_addon.py and
+        # DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it fades
+        # a documented failure rather than confirming a fresh finding.
+        state.orb_fade_enabled = request.form.get("orb_fade_enabled") == "on"
+
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
             state.autopilot_scan_interval_minutes = int(interval)
@@ -903,6 +910,11 @@ def start_scheduler():
     # matching this codebase's own established convention (see
     # src/range_confluence_addon.py's module docstring).
     scheduler.add_job(check_range_confluence_opportunities,
+                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # ORB Fade: same uniform 5-minute cadence every job in this app uses --
+    # comfortably fine-grained against its 15-minute breakout bars and
+    # 8-hour hold cap. See src/orb_fade_addon.py's module docstring.
+    scheduler.add_job(check_orb_fade_opportunities,
                        IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
