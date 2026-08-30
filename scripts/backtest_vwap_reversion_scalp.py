@@ -113,6 +113,17 @@ pattern every other add-on already uses, no infra spend required; if it
 collapses, that tells us decisively that this specific edge needs
 faster execution rather than being a guess.
 
+A DELAYED entry looking STRONGER than an immediate one is not, on its
+own, good news -- it's a specific artifact risk worth naming directly:
+target/stop are frozen at signal time, but a delayed entry's price is
+sampled minutes later, so some fraction of "delayed" trades may already
+have drifted past their own frozen target before the order could even
+be placed -- a near-guaranteed win entered after the fact, not
+predictive skill. resolve_trades counts exactly this
+(already_past_target/total_entries, printed once per scenario in
+main()) so an apparent improvement under delay can be told apart from a
+real one rather than assumed to be either.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -453,6 +464,34 @@ def _selftest():
     cal_values = sorted(v for _, v in cal_daily)
     assert cal_values == [2.0 / 3, 3.0], f"expected bucket means [0.667, 3.0], got {cal_values}"
 
+    # resolve_trades must count an entry that's ALREADY past its own
+    # frozen target as "already_past_target" -- the diagnostic that
+    # explains why a DELAYED entry can look stronger than an immediate
+    # one without that meaning the edge itself got better.
+    class _FakeMeta:
+        pip_size = 0.0001
+
+    diag_base = datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc)
+    diag_times = [diag_base + timedelta(minutes=i) for i in range(7)]
+    diag_candles = [
+        {"mid": {"c": "100.0"}, "bid": {"h": "100.0", "l": "100.0", "c": "100.0"},
+         "ask": {"h": "100.0", "l": "100.0", "c": "100.0", "o": "100.0"}}
+        for _ in range(5)
+    ] + [
+        # entry bar (index 5, 5 minutes after the signal): price has
+        # already reverted PAST the frozen target of 100.0.
+        {"mid": {"c": "100.5"}, "bid": {"h": "100.6", "l": "100.4", "c": "100.5"},
+         "ask": {"h": "100.7", "l": "100.5", "c": "100.6", "o": "100.5"}},
+        {"mid": {"c": "100.5"}, "bid": {"h": "100.6", "l": "100.4", "c": "100.5"},
+         "ask": {"h": "100.7", "l": "100.5", "c": "100.6", "o": "100.5"}},
+    ]
+    diag_vwap = [100.0] * 7
+    diag_dev_stdev = [1.0] * 7
+    _, _, already_past, total = resolve_trades(diag_candles, diag_times, diag_vwap, diag_dev_stdev,
+                                                 [(0, "LONG")], "EUR_USD", _FakeMeta(), entry_delay_minutes=5)
+    assert total == 1 and already_past == 1, \
+        f"expected 1 entry, already past its frozen target, got total={total} already_past={already_past}"
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -481,6 +520,8 @@ def _fetch_and_compute_signals(client, instrument):
 
 def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, entry_delay_minutes):
     results_by_buffer = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
+    total_entries = 0
+    already_past_target = 0  # see module docstring's EXECUTION-DELAY REALISM note
 
     for signal_index, direction in signals:
         entry_index = _delayed_entry_index(times, signal_index, entry_delay_minutes)
@@ -498,6 +539,17 @@ def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, e
         if max_bars <= 0:
             continue  # not enough real time remains in the fetched data to size a genuine hold window
 
+        total_entries += 1
+        # target/stop are FROZEN at signal time, but a delayed entry can
+        # land AFTER price has already reverted past that frozen target
+        # -- a near-guaranteed win entered after the fact, not genuine
+        # predictive skill. Counted (not excluded) so main() can report
+        # how much of any apparent improvement under delay is really
+        # just "waited long enough that the outcome was already obvious."
+        already_there = (entry_price >= target) if direction == "LONG" else (entry_price <= target)
+        if already_there:
+            already_past_target += 1
+
         for buf in STOP_Z_BUFFER_SWEEP:
             if direction == "LONG":
                 stop_loss = target - (Z_ENTRY + buf) * std_at_signal
@@ -513,7 +565,7 @@ def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, e
                     for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
     avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
 
-    return results_by_buffer, avg_spread_pips
+    return results_by_buffer, avg_spread_pips, already_past_target, total_entries
 
 
 def report_scenario(label: str, all_returns: dict) -> None:
@@ -629,11 +681,21 @@ def main():
 
     for label, delay_minutes in ENTRY_DELAY_SCENARIOS:
         all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
+        total_already_past_target = 0
+        total_entries = 0
         for instrument, (candles, times, vwap, dev_stdev, signals) in per_instrument_signals.items():
-            results_by_buffer, _ = resolve_trades(candles, times, vwap, dev_stdev, signals,
-                                                    instrument, meta[instrument], delay_minutes)
+            results_by_buffer, _, already_past_target, entries = resolve_trades(
+                candles, times, vwap, dev_stdev, signals, instrument, meta[instrument], delay_minutes)
+            total_already_past_target += already_past_target
+            total_entries += entries
             for buf in STOP_Z_BUFFER_SWEEP:
                 all_returns[buf].extend(results_by_buffer[buf])
+        if total_entries > 0:
+            pct = 100 * total_already_past_target / total_entries
+            print(f"\n[{label}] {total_already_past_target}/{total_entries} entries ({pct:.1f}%) had ALREADY "
+                  f"reached or passed their own (frozen-at-signal-time) target before the order could even be "
+                  f"placed -- near-guaranteed wins entered after the fact, not predictive skill. High here "
+                  f"would explain an apparent improvement under delay as an artifact, not a stronger edge.")
         report_scenario(label, all_returns)
 
 

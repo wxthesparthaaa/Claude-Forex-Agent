@@ -4767,3 +4767,35 @@ see whether the realistic 5-minute scenario survives the same bar the
 near-immediate one already cleared, which would mean this can ship
 today on the exact scheduler pattern every other add-on already uses,
 no infra spend required.
+
+## 2026-08-30 (continued) -- Fifth run: realistic 5-minute delay didn't just survive, it looked STRONGER -- caught why before trusting it
+
+Both scenarios survived every bar (Bonferroni, split-half, calendar-day
+pooling) at every stop-buffer level. But the realistic 5-minute-delay
+scenario came back noticeably STRONGER than the near-immediate one
+across the board (e.g. stop_buf=1.0 calendar-day: day-win-rate rose
+from 98.5% to a full 100.0%, mean_R from +0.51 to +0.65). A delay
+making an execution-sensitive signal MORE reliable, not less, is
+backwards from what should happen and needed an explanation before
+being taken as good news.
+
+**The mechanism**: target and stop are frozen at the moment the signal
+fires, but a delayed entry's price is sampled minutes later. If the
+reversion move starts fast, some fraction of "delayed" entries land
+AFTER price has already drifted past its own frozen target -- a
+near-guaranteed win entered after the fact, not predictive skill
+surviving delay. Added a direct diagnostic to `resolve_trades`
+(already_past_target/total_entries, printed once per scenario) rather
+than debate the mechanism in the abstract -- it counts exactly this
+condition at every entry, in both scenarios, so the apparent
+improvement under delay can be measured and told apart from a real one
+instead of assumed either way. New self-test constructs a hand-built
+signal where the delayed entry price is deliberately placed past its
+own frozen target and confirms the counter catches it.
+
+Not yet run -- awaiting a sixth pass to see what fraction of the
+realistic-delay scenario's entries this diagnostic actually flags. A
+high fraction there would mean the apparent strengthening under delay
+is substantially this artifact, not a stronger edge; a low fraction
+would mean the improvement holds up for a different, more interesting
+reason worth understanding on its own terms.
