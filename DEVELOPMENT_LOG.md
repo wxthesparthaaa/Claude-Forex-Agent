@@ -4823,3 +4823,58 @@ new infrastructure. This is now the most rigorously cross-examined
 result of the entire session, by a wide margin. Presented to the user
 as ready for the "build it live" decision, the same explicit checkpoint
 every other add-on this session passed through before shipping.
+
+## 2026-08-30 (continued) -- Shipped VWAP Scalp live, this session's first genuine scalp
+
+User confirmed: ship it. Built `src/vwap_scalp_addon.py` following the
+same architectural pattern as Range Confluence and ORB Fade (own
+non-blocking lock, public wrapper delegating to an `_unsafe` function,
+same gating order, same candidate-dict shape into
+`trade_execution.place_and_record`) -- but with genuinely new mechanics
+none of this session's prior add-ons needed, since this is the first
+strategy actually operating at minute resolution.
+
+**Mechanics shipped**: `_compute_vwap_signal` reimplements the
+backtest's session-anchored-VWAP + rolling-30-minute-stdev-of-deviation
+logic in `src/` (not imported from `scripts/`, matching this codebase's
+convention), fetching only TODAY's M1 candles live rather than the
+backtest's multi-month pull. The self-referential-baseline bug fixed in
+the backtest (a bar's own deviation must be scored against the window
+BEFORE being folded into it) is built into this implementation from the
+start, not retrofitted. STOP_Z_BUFFER=1.5 shipped (not 1.0 or 2.0) --
+the level with the strongest t-statistic in the backtest's realistic-
+delay scenario, not just the highest raw win rate. MAX_HOLD_MINUTES=30
+force-close, matching the backtest's own cap. COOLDOWN_MINUTES=30 after
+any signal (whether or not the resulting position already closed)
+before a fresh one can fire on the same pair, reproducing the
+backtest's own signal-spacing convention live so signal density matches
+what was actually validated, not just the entry/exit mechanics.
+
+**Runs on the existing 5-minute scheduler, unmodified** -- the whole
+point of the multi-day investigation that preceded this: the signal was
+specifically validated AGAINST this exact execution delay (the
+backtest's "realistic 5-minute poll" scenario), not assumed to tolerate
+it. No infrastructure change, no new keep-alive service, no Render plan
+upgrade. Matching ORB Fade's own convention, natural SL/TP fills are
+left to the existing `trade_monitor.check_open_trades` job with no
+Telegram ping (SL/TP here are the PRIMARY real exit, not a rare
+backstop); this module only notifies on its own actions (opening, or
+the 30-minute force-close).
+
+Off by default via a new `vwap_scalp_enabled` toggle in
+`src/dashboard_state.py`, wired into `app.py` (import, `/settings`,
+dashboard context, a 5-minute scheduler job, DEVELOPER_NOTES) and
+`templates/dashboard.html` (its own toggle row, summarizing the six
+rounds of scrutiny this went through for the Settings reader, not just
+this log). 15 new tests in `tests/test_vwap_scalp_addon.py`, mirroring
+`test_orb_fade_addon.py`'s frozen-clock convention since this module
+also gates on wall-clock hour (the watch window) and elapsed time (the
+cooldown and the 30-minute hold cap). One fixture bug caught before
+trusting the tests themselves: a perfectly flat baseline has EXACTLY
+zero variance, which `_compute_vwap_signal` correctly treats as "no
+signal" -- meaning a literally-flat test fixture could never fire a
+signal at all, regardless of how large the final "extension" bar was.
+Fixed with a tiny +-0.002 baseline oscillation, giving a real, nonzero
+stdev to fire against. Full suite (512 tests) passes; `py_compile` +
+`import app` verified before commit, per this session's established
+discipline.

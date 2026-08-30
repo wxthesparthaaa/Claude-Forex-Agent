@@ -187,6 +187,17 @@ class DashboardState:
     # data. Off by default. See src/orb_fade_addon.py and
     # DEVELOPMENT_LOG.md 2026-08-30.
     orb_fade_enabled: bool = False
+    # VWAP Scalp: the third live strategy and this session's first
+    # genuine scalp (minutes, not hours-to-months) -- fades a 2-stdev
+    # extension from the session VWAP back toward it. The most
+    # rigorously cross-examined result this session: two real bug fixes,
+    # a pseudo-replication fix, cross-instrument-correlation pooling,
+    # and an artifact check for delayed-entry execution all confirmed
+    # before shipping. Runs on the existing 5-minute scheduler cadence
+    # (validated against exactly this delay in the backtest -- no new
+    # infrastructure needed). Off by default. See src/vwap_scalp_addon.py
+    # and DEVELOPMENT_LOG.md 2026-08-30.
+    vwap_scalp_enabled: bool = False
 
 
 def default_state() -> DashboardState:

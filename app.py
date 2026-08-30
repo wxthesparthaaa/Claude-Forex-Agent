@@ -69,6 +69,7 @@ from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
 from range_confluence_addon import check_range_confluence_opportunities
 from orb_fade_addon import check_orb_fade_opportunities
+from vwap_scalp_addon import check_vwap_scalp_opportunities
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -83,6 +84,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Shipped VWAP Scalp (src/vwap_scalp_addon.py) as a live Settings toggle, off by default: "
+                    "the session's first genuine scalp (30-min max hold), fades a 2-stdev extension from the "
+                    "session VWAP back toward it. Most rigorously tested result this session -- survived two "
+                    "bug fixes, a pseudo-replication correction, cross-instrument pooling, and an artifact "
+                    "check for delayed-entry execution, all before shipping. Runs on the existing 5-minute "
+                    "scheduler; validated at exactly that execution delay, no new infra needed."),
     ("2026-08-30", "Shipped ORB Fade (src/orb_fade_addon.py) as a live Settings toggle, off by default: fades "
                     "the first London-session breakout of the overnight Asian range, RR=2.0 mirrored stop/target, "
                     "8-hour time cap if neither fires. Caveat stated plainly in the module and to the user: this "
@@ -513,6 +520,7 @@ def dashboard():
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         range_confluence_enabled=state.range_confluence_enabled,
         orb_fade_enabled=state.orb_fade_enabled,
+        vwap_scalp_enabled=state.vwap_scalp_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -826,6 +834,11 @@ def settings():
         # a documented failure rather than confirming a fresh finding.
         state.orb_fade_enabled = request.form.get("orb_fade_enabled") == "on"
 
+        # VWAP Scalp: off by default -- see src/vwap_scalp_addon.py and
+        # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
+        # this went through before shipping.
+        state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
+
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):
             state.autopilot_scan_interval_minutes = int(interval)
@@ -915,6 +928,11 @@ def start_scheduler():
     # comfortably fine-grained against its 15-minute breakout bars and
     # 8-hour hold cap. See src/orb_fade_addon.py's module docstring.
     scheduler.add_job(check_orb_fade_opportunities,
+                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # VWAP Scalp: same uniform 5-minute cadence -- validated at exactly
+    # this execution delay in the backtest (see src/vwap_scalp_addon.py's
+    # module docstring), not a compromise made after the fact.
+    scheduler.add_job(check_vwap_scalp_opportunities,
                        IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
