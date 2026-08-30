@@ -384,6 +384,14 @@ def _check_range_confluence_opportunities_unsafe(client, range_confluence_enable
     risk_config = risk_config_from_state(state)
     opened = []
 
+    # Unconditional once enabled + autopilot is active -- same "print
+    # one line per actual scan attempt" convention as the dispatcher's
+    # own tick and autopilot's interval scan (see scheduled_jobs.py).
+    # Without this, a real crash mid-loop and "ran, correctly found
+    # nothing to do" look IDENTICAL in Render's logs -- both silent.
+    print(f"INFO: Range Confluence tick at {datetime.now(timezone.utc).isoformat()} -- "
+          f"watching {', '.join(RANGE_CONFLUENCE_PAIRS)}", flush=True)
+
     for instrument in RANGE_CONFLUENCE_PAIRS:
         try:
             entries = load_journal()
@@ -409,4 +417,5 @@ def _check_range_confluence_opportunities_unsafe(client, range_confluence_enable
             print(f"WARNING: Range Confluence tick failed for {instrument}: {e}", flush=True)
             continue
 
+    print(f"INFO: Range Confluence tick finished -- {len(opened)} opened", flush=True)
     return opened

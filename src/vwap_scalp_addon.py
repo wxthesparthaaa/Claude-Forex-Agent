@@ -328,6 +328,16 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     opened = []
 
+    # Unconditional once enabled + autopilot is active -- same "print
+    # one line per actual scan attempt" convention as the dispatcher's
+    # own tick and autopilot's interval scan (see scheduled_jobs.py).
+    # Without this, a real crash mid-loop and "ran, correctly found
+    # nothing to do" look IDENTICAL in Render's logs -- both silent.
+    in_watch_window = WATCH_START_HOUR <= now.hour < WATCH_END_HOUR
+    print(f"INFO: VWAP Scalp tick at {now.isoformat()} -- watching {', '.join(VWAP_SCALP_PAIRS)} "
+          f"({'inside' if in_watch_window else 'outside'} the {WATCH_START_HOUR:02d}:00-{WATCH_END_HOUR:02d}:00 "
+          f"UTC watch window)", flush=True)
+
     for instrument in VWAP_SCALP_PAIRS:
         try:
             entries = load_journal()
@@ -362,4 +372,5 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
             continue
 
+    print(f"INFO: VWAP Scalp tick finished -- {len(opened)} opened", flush=True)
     return opened

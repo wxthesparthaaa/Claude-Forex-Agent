@@ -286,6 +286,16 @@ def _check_orb_fade_opportunities_unsafe(client, orb_fade_enabled) -> list:
     today = now.date()
     opened = []
 
+    # Unconditional once enabled + autopilot is active -- same "print
+    # one line per actual scan attempt" convention as the dispatcher's
+    # own tick and autopilot's interval scan (see scheduled_jobs.py).
+    # Without this, a real crash mid-loop and "ran, correctly found
+    # nothing to do" look IDENTICAL in Render's logs -- both silent.
+    in_watch_window = LONDON_OPEN_HOUR <= now.hour < BREAKOUT_WATCH_END_HOUR
+    print(f"INFO: ORB Fade tick at {now.isoformat()} -- watching {', '.join(ORB_FADE_PAIRS)} "
+          f"({'inside' if in_watch_window else 'outside'} the {LONDON_OPEN_HOUR:02d}:00-"
+          f"{BREAKOUT_WATCH_END_HOUR:02d}:00 UTC breakout watch window)", flush=True)
+
     for instrument in ORB_FADE_PAIRS:
         try:
             entries = load_journal()
@@ -334,4 +344,5 @@ def _check_orb_fade_opportunities_unsafe(client, orb_fade_enabled) -> list:
             print(f"WARNING: ORB Fade tick failed for {instrument}: {e}", flush=True)
             continue
 
+    print(f"INFO: ORB Fade tick finished -- {len(opened)} opened", flush=True)
     return opened

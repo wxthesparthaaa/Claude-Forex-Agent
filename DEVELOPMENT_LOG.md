@@ -4878,3 +4878,41 @@ Fixed with a tiny +-0.002 baseline oscillation, giving a real, nonzero
 stdev to fire against. Full suite (512 tests) passes; `py_compile` +
 `import app` verified before commit, per this session's established
 discipline.
+
+## 2026-08-31 -- Fixed a real observability gap: none of the 3 newest add-ons logged a routine tick
+
+User asked how to verify VWAP Scalp was actually running live and
+pasted real Render logs. Confirmed via the GitHub-synced state
+(`origin/state-sync` branch) that `vwap_scalp_enabled: true` and
+autopilot phase is active -- the toggle and gating are correctly live.
+But the pasted logs contained zero mention of VWAP Scalp at all, even
+though it should have been ticking every 5 minutes alongside
+`dispatcher tick`/`check_open_trades tick`/`autopilot interval scan`,
+all of which DO print an unconditional INFO line every time they run
+(see scheduled_jobs.py's own comment: "one line per actual scan
+attempt... needs no log line" was explicitly rejected there as the
+wrong call, after a real incident where a stuck reconciliation was
+invisible for 45+ minutes with zero log trace).
+
+Checked: none of Range Confluence, ORB Fade, or VWAP Scalp had this
+same unconditional tick line -- all three only ever printed on an
+exception or an actual trade, meaning "ticking correctly, found nothing
+to do" and "crashed silently" were indistinguishable from the logs for
+any of them. Added a matching `INFO: <strategy> tick at ... -- watching
+{pairs}` line (plus a `... tick finished -- N opened` summary) to all
+three, once enabled + autopilot-active, mirroring scheduled_jobs.py's
+own established convention exactly rather than inventing a new logging
+style. This was purely additive (no behavior change) -- full suite
+(512 tests) still passes, `py_compile` + `import app` verified.
+
+Separately, user also asked about `WARNING: check_open_trades skipped
+-- JOURNAL_LOCK held by another caller` appearing in the same logs, 4
+times consecutively at one point. Confirmed this is documented,
+intentional, non-blocking-retry behavior (trade_monitor.py's own
+comment), not a bug -- 4 in a row (~20 min) is short of the 9-in-a-row
+(~45 min) threshold the code's own comment cites as the signature of a
+genuinely stuck reconciliation, and the logs show it self-recovered
+with clean successes right after. Plausible explanation: 3 more
+add-ons now share JOURNAL_LOCK on the same 5-minute cadence, so
+somewhat more contention than before is expected. Flagged as "watch
+for a longer streak," not something to fix now.
