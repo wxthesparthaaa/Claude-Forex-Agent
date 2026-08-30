@@ -4125,6 +4125,54 @@ bogus value) checks out. Whether anything actually survives all three
 layers can only be answered by the real run -- awaiting real-data
 output.
 
+## 2026-08-30 (continued) -- Combination search real-data run: confirms the redundancy risk flagged up front, no new edge
+
+Real run: 560 combinations x 5 horizons = 2800 Stage-1 comparisons.
+2520 (90%) survived Benjamini-Hochberg FDR. Of these, most passed
+split-half too, leaving 1946 candidates for the one-shot Stage-3
+holdout test.
+
+**The 90%-survival number and the subsequent hundreds of "VALIDATED"
+Stage-3 rows are NOT evidence of hundreds of real, independent edges.**
+This is the exact redundancy risk the script's own docstring flagged
+before running it: with a 16-feature bank containing many correlated
+near-duplicates, "combinations" of 3 features aren't 3 independent
+opinions agreeing -- once 2 of the 3 chosen features already reflect
+the same underlying phenomenon, the 3rd slot rarely changes the
+outcome, so one real signal gets counted as dozens of "different"
+validated combinations.
+
+Concretely: `dist_from_252_high + dist_from_252_low` (a "where does
+price sit in its own 52-week range" measure) validates at 20d/40d/60d
+with almost EVERY possible third feature -- every momentum lookback,
+every SMA distance, gap, body_ratio. That is one real 2-feature signal
+counted ~14 times over, not 14 discoveries. `rv_percentile` shows the
+same pattern, recurring in an outsized share of validated rows
+regardless of partner -- consistent with the single-feature discovery
+run's own finding that it was the one mildly-credible thread there too.
+
+**Momentum-heavy combinations mostly reproduced the exact inversion
+failure from the single-feature run.** At 40d/60d, dozens of
+NOT-validated rows show the same dramatic sign flip already documented:
+`mom_5+mom_20+mom_60`@60d discovery +1.55% -> holdout -1.11%;
+`mom_20+mom_60+mom_90`@60d discovery +1.83% -> holdout -0.68%; and many
+more. Wrapping unstable momentum features in a 3-way combination did
+not fix the regime-dependence -- it diluted it across a few hundred
+more rows showing the identical failure mode.
+
+**Conclusion**: no new validated edge. The combination search's real
+value was methodological, not a discovery: it reconfirmed the two
+threads already flagged (52-week range position, volatility percentile)
+as the only ones showing up with any consistency, reconfirmed momentum/
+extension signals are unstable across time even combined, and
+demonstrated concretely why a combination search over a correlated
+feature bank needs a deduplication/clustering step BEFORE combining --
+otherwise apparent discoveries inflate by roughly an order of magnitude
+without adding real information. That clustering step is the natural
+next refinement if this thread is pursued further, not something to
+chase blindly on this run's raw output. 27 distinct hypotheses/
+approaches tested this session total.
+
 ## 2026-08-30 (continued) -- Pattern discovery real-data run: the three-layer design caught exactly what it was built to catch
 
 Real run across 17 instruments (discovery ~1490 days, holdout ~640 days

@@ -81,6 +81,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Combination search real run: 90% of 2800 comparisons survived FDR, hundreds 'validated' at "
+                    "Stage 3 -- but almost all reduce to 2 signals (52wk range position, rv_percentile) counted "
+                    "~14x over via redundant feature triples. Momentum combos reproduced the same inversion "
+                    "failure. No new edge -- confirms need to cluster correlated features before combining."),
     ("2026-08-30", "Pattern discovery real run: a big reversal cluster (48/80 FDR survivors, mostly correlated "
                     "momentum/SMA-distance proxies) passed split-half but INVERTED on the true holdout -- exactly "
                     "the failure mode this design exists to catch. Only rv_percentile@20d/40d mildly credible "
