@@ -95,6 +95,24 @@ mean R-multiple BEFORE the significance test and split-half check ever
 see it -- this is the number that should actually be trusted, not the
 raw per-trade one.
 
+EXECUTION-DELAY REALISM: the signal was validated assuming entry within
+~1 real minute of firing. This app's existing live add-ons (Range
+Confluence, ORB Fade, base strategy) all poll every 5 minutes -- the
+ceiling this app's current hosting (free Render, spins down after 15
+min idle) plus its current keep-alive monitor (free UptimeRobot, 5-
+minute checks) actually delivers. Rather than assume this signal either
+needs new infrastructure or can't be deployed, ENTRY_DELAY_SCENARIOS
+tests the IDENTICAL signal set under two execution models side by side:
+near-immediate (~1 minute, what was validated above) and a realistic
+worst case for a 5-minute poll (you don't notice a signal until your
+very next scheduled check). Both scenarios reuse the exact same
+detected signals via resolve_trades -- only how long it takes to act on
+one differs. If the realistic scenario still survives the same
+Bonferroni/split-half bar, this can ship today on the exact scheduler
+pattern every other add-on already uses, no infra spend required; if it
+collapses, that tells us decisively that this specific edge needs
+faster execution rather than being a guess.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -292,6 +310,39 @@ def _minutes_bar_count(times: list, start_index: int, minutes: int) -> int:
     return j - start_index
 
 
+def _delayed_entry_index(times: list, signal_index: int, delay_minutes: float):
+    """First bar index after signal_index whose timestamp is at least
+    delay_minutes after the signal bar's own time -- models how long a
+    live system takes to notice a signal and act on it, gap-aware in
+    the same way _minutes_bar_count is. delay_minutes=1 approximates
+    near-immediate reaction; delay_minutes=5 approximates the WORST
+    CASE for a system that only checks every 5 minutes -- the cadence
+    every existing live add-on in this app currently uses, since that's
+    the ceiling this hosting setup (free Render + free UptimeRobot)
+    actually delivers -- you might not notice a signal until your very
+    next scheduled check, up to 5 minutes later. Returns None if no
+    such bar exists in the fetched data."""
+    n = len(times)
+    cutoff = times[signal_index] + timedelta(minutes=delay_minutes)
+    for j in range(signal_index + 1, n):
+        if times[j] >= cutoff:
+            return j
+    return None
+
+
+# Two execution models tested side by side against the IDENTICAL signal
+# set: (label, delay_minutes). "immediate" is what every result so far
+# in this script assumed (entry within ~1 real minute of the signal);
+# "realistic" tests whether the SAME statistically-validated signal
+# still holds up if entry is delayed by the full worst case of this
+# app's current 5-minute scheduler cadence -- the question of whether
+# this needs new infrastructure at all, or can ship today unchanged.
+ENTRY_DELAY_SCENARIOS = [
+    ("near-immediate (entry within ~1 real minute)", 1),
+    ("realistic 5-minute poll (matches this app's current infra)", 5),
+]
+
+
 def find_scalp_signals(times: list, z: list):
     """Returns [(signal_index, direction), ...] -- one non-overlapping
     candidate per MAX_HOLD_BARS window, only inside the watch hours."""
@@ -369,6 +420,15 @@ def _selftest():
     assert _minutes_bar_count(dense_times, 0, 30) == 30, \
         "a gap-free feed should still cap at exactly 30 bars for a 30-minute window"
 
+    # _delayed_entry_index: a 1-minute delay on a gap-free feed should
+    # land on the very next bar; a 5-minute delay should skip 4 bars
+    # ahead of that -- the whole point of the realistic-execution
+    # scenario this enables.
+    assert _delayed_entry_index(dense_times, 0, 1) == 1
+    assert _delayed_entry_index(dense_times, 0, 5) == 5
+    # No bar far enough in the future -> None, not an out-of-range index.
+    assert _delayed_entry_index(dense_times, 38, 5) is None
+
     # daily_aggregate must collapse same-(instrument,day) trades into
     # ONE mean observation, and keep different instruments on the same
     # calendar day as SEPARATE observations (they're different markets,
@@ -403,22 +463,28 @@ def _selftest():
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
 
 
-def backtest_instrument(client, instrument, meta):
+def _fetch_and_compute_signals(client, instrument):
+    """Fetch + VWAP/z-score + signal detection -- done ONCE per
+    instrument and shared across every entry-delay scenario tested,
+    since the underlying signals are identical regardless of how long a
+    live system takes to react to them; only the RESOLUTION (entry
+    price, hold window) differs per scenario."""
     test_end = datetime.now(timezone.utc)
     test_start = test_end - timedelta(days=TEST_DAYS)
     candles = fetch_history_cached(client, instrument, "M1", test_start, test_end, price="MBA")
     if len(candles) < 5000:
         return None
-
     times, vwap, dev_stdev, z = compute_vwap_signals(candles)
     signals = find_scalp_signals(times, z)
-    n = len(candles)
+    return candles, times, vwap, dev_stdev, signals
 
+
+def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, entry_delay_minutes):
     results_by_buffer = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
 
     for signal_index, direction in signals:
-        entry_index = signal_index + 1
-        if entry_index >= n:
+        entry_index = _delayed_entry_index(times, signal_index, entry_delay_minutes)
+        if entry_index is None:
             continue
         if direction == "LONG":
             entry_price = float(candles[entry_index]["ask"]["o"])
@@ -447,49 +513,22 @@ def backtest_instrument(client, instrument, meta):
                     for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
     avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
 
-    return len(signals), results_by_buffer, avg_spread_pips
+    return results_by_buffer, avg_spread_pips
 
 
-def main():
-    _selftest()
-    client = OandaClient()
-    meta = fetch_instrument_metadata(client, SCALP_PAIRS)
-
-    print(f"Fetching {len(SCALP_PAIRS)} instruments for the VWAP reversion scalp test "
-          f"({TEST_DAYS} days of 1-minute mid+bid+ask candles each, ~{TEST_DAYS * 1440:,} bars/instrument)...")
-
-    all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
-    total_signals = 0
-
-    for instrument in SCALP_PAIRS:
-        result = backtest_instrument(client, instrument, meta[instrument])
-        if result is None:
-            print(f"  {instrument:10s}  insufficient history, skipped")
-            continue
-        n_signals, results_by_buffer, avg_spread_pips = result
-        total_signals += n_signals
-        resolved = sum(len(v) for v in results_by_buffer.values()) // max(1, len(STOP_Z_BUFFER_SWEEP))
-        spread_str = f"{avg_spread_pips:.2f} pips avg spread" if avg_spread_pips is not None else "no spread data"
-        print(f"  {instrument:10s}  {n_signals} signals, ~{resolved} resolved per stop level, {spread_str}")
-        for buf in STOP_Z_BUFFER_SWEEP:
-            all_returns[buf].extend(results_by_buffer[buf])
-
-    print(f"\n{total_signals} total candidate signals across {len(SCALP_PAIRS)} instruments\n")
-    if total_signals == 0:
-        print("No signals found -- nothing to test.")
-        return
-
+def report_scenario(label: str, all_returns: dict) -> None:
     bonferroni_alpha = 0.05 / len(STOP_Z_BUFFER_SWEEP)
-    print(f"{'='*76}\nRAW PER-TRADE R-MULTIPLE (each of the ~1500 signals/instrument treated as its "
-          f"own independent draw)\n{'='*76}")
+    print(f"\n{'#'*76}\nENTRY-DELAY SCENARIO: {label}\n{'#'*76}")
+
+    print(f"\n{'='*76}\nRAW PER-TRADE R-MULTIPLE (each signal treated as its own independent "
+          f"draw)\n{'='*76}")
     print("NOT the number to trust for significance -- see the per-INSTRUMENT-DAY re-test below. At "
           "~17 signals/day/instrument, trades on the same day plainly share the same intraday volatility "
           "regime and are not independent observations; a plain t-test over raw trades badly overstates "
           "how certain this result really is. Shown here only for the effect size (mean_R, win rate).")
     print(f"{'stop_buf':>9s} {'n':>6s} {'win_rate':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}")
     for buf in STOP_Z_BUFFER_SWEEP:
-        entries = all_returns[buf]
-        r_multiples = [r for _, _, r in entries]
+        r_multiples = [r for _, _, r in all_returns[buf]]
         n_obs = len(r_multiples)
         if n_obs < 30:
             print(f"{buf:>9.1f}  (fewer than 30 resolved trades, skipped)")
@@ -501,13 +540,12 @@ def main():
     print(f"\n{'='*76}\nPER-INSTRUMENT-DAY RE-TEST (the number that actually matters)\n{'='*76}")
     print("Every trade's R-multiple for a given (instrument, calendar day) is averaged into ONE "
           "observation first -- treating a trading day as the independent unit, not each individual "
-          "scalp -- then the same significance test runs on those day-level means instead of raw trades. "
-          "This is the honest sample size: 5 instruments x <=90 days, not thousands of trades.")
+          "scalp -- then the same significance test runs on those day-level means instead of raw trades.")
     print(f"{'stop_buf':>9s} {'n_days':>7s} {'day_win%':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
     survives_bonferroni = []
     daily_series_by_buf = {}
     for buf in STOP_Z_BUFFER_SWEEP:
-        daily = daily_aggregate(all_returns[buf])  # [(date, mean_r), ...] sorted chronologically
+        daily = daily_aggregate(all_returns[buf])
         daily_series_by_buf[buf] = daily
         day_means = [r for _, r in daily]
         n_days = len(day_means)
@@ -521,12 +559,11 @@ def main():
         if sig_bonf:
             survives_bonferroni.append(buf)
         print(f"{buf:>9.1f} {n_days:7d} {100*day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
-    print(f"\nBonferroni-adjusted threshold for {len(STOP_Z_BUFFER_SWEEP)} stop-buffer levels: "
+    print(f"Bonferroni-adjusted threshold for {len(STOP_Z_BUFFER_SWEEP)} stop-buffer levels: "
           f"p < {bonferroni_alpha:.4f}")
 
     if survives_bonferroni:
-        print(f"\n{'='*76}\nSPLIT-HALF CHECK on the level(s) that survived Bonferroni "
-              f"(chronological instrument-days, first half vs second half)\n{'='*76}")
+        print(f"\nSPLIT-HALF CHECK (chronological instrument-days, first half vs second half):")
         for buf in survives_bonferroni:
             daily = daily_series_by_buf[buf]
             half = len(daily) // 2
@@ -542,12 +579,7 @@ def main():
         print("\nNo stop-buffer level survived Bonferroni on the per-instrument-day re-test -- no "
               "split-half check to run.")
 
-    print(f"\n{'='*76}\nCALENDAR-DAY RE-TEST (all 5 instruments pooled -- the strictest check)\n{'='*76}")
-    print("Several of these 5 majors (EUR_USD/GBP_USD/AUD_USD especially) plainly tend to move together "
-          "on shared risk-on/risk-off macro days, so even the per-instrument-day units above aren't fully "
-          "independent of EACH OTHER on the same date. This pools every trade from every instrument on a "
-          "given calendar day into ONE observation -- at most ~90 independent units, the most conservative "
-          "reading this script can produce.")
+    print(f"\n{'='*76}\nCALENDAR-DAY RE-TEST (all instruments pooled -- the strictest check)\n{'='*76}")
     print(f"{'stop_buf':>9s} {'n_cal_days':>10s} {'day_win%':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
     for buf in STOP_Z_BUFFER_SWEEP:
         cal_daily = calendar_day_aggregate(all_returns[buf])
@@ -561,6 +593,48 @@ def main():
         sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
         sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
         print(f"{buf:>9.1f} {n_days:10d} {100*day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
+
+
+def main():
+    _selftest()
+    client = OandaClient()
+    meta = fetch_instrument_metadata(client, SCALP_PAIRS)
+
+    print(f"Fetching {len(SCALP_PAIRS)} instruments for the VWAP reversion scalp test "
+          f"({TEST_DAYS} days of 1-minute mid+bid+ask candles each, ~{TEST_DAYS * 1440:,} bars/instrument)...")
+
+    per_instrument_signals = {}
+    total_signals = 0
+
+    for instrument in SCALP_PAIRS:
+        result = _fetch_and_compute_signals(client, instrument)
+        if result is None:
+            print(f"  {instrument:10s}  insufficient history, skipped")
+            continue
+        candles, times, vwap, dev_stdev, signals = result
+        per_instrument_signals[instrument] = result
+        total_signals += len(signals)
+        spreads_pips = [(float(c["ask"]["c"]) - float(c["bid"]["c"])) / float(meta[instrument].pip_size)
+                        for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
+        avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
+        spread_str = f"{avg_spread_pips:.2f} pips avg spread" if avg_spread_pips is not None else "no spread data"
+        print(f"  {instrument:10s}  {len(signals)} signals, {spread_str}")
+
+    print(f"\n{total_signals} total candidate signals across {len(SCALP_PAIRS)} instruments -- identical "
+          f"signal set reused for every entry-delay scenario below; only how long it takes to ACT on a "
+          f"signal differs between them.")
+    if total_signals == 0:
+        print("No signals found -- nothing to test.")
+        return
+
+    for label, delay_minutes in ENTRY_DELAY_SCENARIOS:
+        all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
+        for instrument, (candles, times, vwap, dev_stdev, signals) in per_instrument_signals.items():
+            results_by_buffer, _ = resolve_trades(candles, times, vwap, dev_stdev, signals,
+                                                    instrument, meta[instrument], delay_minutes)
+            for buf in STOP_Z_BUFFER_SWEEP:
+                all_returns[buf].extend(results_by_buffer[buf])
+        report_scenario(label, all_returns)
 
 
 if __name__ == "__main__":

@@ -4729,3 +4729,41 @@ this session's other add-ons required. Presented to the user as: the
 statistics are now about as solid as this session produces, but
 shipping needs solving the execution-latency problem first, not just
 flipping a toggle.
+
+## 2026-08-30 (continued) -- Investigated infra feasibility, then built a way to test around it entirely
+
+Asked to investigate feasibility before spending anything on
+infrastructure. Findings, web-sourced rather than guessed: this app's
+free Render tier grants 750 free instance-hours/month (a 31-day month
+has 744, so keeping it awake all month would still fit the free quota
+-- the real constraint is nothing currently pings it often enough to
+prevent the 15-minute spin-down) and free UptimeRobot caps checks at
+5 minutes, which is almost certainly why every existing live add-on in
+this app already uses a 5-minute cadence -- not an arbitrary choice,
+the ceiling the current stack imposes. Render's own Starter plan ($7/
+mo) removes the spin-down entirely and would also make every existing
+job more reliable, not just a new one; UptimeRobot's Solo plan ($13/mo)
+is a costlier workaround that keeps the free Render tier awake via
+faster pings instead.
+
+User then asked whether the STRATEGY could instead be tested to work
+around the free tiers, rather than spending on infra. Built exactly
+that test rather than assuming an answer: `ENTRY_DELAY_SCENARIOS` now
+resolves the IDENTICAL detected signal set under two execution models
+side by side -- near-immediate (~1 real minute, what every result so
+far assumed) and a realistic worst case for a 5-minute poll (a signal
+isn't noticed until the very next scheduled check, up to 5 minutes
+later). `backtest_instrument` was split into `_fetch_and_compute_signals`
+(fetch + VWAP/z-score/signal-detection, done once) and `resolve_trades`
+(entry/exit resolution for a GIVEN delay, called once per scenario) so
+both scenarios share the exact same underlying signals -- only how long
+it takes to act on one differs between them. `report_scenario` runs the
+full instrument-day + calendar-day significance pipeline for each,
+printed side by side for direct comparison. New self-tests for
+`_delayed_entry_index` (1-minute delay lands on the very next bar,
+5-minute delay skips 4 bars ahead, no bar far enough returns None, not
+an out-of-range index). Not yet run -- awaiting the user's next pass to
+see whether the realistic 5-minute scenario survives the same bar the
+near-immediate one already cleared, which would mean this can ship
+today on the exact scheduler pattern every other add-on already uses,
+no infra spend required.
