@@ -83,6 +83,10 @@ def closes_from_candles(candles: list) -> list:
     return [float(c["mid"]["c"]) for c in candles]
 
 
+def opens_from_candles(candles: list) -> list:
+    return [float(c["mid"]["o"]) for c in candles]
+
+
 def highs_from_candles(candles: list) -> list:
     return [float(c["mid"]["h"]) for c in candles]
 
