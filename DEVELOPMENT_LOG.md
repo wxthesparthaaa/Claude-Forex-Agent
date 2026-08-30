@@ -3955,3 +3955,38 @@ split-half check needed. Moving to a second round-3 candidate:
 Nison-style candlestick reversal patterns (candle SHAPE as the trigger,
 a genuinely different construction from every retracement/extreme/
 volatility-based pattern tested so far).
+
+## 2026-08-30 (continued) -- Trader-book round 3, candidate #2: candlestick reversal patterns, ruled out
+
+Built `scripts/backtest_candlestick_reversal.py`: Steve Nison's bullish/
+bearish engulfing and hammer/shooting star patterns, the first pattern
+this session defined purely by candle SHAPE rather than any price
+level. Required a 10-day trend context (Nison's own "never trade
+candlesticks in a vacuum" rule) plus next-day close confirmation before
+counting as a trade -- no confirmation, no trade, matching Turtle
+Soup's and Oops's own convention. Verified look-ahead-safe with 5
+synthetic cases, including proving a hammer-shaped candle with no
+preceding downtrend correctly produces no signal. Ran on the
+17-instrument commodities-inclusive universe, pooling all four pattern
+variants into one direction-sign test per horizon (this session's
+established convention for sub-variants of one pattern family).
+
+**Result**: 1340 signals across 17 instruments (568 bullish engulfing,
+501 bearish engulfing, 179 hammer, 92 shooting star). Same 5
+pre-specified horizons, same Bonferroni threshold:
+
+| hold (days) | n | mean return | t | p |
+|---|---|---|---|---|
+| 1 | 1340 | -0.0074% | -0.24 | 0.8111 |
+| 3 | 1339 | -0.0724% | -1.27 | 0.2030 |
+| 5 | 1339 | -0.0644% | -0.98 | 0.3271 |
+| 10 | 1334 | -0.2154% | -2.26 | 0.0238 |
+| 20 | 1322 | -0.1184% | -0.81 | 0.4195 |
+
+The 10-day horizon clears the raw 0.05 threshold but NOT the
+Bonferroni-adjusted one (0.01) -- on this session's standing bar, it's
+ruled out without a split-half check. Worth noting for what it's worth:
+the sign is NEGATIVE (confirmed reversal trades tend to lose at 10
+days), the same "the documented pattern's own predicted direction is
+wrong, not just absent" shape Ichimoku's 96-bar result showed, just not
+strong enough to clear the higher bar this time. Ruled out.
