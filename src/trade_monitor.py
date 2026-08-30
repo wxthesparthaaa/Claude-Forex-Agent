@@ -248,7 +248,8 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
     return changed
 
 
-def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually") -> list:
+def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually",
+                            trade_ids: set | None = None) -> list:
     """Closes every journal-tracked OPEN trade immediately via OANDA,
     regardless of SL/TP/expiry -- an explicit user-initiated "get me
     flat now" action, distinct from the other three closure paths, so
@@ -262,10 +263,19 @@ def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually")
     cancelled {reason}") -- defaults to the wording the manual /execute
     button has always used. scheduled_jobs.check_friday_preclose_cancel
     passes its own wording so an automated weekend-protective cancel
-    doesn't read as if a human clicked the button."""
+    doesn't read as if a human clicked the button.
+
+    trade_ids: None (default) closes every open trade, matching the
+    original "Cancel all trades" behavior exactly. A non-None set
+    restricts this to just those trade_ids -- backs the dashboard's
+    per-trade "Close" button (app.py's /close_trade/<trade_id> route),
+    reusing this exact same close-and-journal path rather than a sixth
+    hand-rolled copy of it."""
     with JOURNAL_LOCK:
         entries = load_journal()
         pending = open_entries(entries)
+        if trade_ids is not None:
+            pending = [e for e in pending if e["trade_id"] in trade_ids]
         if not pending:
             return []
 
@@ -275,6 +285,8 @@ def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually")
 
         for entry in entries:
             if entry["status"] != "OPEN":
+                continue
+            if trade_ids is not None and entry["trade_id"] not in trade_ids:
                 continue
             try:
                 result = client.close_trade(entry["trade_id"])
@@ -295,8 +307,12 @@ def cancel_all_open_trades(client: OandaClient = None, reason: str = "manually")
             total_pnl = sum(e["realized_pnl"] for e in closed)
             currency = closed[0].get("account_currency", "")
             lines = "\n".join(f"  {e['instrument']} {e['direction']}: {e['realized_pnl']:+.2f}" for e in closed)
+            # "All trades" only reads correctly when this really did close
+            # everything open -- a trade_ids-filtered call (the per-trade
+            # dashboard button) gets its own, accurate wording instead.
+            header = "All trades cancelled" if trade_ids is None else "Trade(s) closed"
             send_message(
-                f"🛑 <b>All trades cancelled {reason}</b> ({len(closed)} closed)\n{lines}\n"
+                f"🛑 <b>{header} {reason}</b> ({len(closed)} closed)\n{lines}\n"
                 f"Total P&L: {total_pnl:+.2f} {currency}"
             )
         return closed
@@ -383,6 +399,7 @@ def live_trades_view(client: OandaClient = None) -> list:
         live = live_by_id.get(entry["trade_id"], {})
         elapsed = hours_open(entry, now)
         rows.append({
+            "trade_id": entry["trade_id"],
             "instrument": entry["instrument"],
             "direction": entry["direction"],
             "units": entry["units"],

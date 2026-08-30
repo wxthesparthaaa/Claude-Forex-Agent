@@ -650,6 +650,31 @@ def cancel_all_trades():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/close_trade/<trade_id>", methods=["POST"])
+def close_trade_route(trade_id):
+    """Closes ONE open position immediately, regardless of SL/TP --
+    explicit user request to be able to cherry-pick the timing of an
+    individual live trade rather than only having the all-or-nothing
+    "Cancel all trades" button. Reuses cancel_all_open_trades's exact
+    close-and-journal path via its trade_ids filter, not a separate
+    implementation -- only ever reached by the user's own click (the
+    dashboard requires a JS confirm() first, same posture as the bulk
+    cancel button)."""
+    try:
+        client = OandaClient()
+        closed = cancel_all_open_trades(client, reason="manually", trade_ids={trade_id})
+        if closed:
+            entry = closed[0]
+            flash(f"Closed {entry['instrument']} ({entry['realized_pnl']:+.2f}).", "success")
+        else:
+            flash("That trade is no longer open.", "error")
+    except Exception as e:
+        print(f"WARNING: close_trade_route failed for {trade_id}: {e}", flush=True)
+        flash(str(e), "error")
+
+    return redirect(url_for("dashboard"))
+
+
 @app.route("/journal.xlsx")
 def journal_export():
     """Generated on demand from the current trade journal, not a

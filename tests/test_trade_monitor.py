@@ -448,6 +448,7 @@ def test_live_trades_view_enriches_with_live_price_and_pnl(tmp_path, monkeypatch
     assert rows[0]["current_price"] == "1.102"
     assert rows[0]["unrealized_pnl"] == 12.5
     assert rows[0]["hours_open"] >= 0.0
+    assert rows[0]["trade_id"] == "101"  # backs the dashboard's per-trade "Close" button
 
 
 def test_cancel_all_open_trades_noop_when_nothing_open(tmp_path, monkeypatch):
@@ -473,6 +474,29 @@ def test_cancel_all_open_trades_closes_and_marks_cancelled(mock_send, tmp_path, 
     assert all(e["status"] == tj.CANCELLED for e in entries)
     mock_send.assert_called_once()
     assert "cancelled manually" in mock_send.call_args[0][0]
+
+
+@patch("trade_monitor.send_message")
+def test_cancel_all_open_trades_trade_ids_filter_closes_only_that_one(mock_send, tmp_path, monkeypatch):
+    # Backs the dashboard's per-trade "Close" button: the SAME function,
+    # restricted to one trade_id, must leave every other open position
+    # completely untouched.
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    client = FakeClient(close_trade_result={"orderFillTransaction": {"pl": "8.0", "price": "1.11"}})
+    closed = trade_monitor.cancel_all_open_trades(client, trade_ids={"101"})
+
+    assert client.closed_ids == ["101"]  # GBP_USD's trade never touched
+    assert len(closed) == 1
+    assert closed[0]["instrument"] == "EUR_USD"
+
+    entries = {e["trade_id"]: e for e in tj.load_journal()}
+    assert entries["101"]["status"] == tj.CANCELLED
+    assert entries["102"]["status"] == tj.OPEN  # untouched
+    mock_send.assert_called_once()
+    assert "Trade(s) closed manually" in mock_send.call_args[0][0]  # not "All trades" -- only one was
 
 
 @patch("trade_monitor.send_message")

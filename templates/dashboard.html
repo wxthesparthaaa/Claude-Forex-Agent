@@ -298,7 +298,7 @@
     <table>
       <tr>
         <th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th>
-        <th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th>
+        <th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th></th>
       </tr>
       {% for t in live_trades %}
       <tr>
@@ -312,6 +312,13 @@
           {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
         </td>
         <td class="num">{{ t.hours_open }}h</td>
+        <td>
+          <form method="post" action="/close_trade/{{ t.trade_id }}" class="close-trade-form"
+                data-instrument="{{ t.instrument }}">
+            <button class="cancel-btn" type="submit" data-loading-text="Closing..."
+                    data-loading-status="Closing {{ t.instrument }}.">Close</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </table>
@@ -588,6 +595,18 @@
         }
       });
     }
+
+    // Same "require an explicit confirmation" guard as Cancel all trades,
+    // scoped to just the one position this specific row's button closes.
+    document.querySelectorAll('.close-trade-form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var instrument = form.getAttribute('data-instrument');
+        if (!confirm('Close this ' + instrument + ' position right now? This locks in whatever P&L it has this instant.')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+    });
 
     // Generic "this button is working" feedback for every form on the
     // page -- disables the button, swaps its label, and shows an
