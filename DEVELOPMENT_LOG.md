@@ -4042,3 +4042,85 @@ Combined tally: 24 distinct, rigorously tested hypotheses this session
 (15 statistical + 9 trader-book across 3 rounds), none producing a
 validated, stable, tradeable edge on this account's currently
 accessible instruments and data.
+
+## 2026-08-30 (continued) -- Multi-factor confluence: composite failed, but a striking diagnostic surfaced
+
+User pushed back on the whole approach after round 3: professional FX
+traders do make money long-term, so an edge must exist somewhere --
+the fact that 24 single-signal hypotheses all failed doesn't disprove
+that, it may just mean single-signal testing is the wrong lens. Real
+traders synthesize several weak, individually-noisy observations rather
+than trading off any one indicator, so as a genuine change of approach
+(not another book), built `scripts/backtest_multi_factor_confluence.py`:
+three already-individually-tested-and-weak factors -- 90-day momentum,
+252-day value/mean-reversion, 5-day short-term reversal -- combined
+with equal weight (no fitted parameters) into a -3..+3 composite,
+trading only when >=2 of 3 agree. Verified look-ahead-safe with 4
+synthetic cases including the exact 2-of-3 threshold boundary.
+
+**Composite result**: 3962 signals across 17 instruments, nothing
+survives even raw p<0.05 at any of 5 pre-specified horizons
+(5/10/20/40/60 days) -- the pre-registered hypothesis failed.
+
+**But the diagnostic panel (each factor traded ALONE, printed for
+context, not itself a corrected hypothesis) showed something real**:
+- Momentum alone at 60 days: -0.226%, t=-3.64, **p=0.0003**.
+- Value alone at 60 days: +0.234%, t=+3.77, **p=0.0002** -- opposite
+  sign from momentum.
+- Value alone at 5/10/20 days: consistently negative (p as low as
+  0.0087) -- betting on reversion LOSES at short-to-medium horizons.
+
+Both 60-day numbers are well below even a strict 0.01 Bonferroni bar,
+despite being diagnostic rather than pre-registered. The pattern reads
+as a coherent, well-documented academic phenomenon: short-to-medium
+continuation, then longer-run reversion (momentum decay / long-term
+reversal, as in Jegadeesh-Titman and DeBondt-Thaler). It also explains
+why confluence failed: momentum and value are supposed to DISAGREE in
+exactly this window, so requiring 2-of-3 agreement discards the very
+period where each factor is individually doing something real. This
+number was NOT treated as validated on the spot -- that would be the
+exact after-the-fact slicing this session's discipline forbids -- but
+flagged as worth a freshly pre-registered, properly-corrected follow-up
+test in its own right.
+
+## 2026-08-30 (continued) -- Sidetrack: pattern discovery via feature screening, no prior hypothesis
+
+Before chasing the momentum/value follow-up, user asked for something
+more ambitious: reverse-engineer patterns directly from the data with
+no prior strategy in mind at all, "just look for what actually worked
+and see if it makes sense." Flagged honestly that this is a materially
+HIGHER-risk exercise than everything before it -- a broad, hypothesis-
+free scan implicitly tests many more comparisons at once than any
+single pre-registered idea, which is exactly the kind of search that
+manufactures fake edges by chance (the same trap the original trend-
+following look-ahead bug fell into). Agreed to build it with three
+layers of defense scaled to match the bigger search space, stricter
+than anything used so far:
+  1. A TRUE holdout (chronological 70/30 split per instrument) set
+     aside before any screening happens, never touched until the very
+     end -- stricter than the usual split-half, which only splits
+     data AFTER a pattern is already found.
+  2. Screening on discovery data only across a 16-feature x 5-horizon
+     = 80-comparison bank (momentum at 7 lookbacks, distance from 4
+     SMAs, distance from the 252-day high/low, a causal RV percentile,
+     the opening gap, candle body position), corrected with
+     Benjamini-Hochberg FDR (q=0.05) rather than this session's usual
+     5-comparison Bonferroni, since 80 simultaneous comparisons need a
+     correction built for that scale. Quintile cutoffs are fixed from
+     discovery data only and reused unchanged on holdout later -- the
+     holdout's own distribution never leaks into what counts as
+     "extreme."
+  3. Split-half (within discovery, this session's usual bar) on FDR
+     survivors, then a ONE-SHOT holdout test on whatever passes that --
+     no re-tuning, no second attempt after seeing the holdout number.
+
+Built `scripts/backtest_pattern_discovery.py`. Verified with 8
+synthetic cases covering the statistical machinery itself: the
+two-sample test correctly detects a real difference and correctly
+finds none between identical distributions, percentile cutoffs are
+exact on a known list, Benjamini-Hochberg keeps only the textbook-
+correct survivors on a worked example, and the feature arithmetic
+(gap, body position, insufficient-history returns None rather than a
+bogus value) checks out. Whether anything actually survives all three
+layers can only be answered by the real run -- awaiting real-data
+output.
