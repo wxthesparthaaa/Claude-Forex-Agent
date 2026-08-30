@@ -81,6 +81,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-08-30", "Trader-book candidate #2 (Turtle trailing exit): 12.3% win rate as expected, but avg_R "
+                    "roughly breakeven (-0.006) and split-half SIGN FLIPS (-0.021 -> +0.009). Ruled out. FX vs "
+                    "commodities split noted but not chased (after-the-fact slicing). Moving to #3, event-driven."),
     ("2026-08-30", "Trader-book candidate #1 (Ichimoku Cloud): a Bonferroni-significant 96-bar result (43.14% "
                     "acc., worse than random) failed split-half the same way reversal/Monday did -- one half "
                     "carries it all. Ruled out. Moving to candidate #2, the Turtle-style trailing exit."),

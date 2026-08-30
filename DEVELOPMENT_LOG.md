@@ -3657,3 +3657,41 @@ which direction a result points -- a "worse than random" finding needs
 the same time-stability proof a "better than random" one does, and this
 doesn't have it. First of the three trader-book candidates closed out;
 moving to #2 (Turtle-style trailing exit).
+
+## 2026-08-30 (continued) -- Trader-book candidate #2, Turtle trailing exit: ruled out
+
+**Request**: does the same entry signal already known to be coin-flip
+accurate on direction still produce positive expectancy under a
+trend-following-style "let winners run" exit (no fixed target, trail
+out via a shorter reverse channel), rather than the fixed R:R already
+tested? Reused `backtest_entry_filter.py`'s exact entry-generation
+logic for a clean apples-to-apples comparison; the new trailing-exit
+resolver got the same elevated scrutiny as the trend-following bug that
+started this whole line of work, verified with synthetic cases proving
+the trailing level at bar j is computed strictly from bars before j,
+unaffected even by a dramatically extreme low on bar j itself.
+
+**Result**: win rate 12.3% (n=7029) -- expected and not itself a red
+flag, since a trailing-exit system is supposed to have many small
+losses offset by occasional large winners. The problem is the average
+R came back roughly breakeven-to-negative (avg_R=-0.0060, total_R=-42.24
+before any transaction costs), meaning the occasional big winners
+aren't compensating enough -- the core Turtle philosophy didn't
+materialize here. **Split-half check fails outright with a sign flip**:
+first half avg_R=-0.0213 (total -74.69), second half avg_R=+0.0092
+(total +32.46).
+
+**One descriptive curiosity, explicitly not pursued further**: all 7 FX
+majors came back negative, all 4 commodities came back positive -- a
+clean split by asset class. Not chased as a narrower hypothesis, since
+cherry-picking the subset that looks good after seeing the aggregate
+result is the exact trap that's already failed for every prior
+after-the-fact slice this session (regime segmentation, per-pair
+breakdowns). If this specific FX-vs-commodity distinction is ever
+worth testing, it needs to be pre-registered and validated
+out-of-sample on its own, not adopted because it happened to look good
+here.
+
+**Conclusion**: ruled out on the same split-half standard as everything
+else. Second of three trader-book candidates closed out; moving to #3
+(Kathy Lien-style event-driven / scheduled-release trading).
