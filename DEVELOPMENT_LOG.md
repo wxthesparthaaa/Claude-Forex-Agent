@@ -3620,3 +3620,40 @@ thorough and honest investigation, not a gap in the investigation
 itself -- the manual scan-and-approve workflow, the risk engine, and
 all protective/reporting infrastructure remain fully functional and
 independently valuable regardless.
+
+## 2026-08-30 (continued) -- Trader-book candidate #1, Ichimoku Cloud: ruled out
+
+**Request**: researched well-documented trader/book strategies as a
+different source of hypotheses (structural ideas, not statistical
+mining) after the pure data-driven investigation above was exhausted.
+First candidate: Ichimoku Cloud, chosen because its three-way
+simultaneous confirmation requirement (Tenkan/Kijun cross + price vs.
+the displaced cloud + Chikou span) is structurally different from every
+signal tested this session, which used at most two confirming
+components.
+
+**Built**: `scripts/backtest_ichimoku_signal.py`. Look-ahead safety
+worked through deliberately -- the cloud's forward displacement means
+the boundary visible at any bar was computed 26 bars earlier from
+already-known data (not a lookahead risk, that's the indicator's whole
+design), and outcome resolution reuses the same discrete-entry +
+`trade_simulator.simulate_trade` pattern already confirmed clean in the
+16-script audit, not the continuous-position pattern that caused the
+trend-following bug. Verified with two synthetic cases: a genuine
+three-way-aligned signal fires; the identical setup with only the cloud
+disagreeing correctly fires nothing.
+
+**Result**: 4 of 5 fixed forward horizons unremarkable (46-51%
+accuracy). The 96-bar horizon showed 43.14% accuracy (WORSE than a coin
+flip), p=0.0056, survives a 5-horizon Bonferroni correction (p<0.01).
+Split-half check: first half 48.00% (p=0.57, indistinguishable from
+random), second half 38.31% (p=0.0007) -- same sign both halves
+(passes the literal no-flip bar), but the entire effect is carried by
+one half, the identical pattern that already disqualified cross-
+sectional reversal and the JPY Monday effect.
+
+**Conclusion**: ruled out, applying the same standard regardless of
+which direction a result points -- a "worse than random" finding needs
+the same time-stability proof a "better than random" one does, and this
+doesn't have it. First of the three trader-book candidates closed out;
+moving to #2 (Turtle-style trailing exit).
