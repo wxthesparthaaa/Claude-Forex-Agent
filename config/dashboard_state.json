@@ -1,6 +1,6 @@
 {
   "risk_config": {
-    "risk_per_trade_pct": 2.0,
+    "risk_per_trade_pct": 1.0,
     "risk_per_trade_pct_min": 1.0,
     "risk_per_trade_pct_max": 2.0,
     "max_portfolio_heat_pct": 6.0,
@@ -15,7 +15,7 @@
     "max_trades_per_day": 30,
     "max_trades_per_day_min": 1,
     "max_trades_per_day_max": 50,
-    "autopilot_confidence_threshold_pct": 65.0
+    "autopilot_confidence_threshold_pct": 70.0
   },
   "phase_state": {
     "phase": "autopilot",
