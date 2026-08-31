@@ -521,6 +521,7 @@ def dashboard():
         range_confluence_enabled=state.range_confluence_enabled,
         orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
+        base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -555,6 +556,9 @@ def scan():
             # read as "did this even run?" rather than "ran fine, found
             # nothing right now".
             flash("Scan complete: no qualifying setups found right now.", "success")
+        elif phase_state.phase == "autopilot" and not state.base_strategy_enabled:
+            flash(f"Scan complete: {len(qualifying)} candidate(s) found, but the base strategy is disabled "
+                  f"in Settings right now -- not auto-executed.", "success")
         elif phase_state.phase == "autopilot":
             # Same non-blocking lock the scheduled autopilot scan uses
             # around its own auto-execution -- without this, a click on
@@ -846,6 +850,13 @@ def settings():
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
         state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
+
+        # Base strategy: ON by default -- this is the original strategy
+        # the app was built around, not a new experiment. Turning it off
+        # stops IT from auto-executing (checked alongside, not instead
+        # of, phase_state.phase=="autopilot" in scheduled_jobs.py and the
+        # /scan route above) without touching any add-on's own toggle.
+        state.base_strategy_enabled = request.form.get("base_strategy_enabled") == "on"
 
         interval = request.form.get("autopilot_scan_interval_minutes")
         if interval is not None and int(interval) in (15, 30, 60, 240):

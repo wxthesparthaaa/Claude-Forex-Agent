@@ -198,6 +198,23 @@ class DashboardState:
     # infrastructure needed). Off by default. See src/vwap_scalp_addon.py
     # and DEVELOPMENT_LOG.md 2026-08-30.
     vwap_scalp_enabled: bool = False
+    # User request (2026-09-01): a way to stop the ORIGINAL base
+    # strategy (currency-strength/pivot/RSI confluence -- the one every
+    # add-on above was built alongside, not instead of) from
+    # auto-executing, independent of Autopilot phase itself -- every
+    # add-on's own on/off toggle already exists separately from this,
+    # but the base strategy never had one; autopilot phase was the ONLY
+    # switch, and it gates every add-on too. On by default (this is the
+    # strategy the app was originally built around, not a new
+    # experiment) -- turning it off lets a candidate like VWAP Scalp
+    # collect live data without the base strategy's own trades
+    # consuming the shared max_trades_per_day slots or contributing
+    # losses to the shared weekly loss limit. Checked in
+    # scheduled_jobs.run_evening_scan_and_notify and app.py's /scan
+    # route, both ALONGSIDE (not replacing) the existing
+    # phase_state.phase=="autopilot" check -- addons are unaffected,
+    # since none of them read this field.
+    base_strategy_enabled: bool = True
 
 
 def default_state() -> DashboardState:

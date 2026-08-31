@@ -247,7 +247,7 @@ def run_evening_scan_and_notify(client: OandaClient = None, notify_listing: bool
                           f"instruments={instruments})\n{''.join(traceback.format_stack())}", flush=True)
                     send_message(format_potential_trades_message(candidate_dicts, mode=current_mode))
 
-        if phase_state.phase == "autopilot":
+        if phase_state.phase == "autopilot" and state.base_strategy_enabled:
             try:
                 auto_execute_candidates(client, candidates, phase_state, risk_config, account)
             except Exception as e:

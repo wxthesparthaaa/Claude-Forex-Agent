@@ -403,6 +403,19 @@
           </label>
         </div>
         <div class="toggle-row">
+          <span>Base strategy (currency-strength/pivot/RSI)</span>
+          <label class="switch">
+            <input type="checkbox" name="base_strategy_enabled" {{ 'checked' if base_strategy_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          On by default -- this is the original strategy, not an experiment. Turning it off stops IT from
+          auto-executing (while Autopilot is on) without touching any add-on below -- useful for letting a
+          candidate like VWAP Scalp collect live data without the base strategy's own trades competing for
+          the shared trades/day cap or contributing to the shared weekly loss limit.
+        </p>
+        <div class="toggle-row">
           <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
           <label class="switch">
             <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>

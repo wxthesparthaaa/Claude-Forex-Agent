@@ -386,6 +386,33 @@ def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan
     mock_auto_exec.assert_not_called()
 
 
+@patch("scheduled_jobs.auto_execute_candidates")
+@patch("scheduled_jobs.save_candidates")
+@patch("scheduled_jobs.run_live_scan")
+@patch("scheduled_jobs.send_message")
+def test_run_evening_scan_does_not_auto_execute_when_base_strategy_disabled(
+        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
+    # User request (2026-09-01): a way to stop the ORIGINAL base
+    # strategy from auto-executing independent of Autopilot phase
+    # itself, so a candidate like VWAP Scalp can collect live data
+    # without the base strategy's own trades competing for the shared
+    # trades/day cap or weekly loss limit. Still in autopilot phase
+    # (add-ons must be unaffected -- they check phase_state, not this
+    # field) -- just base_strategy_enabled=False.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.base_strategy_enabled = False
+    dashboard_state.save_state(state)
+
+    mock_scan.return_value = []
+    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
+
+    run_evening_scan_and_notify(client)
+
+    mock_auto_exec.assert_not_called()
+
+
 @patch("scheduled_jobs.save_candidates")
 @patch("scheduled_jobs.run_live_scan")
 @patch("scheduled_jobs.send_message")

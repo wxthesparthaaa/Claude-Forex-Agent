@@ -5320,3 +5320,52 @@ every other user-adjustable field). Full suite (528 tests) passes;
 verified (no live OANDA credentials available in this environment to
 render the full dashboard with real data, so the template check is
 syntax-only, not a visual one).
+
+## 2026-09-01 (continued) -- Added an independent on/off toggle for the base strategy
+
+User's follow-up, same motivation as the weekly-loss-limit change:
+"I want to fully focus on the VWAP strategy for now" -- wants the
+ORIGINAL base strategy (currency-strength/pivot/RSI confluence) to stop
+auto-executing, without touching any add-on. Checked: every add-on
+(Range Confluence, ORB Fade, VWAP Scalp) already has its own on/off
+toggle, checked independently of Autopilot phase -- but the BASE
+strategy never had one. Its only gate was
+`phase_state.phase == "autopilot"`, the exact same phase check every
+add-on ALSO uses via `is_auto_execute_mode` -- meaning there was no way
+to disable just the base strategy; turning off Autopilot phase entirely
+would have silently disabled VWAP Scalp too, the opposite of what was
+being asked for.
+
+Added `base_strategy_enabled: bool = True` to DashboardState (on by
+default -- this is the original strategy the app was built around, not
+a new experiment; the toggle is a new opt-OUT, not an opt-in). Gated
+both real call sites of `auto_execute_candidates`
+(`scheduled_jobs.run_evening_scan_and_notify` and app.py's `/scan`
+route) with `phase_state.phase == "autopilot" and state.base_strategy_enabled`
+-- ALONGSIDE the existing phase check, not replacing it, so kill-switch
+and manual-phase behavior are unchanged. Deliberately left
+`auto_execute_candidates` itself untouched (still a pure function
+taking explicit phase_state/risk_config/account, no state-loading) --
+the toggle is enforced by both callers before ever reaching it, keeping
+that function's existing signature and testability intact. Added a
+third `/scan` route branch so a scan run while the base strategy is
+disabled reports that plainly ("base strategy is disabled in Settings
+right now -- not auto-executed") rather than reusing the generic
+manual-mode message, which would have been misleading about the actual
+reason.
+
+Practical effect: turning this off means the base strategy's own
+trades stop consuming the shared `max_trades_per_day` slots and stop
+contributing losses to the shared weekly loss limit -- both concerns
+raised earlier the same session about what could crowd out or cut off
+VWAP Scalp's live data collection.
+
+New test in tests/test_scheduled_jobs.py mirroring the existing
+manual-phase test exactly, but in autopilot phase with
+base_strategy_enabled=False, confirming auto_execute_candidates is
+never called. Skipped an equivalent test for the app.py `/scan` route
+specifically -- identical conditional logic, but exercising it there
+would require mocking a full OandaClient + live-scan pipeline for
+marginal extra confidence over what the scheduled_jobs.py test already
+provides. Full suite (529 tests) passes; `py_compile` + `import app` +
+template-compile check verified.
