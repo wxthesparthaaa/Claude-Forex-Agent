@@ -1,36 +1,36 @@
 {
-  "scanned_at": "2026-08-31T20:15:07.467303+00:00",
+  "scanned_at": "2026-08-31T20:35:04.513451+00:00",
   "candidates": [
     {
-      "instrument": "USD_CAD",
+      "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 1.38598,
-      "stop_loss": 1.38542,
-      "take_profit": 1.3871,
-      "confidence_pct": 71.8,
+      "entry_price": 86.962,
+      "stop_loss": 86.153,
+      "take_profit": 88.58,
+      "confidence_pct": 70.0,
       "confidence_components": {
         "breadth": 71.42857142857143,
-        "rsi": 86.14780119445282,
-        "candlestick": 85.0,
+        "rsi": 100.0,
+        "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 73001,
-      "unit_label": "units",
+      "units": 36,
+      "unit_label": "barrels",
       "risk_amount": 37.499348,
-      "notional_account_currency": 92809.5,
+      "notional_account_currency": 3979.61,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 42 (neutral range).",
-        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
-        "News sentiment: no USD-relevant headlines in the latest fetch (neutral)."
+        "RSI is 63 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": false
       }
     }
