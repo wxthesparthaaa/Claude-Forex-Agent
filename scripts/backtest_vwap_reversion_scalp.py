@@ -124,6 +124,24 @@ predictive skill. resolve_trades counts exactly this
 main()) so an apparent improvement under delay can be told apart from a
 real one rather than assumed to be either.
 
+POST-DEPLOYMENT FINDING (2026-08-31): the live "raw" signal (fires the
+instant |z|>=Z_ENTRY crosses) produced a 25% win rate on its first 12
+real trades, against a backtested 70-95% at every aggregation level --
+with wildly inconsistent realized R:R (0.68 to 5.89) and one stop-out
+in 26 seconds. Diagnosis: the raw signal doesn't check whether the
+extension has actually STOPPED WORSENING before entering, so a live
+order (fired anywhere from 0-5 minutes after detection, depending on
+poll timing) can land WHILE price is still accelerating away from VWAP
+rather than after it has begun reverting -- entering into a still-
+falling knife, not fading a completed spike. SIGNAL_MODES now tests
+find_scalp_signals_confirmed side by side with the original: it waits
+for z to tick back from its own running extreme (evidence the reversal
+has actually started) before firing, using the CONFIRMATION bar's own
+vwap/std as the frozen reference rather than the stale extreme's. Both
+signal modes run through both entry-delay scenarios, so this directly
+answers whether requiring confirmation recovers the backtested edge
+under REALISTIC (not idealized) execution.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -180,6 +198,7 @@ MIN_SESSION_SAMPLES = 20
 Z_ENTRY = 2.0
 STOP_Z_BUFFER_SWEEP = [1.0, 1.5, 2.0]
 MAX_HOLD_BARS = 30
+CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 
 
 def _parse_time(c):
@@ -376,6 +395,62 @@ def find_scalp_signals(times: list, z: list):
     return signals
 
 
+def find_scalp_signals_confirmed(times: list, z: list):
+    """Like find_scalp_signals, but requires the deviation to have
+    already turned back toward VWAP -- ticked back from its own local
+    extreme by at least one bar -- before firing, instead of firing the
+    instant the raw Z_ENTRY threshold is crossed.
+
+    Built directly from a real live-trading finding (2026-08-31): the
+    first day of real trades landed at a 25% win rate against a
+    backtested 70-95%, with wildly inconsistent designed R:R per trade
+    (0.68 to 5.89) and one stop-out in 26 seconds -- the signature of
+    entering WHILE an extension was still worsening rather than AFTER
+    it had actually begun reverting. "raw" fires the moment the
+    threshold crosses regardless of whether the move is still
+    accelerating; this variant waits for evidence the peak has passed.
+
+    The signal fires AT the confirmation bar, using THAT bar's own
+    vwap/std as the frozen target/stop reference -- the original
+    extreme's own reading is stale by the time reversal is confirmed,
+    exactly the mismatch behind the R:R inconsistency observed live. A
+    raw extreme that never reverses within CONFIRMATION_MAX_WAIT_MINUTES
+    is discarded, not chased indefinitely."""
+    n = len(times)
+    signals = []
+    i = 0
+    while i < n - 1:
+        t = times[i]
+        if z[i] is None or not (WATCH_START_HOUR <= t.hour < WATCH_END_HOUR):
+            i += 1
+            continue
+        if z[i] <= -Z_ENTRY or z[i] >= Z_ENTRY:
+            direction = "LONG" if z[i] <= -Z_ENTRY else "SHORT"
+            extreme_z = z[i]
+            wait_cutoff = t + timedelta(minutes=CONFIRMATION_MAX_WAIT_MINUTES)
+            j = i + 1
+            confirmed_at = None
+            while j < n and times[j] <= wait_cutoff:
+                if z[j] is None:
+                    j += 1
+                    continue
+                still_extending = (z[j] <= extreme_z) if direction == "LONG" else (z[j] >= extreme_z)
+                if still_extending:
+                    extreme_z = z[j]
+                    j += 1
+                    continue
+                confirmed_at = j  # z[j] ticked back toward zero from the running extreme -- reversal confirmed
+                break
+            if confirmed_at is not None:
+                signals.append((confirmed_at, direction))
+                i = confirmed_at + 1 + MAX_HOLD_BARS
+                continue
+            i = j if j > i else i + 1  # never confirmed within the wait window -- resume scanning past it
+        else:
+            i += 1
+    return signals
+
+
 def _selftest():
     # Flat price, constant volume -> deviation is always exactly 0, so
     # its stdev is 0 and no z-score (and therefore no signal) should
@@ -404,6 +479,20 @@ def _selftest():
 
     signals = find_scalp_signals(times, [None] * 30 + [-2.5] + [None] * 4)
     assert signals == [(30, "LONG")], f"expected exactly one LONG signal at index 30, got {signals}"
+
+    # find_scalp_signals_confirmed must NOT fire at the raw extreme --
+    # it should wait for z to tick back from its own running extreme.
+    confirmed_z = [None] * 30 + [-2.5, -3.0, -2.7] + [None] * 2
+    confirmed_signals = find_scalp_signals_confirmed(times[:35], confirmed_z)
+    assert confirmed_signals == [(32, "LONG")], \
+        f"expected confirmation to fire at index 32 (the tick-back from -3.0 to -2.7), got {confirmed_signals}"
+
+    # A raw extreme that NEVER reverses within CONFIRMATION_MAX_WAIT_MINUTES
+    # must be discarded entirely -- no chasing a still-worsening move.
+    never_reverses_z = [None] * 30 + [-2.5 - 0.1 * k for k in range(11)]
+    never_reverses_times = [watch_base + timedelta(minutes=i) for i in range(len(never_reverses_z))]
+    assert find_scalp_signals_confirmed(never_reverses_times, never_reverses_z) == [], \
+        "a deviation that never ticks back within the wait window should never fire"
 
     # Session reset: a big jump straight across a day boundary must NOT
     # pollute the new session's own VWAP/deviation baseline -- the first
@@ -502,20 +591,29 @@ def _selftest():
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
 
 
-def _fetch_and_compute_signals(client, instrument):
-    """Fetch + VWAP/z-score + signal detection -- done ONCE per
-    instrument and shared across every entry-delay scenario tested,
-    since the underlying signals are identical regardless of how long a
-    live system takes to react to them; only the RESOLUTION (entry
-    price, hold window) differs per scenario."""
+def _fetch_and_compute_vwap(client, instrument):
+    """Fetch + VWAP/z-score computation ONLY -- done ONCE per instrument
+    and shared across every SIGNAL MODE (raw vs confirmed) and every
+    entry-delay scenario tested, since the underlying VWAP/z-score
+    series is identical regardless of which signal-detection rule or
+    execution-delay model gets applied on top of it."""
     test_end = datetime.now(timezone.utc)
     test_start = test_end - timedelta(days=TEST_DAYS)
     candles = fetch_history_cached(client, instrument, "M1", test_start, test_end, price="MBA")
     if len(candles) < 5000:
         return None
     times, vwap, dev_stdev, z = compute_vwap_signals(candles)
-    signals = find_scalp_signals(times, z)
-    return candles, times, vwap, dev_stdev, signals
+    return candles, times, vwap, dev_stdev, z
+
+
+# (label, signal-finder function) -- "raw" is what shipped live and
+# produced the 25%-win-rate real trades on 2026-08-31; "confirmed"
+# requires the deviation to have already turned back toward VWAP before
+# firing (see find_scalp_signals_confirmed's own docstring for why).
+SIGNAL_MODES = [
+    ("raw (fires the instant the threshold crosses -- what's live today)", find_scalp_signals),
+    ("confirmed (waits for the reversal to start before firing)", find_scalp_signals_confirmed),
+]
 
 
 def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, entry_delay_minutes):
@@ -655,48 +753,60 @@ def main():
     print(f"Fetching {len(SCALP_PAIRS)} instruments for the VWAP reversion scalp test "
           f"({TEST_DAYS} days of 1-minute mid+bid+ask candles each, ~{TEST_DAYS * 1440:,} bars/instrument)...")
 
-    per_instrument_signals = {}
-    total_signals = 0
+    per_instrument_vwap = {}
 
     for instrument in SCALP_PAIRS:
-        result = _fetch_and_compute_signals(client, instrument)
+        result = _fetch_and_compute_vwap(client, instrument)
         if result is None:
             print(f"  {instrument:10s}  insufficient history, skipped")
             continue
-        candles, times, vwap, dev_stdev, signals = result
-        per_instrument_signals[instrument] = result
-        total_signals += len(signals)
+        candles, times, vwap, dev_stdev, z = result
+        per_instrument_vwap[instrument] = result
         spreads_pips = [(float(c["ask"]["c"]) - float(c["bid"]["c"])) / float(meta[instrument].pip_size)
                         for c, t in zip(candles, times) if WATCH_START_HOUR <= t.hour < WATCH_END_HOUR]
         avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
         spread_str = f"{avg_spread_pips:.2f} pips avg spread" if avg_spread_pips is not None else "no spread data"
-        print(f"  {instrument:10s}  {len(signals)} signals, {spread_str}")
+        print(f"  {instrument:10s}  {spread_str}")
 
-    print(f"\n{total_signals} total candidate signals across {len(SCALP_PAIRS)} instruments -- identical "
-          f"signal set reused for every entry-delay scenario below; only how long it takes to ACT on a "
-          f"signal differs between them.")
-    if total_signals == 0:
-        print("No signals found -- nothing to test.")
+    if not per_instrument_vwap:
+        print("No usable instrument data -- nothing to test.")
         return
 
-    for label, delay_minutes in ENTRY_DELAY_SCENARIOS:
-        all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
-        total_already_past_target = 0
-        total_entries = 0
-        for instrument, (candles, times, vwap, dev_stdev, signals) in per_instrument_signals.items():
-            results_by_buffer, _, already_past_target, entries = resolve_trades(
-                candles, times, vwap, dev_stdev, signals, instrument, meta[instrument], delay_minutes)
-            total_already_past_target += already_past_target
-            total_entries += entries
-            for buf in STOP_Z_BUFFER_SWEEP:
-                all_returns[buf].extend(results_by_buffer[buf])
-        if total_entries > 0:
-            pct = 100 * total_already_past_target / total_entries
-            print(f"\n[{label}] {total_already_past_target}/{total_entries} entries ({pct:.1f}%) had ALREADY "
-                  f"reached or passed their own (frozen-at-signal-time) target before the order could even be "
-                  f"placed -- near-guaranteed wins entered after the fact, not predictive skill. High here "
-                  f"would explain an apparent improvement under delay as an artifact, not a stronger edge.")
-        report_scenario(label, all_returns)
+    for signal_label, signal_finder in SIGNAL_MODES:
+        print(f"\n{'@'*76}\nSIGNAL MODE: {signal_label}\n{'@'*76}")
+
+        per_instrument_signals = {}
+        total_signals = 0
+        for instrument, (candles, times, vwap, dev_stdev, z) in per_instrument_vwap.items():
+            signals = signal_finder(times, z)
+            per_instrument_signals[instrument] = (candles, times, vwap, dev_stdev, signals)
+            total_signals += len(signals)
+            print(f"  {instrument:10s}  {len(signals)} signals")
+        print(f"\n{total_signals} total candidate signals across {len(per_instrument_signals)} instruments "
+              f"under this signal mode -- reused for every entry-delay scenario below; only how long it "
+              f"takes to ACT on a signal differs between them.")
+        if total_signals == 0:
+            print("No signals found under this mode -- nothing to test.")
+            continue
+
+        for label, delay_minutes in ENTRY_DELAY_SCENARIOS:
+            all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
+            total_already_past_target = 0
+            total_entries = 0
+            for instrument, (candles, times, vwap, dev_stdev, signals) in per_instrument_signals.items():
+                results_by_buffer, _, already_past_target, entries = resolve_trades(
+                    candles, times, vwap, dev_stdev, signals, instrument, meta[instrument], delay_minutes)
+                total_already_past_target += already_past_target
+                total_entries += entries
+                for buf in STOP_Z_BUFFER_SWEEP:
+                    all_returns[buf].extend(results_by_buffer[buf])
+            if total_entries > 0:
+                pct = 100 * total_already_past_target / total_entries
+                print(f"\n[{signal_label} | {label}] {total_already_past_target}/{total_entries} entries "
+                      f"({pct:.1f}%) had ALREADY reached or passed their own (frozen-at-signal-time) target "
+                      f"before the order could even be placed -- near-guaranteed wins entered after the "
+                      f"fact, not predictive skill.")
+            report_scenario(f"{signal_label} | {label}", all_returns)
 
 
 if __name__ == "__main__":

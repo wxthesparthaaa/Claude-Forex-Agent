@@ -4916,3 +4916,49 @@ with clean successes right after. Plausible explanation: 3 more
 add-ons now share JOURNAL_LOCK on the same 5-minute cadence, so
 somewhat more contention than before is expected. Flagged as "watch
 for a longer streak," not something to fix now.
+
+## 2026-08-31 (continued) -- Real trades looked like a failure: diagnosed, built a confirmation-gate fix
+
+User reported VWAP Scalp "looking like a big failure" and asked for a
+real diagnosis, hypothesizing the signal needed a higher-level
+confirmation before firing. Pulled the actual live journal from the
+`state-sync` branch rather than theorizing: 12 real VWAP_SCALP trades,
+3 wins / 9 losses (25% win rate) against a backtested 70-95% at every
+aggregation level.
+
+**Real, structural findings, not just a bad win rate**:
+- Realized losses averaged ~$49 against an intended $39.13 risk_amount
+  -- a 20-38% systematic overshoot.
+- Designed R:R varied wildly per trade (0.68 to 5.89) when it should
+  have been far more consistent -- a symptom of entry price drifting
+  away from the signal's original context by the time the live order
+  actually fires (0-5 minutes after detection, depending on poll
+  timing).
+- One USD_JPY trade (designed R:R 5.89) stopped out in 26 SECONDS --
+  the signature of entering WHILE an extension was still accelerating,
+  not after it had reversed. Confirms the user's own hypothesis
+  directly: the raw signal fires the instant |z|>=2.0 crosses with no
+  check that the move has actually stopped worsening.
+
+**Fix built and self-tested** (not yet real-data validated):
+`find_scalp_signals_confirmed` in scripts/backtest_vwap_reversion_scalp.py
+requires z to tick back from its own running extreme -- real evidence
+the reversal has started -- before firing, using the CONFIRMATION bar's
+own vwap/std as the frozen target/stop reference rather than the stale
+original extreme's. A raw extreme that never reverses within
+CONFIRMATION_MAX_WAIT_MINUTES=10 is discarded, not chased. `main()`
+now runs BOTH signal modes (raw vs confirmed) through BOTH entry-delay
+scenarios (near-immediate vs realistic 5-minute poll), so the real
+question -- does requiring confirmation recover the backtested edge
+under REALISTIC execution -- gets a direct answer, not a guess. Two
+new self-test cases (confirmation fires at the tick-back bar, not the
+raw extreme; a never-reversing extreme produces no signal at all) pass.
+Full project suite (512 tests, unaffected -- this is a standalone
+script) still passes. Awaiting the user's next real-data run to see
+whether the confirmation gate actually closes the gap.
+
+Not yet decided: whether to pause the live `vwap_scalp_enabled` toggle
+while this is being re-validated. Account is OANDA's DEMO/practice
+mode (confirmed via dashboard_state.json's own "mode": "demo" field),
+so no real capital is at risk from letting it keep trading meanwhile --
+left as the user's call, not paused unilaterally.
