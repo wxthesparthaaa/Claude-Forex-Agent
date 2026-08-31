@@ -2687,5 +2687,44 @@
     "pyramided": false,
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1469",
+    "instrument": "USD_CHF",
+    "direction": "SHORT",
+    "units": -36282,
+    "entry_price": 0.808,
+    "stop_loss": 0.8087,
+    "take_profit": 0.8066,
+    "confidence_pct": 71.7,
+    "rationale": [
+      "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 43 (neutral range).",
+      "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+      "News sentiment: neutral."
+    ],
+    "opened_at": "2026-08-31T14:35:15.517642+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 40.0,
+    "confidence_components": {
+      "breadth": 71.42857142857143,
+      "rsi": 100.0,
+      "candlestick": 50.0,
+      "news": 56.66666666666667
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": false,
+      "news": true
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
