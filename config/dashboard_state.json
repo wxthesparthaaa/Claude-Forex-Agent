@@ -12,7 +12,7 @@
     "max_drawdown_pct": 20.0,
     "suggested_max_drawdown_pct": 20.0,
     "max_currency_exposure_pct": 4.0,
-    "max_trades_per_day": 10,
+    "max_trades_per_day": 30,
     "max_trades_per_day_min": 1,
     "max_trades_per_day_max": 50,
     "autopilot_confidence_threshold_pct": 65.0
