@@ -2922,5 +2922,44 @@
     "pyramided": false,
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "1785",
+    "instrument": "USD_CAD",
+    "direction": "LONG",
+    "units": 73001,
+    "entry_price": 1.38598,
+    "stop_loss": 1.38542,
+    "take_profit": 1.3871,
+    "confidence_pct": 71.8,
+    "rationale": [
+      "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+      "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+      "RSI is 42 (neutral range).",
+      "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
+      "News sentiment: no USD-relevant headlines in the latest fetch (neutral)."
+    ],
+    "opened_at": "2026-08-31T20:15:08.969032+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 37.499348,
+    "confidence_components": {
+      "breadth": 71.42857142857143,
+      "rsi": 86.14780119445282,
+      "candlestick": 85.0,
+      "news": 50.0
+    },
+    "confidence_components_available": {
+      "breadth": true,
+      "rsi": true,
+      "candlestick": true,
+      "news": false
+    },
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
