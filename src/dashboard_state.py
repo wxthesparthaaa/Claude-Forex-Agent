@@ -301,7 +301,8 @@ def save_state(state: DashboardState) -> None:
 # settings() route) -- everything else on RiskConfig (bounds, suggested
 # defaults, the risk-limit percentages) is a code-defined constant, never
 # written by any route.
-_USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct")
+_USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct",
+                                 "max_weekly_loss_pct")
 
 
 def risk_config_from_state(state: DashboardState) -> RiskConfig:

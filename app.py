@@ -785,6 +785,14 @@ def settings():
         risk_config.max_trades_per_day = int(_clamp(
             float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
             risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
+        # Adjustable 5-100% (explicit user request, 2026-08-31): raising
+        # this is the intended way to keep a candidate's live data
+        # collection (e.g. VWAP Scalp) running past what a normal week's
+        # losses would otherwise trip -- see RiskConfig's own comment for
+        # why this is account-wide, not per-strategy.
+        risk_config.max_weekly_loss_pct = _clamp(
+            float(request.form.get("max_weekly_loss_pct", risk_config.max_weekly_loss_pct)),
+            risk_config.max_weekly_loss_pct_min, risk_config.max_weekly_loss_pct_max)
         risk_config.autopilot_confidence_threshold_pct = _clamp(
             float(request.form.get("autopilot_confidence_threshold_pct",
                                     risk_config.autopilot_confidence_threshold_pct)),

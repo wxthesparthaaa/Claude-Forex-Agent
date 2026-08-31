@@ -380,6 +380,17 @@
                min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
                value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
 
+        <label>Weekly loss limit: <span id="weeklyLossVal">{{ risk_config.max_weekly_loss_pct }}</span>%</label>
+        <input type="range" name="max_weekly_loss_pct"
+               min="{{ risk_config.max_weekly_loss_pct_min }}" max="{{ risk_config.max_weekly_loss_pct_max }}" step="1"
+               value="{{ risk_config.max_weekly_loss_pct }}" oninput="weeklyLossVal.textContent = this.value">
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
+          from the same weekly P&amp;L figure. Raise this temporarily to keep a candidate's live data collection
+          running past a normal week's losses; the default (10%) is a genuine safety limit, so lower it back
+          when you're done collecting data.
+        </p>
+
         <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
         <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
                value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">

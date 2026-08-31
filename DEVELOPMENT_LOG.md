@@ -5249,3 +5249,74 @@ happened yet is seeing real trades under the FIXED live-detection code
 (commit 1eade67) -- that's still what the scheduled check-in is for,
 and it's the one thing no amount of further backtesting can substitute
 for.
+
+## 2026-09-01 -- Post-fix check-in fired: 7 real trades, meaningfully better than pre-fix, still too few to conclude anything
+
+The scheduled one-time check-in (set up 2026-08-31 to fire ~3 hours
+after the fix deployed) ran. Pulled the live-synced journal from
+`origin/state-sync`, filtered to VWAP_SCALP entries opened after commit
+1eade67's own deployment timestamp (2026-08-31T14:06:55 UTC, via `git
+log -1 --format=%cI`).
+
+**7 post-fix trades, all closed, 0 open.** Win rate 42.9% (3/7) --
+nearly double the pre-fix 25%. Average loss ran $44.95 against a $40
+intended risk, a 12.4% overshoot, down from the pre-fix 20-38% range.
+Designed R:R still spanned 0.35-4.24, about as wide as pre-fix's
+0.68-5.89 -- but this was already understood to be structural (target/
+stop frozen at the confirmation bar, entry filled at a fresh live price
+moments later), not something the live-detection fix was meant to
+narrow, so this isn't itself a red flag.
+
+Two things flagged for future watching rather than acted on now: (1) a
+USD_JPY loss resolved in 14 seconds, echoing the pre-fix run's 26-
+second anomaly -- two data points isn't a pattern yet, but worth
+tracking if fast stop-outs keep recurring; (2) the single biggest
+winner (GBP_USD, +$75.99) didn't actually hit its take-profit -- it
+resolved via the 30-minute force-close catching a favorable price at
+that moment, not the designed target being reached.
+
+**Verdict given to the user**: meaningfully better than pre-fix on the
+metrics that plausibly reflect the bug (win rate, loss-magnitude
+consistency), but n=7 in under a day is nowhere near the sample sizes
+the backtest itself needed (129-645 independent calendar-days) to say
+anything with real confidence. Real progress, not proof yet.
+
+## 2026-09-01 (continued) -- Made the weekly loss limit user-adjustable, for VWAP Scalp data collection
+
+User's own concern, unprompted: the shared weekly loss limit (10%,
+account-wide -- every strategy draws from the same weekly_realized_pnl)
+could cut off VWAP Scalp's post-fix data collection before a meaningful
+sample accumulates. Checked: `max_weekly_loss_pct` already existed on
+RiskConfig and was ALREADY being compared against
+`suggested_max_weekly_loss_pct` for the dashboard's out-of-range red
+warning -- but had no min/max bounds and wasn't in
+`_USER_ADJUSTABLE_RISK_FIELDS`, so there was no way to change it at all
+short of editing code. Asked the user to choose between a numeric
+Settings field (matching `max_trades_per_day`'s existing pattern -- a
+genuine, adjustable backstop) versus a full on/off bypass toggle; they
+chose the numeric field, since it keeps a real limit in place rather
+than removing the safety net entirely while enabled.
+
+Added `max_weekly_loss_pct_min=5.0`/`max_weekly_loss_pct_max=100.0` to
+RiskConfig, added the field to `_USER_ADJUSTABLE_RISK_FIELDS` (so a
+saved value survives future code-level default changes, per
+`risk_config_from_state`'s own documented guarantee), wired the
+`/settings` route to clamp and save it the same way `max_trades_per_day`
+already is, and added a matching slider to the dashboard template with
+explanatory copy stating plainly this is account-wide, not
+per-strategy. The existing out-of-range warning now activates for real
+the moment someone raises it above 10% -- no new warning logic needed,
+it was already comparing against the right constant, just previously
+unreachable.
+
+5 new tests in tests/test_settings_weekly_loss_limit.py: bounds are
+correct on a fresh RiskConfig, a raised value persists through
+/settings, values are clamped (not rejected) at both the low and high
+end, an unrelated settings save doesn't silently reset this field back
+to default, and a saved value survives independent of code-level
+default changes (mirroring risk_config_from_state's own guarantee for
+every other user-adjustable field). Full suite (528 tests) passes;
+`py_compile` + `import app` + a direct Jinja template-compile check
+verified (no live OANDA credentials available in this environment to
+render the full dashboard with real data, so the template check is
+syntax-only, not a visual one).

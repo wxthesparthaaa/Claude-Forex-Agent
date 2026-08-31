@@ -34,7 +34,18 @@ class RiskConfig:
     # by their own attached SL/TP regardless).
     max_daily_loss_pct: float = 6.0
     suggested_max_daily_loss_pct: float = 6.0
+    # Adjustable 5-100% (explicit user request, 2026-08-31): raising this
+    # temporarily is the intended way to keep a new candidate's live data
+    # collection (e.g. VWAP Scalp) running past what would otherwise be a
+    # normal week's worth of losses tripping the SHARED weekly breaker --
+    # every strategy draws from the same weekly_realized_pnl figure, so
+    # this isn't per-strategy, it's a genuine (if temporary) loosening of
+    # the account-wide backstop. suggested_max_weekly_loss_pct stays at
+    # the original 10.0 so the dashboard's red out-of-range disclaimer
+    # still flags a raised value as a deliberate, non-default choice.
     max_weekly_loss_pct: float = 10.0
+    max_weekly_loss_pct_min: float = 5.0
+    max_weekly_loss_pct_max: float = 100.0
     suggested_max_weekly_loss_pct: float = 10.0
 
     # Circuit breaker: halts ALL new trading (any mode) until a human
