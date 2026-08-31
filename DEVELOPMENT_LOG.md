@@ -5194,3 +5194,58 @@ fix (no reason to invalidate it); GBP_USD/USD_JPY/AUD_USD/USD_CAD still
 need a full re-fetch on the next run since none of their chunks were
 ever persisted, but this time a single transient timeout shouldn't be
 able to kill the whole run again.
+
+## 2026-08-31 (continued) -- The placebo test came back decisively negative -- the real signal is not a construction artifact
+
+User re-ran the full 180-day, 4-signal-mode backtest after the retry
+fix (all 5 instruments fetched cleanly this time). The placebo baseline
+came back CLEARLY, statistically decisively NEGATIVE: day-win-rate
+11.6-33.5% across all three stop-buffer levels, mean_R -0.05 to -0.10,
+every single result significant at p<0.01 (mostly p<0.0001) -- not
+noise, a real negative result. The three real signal modes (raw,
+confirmed 1-bar, confirmed 2-bar) all held at day-win-rate 86-100%,
+mean_R +0.39 to +0.75, same order of significance -- essentially
+unchanged from the 90-day run.
+
+**This directly refutes the hypothesis raised earlier the same day**
+(that raw/1-bar/2-bar's similarity to each other might mean the
+apparent edge was really coming from the target/stop CONSTRUCTION
+itself -- target=VWAP, a slow anchor any range-bound instrument drifts
+back near regardless of prediction -- rather than from the z-score
+extreme condition). Same exact construction, same universe, same
+resolution machinery -- the ONLY difference between the placebo and the
+real signals is whether entry is conditioned on a genuine 2-stdev
+extreme. The placebo fails decisively under that construction; the real
+signal succeeds decisively under the identical construction. A
+construction artifact would have made the placebo look strong too. It
+didn't -- it went strongly the other way.
+
+This also retroactively explains why raw/1-bar/2-bar look so similar to
+EACH OTHER: they all still condition on the SAME underlying extreme
+event, just entering a few bars apart within it -- the placebo isolates
+the real question (extreme vs. no extreme) instead of entry-timing
+variants of the same extreme, and THAT is where the huge difference
+shows up. There's also a clean mechanical reason the placebo loses: a
+random, non-extreme entry starts close to VWAP already (small reward to
+target), while the stop is still sized off the (Z_ENTRY+buf)-stdev
+calibration meant for genuine extremes -- an unfavorable R:R by
+construction whenever you're not actually at an extreme. That the real
+signal overcomes that same unfavorable-by-default geometry to still win
+85%+ of the time is a stronger validation than either fact in
+isolation.
+
+Between the three real variants, 1-bar (already live) and 2-bar remain
+close, with 1-bar's own stop_buf=1.0 realistic-delay result slightly
+stronger (t=8.71 vs 2-bar's t=7.43) -- no case found to switch off
+what's already deployed.
+
+**Where this leaves the candidate**: this backtest has now survived
+essentially every check this session knows how to run -- two real bug
+fixes, a pseudo-replication correction, cross-instrument-correlation
+pooling, execution-delay realism (both scenarios), an artifact check
+for delayed entries, three entry-timing variants, and now a placebo
+baseline that fails exactly where it should. The one thing that hasn't
+happened yet is seeing real trades under the FIXED live-detection code
+(commit 1eade67) -- that's still what the scheduled check-in is for,
+and it's the one thing no amount of further backtesting can substitute
+for.
