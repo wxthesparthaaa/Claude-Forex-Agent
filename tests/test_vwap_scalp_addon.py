@@ -42,22 +42,39 @@ def _m1_candle(dt, close, volume=10):
             "mid": {"c": str(close)}, "volume": volume}
 
 
-def _extended_session_candles(today, n_flat=30, extension_price=100.5):
-    """A quiet session oscillating narrowly around 100.0 for n_flat
-    minutes (a REAL, nonzero baseline stdev -- a perfectly flat baseline
-    would have zero variance, which _compute_vwap_signal deliberately
-    treats as "no signal," so it can never actually fire against a
-    literally-flat fixture), then one final bar deviated far enough from
-    that baseline to fire a fade signal."""
-    day_start = datetime(today.year, today.month, today.day, 9, 0, tzinfo=timezone.utc)
+def _extended_session_candles(n_flat=30, extension_price=105.0, confirmation_price=104.0, end_time=None):
+    """Oscillating baseline (a real, nonzero stdev -- a perfectly flat
+    baseline has zero variance, which the detection deliberately treats
+    as "no signal"), then an extension bar, then a CONFIRMATION bar that
+    ticks back toward VWAP, ending at `end_time` (default FIXED_NOW) so
+    the confirmed signal stays fresh relative to the frozen clock most
+    tests use. Confirmation-gated detection (mirrors the backtest's
+    find_scalp_signals_confirmed) requires evidence the reversal has
+    started before firing -- a fixture with no follow-up tick-back would
+    never produce a signal at all."""
+    end_time = end_time or FIXED_NOW
+    day_start = end_time - timedelta(minutes=n_flat + 1)
     bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (0.002 if i % 2 == 0 else -0.002))
             for i in range(n_flat)]
     bars.append(_m1_candle(day_start + timedelta(minutes=n_flat), extension_price))
+    bars.append(_m1_candle(end_time, confirmation_price))
     return bars
 
 
-def _flat_session_candles(today, n=31):
-    day_start = datetime(today.year, today.month, today.day, 9, 0, tzinfo=timezone.utc)
+def _unconfirmed_extension_candles(n_flat=30, extension_price=105.0, end_time=None):
+    """Same baseline + a raw extreme, but NO follow-up tick-back -- must
+    never fire under the confirmation-gated detection."""
+    end_time = end_time or FIXED_NOW
+    day_start = end_time - timedelta(minutes=n_flat)
+    bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (0.002 if i % 2 == 0 else -0.002))
+            for i in range(n_flat)]
+    bars.append(_m1_candle(end_time, extension_price))
+    return bars
+
+
+def _flat_session_candles(n=31, end_time=None):
+    end_time = end_time or FIXED_NOW
+    day_start = end_time - timedelta(minutes=n - 1)
     return [_m1_candle(day_start + timedelta(minutes=i), 100.0) for i in range(n)]
 
 
@@ -97,38 +114,58 @@ class FakeClient:
         return self._close_result
 
 
-def test_compute_vwap_signal_none_on_flat_session():
-    today = FIXED_NOW.date()
-    candles = _flat_session_candles(today)
-    assert vs._compute_vwap_signal(candles) is None
+def test_compute_vwap_series_none_on_flat_session():
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(_flat_session_candles())
+    assert all(v is None for v in z)
 
 
-def test_compute_vwap_signal_none_with_insufficient_history():
-    today = FIXED_NOW.date()
-    candles = _flat_session_candles(today, n=5)
-    assert vs._compute_vwap_signal(candles) is None
-
-
-def test_compute_vwap_signal_fires_positive_z_on_upward_extension():
-    today = FIXED_NOW.date()
-    candles = _extended_session_candles(today, extension_price=101.0)
-    signal = vs._compute_vwap_signal(candles)
-    assert signal is not None
-    assert signal["z"] > 0  # price extended ABOVE its own session VWAP
-
-
-def test_compute_vwap_signal_self_excludes_current_bar_from_baseline():
+def test_compute_vwap_series_self_excludes_current_bar_from_baseline():
     # If the extreme bar's OWN deviation leaked into the stdev used to
     # judge how extreme IT is (the exact bug found and fixed in the
     # backtest), that huge value would inflate its own baseline and
-    # DAMPEN its own z-score. The baseline here is a tiny +-0.002
-    # oscillation; a jump to 105.0 should read as an enormous z if (and
-    # only if) the fix's self-exclusion is actually in effect.
-    today = FIXED_NOW.date()
-    extreme = _extended_session_candles(today, extension_price=105.0)
-    extreme_signal = vs._compute_vwap_signal(extreme)
-    assert extreme_signal is not None
-    assert abs(extreme_signal["z"]) > 50
+    # DAMPEN its own z-score. The baseline oscillates by only +-0.002; a
+    # jump to 105.0 should read as an enormous z if (and only if) the
+    # fix's self-exclusion is actually in effect.
+    candles = _unconfirmed_extension_candles(extension_price=105.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    assert z[-1] is not None
+    assert abs(z[-1]) > 50
+
+
+def test_find_confirmed_signal_none_on_flat_session():
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(_flat_session_candles())
+    signal_index, direction = vs._find_confirmed_signal(times, z, FIXED_NOW)
+    assert direction is None
+
+
+def test_find_confirmed_signal_fires_short_on_upward_extension_with_confirmation():
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction == "SHORT"
+    assert signal_index == len(candles) - 1  # fires at the confirmation bar, not the raw extreme
+
+
+def test_find_confirmed_signal_fires_long_on_downward_extension_with_confirmation():
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction == "LONG"
+
+
+def test_find_confirmed_signal_none_without_confirmation():
+    candles = _unconfirmed_extension_candles(extension_price=105.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction is None, "a raw extreme with no follow-up tick-back must never fire"
+
+
+def test_find_confirmed_signal_ignores_stale_confirmation():
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    stale_now = times[-1] + timedelta(minutes=vs.SIGNAL_RECENCY_MINUTES + 5)
+    signal_index, direction = vs._find_confirmed_signal(times, z, stale_now)
+    assert direction is None, "a confirmed signal older than SIGNAL_RECENCY_MINUTES must be ignored"
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -170,8 +207,7 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    today = FIXED_NOW.date()
-    candles = _extended_session_candles(today, extension_price=105.0)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -192,8 +228,7 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    today = FIXED_NOW.date()
-    candles = _extended_session_candles(today, extension_price=95.0)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
     client = FakeClient(candles_by_instrument={"GBP_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -205,12 +240,27 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_no_confirmation_yet_places_no_order(mock_send, tmp_path, monkeypatch):
+    # A raw extreme that hasn't ticked back yet must NOT open a position
+    # -- the core fix for the real live losses (2026-08-31): the old
+    # code fired on the raw crossing alone.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    client = FakeClient(candles_by_instrument={"EUR_USD": _unconfirmed_extension_candles(extension_price=105.0)})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_no_signal_yet_places_no_order(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    today = FIXED_NOW.date()
-    client = FakeClient(candles_by_instrument={"EUR_USD": _flat_session_candles(today)})
+    client = FakeClient(candles_by_instrument={"EUR_USD": _flat_session_candles()})
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
@@ -227,8 +277,9 @@ def test_outside_watch_window_skips_fresh_entries(mock_send, tmp_path, monkeypat
         _frozen = FIXED_NOW.replace(hour=22)  # 22:00 UTC -- past WATCH_END_HOUR
 
     monkeypatch.setattr(vs, "datetime", _OutsideWindow)
-    today = FIXED_NOW.date()
-    client = FakeClient(candles_by_instrument={"EUR_USD": _extended_session_candles(today, extension_price=105.0)})
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_OutsideWindow._frozen)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
@@ -253,8 +304,8 @@ def test_cooldown_skips_reentry_despite_fresh_signal(mock_send, tmp_path, monkey
     tj.save_journal(entries)
 
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    today = FIXED_NOW.date()
-    client = FakeClient(candles_by_instrument={"EUR_USD": _extended_session_candles(today, extension_price=105.0)})
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
 

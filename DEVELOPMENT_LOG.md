@@ -4962,3 +4962,53 @@ while this is being re-validated. Account is OANDA's DEMO/practice
 mode (confirmed via dashboard_state.json's own "mode": "demo" field),
 so no real capital is at risk from letting it keep trading meanwhile --
 left as the user's call, not paused unilaterally.
+
+## 2026-08-31 (continued) -- Found the REAL bug: live detection only ever checked the current instant
+
+User ran the confirmation-gate backtest. Result: "confirmed" performed
+about the SAME as "raw" (calendar-day day-win-rate 95-100% either way,
+comparable t-stats). If missing confirmation were the dominant problem,
+confirmed should have clearly separated from raw -- it didn't. That was
+the tell to keep looking rather than ship the confirmation gate alone
+and call it fixed.
+
+**The real bug**: `_compute_vwap_signal` in the shipped
+src/vwap_scalp_addon.py only ever evaluated the SINGLE LATEST bar at
+each 5-minute poll (`if std > 0 and i == n - 1`) -- "is right now
+extreme," with zero memory of what happened between checks. Neither
+backtest signal mode ("raw" nor "confirmed") ever modeled this: both
+scan every minute continuously. A reversal that both started AND
+finished between two 5-minute polls was silently invisible to the live
+code; a poll landing mid-extension could fire straight into a still-
+worsening move -- textbook explanation for the 26-second USD_JPY
+stop-out and the wildly inconsistent realized R:R (0.68-5.89) in the
+real trades.
+
+**Fix**: replaced `_compute_vwap_signal` with `_compute_vwap_series`
+(computes vwap/dev_stdev/z for EVERY fetched bar, not just the latest)
+and `_find_confirmed_signal` (scans the whole window for the most
+recent CONFIRMED reversal -- mirrors the backtest's
+find_scalp_signals_confirmed exactly -- ignoring anything older than
+SIGNAL_RECENCY_MINUTES=10 as stale). This correctly reproduces
+continuous monitoring within each poll's fetched window instead of a
+blind instantaneous snapshot. STOP_Z_BUFFER changed from 1.5 to 1.0 --
+the strongest t-stat of the three levels under the confirmed-signal +
+realistic-delay backtest scenario (t=21-29 across all three aggregation
+levels), matching this session's own "strongest t-stat, not just
+highest raw win rate" selection discipline.
+
+Full test file rewritten (19 tests, all passing) -- fixtures now
+require an explicit confirmation/tick-back bar after the extension
+(the old raw-crossing-only fixtures would never fire at all under the
+new gate), and a new test pins down the core fix directly: a raw
+extreme with no follow-up tick-back must place zero orders. Full
+project suite (516 tests) passes; `py_compile` + `import app` verified
+before commit.
+
+This is now the third real, structural bug this specific strategy
+exposed only once it was trading real (if demo) capital -- something
+none of this session's ~30 purely-retrospective backtests could ever
+have caught, since all of them assumed continuous signal detection by
+construction. Not yet redeployed -- awaiting the user's decision on
+whether to pause vwap_scalp_enabled while this is watched, and whether
+to re-enable now or wait for a burn-in period.
