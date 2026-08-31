@@ -1,6 +1,10 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
+
+import pytest
+import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -120,3 +124,57 @@ def test_ohlc_extraction_helpers():
     assert ch.closes_from_candles(candles) == [1.15]
     assert ch.highs_from_candles(candles) == [1.2]
     assert ch.lows_from_candles(candles) == [1.0]
+
+
+def _http_error(status_code):
+    response = Mock()
+    response.status_code = status_code
+    return requests.exceptions.HTTPError(response=response)
+
+
+class FlakyClient(FakeClient):
+    """Raises a given transient/structural error `fail_times` times in a
+    row, then falls through to FakeClient's own successful response."""
+    def __init__(self, fail_times, exc_factory=lambda: _http_error(504)):
+        super().__init__()
+        self.fail_times = fail_times
+        self.exc_factory = exc_factory
+        self.attempts = 0
+
+    def get_candles(self, *args, **kwargs):
+        self.attempts += 1
+        if self.attempts <= self.fail_times:
+            raise self.exc_factory()
+        return super().get_candles(*args, **kwargs)
+
+
+def test_fetch_history_retries_transient_5xx_and_succeeds(monkeypatch):
+    monkeypatch.setattr(ch.time, "sleep", lambda seconds: None)  # don't actually wait in tests
+    client = FlakyClient(fail_times=1)  # one 504, then a normal response
+    candles = ch.fetch_history(client, "EUR_USD", "D", datetime(2026, 1, 1), datetime(2026, 1, 3))
+    assert client.attempts == 2
+    assert len(candles) > 0
+
+
+def test_fetch_history_retries_transient_connection_error_and_succeeds(monkeypatch):
+    monkeypatch.setattr(ch.time, "sleep", lambda seconds: None)
+    client = FlakyClient(fail_times=1, exc_factory=lambda: requests.exceptions.ConnectionError("reset"))
+    candles = ch.fetch_history(client, "EUR_USD", "D", datetime(2026, 1, 1), datetime(2026, 1, 3))
+    assert client.attempts == 2
+    assert len(candles) > 0
+
+
+def test_fetch_history_gives_up_after_max_retries(monkeypatch):
+    monkeypatch.setattr(ch.time, "sleep", lambda seconds: None)
+    client = FlakyClient(fail_times=ch.MAX_CHUNK_RETRIES)  # never succeeds within the retry budget
+    with pytest.raises(requests.exceptions.HTTPError):
+        ch.fetch_history(client, "EUR_USD", "D", datetime(2026, 1, 1), datetime(2026, 1, 3))
+    assert client.attempts == ch.MAX_CHUNK_RETRIES
+
+
+def test_fetch_history_does_not_retry_structural_400(monkeypatch):
+    monkeypatch.setattr(ch.time, "sleep", lambda seconds: None)
+    client = FlakyClient(fail_times=999, exc_factory=lambda: _http_error(400))
+    with pytest.raises(requests.exceptions.HTTPError):
+        ch.fetch_history(client, "EUR_USD", "D", datetime(2026, 1, 1), datetime(2026, 1, 3))
+    assert client.attempts == 1  # a structural 400 must never be retried

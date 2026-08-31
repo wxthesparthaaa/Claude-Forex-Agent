@@ -5156,3 +5156,41 @@ those all assumed the target/stop construction itself was sound and
 only checked whether the SAMPLE was independent/large enough, never
 whether the construction could produce a strong-looking result with NO
 signal at all.
+
+## 2026-08-31 (continued) -- 180-day run hit a real 504, added chunk-level retry to candle_history.py
+
+User's first 180-day run fetched EUR_USD successfully (cached, 54MB)
+then died on GBP_USD: `504 Gateway Timeout` from OANDA partway through
+the chunked M1 pull. A transient server-side timeout, not a code bug --
+but with 180 days now ~2x the request count of the original 90-day
+window, a multi-hour fetch has more chances of hitting one, and
+fetch_history_cached only ever saves to cache at the very END of a
+successful full-instrument fetch, so GBP_USD's already-fetched chunks
+were silently discarded when the exception propagated.
+
+Added `_fetch_chunk_with_retry` to src/candle_history.py, wrapping the
+per-chunk `client.get_candles()` call: up to 3 total attempts, 25-second
+backoff between them (deliberately >= oanda_client.py's own 20-second
+circuit-breaker cooldown, so a retry doesn't immediately hit the
+still-open breaker for a reason unrelated to whether OANDA has actually
+recovered). Only retries genuinely transient failures (5xx / connection
+/ timeout, mirroring `requests.exceptions.HTTPError`/`RequestException`)
+-- a 400/404 (OANDA doesn't list this instrument/param combination at
+all, matching oanda_client.py's own established handling for e.g.
+CHF_SGD) is a permanent, structural response retrying can never fix,
+and is re-raised immediately, not retried. Order-placement code paths
+were deliberately left untouched -- retrying a POST automatically risks
+a duplicate live order if a timeout happened after the order actually
+filled server-side but the response was lost; this fix is scoped only
+to read-only candle fetches.
+
+4 new tests in tests/test_candle_history.py (12 total, all passing):
+retries and recovers from a transient 504, retries and recovers from a
+transient connection error, gives up and raises after exhausting the
+retry budget, and confirms a structural 400 is never retried at all
+(fails on the first attempt). Full project suite (523 tests) passes;
+`py_compile` + `import app` verified. EUR_USD's cache survives this
+fix (no reason to invalidate it); GBP_USD/USD_JPY/AUD_USD/USD_CAD still
+need a full re-fetch on the next run since none of their chunks were
+ever persisted, but this time a single transient timeout shouldn't be
+able to kill the whole run again.

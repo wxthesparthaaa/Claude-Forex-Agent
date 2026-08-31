@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timedelta, timezone
+
+import requests
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "candle_cache")
 
@@ -25,6 +28,19 @@ CHUNK_DAYS = {
     "H4": 700,
     "D": 3650,
 }
+
+# Real incident (2026-08-31): a 180-day M1 fetch across 5 instruments is
+# hundreds of chunked requests; one 504 Gateway Timeout partway through
+# used to kill the entire multi-hour run with no retry at all, discarding
+# every already-fetched instrument's progress that hadn't reached
+# fetch_history_cached's own end-of-function save_to_cache call yet.
+# MAX_CHUNK_RETRIES=3 total attempts per chunk (1 initial + 2 retries).
+# RETRY_BACKOFF_SECONDS is deliberately >= oanda_client's own 20-second
+# circuit-breaker cooldown -- retrying sooner than that would just hit
+# the still-open breaker and fail for a reason unrelated to whether
+# OANDA has actually recovered.
+MAX_CHUNK_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 25
 
 
 def _cache_path(instrument: str, granularity: str, price: str = "M") -> str:
@@ -52,16 +68,46 @@ def fetch_history(client, instrument: str, granularity: str, from_date: datetime
     cursor = from_date
     while cursor < to_date:
         chunk_end = min(cursor + timedelta(days=chunk_days), to_date)
-        candles = client.get_candles(
-            instrument, granularity, price=price,
-            from_time=cursor.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            to_time=chunk_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
+        candles = _fetch_chunk_with_retry(client, instrument, granularity, cursor, chunk_end, price)
         for c in candles:
             if c.get("complete", True):
                 all_candles[c["time"]] = c
         cursor = chunk_end
     return [all_candles[t] for t in sorted(all_candles.keys())]
+
+
+def _fetch_chunk_with_retry(client, instrument: str, granularity: str, from_dt: datetime, to_dt: datetime,
+                             price: str) -> list:
+    """A single chunk's candle fetch can hit a genuinely transient
+    server-side failure (a real incident: 504 Gateway Timeout on a heavy
+    multi-hundred-thousand-bar M1 pull) without OANDA's API being
+    actually down -- retrying is far cheaper than losing an entire
+    multi-hour, multi-instrument fetch to one bad chunk. Only retries
+    transient failures (5xx / connection / timeout); a 400 or 404 (OANDA
+    doesn't list this instrument/param combination at all) is a
+    permanent, structural response retrying can never fix, and is
+    re-raised immediately, matching oanda_client's own 400/404
+    handling."""
+    last_error = None
+    for attempt in range(MAX_CHUNK_RETRIES):
+        try:
+            return client.get_candles(
+                instrument, granularity, price=price,
+                from_time=from_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                to_time=to_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (400, 404):
+                raise  # structural, not transient -- retrying can't help
+            last_error = e
+        except requests.exceptions.RequestException as e:
+            last_error = e
+        if attempt < MAX_CHUNK_RETRIES - 1:
+            print(f"WARNING: candle fetch for {instrument} {from_dt.date()}-{to_dt.date()} failed "
+                  f"({last_error}) -- retrying in {RETRY_BACKOFF_SECONDS}s "
+                  f"(attempt {attempt + 2}/{MAX_CHUNK_RETRIES})", flush=True)
+            time.sleep(RETRY_BACKOFF_SECONDS)
+    raise last_error
 
 
 def save_to_cache(instrument: str, granularity: str, candles: list, price: str = "M") -> str:
