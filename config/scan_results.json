@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-08-31T03:20:57.773771+00:00",
-  "candidates": [
-    {
-      "instrument": "AUD_USD",
-      "direction": "LONG",
-      "entry_price": 0.71685,
-      "stop_loss": 0.7161,
-      "take_profit": 0.71835,
-      "confidence_pct": 86.2,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 75.0
-      },
-      "units": 40986,
-      "unit_label": "units",
-      "risk_amount": 39.13222,
-      "notional_account_currency": 37402.22,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 57 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-08-31T03:40:57.470216+00:00",
+  "candidates": []
 }
