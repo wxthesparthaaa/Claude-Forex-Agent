@@ -5012,3 +5012,54 @@ have caught, since all of them assumed continuous signal detection by
 construction. Not yet redeployed -- awaiting the user's decision on
 whether to pause vwap_scalp_enabled while this is watched, and whether
 to re-enable now or wait for a burn-in period.
+
+## 2026-08-31 (continued) -- Fixed: capital reset didn't actually reset the dashboard's live figure
+
+User hit the weekly loss limit, reset strategy capital to 2000.00 via
+/settings, got the "Strategy capital reset to 2000.00" success flash --
+but the STRATEGY CAPITAL tile kept showing 1885.42.
+
+**Root cause**: the dashboard doesn't display `strategy_starting_capital`
+directly -- it displays `tracked_equity_live()`, which is
+`strategy_starting_capital + strategy_realized_pnl +
+realized_pnl_since(entries, state.last_review_timestamp)` (the third
+term covers trades closed since the last 1am review that haven't been
+folded into strategy_realized_pnl yet, so the dashboard updates the
+moment a trade closes rather than sitting stale until the next
+review). The reset handler already zeroed strategy_realized_pnl
+correctly (a comment there even states the intent: "the new number IS
+the capital going forward") -- but never bumped last_review_timestamp,
+so any trade that closed before the reset (but after the last actual
+nightly review) kept getting layered right back on top of the freshly-
+reset number. 2000 - 114.58 = 1885.42, matching exactly.
+
+**A second, more consequential gap**: weekly_realized_pnl -- the actual
+input risk_engine checks against max_weekly_loss_pct, and what drives
+the "GAIN (THIS WEEK)" tile -- is realized_pnl_since(entries,
+state.week_start_timestamp), with the identical gap. Since the user's
+whole reason for resetting was a tripped weekly loss limit, this meant
+the reset didn't just display wrong -- it likely didn't even clear the
+breaker it was meant to clear.
+
+**Fix**: both reset_capital and the explicit strategy_capital override
+in app.py's /settings route now also bump last_review_timestamp and
+week_start_timestamp to now, so both "since" queries start counting
+from a genuinely clean slate -- matching what scheduled_jobs.py's own
+nightly review and Friday reflection already do when they roll each of
+these forward on their own schedule.
+
+New tests/test_settings_capital_reset.py (3 tests) -- this codebase's
+first Flask-test-client-based route test (every other test targets
+src/ modules directly); reproduces the exact 1885.42 figure as a sanity
+check before asserting the fix, and separately verifies the weekly-
+loss-limit input is genuinely cleared, not just the display. Caught and
+fixed a real mistake while writing it: seeding pre-reset journal/state
+data before applying the tmp_path isolation wrote directly to this
+repo's real local config/dashboard_state.json and trade_journal.json
+(git diff confirmed real prior state -- max_trades_per_day: 10,
+strategy_realized_pnl: -23.4554, a real last_review_timestamp from
+2026-08-12 -- almost certainly pulled from GitHub by an earlier `import
+app` verification step this session). Reverted immediately via `git
+checkout -- config/`, then fixed the test's ordering (isolate before
+any write, not after). Full suite (519 tests) passes; `py_compile` +
+`import app` verified; confirmed config/ stays clean on a fresh run.

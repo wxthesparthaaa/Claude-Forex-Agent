@@ -851,9 +851,31 @@ def settings():
         # the original $2,000 target. Both re-baseline strategy_realized_pnl
         # to 0 -- the new number IS the capital going forward, not "the old
         # capital plus whatever P&L happened to be sitting on top of it".
+        #
+        # Real bug (found live 2026-08-31): strategy_realized_pnl alone
+        # wasn't enough. tracked_equity_live() ALSO adds
+        # realized_pnl_since(entries, state.last_review_timestamp) --
+        # trades closed since the last 1am review that haven't been
+        # folded into strategy_realized_pnl yet -- so any trade that
+        # closed before this reset but after the last review kept
+        # getting layered right back on top of the freshly-reset number
+        # (a real report: reset to 2000.00, dashboard still showed
+        # 1885.42 -- exactly 2000 plus a pre-reset -114.58). Worse,
+        # weekly_realized_pnl (the actual weekly-loss-circuit-breaker
+        # input, and the "GAIN (THIS WEEK)" tile) is
+        # realized_pnl_since(entries, state.week_start_timestamp) -- if
+        # THAT isn't bumped too, a reset done specifically to get past a
+        # tripped weekly loss limit doesn't actually clear it; the
+        # breaker keeps seeing the same pre-reset week of losses.
+        # Bumping both timestamps to now makes both "since" queries
+        # start counting from a genuinely clean slate, matching what
+        # scheduled_jobs.py's own nightly review and Friday reflection
+        # already do when they roll each of these forward.
         if request.form.get("reset_capital"):
             state.strategy_starting_capital = DEFAULT_STRATEGY_CAPITAL
             state.strategy_realized_pnl = 0.0
+            state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
+            state.week_start_timestamp = state.last_review_timestamp
             flash(f"Strategy capital reset to {DEFAULT_STRATEGY_CAPITAL:.2f}.", "success")
         else:
             new_capital = request.form.get("strategy_capital")
@@ -862,6 +884,8 @@ def settings():
                 if abs(new_capital - tracked_equity_live(state)) > 0.01:
                     state.strategy_starting_capital = new_capital
                     state.strategy_realized_pnl = 0.0
+                    state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
+                    state.week_start_timestamp = state.last_review_timestamp
                     flash(f"Strategy capital set to {new_capital:.2f}.", "success")
 
         state.risk_config = asdict(risk_config)
