@@ -157,6 +157,30 @@ extending" pattern the 1-bar version already treats as unconfirmed,
 just interrupted partway through), so two non-consecutive bounce-backs
 around a renewed extreme do not count as satisfying this.
 
+THE PLACEBO TEST (2026-08-31, same day, prompted by the user's own
+skepticism): raw, confirmed 1-bar, and confirmed 2-bar all landed
+within a few points of each other despite entering at meaningfully
+different bars -- suspicious, since a real predictive signal should be
+more sensitive to entry timing than that. find_placebo_signals answers
+the obvious follow-up directly instead of debating it: pick RANDOM,
+non-predictive (bar, direction) pairs -- no z-score condition at all --
+and run them through the identical target/stop/resolution machinery. If
+the placebo baseline ALSO shows an implausibly strong win rate, the
+edge was never really about the z-score threshold; it's the
+target-equals-VWAP construction itself (a slow cumulative average any
+range-bound instrument drifts back near just by definition) doing the
+work. If the placebo instead resolves near or below the R:R-implied
+breakeven, the real signal modes' margin OVER this baseline -- not
+their raw win rate alone -- is the number actually worth trusting.
+
+DATA WINDOW DOUBLED (2026-08-31, same day, user request): TEST_DAYS
+90 -> 180 -- more independent calendar days for every significance
+test, and more regime diversity to generalize across, directly
+addressing "only 90 days" as a real, previously-acknowledged caveat.
+This roughly doubles the fetch time on a first run (candle_history's
+local cache isn't keyed by date range, so the previous 90-day cache
+files were deleted to force a genuine re-fetch at the new window).
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -189,6 +213,7 @@ scoped to 5 instruments rather than 13-17.
 """
 import math
 import os
+import random
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -205,7 +230,14 @@ from spread_aware_trade_simulator import simulate_scalp_trade
 
 SCALP_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD"]
 
-TEST_DAYS = 90
+TEST_DAYS = 180  # doubled from the original 90 (2026-08-31, user request) -- more independent
+                 # calendar days for every significance test, and more regime diversity to
+                 # generalize across, directly addressing "only 90 days" as a real caveat.
+                 # candle_history's local cache is keyed by instrument/granularity/price only,
+                 # NOT by date range -- changing this value alone would silently keep serving
+                 # the old 90-day cache, so the 5 stale AUD_USD/EUR_USD/GBP_USD/USD_CAD/USD_JPY
+                 # _M1_MBA.json files under data/candle_cache/ were deleted alongside this edit
+                 # to force a real re-fetch at the new window on the next run.
 WATCH_START_HOUR = 7
 WATCH_END_HOUR = 20
 ROLLING_WINDOW_MINUTES = 30
@@ -523,6 +555,66 @@ def find_scalp_signals_confirmed_2bar(times: list, z: list):
     return signals
 
 
+PLACEBO_TARGET_COUNT = 6000   # oversampled -- spacing enforcement below thins this down;
+                               # picked so the final count lands in the same ballpark as the
+                               # real signal modes for a fair, not density-inflated, comparison
+PLACEBO_SEED = 42
+
+
+def find_placebo_signals(times: list, z: list, target_count: int = PLACEBO_TARGET_COUNT,
+                          seed: int = PLACEBO_SEED):
+    """NULL/PLACEBO baseline (2026-08-31, prompted directly by the user's
+    own skepticism): raw, confirmed 1-bar, and confirmed 2-bar all show
+    nearly the SAME implausibly strong win rate (85-100% at the day
+    level) despite entering at meaningfully different bars -- if the
+    z-score threshold and confirmation logic were doing the real work,
+    changing WHICH bar you enter on should matter more than it does.
+    That pattern points at the alternative explanation this tests
+    directly: is the apparent edge coming from the TARGET/STOP
+    CONSTRUCTION itself -- target = session VWAP, a slow cumulative
+    average that any continuously-traded, range-bound instrument tends
+    to drift back near just by construction, not necessarily because
+    anything was predicted -- rather than from the z-score threshold
+    predicting anything real?
+
+    Picks `target_count` RANDOM (bar, direction) candidates -- NOT
+    conditioned on |z|>=Z_ENTRY at all, any bar with a valid z/vwap/std
+    qualifies, direction is a coin flip -- then thins them to the same
+    non-overlapping MAX_HOLD_BARS spacing every real signal finder
+    enforces, so this isn't just winning by being denser. Runs through
+    the EXACT SAME resolve_trades/target/stop machinery as every real
+    signal mode.
+
+    If this placebo baseline ALSO shows an implausibly high win rate,
+    that is decisive evidence the construction itself is inflated,
+    independent of any real signal -- the honest conclusion would be
+    that this whole candidate needs to be discarded or fundamentally
+    redesigned, not just re-tuned. If it instead resolves close to (or
+    below) the R:R-implied breakeven, the real signal modes'
+    outperformance OVER this baseline becomes the genuinely meaningful,
+    defensible number -- not their raw win rate in isolation.
+
+    A fixed seed makes this reproducible run to run, not a fresh random
+    draw that could accidentally look better or worse by chance -- the
+    same reasoning as this session's own established discipline of
+    pre-specifying parameters rather than tuning after seeing results."""
+    rng = random.Random(seed)
+    eligible = [i for i in range(len(times))
+                if z[i] is not None and WATCH_START_HOUR <= times[i].hour < WATCH_END_HOUR]
+    if not eligible:
+        return []
+    chosen = rng.sample(eligible, min(target_count, len(eligible)))
+    candidates = sorted((i, rng.choice(["LONG", "SHORT"])) for i in chosen)
+
+    signals = []
+    last_i = -10 ** 9
+    for i, direction in candidates:
+        if i - last_i > MAX_HOLD_BARS:
+            signals.append((i, direction))
+            last_i = i
+    return signals
+
+
 def _selftest():
     # Flat price, constant volume -> deviation is always exactly 0, so
     # its stdev is 0 and no z-score (and therefore no signal) should
@@ -588,6 +680,28 @@ def _selftest():
     reset_signals = find_scalp_signals_confirmed_2bar(reset_times, reset_z)
     assert reset_signals == [(35, "LONG")], \
         f"expected the streak to reset at the new -3.2 extreme (index 33), firing only at index 35, got {reset_signals}"
+
+    # find_placebo_signals: same seed must reproduce the identical
+    # signal set (no accidental fresh-random-draw-per-run luck), every
+    # chosen index must have a real z-score and fall inside the watch
+    # window (not just any bar), and no two signals may sit closer than
+    # MAX_HOLD_BARS apart -- the same non-overlapping spacing every real
+    # signal finder enforces, so this isn't winning by being denser.
+    placebo_base = datetime(2026, 1, 5, 0, 0, tzinfo=timezone.utc)
+    placebo_times = [placebo_base + timedelta(minutes=i) for i in range(2000)]
+    placebo_z = [(0.5 if 420 <= (t.hour * 60 + t.minute) < 1200 else None) for t in placebo_times]
+    run1 = find_placebo_signals(placebo_times, placebo_z, target_count=200, seed=7)
+    run2 = find_placebo_signals(placebo_times, placebo_z, target_count=200, seed=7)
+    assert run1 == run2, "the same seed must reproduce an identical placebo signal set"
+    assert len(run1) > 0, "expected at least some placebo signals from a 2000-bar fixture"
+    for idx, direction in run1:
+        assert placebo_z[idx] is not None, f"placebo picked bar {idx} with no real z-score"
+        assert WATCH_START_HOUR <= placebo_times[idx].hour < WATCH_END_HOUR, \
+            f"placebo picked bar {idx} outside the watch window"
+        assert direction in ("LONG", "SHORT")
+    gaps = [b - a for (a, _), (b, _) in zip(run1, run1[1:])]
+    assert all(gap > MAX_HOLD_BARS for gap in gaps), \
+        f"placebo signals must respect the same non-overlapping spacing as real signal finders, got gaps {gaps}"
 
     # Session reset: a big jump straight across a day boundary must NOT
     # pollute the new session's own VWAP/deviation baseline -- the first
@@ -708,10 +822,15 @@ def _fetch_and_compute_vwap(client, instrument):
 # user-requested variant (2026-08-31): does requiring the bounce to
 # hold for a SECOND consecutive bar improve on the single-bar version,
 # rather than just confirming it isn't noise?
+# "placebo" (2026-08-31): random, non-predictive entries through the
+# EXACT SAME target/stop machinery -- tests directly whether the
+# construction itself (not any real signal) is what's producing the
+# implausibly consistent win rates every real mode above has shown.
 SIGNAL_MODES = [
     ("raw (fires the instant the threshold crosses -- for reference only)", find_scalp_signals),
     ("confirmed 1-bar (waits for one bounce-back bar -- what's live today)", find_scalp_signals_confirmed),
     ("confirmed 2-bar (requires the bounce to hold for a second bar)", find_scalp_signals_confirmed_2bar),
+    ("PLACEBO (random entries, no real signal -- the null baseline)", find_placebo_signals),
 ]
 
 

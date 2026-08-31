@@ -5096,3 +5096,63 @@ script isn't part of it) unaffected. Not yet run on real data --
 awaiting the user's next pass to see whether the stricter 2-bar
 requirement improves, matches, or weakens the 1-bar version already
 shipped live.
+
+## 2026-08-31 (continued) -- The 2-bar result raised a bigger question: is the whole edge an artifact of the target/stop construction?
+
+User ran the 2-bar confirmation backtest. Result: nearly identical to
+raw and confirmed 1-bar (day-win-rate 83.7-100% across all three modes
+and both delay scenarios, all surviving Bonferroni). Separately, user
+directly questioned whether the backtest itself might not be accurate,
+given how far live performance (25% win rate, but see below) sat below
+what an implausibly-strong backtest implied.
+
+Pointed out the more important pattern hiding in the 2-bar result: raw,
+1-bar, and 2-bar enter at meaningfully DIFFERENT bars (right at the
+extreme vs. one tick back vs. two), yet all land within a few points of
+each other. If the z-score threshold and confirmation logic were doing
+the real work, changing WHICH bar you enter on should matter more than
+it does. That's the signature of an edge coming from something common
+to all three -- most likely the target/stop CONSTRUCTION itself
+(target = session VWAP, which any continuously-traded, range-bound
+instrument drifts back near just by being a slow cumulative average,
+not necessarily because anything real was predicted) -- rather than
+from the entry-timing refinement being tested. Also flagged plainly:
+the 25% figure predates the live-detection-window fix, so it isn't
+actually a clean test of what the backtest validates; the real
+comparison hasn't happened yet.
+
+**Built the direct test rather than keep debating it**: `find_placebo_signals`
+in scripts/backtest_vwap_reversion_scalp.py picks RANDOM (bar,
+direction) pairs -- no z-score condition at all, a coin-flip direction
+-- respecting the same non-overlapping MAX_HOLD_BARS spacing every real
+signal finder enforces, then runs them through the IDENTICAL target/
+stop/resolution machinery as every real mode. Wired as a fourth
+SIGNAL_MODES entry. Fixed seed (42) for reproducibility. If this
+placebo baseline also shows an implausibly strong win rate, that's
+decisive evidence the whole candidate's apparent edge is a construction
+artifact, not a real signal; if it resolves near/below the R:R-implied
+breakeven, the real modes' margin OVER this baseline (not their raw win
+rate) becomes the number actually worth trusting. 4 new self-test
+assertions: same-seed reproducibility, every picked bar has a real
+z-score and falls inside the watch window, and the same non-overlapping
+spacing real signal finders enforce.
+
+**Also doubled TEST_DAYS (90 -> 180)**, user request, directly
+addressing the "only 90 days" caveat already on record -- more
+independent calendar days for every significance test, more regime
+diversity. candle_history's local cache isn't keyed by date range, so
+the 5 stale 90-day cache files under data/candle_cache/ (real files
+from the user's own prior local runs -- this session runs on the same
+machine the user does, confirmed by their real file sizes/timestamps)
+were deleted to force a genuine re-fetch at the new window; confirmed
+gitignored, not a tracked-file change. Run time roughly doubles on the
+next pass since the cache has to rebuild from scratch.
+
+Self-tests pass; full project suite (519 tests, this script isn't part
+of it) unaffected. Awaiting the user's next run -- this is the most
+decisive test of this candidate's legitimacy run so far, more
+informative than any of the statistical-rigor passes before it, since
+those all assumed the target/stop construction itself was sound and
+only checked whether the SAMPLE was independent/large enough, never
+whether the construction could produce a strong-looking result with NO
+signal at all.
