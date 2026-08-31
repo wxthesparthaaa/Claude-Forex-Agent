@@ -5063,3 +5063,36 @@ app` verification step this session). Reverted immediately via `git
 checkout -- config/`, then fixed the test's ordering (isolate before
 any write, not after). Full suite (519 tests) passes; `py_compile` +
 `import app` verified; confirmed config/ stays clean on a fresh run.
+
+## 2026-08-31 (continued) -- User-requested follow-up: does the bounce-back need to hold for 2 bars, not 1?
+
+User (having confirmed the 1-bar confirmation gate matches what they'd
+seen retail scalpers describe -- wait for a bounce before entering, not
+just an extreme) asked whether requiring the bounce to hold for a
+SECOND consecutive bar, not just one tick back, would do better --
+closer to "wait for the bounce to actually hold" rather than act on the
+first sign of one. Also asked whether the confirmation considers
+support/resistance at all -- answered directly: no, it only tracks the
+deviation's own trajectory relative to VWAP, no reference to price
+structure (swing highs/lows, prior session extremes, round numbers) at
+all; a real S/R-aware version would need its own design pass, not
+folded into this without deciding what counts as a level first.
+
+Added `find_scalp_signals_confirmed_2bar` to scripts/backtest_vwap_reversion_scalp.py,
+wired as a third SIGNAL_MODES entry alongside raw and the 1-bar
+confirmed version (which is what ships live today). Requires TWO
+CONSECUTIVE bars ticking back from the running extreme before firing --
+a bounce-back tick immediately followed by a fresh push to a new
+extreme resets the streak to zero (the same "still extending" pattern
+the 1-bar version already treats as unconfirmed, just interrupted
+partway through building toward 2), so two bounce-back ticks separated
+by a renewed extreme do NOT satisfy this. 3 new self-test cases: fires
+at the second of two genuine consecutive bounce-backs (not the first);
+a sequence with only one available bounce-back bar (the exact one the
+1-bar version fires on) does NOT fire; a bounce-back interrupted by a
+fresh deeper extreme correctly resets the streak rather than counting
+toward 2. All self-tests pass; full project suite (519 tests, this
+script isn't part of it) unaffected. Not yet run on real data --
+awaiting the user's next pass to see whether the stricter 2-bar
+requirement improves, matches, or weakens the 1-bar version already
+shipped live.

@@ -137,10 +137,25 @@ falling knife, not fading a completed spike. SIGNAL_MODES now tests
 find_scalp_signals_confirmed side by side with the original: it waits
 for z to tick back from its own running extreme (evidence the reversal
 has actually started) before firing, using the CONFIRMATION bar's own
-vwap/std as the frozen reference rather than the stale extreme's. Both
+vwap/std as the frozen reference rather than the stale extreme's. All
 signal modes run through both entry-delay scenarios, so this directly
 answers whether requiring confirmation recovers the backtested edge
-under REALISTIC (not idealized) execution.
+under REALISTIC (not idealized) execution. (The confirmed 1-bar version
+is what's actually running live, as of the fix in
+src/vwap_scalp_addon.py the same day -- see that module's own docstring
+for the deeper live-detection bug that turned out to matter more than
+confirmation alone.)
+
+USER-REQUESTED FOLLOW-UP (2026-08-31, same day): does the confirmation
+need to hold for a SECOND consecutive bar, not just one, before it's
+trustworthy -- closer to how retail scalpers describe waiting for a
+bounce to hold rather than acting on the first tick back?
+find_scalp_signals_confirmed_2bar tests exactly this, added as a third
+SIGNAL_MODES entry. A bounce-back tick immediately followed by a fresh
+push to a new extreme resets the streak (that's the same "still
+extending" pattern the 1-bar version already treats as unconfirmed,
+just interrupted partway through), so two non-consecutive bounce-backs
+around a renewed extreme do not count as satisfying this.
 
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
@@ -451,6 +466,63 @@ def find_scalp_signals_confirmed(times: list, z: list):
     return signals
 
 
+def find_scalp_signals_confirmed_2bar(times: list, z: list):
+    """Like find_scalp_signals_confirmed, but requires TWO CONSECUTIVE
+    bars ticking back from the running extreme before firing, not just
+    one -- a stronger bar that the bounce is holding rather than a
+    single-tick blip that could itself just be noise. User-requested
+    variant (2026-08-31): "wait for a bounce back" is the single-bar
+    version already shipped; this tests whether requiring the bounce to
+    persist for a second bar improves on it.
+
+    A bar that sets a NEW deeper extreme resets the streak to zero (and
+    updates the extreme) -- a single bounce-back tick followed by a
+    fresh push further out does not count as 2 consecutive bars of
+    genuine reversal, it's the SAME "still extending" pattern the
+    1-bar version already treats as not-yet-confirmed, just interrupted
+    partway through building a streak. Fires AT the second confirming
+    bar, using THAT bar's own vwap/std as the frozen reference, same
+    reasoning as the 1-bar version."""
+    n = len(times)
+    signals = []
+    i = 0
+    while i < n - 1:
+        t = times[i]
+        if z[i] is None or not (WATCH_START_HOUR <= t.hour < WATCH_END_HOUR):
+            i += 1
+            continue
+        if z[i] <= -Z_ENTRY or z[i] >= Z_ENTRY:
+            direction = "LONG" if z[i] <= -Z_ENTRY else "SHORT"
+            extreme_z = z[i]
+            wait_cutoff = t + timedelta(minutes=CONFIRMATION_MAX_WAIT_MINUTES)
+            j = i + 1
+            streak = 0
+            confirmed_at = None
+            while j < n and times[j] <= wait_cutoff:
+                if z[j] is None:
+                    j += 1
+                    continue
+                still_extending = (z[j] <= extreme_z) if direction == "LONG" else (z[j] >= extreme_z)
+                if still_extending:
+                    extreme_z = z[j]
+                    streak = 0
+                    j += 1
+                    continue
+                streak += 1
+                if streak >= 2:
+                    confirmed_at = j
+                    break
+                j += 1
+            if confirmed_at is not None:
+                signals.append((confirmed_at, direction))
+                i = confirmed_at + 1 + MAX_HOLD_BARS
+                continue
+            i = j if j > i else i + 1  # never confirmed within the wait window -- resume scanning past it
+        else:
+            i += 1
+    return signals
+
+
 def _selftest():
     # Flat price, constant volume -> deviation is always exactly 0, so
     # its stdev is 0 and no z-score (and therefore no signal) should
@@ -493,6 +565,29 @@ def _selftest():
     never_reverses_times = [watch_base + timedelta(minutes=i) for i in range(len(never_reverses_z))]
     assert find_scalp_signals_confirmed(never_reverses_times, never_reverses_z) == [], \
         "a deviation that never ticks back within the wait window should never fire"
+
+    # find_scalp_signals_confirmed_2bar must fire at the SECOND
+    # consecutive bounce-back bar, not the first.
+    two_bar_z = [None] * 30 + [-2.5, -3.0, -2.8, -2.6] + [None]
+    two_bar_signals = find_scalp_signals_confirmed_2bar(times[:35], two_bar_z)
+    assert two_bar_signals == [(33, "LONG")], \
+        f"expected 2-bar confirmation to fire at index 33 (the SECOND consecutive tick-back), got {two_bar_signals}"
+
+    # Only ONE bounce-back bar available (the exact sequence the 1-bar
+    # version fires on) must NOT fire under the 2-bar requirement.
+    one_bar_only_signals = find_scalp_signals_confirmed_2bar(times[:35], confirmed_z)
+    assert one_bar_only_signals == [], \
+        "a single bounce-back bar must not satisfy the 2-consecutive-bar requirement"
+
+    # A bounce-back tick immediately followed by a NEW deeper extreme
+    # must reset the streak, not count toward the 2-bar total -- two
+    # bounce-backs separated by a fresh push further out is the SAME
+    # "still extending" pattern, not a genuine 2-bar hold.
+    reset_times = [watch_base + timedelta(minutes=i) for i in range(36)]
+    reset_z = [None] * 30 + [-2.5, -3.0, -2.8, -3.2, -3.0, -2.9]
+    reset_signals = find_scalp_signals_confirmed_2bar(reset_times, reset_z)
+    assert reset_signals == [(35, "LONG")], \
+        f"expected the streak to reset at the new -3.2 extreme (index 33), firing only at index 35, got {reset_signals}"
 
     # Session reset: a big jump straight across a day boundary must NOT
     # pollute the new session's own VWAP/deviation baseline -- the first
@@ -606,13 +701,17 @@ def _fetch_and_compute_vwap(client, instrument):
     return candles, times, vwap, dev_stdev, z
 
 
-# (label, signal-finder function) -- "raw" is what shipped live and
-# produced the 25%-win-rate real trades on 2026-08-31; "confirmed"
-# requires the deviation to have already turned back toward VWAP before
-# firing (see find_scalp_signals_confirmed's own docstring for why).
+# (label, signal-finder function). "raw" (fires the instant the
+# threshold crosses) already conclusively ruled out live -- kept here
+# for reference, not the live focus anymore. "confirmed" (1 bounce-back
+# bar) is what's actually running live today. "confirmed_2bar" is the
+# user-requested variant (2026-08-31): does requiring the bounce to
+# hold for a SECOND consecutive bar improve on the single-bar version,
+# rather than just confirming it isn't noise?
 SIGNAL_MODES = [
-    ("raw (fires the instant the threshold crosses -- what's live today)", find_scalp_signals),
-    ("confirmed (waits for the reversal to start before firing)", find_scalp_signals_confirmed),
+    ("raw (fires the instant the threshold crosses -- for reference only)", find_scalp_signals),
+    ("confirmed 1-bar (waits for one bounce-back bar -- what's live today)", find_scalp_signals_confirmed),
+    ("confirmed 2-bar (requires the bounce to hold for a second bar)", find_scalp_signals_confirmed_2bar),
 ]
 
 
