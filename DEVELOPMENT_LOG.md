@@ -5469,3 +5469,139 @@ direction signal that must proceed regardless) confirms the exact
 counting/blocking/non-reset-on-win logic. Full suite (529 tests, this
 script isn't part of it) unaffected. Not yet run -- awaiting the
 user's next pass.
+
+## 2026-09-01 -- Loss-streak breaker REJECTED (real data), universe extended to 17 pairs and validated
+
+**Loss-streak breaker result (5-pair run)**: rejected. Every threshold
+(block after 1/2/3 same-direction losses/day) made the realistic-delay,
+per-instrument-day result WORSE than doing nothing, not better --
+threshold=1 flipped two of three stop-buffer levels to a statistically
+significant LOSS (mean_R -0.09 to -0.14). This is the opposite of what
+a circuit breaker should do: it means the trades being blocked (same-
+day, same-direction, after a loss) perform BETTER than average, not
+worse. Mechanistic read: a loss on a fade means price kept moving
+against the reversion call, which by construction pushes the z-score
+further from VWAP -- the next same-direction signal that day is often a
+STRONGER deviation, not a degraded one. Combined with the earlier
+trend-filter rejection, both proposed "add higher-timeframe/streak
+awareness" fixes are now tested and rejected. Read as: the GBP_USD
+4-loss live streak was small-sample noise, not a structural pattern;
+the already-shipped live-detection fix (full-window scan vs single-
+snapshot) is very likely the whole fix needed. Recommended NOT shipping
+either filter, and leaving VWAP Scalp unfiltered to keep collecting
+real data.
+
+**Universe extended 5 -> 17 pairs (user request)**: `VWAP_SCALP_PAIRS`
+(src/vwap_scalp_addon.py) and `SCALP_PAIRS` (the backtest script) both
+extended in lockstep to match ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS
+exactly (7 majors + 6 JPY/minor crosses + 4 commodities). Held
+commit/push until the wider-universe backtest confirmed it, since this
+directly changes what the live scheduler trades once vwap_scalp_enabled
+is on. Also added `report_per_instrument_breakdown()` to the backtest
+script -- the pooled 17-instrument significance numbers can hide one
+losing pair behind strong majors, so this splits the confirmed-1-bar +
+realistic-5-minute-delay result out per instrument per stop_buf
+specifically to catch that before any live decision.
+
+**Result**: aggregate held (mean_R +0.62/+0.51/+0.48 at stop_buf
+1.0/1.5/2.0, 94.1/91.3/89.5% day-win-rate, all survive Bonferroni --
+consistent with, even marginally better than, the original 5-pair
+number) and the per-instrument breakdown showed NO negative cell
+anywhere across all 17 instruments x 3 stop_bufs. The original spread
+concern (commodities/minor crosses assumed to be a worse bet due to
+much wider raw pip-spread) did not materialize: XAU_USD/XAG_USD/
+WTICO_USD/BCO_USD (64-409 pips avg spread vs 1.3-1.9 for the original
+majors) were among the STRONGEST performers at stop_buf=1.0, not the
+weakest (XAG_USD +0.70 mean_R/97.7% day-win, XAU_USD +0.89/99.2%,
+BCO_USD +0.94/99.2%) -- because R-multiple normalizes against each
+trade's own stop distance, computed in that same instrument's own
+price-scale units as its spread, so raw pip-spread alone isn't a valid
+cross-instrument proxy for spread cost. JPY crosses sit at the weaker
+end but stay cleanly positive everywhere (weakest cell: CHF_JPY at
+stop_buf=2.0, +0.367 mean_R, 83.7% day-win). Both files' docstrings
+updated to record this as validated. Commit/push still pending explicit
+user go-ahead, since this activates 12 new live pairs the moment
+vwap_scalp_enabled is on.
+
+**Answered a question about whether the backtest/live infra actually
+account for OANDA/Render/UptimeRobot limits**: corrected a
+misconception (OANDA does support M1 historical candles; the real
+constraint is ~5000 candles/request, already chunked at 3-day windows
+in candle_history.py). Confirmed the 5-minute poll cadence itself is
+NOT arbitrary -- it's the documented ceiling free Render (15-min idle
+spin-down) + free UptimeRobot (5-min minimum ping) impose, and VWAP
+Scalp's "realistic 5-minute poll" backtest scenario was built
+specifically to validate against that exact constraint before shipping
+(see 2026-08-30 entries above). Flagged the one real untested gap: the
+backtest models a uniform <=5-minute delay, not an occasional LONGER
+gap from an actual cold-boot if an UptimeRobot ping is ever missed --
+nothing currently detects that for the 5-minute scalping jobs (unlike
+run_daily_dispatcher's explicit catch-up design for fixed daily
+touchpoints). Assessed as an unlikely explanation for the already-
+diagnosed live losses specifically, since a cold-boot gap would show as
+a missing/late trade, not the observed pattern of several closely-
+spaced wrong-direction fades during a real trend -- which matches the
+detection-bug signature instead. Offered to check real Render logs for
+tick-timestamp gaps if the user pastes them, using the unconditional
+tick logging already added this session.
+
+## 2026-09-01/02 -- Real Render logs analyzed; found and fixed realized-loss inflation, not a latency bug
+
+User pasted a real ~30-minute Render log window. Two things clarified,
+one real finding:
+
+**Not a bug**: the "traceback" visible mid-log is deliberate diagnostic
+logging in `send_message()` (telegram_notifier.py) -- prints the full
+call stack on EVERY send, left over from tracking down an earlier
+unexplained-notification incident. Confirmed it just shows a manual
+trade-close correctly triggering its Telegram notification.
+
+**Real, previously-unknown finding**: `check_open_trades` isn't purely
+on its intended 5-minute schedule -- app.py's `/` dashboard route (line
+462) also calls it synchronously on every page load, and something
+with user-agent `Go-http-client/1.1` (NOT the user's UptimeRobot monitor,
+which has its own distinct UA and hits `/health` separately) is hitting
+`/` every ~5-6 seconds continuously, firing it ~50-60x more than
+designed. Not harmful (faster SL/TP detection, and rules out a cold-
+boot explanation for that window -- a sleeping dyno can't answer HEAD
+requests every 5 seconds) but unexplained; flagged for the user to
+identify the source. VWAP Scalp's own job is unaffected (separate
+5-minute IntervalTrigger, not tied to `/`).
+
+**The real finding, chased to a fix**: the log showed VWAP Scalp's
+daily loss limit tripped (7.0% >= 6.0%) on 5 trades, 4 losses/1 win,
+net -$179.17 SGD. Pulled the full trade_journal.json from state-sync
+and checked realized_pnl against each trade's own risk_amount: across
+all 24 closed VWAP Scalp trades to date, the 17 losses averaged
+**-1.18R** against their intended -1.0R (range -0.35R to -1.38R), not
+noise -- checked the two largest losses in detail and exit_price
+matched stop_loss exactly both times, ruling out fill slippage past
+the stop trigger. Compared against the base strategy's 20 closed
+losses over the same window: those averaged -1.05R, close to clean --
+this rules out an account-wide cause (e.g. a stale/synthetic SGD
+conversion factor on this OANDA practice account, which would hit
+every strategy equally) and points at something specific to VWAP
+Scalp's execution path, not yet root-caused (position-sizing math in
+calculate_units is internally self-consistent given the recorded
+entry/stop/units, so the gap likely lives in the conversion_rate
+resolved for sizing vs whatever OANDA effectively applies when
+reporting realizedPL in SGD -- needs live account introspection this
+session can't do offline).
+
+User's call: since neither ORB Fade nor Range Confluence have any
+closed live trades yet to check for the same pattern (both still off/
+unused), compensate rather than chase the mechanism further right now.
+Added `REALIZED_LOSS_INFLATION = 1.18` to vwap_scalp_addon.py,
+dividing `risk_amount` by it in `_open_position` -- scoped to VWAP
+Scalp specifically (not the shared RiskConfig.risk_per_trade_pct),
+since base strategy's sizing is already close to correct and touching
+the shared setting would have needlessly shrunk it too. New test
+(`test_risk_amount_compensates_for_observed_realized_loss_inflation`)
+pins the exact compensated value. Full suite green except one
+unrelated, pre-existing, confirmed-reproducible-right-now flaky test
+(`test_trades_opened_today_counts_only_todays_entries` in
+test_trade_journal.py -- a `now - timedelta(hours=1))` fixture crosses
+the SGT day boundary when run within the first hour after SGT
+midnight, which is exactly when this was run; unrelated to this
+change). Held commit/push pending the user's confirmation, same as the
+17-pair extension -- this changes live position sizing.

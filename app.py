@@ -84,6 +84,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-02", "VWAP Scalp fix: real trade data showed losses landing ~1.18x bigger than their own "
+                    "intended risk_amount (base strategy's own losses average only -1.05x over the same "
+                    "window, ruling out an account-wide cause). Root mechanism not yet confirmed -- "
+                    "compensated by dividing VWAP Scalp's risk_amount by 1.18 (REALIZED_LOSS_INFLATION) so "
+                    "real losses land back near the configured risk_per_trade_pct, scoped to this strategy "
+                    "only so the already-correct base strategy sizing isn't touched."),
     ("2026-08-30", "Shipped VWAP Scalp (src/vwap_scalp_addon.py) as a live Settings toggle, off by default: "
                     "the session's first genuine scalp (30-min max hold), fades a 2-stdev extension from the "
                     "session VWAP back toward it. Most rigorously tested result this session -- survived two "

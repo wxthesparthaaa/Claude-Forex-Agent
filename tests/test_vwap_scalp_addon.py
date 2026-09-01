@@ -4,6 +4,8 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import dashboard_state as ds
@@ -221,6 +223,29 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
     assert scalp_entries[0]["status"] == tj.OPEN
     sent_texts = [call.args[0] for call in mock_send.call_args_list]
     assert any("VWAP Scalp" in t for t in sent_texts)
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send, tmp_path, monkeypatch):
+    # Real live data showed losses landing ~1.18x bigger than their own
+    # intended risk_amount -- REALIZED_LOSS_INFLATION compensates so the
+    # REAL realized loss lands back near the user's configured
+    # risk_per_trade_pct. Default state: $2000 starting capital, 2.0%
+    # risk_per_trade_pct -> uncompensated risk_amount would be $40.00;
+    # compensated should be $40.00 / 1.18.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+
+    vs.check_vwap_scalp_opportunities(client)
+
+    entries = tj.load_journal()
+    scalp_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    assert len(scalp_entries) == 1
+    expected = 2000.0 * 2.0 / 100.0 / vs.REALIZED_LOSS_INFLATION
+    assert scalp_entries[0]["risk_amount"] == pytest.approx(expected, rel=1e-6)
 
 
 @patch("vwap_scalp_addon.send_message")

@@ -133,7 +133,20 @@ from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_e
 
 VWAP_SCALP_TAG = "VWAP_SCALP"
 
-VWAP_SCALP_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD"]
+VWAP_SCALP_PAIRS = [
+    "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
+    "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
+    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
+]  # extended from the original 5-majors-only set (2026-09-01, user request) to match
+  # ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS exactly. VALIDATED: the wider-universe backtest
+  # (scripts/backtest_vwap_reversion_scalp.py, 180 days, confirmed 1-bar + realistic
+  # 5-minute delay) showed every one of the 12 new pairs with a POSITIVE mean_R and
+  # day-win-rate at all 3 stop-buffer levels -- including XAU_USD/XAG_USD/WTICO_USD/BCO_USD,
+  # whose much wider raw pip-spread (64-409 pips vs 1.3-1.9 for the original majors) turned
+  # out NOT to erode the edge, since R-multiple is normalized against each instrument's own
+  # stop distance (itself derived from that instrument's own price-scale volatility), not a
+  # forex-sized fixed unit. See that script's module docstring for the full per-instrument
+  # breakdown and reasoning.
 
 WATCH_START_HOUR = 7
 WATCH_END_HOUR = 20            # exclusive -- London + NY liquid hours
@@ -145,6 +158,23 @@ MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- don't chase a stale setup
+
+# Real live data (2026-09-01/02, 24 closed VWAP Scalp trades, 17 losses):
+# realized losses average -1.18R against their own intended risk_amount
+# (range -0.35R to -1.38R), NOT the clean -1.0R a hit stop should produce
+# (exit_price matched stop_loss exactly on the trades checked in detail,
+# ruling out fill slippage). The SAME check on the base strategy's 20
+# closed losses over the same window averaged only -1.05R -- close to
+# clean -- which rules out an account-wide cause (e.g. a stale/synthetic
+# SGD conversion factor on this OANDA practice account, which would hit
+# every strategy equally) and points at something specific to VWAP
+# Scalp's own execution path, not yet root-caused. Compensating here
+# rather than touching the shared RiskConfig.risk_per_trade_pct, which
+# would also needlessly shrink the base strategy's sizing even though
+# its own realized/intended ratio is already close to correct.
+REALIZED_LOSS_INFLATION = 1.18  # divides risk_amount so REAL realized losses land back near the
+                                 # user's intended risk_per_trade_pct; recalibrate as more live
+                                 # data accumulates, and revisit if the root cause is ever found.
 
 _vwap_scalp_lock = threading.Lock()
 
@@ -333,7 +363,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         print(f"WARNING: VWAP Scalp conversion rate failed for {instrument}: {e}", flush=True)
         return False
 
-    risk_amount = account.equity * risk_config.risk_per_trade_pct / 100.0
+    risk_amount = account.equity * risk_config.risk_per_trade_pct / 100.0 / REALIZED_LOSS_INFLATION
     units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return False
