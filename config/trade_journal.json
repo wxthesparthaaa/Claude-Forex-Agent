@@ -2889,10 +2889,10 @@
       "candlestick": false,
       "news": false
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "CANCELLED",
+    "closed_at": "2026-09-01T02:37:18.433950+00:00",
+    "exit_price": 87.277,
+    "realized_pnl": 54.2147,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
