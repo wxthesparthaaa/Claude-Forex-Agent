@@ -1,37 +1,36 @@
 {
-  "scanned_at": "2026-09-01T19:07:39.292756+00:00",
+  "scanned_at": "2026-09-01T19:27:39.861411+00:00",
   "candidates": [
     {
       "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 91.028,
+      "entry_price": 91.194,
       "stop_loss": 88.104,
-      "take_profit": 96.876,
-      "confidence_pct": 59.3,
+      "take_profit": 97.374,
+      "confidence_pct": 61.7,
       "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 51.389025890135045,
-        "candlestick": 20.0,
+        "breadth": 85.71428571428571,
+        "rsi": 46.804683914566354,
+        "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 9,
+      "units": 8,
       "unit_label": "barrels",
       "risk_amount": 35.223141999999996,
-      "notional_account_currency": 1043.21,
+      "notional_account_currency": 929.03,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 75 (overbought -- some chase risk).",
-        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
-        "Caution: the broader currency move looks stretched (z=2.4) -- higher reversal risk than usual.",
+        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 76 (overbought -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": "Daily loss limit reached: 7.9% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": false
       }
     }
