@@ -1,45 +1,12 @@
 {
-  "scanned_at": "2026-09-01T13:31:07.879159+00:00",
+  "scanned_at": "2026-09-01T13:51:02.186927+00:00",
   "candidates": [
     {
-      "instrument": "USD_CAD",
+      "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 1.38928,
-      "stop_loss": 1.38773,
-      "take_profit": 1.39238,
-      "confidence_pct": 51.0,
-      "confidence_components": {
-        "breadth": 57.14285714285714,
-        "rsi": 53.17610814090756,
-        "candlestick": 50.0,
-        "news": 40.833333333333336
-      },
-      "units": 26398,
-      "unit_label": "units",
-      "risk_amount": 37.499348,
-      "notional_account_currency": 33610.27,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 74 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": true,
-        "news": true
-      }
-    },
-    {
-      "instrument": "BCO_USD",
-      "direction": "LONG",
-      "entry_price": 94.722,
-      "stop_loss": 93.963,
-      "take_profit": 96.24,
+      "entry_price": 89.006,
+      "stop_loss": 87.905,
+      "take_profit": 91.208,
       "confidence_pct": 65.0,
       "confidence_components": {
         "breadth": 57.14285714285714,
@@ -47,52 +14,19 @@
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 38,
+      "units": 26,
       "unit_label": "barrels",
       "risk_amount": 37.499348,
-      "notional_account_currency": 4582.37,
+      "notional_account_currency": 2945.39,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 59 (neutral range).",
+        "RSI is 64 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    },
-    {
-      "instrument": "WTICO_USD",
-      "direction": "LONG",
-      "entry_price": 88.709,
-      "stop_loss": 87.905,
-      "take_profit": 90.317,
-      "confidence_pct": 60.5,
-      "confidence_components": {
-        "breadth": 57.14285714285714,
-        "rsi": 100.0,
-        "candlestick": 20.0,
-        "news": 50.0
-      },
-      "units": 36,
-      "unit_label": "barrels",
-      "risk_amount": 37.499348,
-      "notional_account_currency": 4065.61,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 59 (neutral range).",
-        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
-      ],
-      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
+      "rejected_reason": "Daily loss limit reached: 7.0% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
