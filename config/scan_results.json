@@ -1,38 +1,70 @@
 {
-  "scanned_at": "2026-09-01T14:11:02.979740+00:00",
+  "scanned_at": "2026-09-01T14:31:04.080377+00:00",
   "candidates": [
     {
-      "instrument": "WTICO_USD",
+      "instrument": "USD_CAD",
       "direction": "LONG",
-      "entry_price": 88.618,
-      "stop_loss": 87.905,
-      "take_profit": 90.044,
-      "confidence_pct": 63.8,
+      "entry_price": 1.38956,
+      "stop_loss": 1.38804,
+      "take_profit": 1.3926,
+      "confidence_pct": 57.2,
       "confidence_components": {
         "breadth": 57.14285714285714,
-        "rsi": 100.0,
+        "rsi": 79.95244205297766,
         "candlestick": 50.0,
-        "news": 50.0
+        "news": 38.888888888888886
       },
-      "units": 41,
-      "unit_label": "barrels",
+      "units": 26943,
+      "unit_label": "units",
       "risk_amount": 37.499348,
-      "notional_account_currency": 4621.68,
+      "notional_account_currency": 34280.19,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 55 (neutral range).",
+        "RSI is 69 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.1) -- higher reversal risk than usual.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+        "News sentiment: works against this direction -- worth a second look."
       ],
       "rejected_reason": "Daily loss limit reached: 7.0% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
         "candlestick": false,
-        "news": false
+        "news": true
+      }
+    },
+    {
+      "instrument": "USD_CHF",
+      "direction": "LONG",
+      "entry_price": 0.81076,
+      "stop_loss": 0.80968,
+      "take_profit": 0.81292,
+      "confidence_pct": 62.2,
+      "confidence_components": {
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 38.888888888888886
+      },
+      "units": 22126,
+      "unit_label": "units",
+      "risk_amount": 37.499348,
+      "notional_account_currency": 28150.67,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 61 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: works against this direction -- worth a second look."
+      ],
+      "rejected_reason": "Daily loss limit reached: 7.0% >= 6.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
       }
     }
   ]
