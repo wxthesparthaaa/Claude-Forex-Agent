@@ -303,12 +303,14 @@ from candle_history import fetch_history_cached
 from spread_aware_trade_simulator import simulate_scalp_trade
 
 SCALP_PAIRS = [
-    "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
-    "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
+    "EUR_USD", "GBP_USD", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
     "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
-]  # extended from the original 5-majors-only set (2026-09-01, user request) -- matches
-  # ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS exactly, and vwap_scalp_addon.VWAP_SCALP_PAIRS
-  # was updated to the same list in lockstep so backtest and live stay in sync.
+]  # JPY-quoted pairs removed 2026-09-02 -- real live data showed JPY-quoted losses running
+  # ~1.44R vs ~1.17R for everything else (not caught by this backtest, which measures
+  # signal quality via spread-aware bid/ask fills, not the account-currency conversion step
+  # that only exists live). Kept in lockstep with vwap_scalp_addon.VWAP_SCALP_PAIRS -- see
+  # that module's own comment for the full incident writeup. Revisit once the live
+  # conversion-rate mechanism for JPY-quoted pairs is understood.
 
 TEST_DAYS = 180  # doubled from the original 90 (2026-08-31, user request) -- more independent
                  # calendar days for every significance test, and more regime diversity to

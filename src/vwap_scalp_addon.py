@@ -134,19 +134,21 @@ from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_e
 VWAP_SCALP_TAG = "VWAP_SCALP"
 
 VWAP_SCALP_PAIRS = [
-    "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
-    "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
+    "EUR_USD", "GBP_USD", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
     "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
-]  # extended from the original 5-majors-only set (2026-09-01, user request) to match
-  # ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS exactly. VALIDATED: the wider-universe backtest
-  # (scripts/backtest_vwap_reversion_scalp.py, 180 days, confirmed 1-bar + realistic
-  # 5-minute delay) showed every one of the 12 new pairs with a POSITIVE mean_R and
-  # day-win-rate at all 3 stop-buffer levels -- including XAU_USD/XAG_USD/WTICO_USD/BCO_USD,
-  # whose much wider raw pip-spread (64-409 pips vs 1.3-1.9 for the original majors) turned
-  # out NOT to erode the edge, since R-multiple is normalized against each instrument's own
-  # stop distance (itself derived from that instrument's own price-scale volatility), not a
-  # forex-sized fixed unit. See that script's module docstring for the full per-instrument
-  # breakdown and reasoning.
+]  # JPY-quoted pairs (USD_JPY + the 6 JPY crosses added 2026-09-01) REMOVED 2026-09-02
+  # after real live data: across 30 closed VWAP Scalp trades, JPY-quoted losses averaged
+  # -1.44R against their own intended risk vs -1.17R for everything else -- not new (USD_JPY,
+  # one of the original 5, already ran hotter than its 4 non-JPY siblings before the 17-pair
+  # extension), but the extension added 6 more JPY crosses that made this pre-existing gap
+  # dominate the trade mix and start costing real money on this account (e.g. CAD_JPY -1.65R,
+  # GBP_JPY -1.59R, CHF_JPY -1.56R, all with exit_price matching stop_loss almost exactly, so
+  # NOT fill slippage). REALIZED_LOSS_INFLATION=1.18 (calibrated on a mostly-non-JPY sample)
+  # under-corrected these pairs specifically. Root cause not yet confirmed -- suspected to be
+  # in resolve_conversion_rate's JPY->USD->account_currency triangulation (JPY_SGD/SGD_JPY
+  # don't exist on OANDA, confirmed live via a 400 on that pair), but unverified without a
+  # live session. Pulled rather than patched with another unverified compensation factor;
+  # revisit once the conversion-rate mechanism is actually understood.
 
 WATCH_START_HOUR = 7
 WATCH_END_HOUR = 20            # exclusive -- London + NY liquid hours

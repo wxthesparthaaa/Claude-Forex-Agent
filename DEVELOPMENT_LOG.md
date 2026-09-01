@@ -5605,3 +5605,39 @@ the SGT day boundary when run within the first hour after SGT
 midnight, which is exactly when this was run; unrelated to this
 change). Held commit/push pending the user's confirmation, same as the
 17-pair extension -- this changes live position sizing.
+
+## 2026-09-02 (continued) -- Both changes pushed; JPY-quoted pairs pulled after real losses confirmed the compensation didn't work
+
+User confirmed pushing both the 17-pair extension and the
+REALIZED_LOSS_INFLATION fix (commits ca47e9c, 07cf03c). Then asked for
+a track-record review after seeing continued losses.
+
+Pulled the fresh state-sync journal: since the deploy, 1 win / 5 losses
+on the newly-live JPY-cross pairs, and the compensation factor plainly
+did not fix the underlying issue -- CAD_JPY -1.65R, GBP_JPY -1.59R,
+CHF_JPY -1.56R, NZD_JPY -1.49R (realized loss vs the trade's OWN intended
+risk_amount, post-compensation). Split all 30 closed VWAP Scalp trades
+by quote currency: JPY-quoted losses averaged -1.44R vs -1.17R for
+everything else. Critically, this predates the 17-pair extension --
+USD_JPY, one of the original 5 pairs, already ran hotter (-1.18R to
+-1.38R) than its 4 non-JPY siblings before any of this session's
+changes. REALIZED_LOSS_INFLATION=1.18 was calibrated on a mostly-non-JPY
+sample and always under-corrected JPY pairs; adding 6 more JPY crosses
+just made the pre-existing gap dominate the trade mix. Checked fill
+quality again: 3 of 4 losing JPY trades in the post-deploy sample have
+exit_price exactly equal to stop_loss (one, CAD_JPY, had ~0.4 pips of
+real slippage -- small, not the driver) -- same "clean stop, P&L still
+runs hot" signature as the original finding, just proportionally worse.
+
+Rather than patch with another unverified compensation factor,
+`VWAP_SCALP_PAIRS` and the backtest's `SCALP_PAIRS` both had every
+JPY-quoted pair removed (USD_JPY + the 6 crosses added the day before),
+back to the 10 non-JPY pairs from the wider-universe set. Leading
+suspect for root cause (documented in vwap_scalp_addon.py, unverified):
+`resolve_conversion_rate`'s JPY->USD->account_currency triangulation --
+JPY_SGD/SGD_JPY don't exist on OANDA (confirmed live via a 400 on that
+pair in an earlier log paste), forcing the triangulated path for every
+JPY-quoted pair specifically. Full suite green (530 tests, including
+the previously-flaky SGT-midnight test now passing again with the
+boundary safely behind it). Next: investigate the conversion-rate
+mechanism directly rather than guessing further, per user request.

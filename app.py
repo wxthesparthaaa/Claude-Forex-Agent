@@ -84,6 +84,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-02", "VWAP Scalp: removed all JPY-quoted pairs (USD_JPY + 6 crosses) after real post-deploy "
+                    "losses (CAD_JPY -1.65R, GBP_JPY -1.59R, CHF_JPY -1.56R) showed the loss-inflation "
+                    "compensation didn't fix JPY pairs specifically -- JPY-quoted losses average -1.44R vs "
+                    "-1.17R for everything else, and this predates the 17-pair extension (USD_JPY already "
+                    "ran hot). Back to 10 non-JPY pairs pending a real root-cause fix, likely in "
+                    "resolve_conversion_rate's JPY triangulation (no direct JPY_SGD pair on OANDA)."),
     ("2026-09-02", "VWAP Scalp fix: real trade data showed losses landing ~1.18x bigger than their own "
                     "intended risk_amount (base strategy's own losses average only -1.05x over the same "
                     "window, ruling out an account-wide cause). Root mechanism not yet confirmed -- "
