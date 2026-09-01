@@ -115,5 +115,5 @@
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
   "vwap_scalp_enabled": true,
-  "base_strategy_enabled": false
+  "base_strategy_enabled": true
 }
