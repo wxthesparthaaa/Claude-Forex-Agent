@@ -84,6 +84,13 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-02", "VWAP Scalp: the 'JPY-specific' diagnosis was wrong -- a deeper check isolating the "
+                    "realized-vs-sizing conversion gap (separate from a compounding stop-slippage effect on "
+                    "one trade) showed it's GENERAL across every quote currency (CAD 1.22x, JPY 1.40x, USD "
+                    "1.25x -- USD includes the single worst individual trade). Restored all 7 JPY-quoted "
+                    "pairs; recalibrated REALIZED_LOSS_INFLATION 1.18 -> 1.29 to cover the full 17-pair "
+                    "universe at an evidence-based value instead of excluding pairs that were never the "
+                    "sole cause."),
     ("2026-09-02", "VWAP Scalp: removed all JPY-quoted pairs (USD_JPY + 6 crosses) after real post-deploy "
                     "losses (CAD_JPY -1.65R, GBP_JPY -1.59R, CHF_JPY -1.56R) showed the loss-inflation "
                     "compensation didn't fix JPY pairs specifically -- JPY-quoted losses average -1.44R vs "

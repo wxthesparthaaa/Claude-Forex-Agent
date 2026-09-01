@@ -134,21 +134,20 @@ from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_e
 VWAP_SCALP_TAG = "VWAP_SCALP"
 
 VWAP_SCALP_PAIRS = [
-    "EUR_USD", "GBP_USD", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
+    "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
+    "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
     "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
-]  # JPY-quoted pairs (USD_JPY + the 6 JPY crosses added 2026-09-01) REMOVED 2026-09-02
-  # after real live data: across 30 closed VWAP Scalp trades, JPY-quoted losses averaged
-  # -1.44R against their own intended risk vs -1.17R for everything else -- not new (USD_JPY,
-  # one of the original 5, already ran hotter than its 4 non-JPY siblings before the 17-pair
-  # extension), but the extension added 6 more JPY crosses that made this pre-existing gap
-  # dominate the trade mix and start costing real money on this account (e.g. CAD_JPY -1.65R,
-  # GBP_JPY -1.59R, CHF_JPY -1.56R, all with exit_price matching stop_loss almost exactly, so
-  # NOT fill slippage). REALIZED_LOSS_INFLATION=1.18 (calibrated on a mostly-non-JPY sample)
-  # under-corrected these pairs specifically. Root cause not yet confirmed -- suspected to be
-  # in resolve_conversion_rate's JPY->USD->account_currency triangulation (JPY_SGD/SGD_JPY
-  # don't exist on OANDA, confirmed live via a 400 on that pair), but unverified without a
-  # live session. Pulled rather than patched with another unverified compensation factor;
-  # revisit once the conversion-rate mechanism is actually understood.
+]  # JPY-quoted pairs briefly pulled 2026-09-02 on a suspicion they were a JPY-specific
+  # problem, then RESTORED the same day once a deeper check disproved that: isolating the
+  # realized-vs-sizing conversion-rate mismatch specifically (not conflated with the one
+  # trade that also had real stop slippage) showed it's a GENERAL effect across every quote
+  # currency this account trades -- CAD-quoted mean 1.22x, JPY-quoted mean 1.40x, USD-quoted
+  # mean 1.25x (and USD-quoted trades include the single highest individual ratio in the
+  # whole set, 1.62x on a EUR_USD loss). JPY's own mean sits somewhat above the others, so
+  # some real JPY-specific component may still exist, but excluding JPY pairs was never going
+  # to fix the underlying issue for the pairs that stayed -- REALIZED_LOSS_INFLATION now
+  # covers all 17 pairs at a recalibrated, evidence-based value instead. See that constant's
+  # own comment for the full diagnosis.
 
 WATCH_START_HOUR = 7
 WATCH_END_HOUR = 20            # exclusive -- London + NY liquid hours
@@ -161,20 +160,34 @@ COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing conv
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- don't chase a stale setup
 
-# Real live data (2026-09-01/02, 24 closed VWAP Scalp trades, 17 losses):
-# realized losses average -1.18R against their own intended risk_amount
-# (range -0.35R to -1.38R), NOT the clean -1.0R a hit stop should produce
-# (exit_price matched stop_loss exactly on the trades checked in detail,
-# ruling out fill slippage). The SAME check on the base strategy's 20
-# closed losses over the same window averaged only -1.05R -- close to
-# clean -- which rules out an account-wide cause (e.g. a stale/synthetic
-# SGD conversion factor on this OANDA practice account, which would hit
-# every strategy equally) and points at something specific to VWAP
-# Scalp's own execution path, not yet root-caused. Compensating here
-# rather than touching the shared RiskConfig.risk_per_trade_pct, which
-# would also needlessly shrink the base strategy's sizing even though
-# its own realized/intended ratio is already close to correct.
-REALIZED_LOSS_INFLATION = 1.18  # divides risk_amount so REAL realized losses land back near the
+# Real live data (2026-09-01/02, 30 closed VWAP Scalp trades, 22 losses):
+# realized losses run noticeably bigger than their own intended
+# risk_amount, NOT the clean -1.0R a hit stop should produce (exit_price
+# matched stop_loss almost exactly on every trade checked, ruling out
+# ordinary fill slippage as the main driver). Isolated the effect
+# precisely by backing out realized_pnl / (units * actual price move)
+# and comparing it to the rate implied by risk_amount at sizing time --
+# this ratio averages ~1.29x across ALL 22 losses and is NOT specific to
+# any one quote currency (CAD-quoted mean 1.22, JPY-quoted mean 1.40,
+# USD-quoted mean 1.25 -- USD-quoted trades include the single highest
+# individual ratio in the whole set, 1.62 on a EUR_USD loss). An earlier,
+# smaller check wrongly read this as JPY-specific; it wasn't -- one JPY
+# trade also had real ~0.4-pip stop slippage on top of this same general
+# effect, which inflated that trade's R further and skewed a small
+# sample. The wide variance (0.05x-1.6x trade to trade, not a constant
+# multiplier) argues against a simple code bug and toward conversion-
+# rate STALENESS: conversion_rate is fetched once at trade-open and
+# never reconciled against whatever OANDA effectively applies when
+# reporting realizedPL in SGD at close -- a demo account's synthetic
+# conversion feed plausibly drifts more, and more unevenly, than a live
+# one over a trade's hold. Root cause still not fully confirmed (would
+# need live account introspection this offline session can't do).
+# Compensating here rather than touching the shared
+# RiskConfig.risk_per_trade_pct, since the base strategy's own
+# realized/intended ratio was checked separately and stays close to
+# correct -- this is a VWAP-Scalp-specific execution effect, general
+# across the pairs it trades, not an account-wide setting problem.
+REALIZED_LOSS_INFLATION = 1.29  # divides risk_amount so REAL realized losses land back near the
                                  # user's intended risk_per_trade_pct; recalibrate as more live
                                  # data accumulates, and revisit if the root cause is ever found.
 

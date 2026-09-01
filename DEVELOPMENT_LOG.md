@@ -5641,3 +5641,46 @@ JPY-quoted pair specifically. Full suite green (530 tests, including
 the previously-flaky SGT-midnight test now passing again with the
 boundary safely behind it). Next: investigate the conversion-rate
 mechanism directly rather than guessing further, per user request.
+
+## 2026-09-02 (continued) -- JPY-specific diagnosis disproved; recalibrated and restored
+
+Went digging into the conversion-rate mechanism per the user's request
+to look into a real fix, and found the earlier JPY-specific conclusion
+was wrong. Isolated the realized-vs-sizing mismatch cleanly this time:
+`realized_pnl / (units * actual price move)` vs the rate implied by
+`risk_amount` at sizing time -- this separates the conversion-rate
+effect from the SEPARATE stop-slippage effect the cruder pnl/risk_amount
+metric had been conflating (one JPY trade, CAD_JPY, had real ~0.4-pip
+slippage past its stop on top of the conversion mismatch, which
+inflated that one trade's R and skewed the earlier small sample).
+
+Result across 22 losses, split by quote currency: CAD-quoted mean
+1.22x, JPY-quoted mean 1.40x, USD-quoted mean 1.25x -- USD-quoted
+trades include the single highest individual ratio in the whole set
+(1.62x, a EUR_USD loss). This is a GENERAL effect across every quote
+currency this account trades, not a JPY-only problem. The wide,
+uneven variance (0.05x-1.6x trade to trade) argues against a simple
+code bug and toward conversion-rate staleness -- fetched once at
+trade-open, never reconciled against whatever OANDA effectively
+applies when reporting realizedPL in SGD at close; a demo account's
+synthetic conversion feed plausibly drifts more unevenly than a live
+one over a trade's hold. Root cause still not fully confirmed (needs
+live account introspection this offline session can't do).
+
+Recalibrated `REALIZED_LOSS_INFLATION` 1.18 -> 1.29 (the honest average
+across the full 22-loss sample, isolating the conversion effect
+specifically, not the smaller earlier check). Restored all 7 JPY-quoted
+pairs to `VWAP_SCALP_PAIRS`/`SCALP_PAIRS` per user decision -- excluding
+them was never going to fix an effect that hits every pair, and 1.29
+now covers the full 17-pair universe. JPY's own mean does sit somewhat
+above the other currencies, so a real, smaller JPY-specific component
+may still exist underneath the general one; flagged as worth revisiting
+if JPY pairs keep looking disproportionately worse once more data
+accumulates at the new compensation level. Full suite green (530
+tests) before commit. Next: user asked whether trading-session timing
+(e.g. JPY crosses' natural Asian-session liquidity vs the current
+London+NY-only WATCH_START_HOUR/WATCH_END_HOUR) affects backtested
+signal quality -- queued as the next piece of work, a question the
+backtest can actually answer (it never touches account-currency
+conversion, so it's blind to the issue above, but it can test whether
+restricting to specific hours changes per-pair historical performance).
