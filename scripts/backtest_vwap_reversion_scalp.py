@@ -232,13 +232,41 @@ after the decision bar closed. The target (VWAP at signal time) is
 locked at decision time, never recomputed from a later bar. Verified
 with self-test cases before trusting real data.
 
-Universe: 5 majors only (EUR_USD, GBP_USD, USD_JPY, AUD_USD, USD_CAD) --
-deliberately narrower than this session's usual 13-17-instrument
-universe, because genuine scalping economics depend on the tight,
-stable spreads only the most liquid majors reliably offer. Commodities
-and minor crosses have wider typical spreads that would make this a
-different, worse bet -- worth a separate follow-up only if this shows
-promise on the tightest-spread pairs first.
+Universe: originally 5 majors only (EUR_USD, GBP_USD, USD_JPY, AUD_USD,
+USD_CAD), deliberately narrower than this session's usual 13-17-instrument
+universe, because genuine scalping economics depend on the tight, stable
+spreads only the most liquid majors reliably offer -- commodities and
+minor crosses have wider typical spreads that could make this a
+different, worse bet. That 5-pair pass validated decisively (confirmed
+1-bar, stop_buf=1.0: mean_R +0.637, 93.5-100% day-win-rate across every
+re-test, survives Bonferroni everywhere, same sign in both split halves),
+which is the "shows promise on the tightest-spread pairs first" condition
+the original design note set as the bar for extending further. Extended
+2026-09-01 (user request) to the full 17-instrument universe -- matching
+ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS exactly -- to see whether the edge
+survives on wider-spread commodities (XAU_USD, XAG_USD, WTICO_USD,
+BCO_USD) and minor/JPY crosses.
+
+RESULT (2026-09-01, confirmed 1-bar + realistic 5-minute delay,
+report_per_instrument_breakdown): every one of the 12 new pairs showed
+POSITIVE mean_R and day-win-rate at all 3 stop-buffer levels -- no
+negative cell anywhere in the 17-instrument x 3-stop_buf grid. The
+spread worry did NOT materialize: XAU_USD/XAG_USD/WTICO_USD/BCO_USD
+(64-409 pips avg spread, vs 1.3-1.9 for the original 5 majors) were
+among the STRONGEST performers, not the weakest, at stop_buf=1.0
+(XAG_USD +0.70 mean_R/97.7% day-win, XAU_USD +0.89/99.2%, BCO_USD
++0.94/99.2%). The mechanism: R-multiple is normalized against each
+trade's own stop distance, (Z_ENTRY + stop_buf) * dev_stdev, computed
+in that SAME instrument's own price-scale units as its spread -- so a
+"wide" spread in silver's pip convention is being measured against an
+equally "wide" stop distance in that same convention, not a forex-sized
+fixed one. Raw pip-spread size alone is not a reliable cross-instrument
+proxy for spread cost; spread-as-fraction-of-stop-distance is, and that
+ratio held up fine here. The JPY crosses (GBP_JPY/EUR_JPY/CAD_JPY/
+CHF_JPY/NZD_JPY) sit at the weaker end of the range but are still
+cleanly positive at every stop_buf (weakest cell: CHF_JPY at
+stop_buf=2.0, +0.367 mean_R, 83.7% day-win). VWAP_SCALP_PAIRS in
+src/vwap_scalp_addon.py is validated at this full 17-pair list.
 
 Data scale, stated plainly: TEST_DAYS=90 days of 1-minute mid+bid+ask
 candles per instrument (~129,600 bars/instrument) -- a first feasibility
@@ -252,8 +280,9 @@ fixing a bug doesn't re-fetch from OANDA.
 
 Read-only (get_candles/get_instruments only, no orders). Requires real
 OANDA credentials -- run this yourself and paste the output back. The
-heaviest per-instrument bar count of any script this session, though
-scoped to 5 instruments rather than 13-17.
+heaviest per-instrument bar count of any script this session, now run
+across the full 17-instrument universe (extended 2026-09-01) rather
+than the original 5 majors.
 """
 import bisect
 import math
@@ -273,7 +302,13 @@ from instrument_metadata import fetch_instrument_metadata
 from candle_history import fetch_history_cached
 from spread_aware_trade_simulator import simulate_scalp_trade
 
-SCALP_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD"]
+SCALP_PAIRS = [
+    "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
+    "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
+    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
+]  # extended from the original 5-majors-only set (2026-09-01, user request) -- matches
+  # ORB_FADE_PAIRS/RANGE_CONFLUENCE_PAIRS exactly, and vwap_scalp_addon.VWAP_SCALP_PAIRS
+  # was updated to the same list in lockstep so backtest and live stay in sync.
 
 TEST_DAYS = 180  # doubled from the original 90 (2026-08-31, user request) -- more independent
                  # calendar days for every significance test, and more regime diversity to
@@ -1269,6 +1304,47 @@ def report_scenario(label: str, all_returns: dict) -> None:
         print(f"{buf:>9.1f} {n_days:10d} {100*day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
 
 
+def report_per_instrument_breakdown(label: str, all_returns: dict, instruments: list) -> None:
+    """Diagnostic only, not a formal significance re-test -- the pooled
+    17-instrument report above can hide a pair whose economics are
+    actually negative (most plausibly a wide-spread instrument like
+    XAU_USD/XAG_USD, or a wider JPY cross) behind strong majors carrying
+    the average. Breaks the SAME all_returns data down per instrument so
+    a bad pair is visible before it's ever considered for live trading,
+    rather than silently offset in an aggregate. n is deliberately not
+    gated at 30 here (unlike report_scenario) -- with 17 instruments
+    splitting one pool, several will land under that bar, and "too few
+    trades to say anything reliable yet" is itself useful information
+    when deciding whether to trust a pair's numbers."""
+    print(f"\n{'~'*76}\nPER-INSTRUMENT BREAKDOWN: {label}\n{'~'*76}")
+    print("Diagnostic only (not Bonferroni-corrected) -- exists to catch a pair whose negative "
+          "economics are being masked by strong majors in the pooled result above. day_mean_R uses "
+          "the same (instrument, day)-level averaging as the trustworthy pooled number.")
+    for buf in STOP_Z_BUFFER_SWEEP:
+        print(f"\n  -- stop_buf={buf} --")
+        print(f"  {'instrument':10s} {'n':>6s} {'win_rate':>9s} {'mean_R':>9s}   {'n_days':>7s} {'day_win%':>9s} {'day_mean_R':>10s}")
+        for instrument in instruments:
+            entries = [e for e in all_returns[buf] if e[1] == instrument]
+            r_multiples = [r for _, _, r in entries]
+            n_obs = len(r_multiples)
+            if n_obs == 0:
+                print(f"  {instrument:10s}  (no resolved trades)")
+                continue
+            win_rate = sum(1 for r in r_multiples if r > 0) / n_obs
+            mean_r = sum(r_multiples) / n_obs
+            daily = daily_aggregate(entries)
+            day_means = [r for _, r in daily]
+            n_days = len(day_means)
+            if n_days > 0:
+                day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+                day_mean_r = sum(day_means) / n_days
+                day_str = f"{n_days:7d} {100*day_win_rate:8.1f}% {day_mean_r:+10.4f}"
+            else:
+                day_str = f"{'--':>7s} {'--':>9s} {'--':>10s}"
+            flag = "  <-- negative" if mean_r < 0 else ""
+            print(f"  {instrument:10s} {n_obs:6d} {100*win_rate:8.1f}% {mean_r:+9.4f}   {day_str}{flag}")
+
+
 def main():
     _selftest()
     client = OandaClient()
@@ -1331,6 +1407,12 @@ def main():
                       f"before the order could even be placed -- near-guaranteed wins entered after the "
                       f"fact, not predictive skill.")
             report_scenario(f"{signal_label} | {label}", all_returns)
+            if (signal_label == SIGNAL_MODES[1][0]) and (label == ENTRY_DELAY_SCENARIOS[1][0]):
+                # confirmed 1-bar + realistic 5-minute delay == what's actually live today.
+                # This is the ONE combination worth breaking down per instrument -- see
+                # report_per_instrument_breakdown's own docstring for why.
+                report_per_instrument_breakdown(f"{signal_label} | {label}", all_returns,
+                                                 list(per_instrument_signals.keys()))
 
     # TREND-FILTERED PASS (2026-09-01, user-prompted): a real live loss
     # cluster (4 consecutive GBP_USD LONG fades over ~4 hours as GBP_USD
