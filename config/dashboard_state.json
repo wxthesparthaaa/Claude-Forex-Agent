@@ -29,8 +29,8 @@
   "last_nightly_equity": null,
   "week_start_equity": null,
   "strategy_starting_capital": 2000.0,
-  "strategy_realized_pnl": -125.0326,
-  "last_review_timestamp": "2026-08-31T17:04:58.774000+00:00",
+  "strategy_realized_pnl": -238.8429,
+  "last_review_timestamp": "2026-09-01T17:02:30.081719+00:00",
   "week_start_timestamp": "2026-08-31T14:30:54.795336+00:00",
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
