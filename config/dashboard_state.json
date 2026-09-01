@@ -47,15 +47,9 @@
     "BCO_USD": "2026-09-01T20:21:04.678475+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 2,
-  "interval_scanned_instruments_since_digest": [
-    "USD_CAD",
-    "XAU_USD",
-    "XAG_USD",
-    "WTICO_USD",
-    "BCO_USD"
-  ],
-  "last_scan_digest_sent_at": "2026-09-01T09:40:48.336574+00:00",
+  "interval_scan_count_since_digest": 0,
+  "interval_scanned_instruments_since_digest": [],
+  "last_scan_digest_sent_at": "2026-09-01T12:40:48.336650+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
     "USD_JPY": [
