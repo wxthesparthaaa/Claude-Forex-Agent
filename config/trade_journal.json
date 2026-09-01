@@ -3185,7 +3185,8 @@
       "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
       "RSI is 37 (neutral range).",
       "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-      "News sentiment: neutral."
+      "News sentiment: neutral.",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L -40.65."
     ],
     "opened_at": "2026-09-01T12:06:01.177497+00:00",
     "account_currency": "SGD",
@@ -3202,10 +3203,10 @@
       "candlestick": false,
       "news": true
     },
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-09-01T13:31:07.816708+00:00",
+    "exit_price": 1.15962,
+    "realized_pnl": -40.6479,
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
