@@ -36,7 +36,7 @@
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-01T13:45:57.199346+08:00",
     "NZD_USD": "2026-09-01T13:45:57.199346+08:00",
-    "USD_JPY": "2026-09-01T15:06:00.176029+08:00",
+    "USD_JPY": "2026-09-01T15:25:56.601006+08:00",
     "EUR_USD": "2026-09-01T15:21:00.198405+08:00",
     "GBP_USD": "2026-09-01T15:21:00.198405+08:00",
     "USD_CHF": "2026-09-01T15:21:00.198405+08:00",
@@ -47,12 +47,11 @@
     "BCO_USD": "2026-08-31T23:55:14.672306+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 3,
+  "interval_scan_count_since_digest": 2,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
-    "USD_CHF",
-    "USD_JPY"
+    "USD_CHF"
   ],
   "last_scan_digest_sent_at": "2026-09-01T06:35:48.338294+00:00",
   "paused_instruments": {},
