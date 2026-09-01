@@ -181,6 +181,23 @@ This roughly doubles the fetch time on a first run (candle_history's
 local cache isn't keyed by date range, so the previous 90-day cache
 files were deleted to force a genuine re-fetch at the new window).
 
+THE TREND FILTER (2026-09-01): a real live loss cluster exposed a real
+gap -- 4 consecutive GBP_USD LONG fades over ~4 hours as GBP_USD ground
+steadily lower (1 marginal win, 3 losses), a textbook illustration of
+counter-trend scalping with zero awareness that a larger move is in
+progress. The signal, as shipped, uses ONLY 1-minute data -- no
+reference to any higher timeframe at all. The trend-filtered pass at
+the end of main() tests _passes_trend_filter directly: block a
+"confirmed 1-bar" fade only when BOTH M15 and H1 (simple causal SMA
+comparisons) show a real, two-timeframe-confirmed trend AGAINST the
+fade direction. Requiring both timeframes to agree (not either alone)
+means a single timeframe's own short-term noise can't block a trade on
+its own -- only a trend visible on two independent timeframes counts.
+Reported as its own pass, not folded into SIGNAL_MODES, since it
+filters an already-detected signal list rather than detecting signals
+from scratch, and needs its own (much lighter) M15/H1 fetch alongside
+the M1 pull.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -211,6 +228,7 @@ OANDA credentials -- run this yourself and paste the output back. The
 heaviest per-instrument bar count of any script this session, though
 scoped to 5 instruments rather than 13-17.
 """
+import bisect
 import math
 import os
 import random
@@ -790,6 +808,58 @@ def _selftest():
     assert total == 1 and already_past == 1, \
         f"expected 1 entry, already past its frozen target, got total={total} already_past={already_past}"
 
+    # _compute_htf_trend: a steadily RISING series should read "up" once
+    # enough history exists, self-excluding each bar's own close from
+    # the SMA used to judge it (a monotonic rise means closes[i] is
+    # ALWAYS above the average of the PRIOR sma_period bars, which is
+    # necessarily lower than closes[i] itself for a strictly increasing
+    # series -- this only holds if bar i's own value is excluded).
+    htf_base = datetime(2026, 1, 5, 0, 0, tzinfo=timezone.utc)
+    rising_candles = [{"time": (htf_base + timedelta(hours=i)).isoformat().replace("+00:00", "Z"),
+                        "mid": {"c": str(100.0 + i)}} for i in range(30)]
+    htf_times, htf_trend = _compute_htf_trend(rising_candles, sma_period=20)
+    assert htf_trend[25] == "up", f"expected a steadily rising series to read 'up', got {htf_trend[25]}"
+    assert all(v is None for v in htf_trend[:20]), "no trend should compute before sma_period bars exist"
+
+    falling_candles = [{"time": (htf_base + timedelta(hours=i)).isoformat().replace("+00:00", "Z"),
+                         "mid": {"c": str(100.0 - i)}} for i in range(30)]
+    _, falling_trend = _compute_htf_trend(falling_candles, sma_period=20)
+    assert falling_trend[25] == "down", f"expected a steadily falling series to read 'down', got {falling_trend[25]}"
+
+    # _htf_trend_at: causal lookup must return the trend of the bar
+    # STRICTLY BEFORE target_time, never a bar at or after it.
+    lookup_times = [htf_base + timedelta(hours=i) for i in range(5)]
+    lookup_trend = ["up", "up", "down", "down", "up"]
+    assert _htf_trend_at(lookup_times, lookup_trend, htf_base + timedelta(hours=3)) == "down", \
+        "expected the trend from hour 2 (strictly before hour 3), not hour 3's own value"
+    assert _htf_trend_at(lookup_times, lookup_trend, htf_base) is None, \
+        "no bar exists strictly before the very first timestamp"
+
+    # _passes_trend_filter: a LONG fade must be blocked ONLY when BOTH
+    # timeframes agree on "down" -- a single opposing timeframe, or
+    # missing data, must never block on its own.
+    assert _passes_trend_filter("LONG", "down", "down") is False
+    assert _passes_trend_filter("LONG", "down", "up") is True
+    assert _passes_trend_filter("LONG", None, "down") is True
+    assert _passes_trend_filter("SHORT", "up", "up") is False
+    assert _passes_trend_filter("SHORT", "down", "down") is True  # both AGREE with the fade -- not blocked
+
+    # apply_trend_filter: end-to-end, blocks exactly the signals that
+    # fail the two-timeframe check and keeps the rest, in order.
+    filter_signals = [(1, "LONG"), (3, "LONG"), (4, "SHORT")]
+    filter_m1_times = [htf_base + timedelta(hours=i) for i in range(5)]
+    filter_m15_times = [htf_base]
+    filter_m15_trend = ["down"]
+    filter_h1_times = [htf_base]
+    filter_h1_trend = ["down"]
+    filtered, blocked = apply_trend_filter(filter_signals, filter_m1_times,
+                                            filter_m15_times, filter_m15_trend,
+                                            filter_h1_times, filter_h1_trend)
+    # Both LONGs face a two-timeframe-confirmed downtrend -> blocked;
+    # the SHORT agrees with that same downtrend -> passes through.
+    assert filtered == [(4, "SHORT")], f"expected only the SHORT to pass, got {filtered}"
+    assert blocked == 2
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -798,6 +868,97 @@ def _selftest():
 
     print("Self-test passed: VWAP/deviation/z-score reset cleanly at each session boundary, a flat market "
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
+
+
+HTF_SMA_PERIOD = 20  # bars on EACH higher timeframe -- 5 hours of M15 context, ~20 hours of H1 context
+
+
+def _compute_htf_trend(candles: list, sma_period: int = HTF_SMA_PERIOD):
+    """Higher-timeframe trend gauge (2026-09-01, user-prompted diagnosis
+    of real live losses): a bar's own close vs its trailing sma_period
+    SMA, computed from bars STRICTLY BEFORE it (causal -- the same
+    discipline as every other series in this script; a bar's own close
+    never enters the average used to judge IT). trend[i] is "up" if
+    closes[i] is above that SMA, "down" if below, None until enough
+    history exists or on an exact tie. Deliberately simple (a plain SMA
+    comparison, not a more elaborate indicator) -- the question being
+    tested is whether ANY higher-timeframe awareness helps at all, not
+    which specific trend indicator is best."""
+    times = [_parse_time(c) for c in candles]
+    closes = [float(c["mid"]["c"]) for c in candles]
+    n = len(closes)
+    trend = [None] * n
+    for i in range(sma_period, n):
+        window = closes[i - sma_period:i]  # strictly BEFORE bar i -- excludes closes[i] itself
+        sma = sum(window) / sma_period
+        if closes[i] > sma:
+            trend[i] = "up"
+        elif closes[i] < sma:
+            trend[i] = "down"
+    return times, trend
+
+
+def _htf_trend_at(htf_times: list, htf_trend: list, target_time: datetime):
+    """Causal lookup: the trend reading of the most recent COMPLETED
+    higher-timeframe bar strictly BEFORE target_time. None if no such
+    bar exists yet (predates the series, or that bar's own trend wasn't
+    computable) -- a look-ahead-safe way to ask "what did the bigger
+    picture look like at the moment this M1 signal fired," never "what
+    does it look like now."""
+    idx = bisect.bisect_left(htf_times, target_time) - 1
+    if idx < 0:
+        return None
+    return htf_trend[idx]
+
+
+def _passes_trend_filter(direction: str, m15_trend_val, h1_trend_val) -> bool:
+    """Blocks a fade only when BOTH higher timeframes agree with the
+    direction being faded AGAINST -- a LONG fade (betting on a bounce
+    UP) is blocked only if M15 AND H1 both read "down" (a real,
+    two-timeframe-confirmed downtrend, not noise); a SHORT fade is
+    blocked only if both read "up". Deliberately requires BOTH to
+    agree, not either alone -- a single timeframe reading against the
+    fade could itself just be short-term noise on THAT timeframe; two
+    independent timeframes agreeing is a materially stronger claim that
+    a real trend, not a blip, is in progress. Missing data (None on
+    either) never blocks -- absence of a trend reading isn't evidence
+    of a trend."""
+    if m15_trend_val is None or h1_trend_val is None:
+        return True
+    opposing = "down" if direction == "LONG" else "up"
+    return not (m15_trend_val == opposing and h1_trend_val == opposing)
+
+
+def _fetch_htf_context(client, instrument: str):
+    """M15 and H1 mid-only candles for the SAME TEST_DAYS window as the
+    M1 series, each reduced to a causal SMA trend gauge. Much lighter
+    than the M1 pull (M15: ~TEST_DAYS*96 bars; H1: ~TEST_DAYS*24 bars,
+    vs M1's ~TEST_DAYS*1440) -- a genuinely small additional fetch."""
+    test_end = datetime.now(timezone.utc)
+    test_start = test_end - timedelta(days=TEST_DAYS)
+    m15_candles = fetch_history_cached(client, instrument, "M15", test_start, test_end)
+    h1_candles = fetch_history_cached(client, instrument, "H1", test_start, test_end)
+    m15_times, m15_trend = _compute_htf_trend(m15_candles)
+    h1_times, h1_trend = _compute_htf_trend(h1_candles)
+    return m15_times, m15_trend, h1_times, h1_trend
+
+
+def apply_trend_filter(signals: list, times: list, m15_times: list, m15_trend: list,
+                        h1_times: list, h1_trend: list):
+    """Applies _passes_trend_filter to every signal in an already-detected
+    list (e.g. from find_scalp_signals_confirmed). Returns
+    (filtered_signals, blocked_count)."""
+    filtered = []
+    blocked = 0
+    for signal_index, direction in signals:
+        signal_time = times[signal_index]
+        m15_val = _htf_trend_at(m15_times, m15_trend, signal_time)
+        h1_val = _htf_trend_at(h1_times, h1_trend, signal_time)
+        if _passes_trend_filter(direction, m15_val, h1_val):
+            filtered.append((signal_index, direction))
+        else:
+            blocked += 1
+    return filtered, blocked
 
 
 def _fetch_and_compute_vwap(client, instrument):
@@ -1025,6 +1186,56 @@ def main():
                       f"before the order could even be placed -- near-guaranteed wins entered after the "
                       f"fact, not predictive skill.")
             report_scenario(f"{signal_label} | {label}", all_returns)
+
+    # TREND-FILTERED PASS (2026-09-01, user-prompted): a real live loss
+    # cluster (4 consecutive GBP_USD LONG fades over ~4 hours as GBP_USD
+    # ground steadily lower, 1 marginal win/3 losses) is a textbook
+    # illustration of counter-trend scalping with zero awareness of a
+    # larger move in progress. This tests directly whether blocking a
+    # fade when BOTH M15 and H1 show a real, two-timeframe-confirmed
+    # trend against it would have helped -- applied to "confirmed 1-bar"
+    # specifically, since that's what's actually running live.
+    print(f"\n{'@'*76}\nTREND-FILTERED PASS: confirmed 1-bar + M15/H1 trend filter\n{'@'*76}")
+    print("Fetching M15/H1 context per instrument (much lighter than the M1 pull)...")
+
+    per_instrument_filtered_signals = {}
+    total_filtered = 0
+    total_blocked = 0
+    for instrument, (candles, times, vwap, dev_stdev, z) in per_instrument_vwap.items():
+        raw_signals = find_scalp_signals_confirmed(times, z)
+        m15_times, m15_trend, h1_times, h1_trend = _fetch_htf_context(client, instrument)
+        filtered, blocked = apply_trend_filter(raw_signals, times, m15_times, m15_trend, h1_times, h1_trend)
+        per_instrument_filtered_signals[instrument] = (candles, times, vwap, dev_stdev, filtered)
+        total_filtered += len(filtered)
+        total_blocked += blocked
+        print(f"  {instrument:10s}  {len(raw_signals)} confirmed 1-bar signals -> {blocked} blocked by the "
+              f"trend filter -> {len(filtered)} remain")
+
+    print(f"\n{total_filtered} total signals survive the trend filter across "
+          f"{len(per_instrument_filtered_signals)} instruments ({total_blocked} blocked total) -- reused for "
+          f"every entry-delay scenario below.")
+    if total_filtered == 0:
+        print("No signals survive the trend filter -- nothing to test.")
+        return
+
+    for label, delay_minutes in ENTRY_DELAY_SCENARIOS:
+        all_returns = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
+        total_already_past_target = 0
+        total_entries = 0
+        for instrument, (candles, times, vwap, dev_stdev, signals) in per_instrument_filtered_signals.items():
+            results_by_buffer, _, already_past_target, entries = resolve_trades(
+                candles, times, vwap, dev_stdev, signals, instrument, meta[instrument], delay_minutes)
+            total_already_past_target += already_past_target
+            total_entries += entries
+            for buf in STOP_Z_BUFFER_SWEEP:
+                all_returns[buf].extend(results_by_buffer[buf])
+        if total_entries > 0:
+            pct = 100 * total_already_past_target / total_entries
+            print(f"\n[trend-filtered | {label}] {total_already_past_target}/{total_entries} entries "
+                  f"({pct:.1f}%) had ALREADY reached or passed their own (frozen-at-signal-time) target "
+                  f"before the order could even be placed -- near-guaranteed wins entered after the "
+                  f"fact, not predictive skill.")
+        report_scenario(f"confirmed 1-bar + M15/H1 trend filter | {label}", all_returns)
 
 
 if __name__ == "__main__":

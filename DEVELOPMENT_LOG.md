@@ -5369,3 +5369,52 @@ would require mocking a full OandaClient + live-scan pipeline for
 marginal extra confidence over what the scheduled_jobs.py test already
 provides. Full suite (529 tests) passes; `py_compile` + `import app` +
 template-compile check verified.
+
+## 2026-09-01 (continued) -- Real loss cluster exposed a real gap: zero higher-timeframe awareness
+
+User asked for a fresh review of live trades and specifically whether
+the signal considers any timeframe beyond the immediate bounce-back.
+Pulled the current journal: 12 post-fix trades now (up from 7 at the
+last check-in), win rate DOWN to 33.3% (4W/8L, total -$237.23) -- worse
+than the 42.9% seen five trades ago, not improving.
+
+**GBP_USD exposed the exact mechanism**: 4 consecutive LONG fades over
+~4 hours (07:00-10:50 on 2026-09-01) as GBP_USD ground steadily lower
+-- entries 1.35420, 1.35416, 1.35406, 1.35371, each LOWER than the
+last. 1 marginal win (RR=0.43), 3 losses. Textbook counter-trend
+scalping into a real, sustained move: VWAP itself gets dragged down by
+the persistent selling, so the "reversion" target retreats about as
+fast as price does, and every fresh 2-stdev dip re-triggers another
+LONG attempt regardless of the larger picture.
+
+Checked the code directly: confirmed `vwap_scalp_addon.py` uses ONLY
+`client.get_candles(instrument, "M1", ...)` -- the single granularity
+reference anywhere in the file. Zero awareness of any larger timeframe
+was already the honest answer before checking; the GBP_USD cluster is
+what it looks like in practice.
+
+**Built and self-tested a trend-filter pass** in
+scripts/backtest_vwap_reversion_scalp.py: `_compute_htf_trend` (a
+causal SMA-vs-close trend gauge, self-excluding each bar's own close
+from the average judging it -- same discipline as every other series
+in this script), `_htf_trend_at` (causal lookup: the most recent
+COMPLETED higher-timeframe bar strictly before a given M1 signal's own
+time), and `_passes_trend_filter` (blocks a fade ONLY when BOTH M15 and
+H1 agree with the direction being faded against -- a real,
+two-timeframe-confirmed trend, not either timeframe's own noise alone).
+Applied to "confirmed 1-bar" specifically, since that's what's live
+today, reported as its own pass (not folded into SIGNAL_MODES, since it
+filters an already-detected signal list and needs its own M15/H1 fetch
+rather than detecting signals from scratch). Reports how many signals
+each instrument had blocked, alongside the usual full significance
+pipeline on what survives.
+
+6 new self-test assertions: trend correctly reads up/down on
+constructed rising/falling series with self-exclusion verified, the
+causal lookup never returns a bar at or after the target time, the
+filter blocks a LONG only when both timeframes read "down" (not either
+alone, not on missing data), and an end-to-end case confirms the right
+signals get blocked vs pass through. Full suite (529 tests, this
+script isn't part of it) unaffected. Not yet run -- awaiting the user's
+next pass to see whether this would have actually screened out the
+GBP_USD cluster, and whether it helps or hurts overall.
