@@ -198,6 +198,33 @@ filters an already-detected signal list rather than detecting signals
 from scratch, and needs its own (much lighter) M15/H1 fetch alongside
 the M1 pull.
 
+**Real-data finding**: the trend filter, run against 180 days of real
+data, made things WORSE, not better -- day-win-rate dropped from
+89.8-93.5% (unfiltered) to 52.8-56.9%, and 2 of 3 stop-buffer levels
+stopped surviving Bonferroni entirely (blocked ~75% of all signals).
+Likely mechanism: a 2-stdev M1 deviation is, almost by definition,
+evidence price just moved a lot in one direction -- a lagging M15/H1
+SMA very often reflects that SAME recent move, so the filter mostly
+removes the TYPICAL case the signal exists to catch, not specifically
+the failure case. See resolve_trades_with_loss_streak_breaker's own
+docstring for the more surgical follow-up this result motivated.
+
+THE LOSS-STREAK BREAKER (2026-09-01, same day): rather than pre-judging
+every signal against a lagging trend gauge, this targets the ACTUAL
+observed failure directly -- track same-day, same-direction LOSSES per
+instrument (a running count, NOT reset by an interposed win, matching
+the real L-W-L-L sequence); once a direction hits
+max_same_direction_losses (swept at [1, 2, 3], pre-specified) losses
+that day, further signals in that SAME direction are blocked for the
+rest of the day, while the OPPOSITE direction stays fully available.
+Unlike the trend filter, this must be run separately per stop_buf
+(resolve_trades_with_loss_streak_breaker processes signals
+SEQUENTIALLY, and whether a later signal gets blocked depends on
+ACTUAL trade outcomes, which differ by stop_buf). Only the realistic
+5-minute-delay scenario is tested (matches live infra) -- this is
+iterating on a specific proposed fix, not re-establishing foundational
+validity the way the earlier passes did.
+
 Look-ahead safety: VWAP/deviation/stdev at bar i use only that session's
 bars up to and including i; the entry decision is made from bar i's own
 already-closed values, but the fill happens at bar i+1's open, strictly
@@ -860,6 +887,44 @@ def _selftest():
     assert filtered == [(4, "SHORT")], f"expected only the SHORT to pass, got {filtered}"
     assert blocked == 2
 
+    # resolve_trades_with_loss_streak_breaker: 4 signals -- two LONGs
+    # constructed to LOSE (building the streak to 2), a third LONG that
+    # should be BLOCKED once the threshold is reached, and a SHORT
+    # (opposite direction) that must proceed regardless.
+    def _flat_streak_candle():
+        return {"bid": {"h": 100.0, "l": 100.0, "c": 100.0, "o": 100.0},
+                "ask": {"h": 100.0, "l": 100.0, "c": 100.0, "o": 100.0}}
+
+    streak_base = datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc)
+    streak_times = [streak_base + timedelta(minutes=i) for i in range(12)]
+    streak_candles = [_flat_streak_candle() for _ in range(12)]
+    # Episode A: signal 0 (LONG) -> entry bar 1 -> resolution bar 2 LOSES
+    streak_candles[1]["ask"]["o"] = 98.0
+    streak_candles[2]["bid"]["l"] = 96.0
+    streak_candles[2]["bid"]["h"] = 96.5
+    # Episode B: signal 3 (LONG, same day) -> entry bar 4 -> resolution bar 5 LOSES (streak now 2)
+    streak_candles[4]["ask"]["o"] = 98.0
+    streak_candles[5]["bid"]["l"] = 96.0
+    streak_candles[5]["bid"]["h"] = 96.5
+    # Episode C: signal 6 (LONG) -- must be BLOCKED before ever resolving; candles left flat/unused
+    # Episode D: signal 9 (SHORT, opposite direction) -> entry bar 10 -> resolution bar 11 WINS
+    streak_candles[10]["bid"]["o"] = 102.0
+    streak_candles[11]["ask"]["l"] = 99.5
+    streak_candles[11]["ask"]["h"] = 99.8
+
+    streak_vwap = [100.0] * 12
+    streak_dev_stdev = [1.0] * 12
+    streak_signals = [(0, "LONG"), (3, "LONG"), (6, "LONG"), (9, "SHORT")]
+
+    returns, _, total_entries, blocked_streak = resolve_trades_with_loss_streak_breaker(
+        streak_candles, streak_times, streak_vwap, streak_dev_stdev, streak_signals,
+        "EUR_USD", entry_delay_minutes=1, stop_buf=1.0, max_same_direction_losses=2)
+    assert total_entries == 3, f"expected 3 resolved entries (A, B, D -- C blocked), got {total_entries}"
+    assert blocked_streak == 1, f"expected exactly 1 signal blocked by the streak breaker, got {blocked_streak}"
+    r_values = [r for _, _, r in returns]
+    assert r_values[0] < 0 and r_values[1] < 0, \
+        f"expected the first two same-direction signals (A, B) to be losses, got {r_values}"
+
     # Spread-aware fill direction: LONG signals must fill at the ASK,
     # SHORT at the BID -- checked indirectly via simulate_scalp_trade's
     # own self-test (imported, not duplicated here).
@@ -1043,6 +1108,86 @@ def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, e
     avg_spread_pips = sum(spreads_pips) / len(spreads_pips) if spreads_pips else None
 
     return results_by_buffer, avg_spread_pips, already_past_target, total_entries
+
+
+LOSS_STREAK_THRESHOLDS = [1, 2, 3]  # pre-specified sweep, not tuned after seeing results
+
+
+def resolve_trades_with_loss_streak_breaker(candles, times, vwap, dev_stdev, signals, instrument,
+                                             entry_delay_minutes, stop_buf, max_same_direction_losses):
+    """User-requested fix (2026-09-01) targeting the ACTUAL observed
+    failure -- a real GBP_USD live loss cluster was 4 consecutive LONG
+    "fade the dip" attempts over ~4 hours as GBP_USD ground steadily
+    lower (L, W, L, L), not a generic "unaware of trends" problem the
+    blanket M15/H1 trend filter tried (and failed) to fix -- see that
+    filter's own docstring for why blocking on any higher-timeframe
+    trend reading destroyed most of the good signals along with the bad
+    ones. This is more surgical: track same-day, same-direction LOSSES
+    per instrument as a running (not reset-by-a-win) count within each
+    calendar day; once a direction hits max_same_direction_losses losses
+    that day, further signals in that SAME direction are blocked for the
+    rest of the day. The OPPOSITE direction on the same instrument stays
+    fully available -- this isn't "stop trading GBP_USD," it's "stop
+    betting on the SAME reversion thesis that's already failed twice
+    today."
+
+    Unlike resolve_trades, this processes signals for ONE stop_buf
+    SEQUENTIALLY in chronological order and can only be run for that one
+    buf at a time -- whether a later signal gets blocked depends on
+    ACTUAL trade outcomes, which differ by stop_buf (a trade that's a
+    WIN at a wide stop could be a LOSS at a tight one, changing the loss
+    count and every downstream blocking decision from that point). A win
+    does NOT reset the counter -- matches the real L,W,L,L sequence,
+    where the interposed win did not mean the underlying move had
+    actually reversed; only the next calendar day's own fresh key does.
+
+    Returns (returns, already_past_target, total_entries, blocked_by_streak)."""
+    returns = []
+    already_past_target = 0
+    total_entries = 0
+    blocked_by_streak = 0
+    loss_counts = {}  # (direction, date) -> running loss count, implicitly reset each new day's own key
+
+    for signal_index, direction in signals:
+        signal_time = times[signal_index]
+        key = (direction, signal_time.date())
+        if loss_counts.get(key, 0) >= max_same_direction_losses:
+            blocked_by_streak += 1
+            continue
+
+        entry_index = _delayed_entry_index(times, signal_index, entry_delay_minutes)
+        if entry_index is None:
+            continue
+        if direction == "LONG":
+            entry_price = float(candles[entry_index]["ask"]["o"])
+        else:
+            entry_price = float(candles[entry_index]["bid"]["o"])
+
+        target = vwap[signal_index]
+        std_at_signal = dev_stdev[signal_index]
+        entry_time = times[entry_index]
+        max_bars = _minutes_bar_count(times, entry_index, MAX_HOLD_BARS)
+        if max_bars <= 0:
+            continue
+
+        total_entries += 1
+        already_there = (entry_price >= target) if direction == "LONG" else (entry_price <= target)
+        if already_there:
+            already_past_target += 1
+
+        if direction == "LONG":
+            stop_loss = target - (Z_ENTRY + stop_buf) * std_at_signal
+        else:
+            stop_loss = target + (Z_ENTRY + stop_buf) * std_at_signal
+
+        result = simulate_scalp_trade(candles, entry_index, direction, entry_price, stop_loss, target,
+                                       max_bars=max_bars)
+        if result.outcome in ("WIN", "LOSS"):
+            returns.append((entry_time, instrument, result.r_multiple))
+            if result.outcome == "LOSS":
+                loss_counts[key] = loss_counts.get(key, 0) + 1
+
+    return returns, already_past_target, total_entries, blocked_by_streak
 
 
 def report_scenario(label: str, all_returns: dict) -> None:
@@ -1236,6 +1381,46 @@ def main():
                   f"before the order could even be placed -- near-guaranteed wins entered after the "
                   f"fact, not predictive skill.")
         report_scenario(f"confirmed 1-bar + M15/H1 trend filter | {label}", all_returns)
+
+    # LOSS-STREAK-BREAKER PASS (2026-09-01): the trend filter above tried
+    # (and failed -- see its own comment) to fix the GBP_USD cluster with
+    # a blanket higher-timeframe check. This is the more surgical
+    # follow-up: block a fade only after it has ALREADY lost
+    # max_same_direction_losses times in the SAME direction on the SAME
+    # instrument THAT SAME DAY, rather than pre-judging every signal
+    # against a lagging trend gauge. Only the realistic-delay scenario is
+    # tested here (matches live infra) -- this is iterating on a specific
+    # proposed fix, not re-establishing foundational validity the way the
+    # earlier passes did.
+    realistic_delay_minutes = dict(ENTRY_DELAY_SCENARIOS)["realistic 5-minute poll (matches this app's current infra)"]
+    for threshold in LOSS_STREAK_THRESHOLDS:
+        print(f"\n{'@'*76}\nLOSS-STREAK-BREAKER PASS: confirmed 1-bar, blocked after {threshold} same-direction "
+              f"loss(es)/day\n{'@'*76}")
+        all_returns = {b: [] for b in STOP_Z_BUFFER_SWEEP}
+        total_already_past_target = 0
+        total_entries = 0
+        total_blocked_streak = 0
+        for buf in STOP_Z_BUFFER_SWEEP:
+            buf_entries = 0
+            buf_blocked = 0
+            for instrument, (candles, times, vwap, dev_stdev, z) in per_instrument_vwap.items():
+                signals = find_scalp_signals_confirmed(times, z)
+                returns, already_past_target, entries, blocked_streak = resolve_trades_with_loss_streak_breaker(
+                    candles, times, vwap, dev_stdev, signals, instrument,
+                    realistic_delay_minutes, buf, threshold)
+                all_returns[buf].extend(returns)
+                total_already_past_target += already_past_target
+                buf_entries += entries
+                buf_blocked += blocked_streak
+            total_entries += buf_entries
+            total_blocked_streak += buf_blocked
+            print(f"  stop_buf={buf}: {buf_entries} entries resolved, {buf_blocked} signals blocked by the "
+                  f"streak breaker")
+        if total_entries > 0:
+            pct = 100 * total_already_past_target / total_entries
+            print(f"  ({total_already_past_target}/{total_entries} = {pct:.1f}% already past target at entry, "
+                  f"summed across all 3 stop-buffer levels)")
+        report_scenario(f"confirmed 1-bar + loss-streak breaker ({threshold}/day)", all_returns)
 
 
 if __name__ == "__main__":

@@ -5418,3 +5418,54 @@ signals get blocked vs pass through. Full suite (529 tests, this
 script isn't part of it) unaffected. Not yet run -- awaiting the user's
 next pass to see whether this would have actually screened out the
 GBP_USD cluster, and whether it helps or hurts overall.
+
+## 2026-09-01 (continued) -- Trend filter made things WORSE; built a more surgical loss-streak breaker instead
+
+User ran the trend-filter pass. Result: decisively negative. Blocked
+~75% of all confirmed 1-bar signals (10653/14175), and what survived
+performed MUCH worse than the unfiltered version under the
+realistic-delay scenario (the one that matters for live comparison) --
+day-win-rate dropped from 89.8-93.5% to 52.8-56.9%, and 2 of the 3
+stop-buffer levels stopped surviving Bonferroni entirely (p=0.14 and
+p=0.08). Not a marginal downgrade -- the filter actively destroyed most
+of what made the signal work.
+
+**Diagnosed why**: a 2-stdev M1 deviation is, almost by definition,
+evidence price just moved a lot in one direction recently. A 20-bar
+M15 SMA (5 hours) or 20-bar H1 SMA (20 hours) very often reflects that
+SAME recent move -- so requiring the higher timeframes to disagree with
+the M1 signal mostly removes the TYPICAL case the signal exists to
+catch, not specifically the GBP_USD-style failure case. The filter
+can't distinguish "a real multi-hour trend, don't fade it" from "a
+sharp, fadeable extension" -- both look identical to a lagging SMA
+comparison in the short term.
+
+**User also asked why the backtest doesn't cover all 13 pairs +
+commodities**: answered directly -- deliberate, stated from when VWAP
+Scalp was first built. Scalping economics are extremely spread-
+sensitive; the 5 pairs used are specifically the tightest-spread
+majors (1.3-1.9 pips observed). Given the strategy is already
+underperforming on the most favorable spread conditions available,
+adding pairs with 3-10x wider typical spreads would dilute the result
+with a confound unrelated to whether the signal works, not clarify it.
+Offered NZD_USD/USD_CHF (also tight-spread majors, just not in the
+original 5) as a way to add statistical power without that confound,
+if wanted later.
+
+**Built a more surgical fix instead of another blanket filter**:
+`resolve_trades_with_loss_streak_breaker` targets the ACTUAL observed
+failure -- a running (not win-reset) count of same-day, same-direction
+losses per instrument; once a direction hits a threshold of losses
+that day, further signals in that SAME direction are blocked for the
+rest of the day, while the OPPOSITE direction stays fully available.
+Swept at thresholds [1, 2, 3], pre-specified. Must run separately per
+stop_buf (unlike the trend filter) since blocking decisions depend on
+actual trade outcomes, which differ by stop_buf. Only the
+realistic-delay scenario is tested (matches live infra) -- iterating
+on a specific fix, not re-establishing foundational validity. 1 new
+self-test: a constructed 4-signal sequence (2 same-direction losses,
+a 3rd same-direction signal that must be blocked, an opposite-
+direction signal that must proceed regardless) confirms the exact
+counting/blocking/non-reset-on-win logic. Full suite (529 tests, this
+script isn't part of it) unaffected. Not yet run -- awaiting the
+user's next pass.
