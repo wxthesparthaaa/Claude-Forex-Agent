@@ -1,37 +1,37 @@
 {
-  "scanned_at": "2026-09-01T18:47:39.861187+00:00",
+  "scanned_at": "2026-09-01T19:07:39.292756+00:00",
   "candidates": [
     {
       "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 91.119,
+      "entry_price": 91.028,
       "stop_loss": 88.104,
-      "take_profit": 97.149,
-      "confidence_pct": 62.0,
+      "take_profit": 96.876,
+      "confidence_pct": 59.3,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 37.13545404804634,
-        "candlestick": 50.0,
+        "rsi": 51.389025890135045,
+        "candlestick": 20.0,
         "news": 50.0
       },
       "units": 9,
       "unit_label": "barrels",
       "risk_amount": 35.223141999999996,
-      "notional_account_currency": 1044.48,
+      "notional_account_currency": 1043.21,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 78 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=2.2) -- higher reversal risk than usual.",
+        "RSI is 75 (overbought -- some chase risk).",
+        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "Caution: the broader currency move looks stretched (z=2.4) -- higher reversal risk than usual.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": "Daily loss limit reached: 7.9% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": false
       }
     }
