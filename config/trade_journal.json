@@ -3679,5 +3679,30 @@
     "pyramided": false,
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "2938",
+    "instrument": "GBP_USD",
+    "direction": "SHORT",
+    "units": -93682,
+    "entry_price": 1.35099,
+    "stop_loss": 1.35125,
+    "take_profit": 1.35043,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-02T07:51:21.045717+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 31.007751937984494,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null
   }
 ]
