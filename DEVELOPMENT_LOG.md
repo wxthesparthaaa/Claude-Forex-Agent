@@ -5844,3 +5844,52 @@ the backtest methodology itself is unsound. Smoke-tested against a
 hand-built extension+confirmation+reversion fixture (no crashes,
 plausible signal/outcome). No production code changed by this script.
 Needs real OANDA credentials -- handed to the user to run.
+
+## 2026-09-02/03 -- First real replay run exposed 2 bugs in the SCRIPT (not production), fixed and re-verified
+
+User ran it. Raw results: 561 replayed trades vs 42 actual over the
+same 3-day window, several nonsensical "LOSS +1.000" lines (a stop-out
+with a POSITIVE r_multiple) and one "+552.827R" win, and an entirely
+EMPTY "actual" section. All three traced to real bugs in this
+diagnostic script, not the production code it drives:
+
+1. **Sign-flip bug**: entry_price is a fresh price at tick-execution
+   time; stop_loss/take_profit are computed from the SIGNAL bar's
+   target/std, which can be up to SIGNAL_RECENCY_MINUTES=10 minutes
+   stale. If price moved enough in between, stop_loss could end up on
+   the WRONG side of entry_price for that direction -- exactly what a
+   real OANDA broker would reject outright (a bracket order needs
+   stop_loss < entry < take_profit for a LONG, the mirror for a SHORT).
+   The script wasn't checking this before calling simulate_scalp_trade,
+   so it resolved nonsense orders into nonsense R-multiples. Fixed:
+   `_resolve_candidate` now validates this exactly like a real broker
+   would and tallies rejections separately (excluded from win-rate/
+   mean_R, not silently dropped).
+
+2. **Signal-volume mismatch**: the replay found ~40 signals/pair/3-days
+   with NO risk-engine gating modeled at all, vs 42 REAL trades total.
+   The dominant real gate is almost certainly `max_trades_per_day`
+   (RiskConfig default: 5, shared across the WHOLE account, not per-
+   strategy) -- exactly the "Daily loss limit reached"/"Portfolio heat
+   cap exceeded" messages seen throughout this session's real logs.
+   Modeling the FULL risk engine (equity tracking, running currency
+   exposure, daily/weekly realized P&L) was judged out of scope for
+   this diagnostic; restructured the per-instrument loop into a single
+   GLOBAL tick loop (`_replay_all`) sharing one daily counter across all
+   17 pairs instead -- still an overestimate of what VWAP Scalp alone
+   could have traded (other live strategies compete for the same daily
+   slots), but far closer to reality than an unbounded count. Documented
+   this limitation plainly in the module docstring.
+
+3. **Empty ACTUAL section**: the local config/trade_journal.json had
+   zero matching entries -- the state-sync pull was a manual pre-step
+   that's easy to forget. Script now runs it automatically via
+   subprocess before reading, with a loud warning (not a silently empty
+   table) if it still comes back with nothing.
+
+Re-verified against a multi-pair synthetic fixture (7 staggered pairs,
+2 days): confirmed exactly 5 trades/day now (the shared cap working),
+4 trades correctly rejected as invalid orders, zero sign-flip results.
+Full suite green except the same pre-existing SGT-midnight-boundary
+flaky test noted earlier this session (unrelated). Handed back to the
+user for a corrected run.
