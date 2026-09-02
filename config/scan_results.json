@@ -1,71 +1,71 @@
 {
-  "scanned_at": "2026-09-02T14:31:33.737084+00:00",
+  "scanned_at": "2026-09-02T14:51:32.914548+00:00",
   "candidates": [
     {
-      "instrument": "WTICO_USD",
+      "instrument": "BCO_USD",
       "direction": "LONG",
-      "entry_price": 90.551,
-      "stop_loss": 89.571,
-      "take_profit": 92.511,
-      "confidence_pct": 71.0,
+      "entry_price": 97.363,
+      "stop_loss": 95.913,
+      "take_profit": 100.263,
+      "confidence_pct": 67.7,
       "confidence_components": {
         "breadth": 100.0,
         "rsi": 100.0,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 32,
+      "units": 21,
       "unit_label": "barrels",
       "risk_amount": 40.0,
-      "notional_account_currency": 3682.47,
+      "notional_account_currency": 2598.26,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 51 (neutral range).",
+        "RSI is 58 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.7) -- higher reversal risk than usual.",
+        "Caution: the broader currency move looks stretched (z=-3.0) -- higher reversal risk than usual.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": "Daily loss limit reached: 6.3% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": false
       }
     },
     {
-      "instrument": "BCO_USD",
+      "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 96.924,
-      "stop_loss": 95.913,
-      "take_profit": 98.946,
-      "confidence_pct": 71.0,
+      "entry_price": 91.024,
+      "stop_loss": 89.571,
+      "take_profit": 93.93,
+      "confidence_pct": 67.7,
       "confidence_components": {
         "breadth": 100.0,
         "rsi": 100.0,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 31,
+      "units": 21,
       "unit_label": "barrels",
       "risk_amount": 40.0,
-      "notional_account_currency": 3818.47,
+      "notional_account_currency": 2429.09,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 53 (neutral range).",
+        "RSI is 58 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.7) -- higher reversal risk than usual.",
+        "Caution: the broader currency move looks stretched (z=-3.0) -- higher reversal risk than usual.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": "Daily loss limit reached: 6.3% >= 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": false
       }
     }
