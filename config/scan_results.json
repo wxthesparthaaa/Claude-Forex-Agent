@@ -1,36 +1,36 @@
 {
-  "scanned_at": "2026-09-02T05:01:27.761660+00:00",
+  "scanned_at": "2026-09-02T05:21:26.806833+00:00",
   "candidates": [
     {
       "instrument": "NZD_USD",
       "direction": "SHORT",
-      "entry_price": 0.58292,
+      "entry_price": 0.58351,
       "stop_loss": 0.58975,
-      "take_profit": 0.56926,
-      "confidence_pct": 62.5,
+      "take_profit": 0.57103,
+      "confidence_pct": 66.2,
       "confidence_components": {
         "breadth": 85.71428571428571,
-        "rsi": 29.102745309240277,
-        "candlestick": 85.0,
+        "rsi": 64.93459921782822,
+        "candlestick": 50.0,
         "news": 50.0
       },
-      "units": -4101,
+      "units": -4490,
       "unit_label": "units",
       "risk_amount": 35.6748,
-      "notional_account_currency": 3044.49,
+      "notional_account_currency": 3335.44,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 21 (oversold -- some chase risk).",
-        "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
+        "RSI is 28 (oversold -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": true
       }
     }
