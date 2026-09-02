@@ -3874,5 +3874,30 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "3190",
+    "instrument": "USD_CAD",
+    "direction": "SHORT",
+    "units": -72151,
+    "entry_price": 1.39188,
+    "stop_loss": 1.39235,
+    "take_profit": 1.39178,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-02T12:21:48.450714+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 31.007751937984494,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null
   }
 ]
