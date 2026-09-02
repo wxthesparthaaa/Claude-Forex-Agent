@@ -5893,3 +5893,52 @@ Re-verified against a multi-pair synthetic fixture (7 staggered pairs,
 Full suite green except the same pre-existing SGT-midnight-boundary
 flaky test noted earlier this session (unrelated). Handed back to the
 user for a corrected run.
+
+## 2026-09-03 -- Second real run: win rate converged to actual (30.0% vs 31.0%), but trades barely overlapped -- traced to a THIRD script bug (wrong max_trades_per_day)
+
+Second run's real numbers: 10 replayed trades, win_rate=30.0%,
+mean_R=-0.3577 -- remarkably close to the actual 42 trades' 31.0% win
+rate. This is itself a meaningful, reassuring signal: once the sign-
+flip bug and unbounded signal count were fixed, the SIGNAL QUALITY the
+replay finds converges to what live actually experienced. But the
+DIRECT COMPARISON section showed only 1 match out of 10 replayed / 42
+actual trades -- the specific trades barely overlapped even though both
+sides land around the same win rate.
+
+Root cause: MAX_TRADES_PER_DAY=5 (RiskConfig's code default) vs a real
+account fact that flatly disproves it -- 19 VWAP Scalp trades opened in
+a single real day (2026-08-31), impossible under a cap of 5. Checked
+the actual live dashboard_state.json (pulled via state-sync):
+max_trades_per_day=30, max_weekly_loss_pct=75.0 -- both deliberately
+loosened by the user for data collection (documented earlier this
+session). The hardcoded 5 was picking an almost-arbitrary 5-per-day
+subset of the real ~40/pair/3-day signal pool, explaining why the SET
+of trades differed so much even as the aggregate win rate converged.
+
+Fixed properly this time instead of hardcoding a second guessed number:
+script now pulls dashboard_state.json from state-sync alongside the
+journal and reads max_trades_per_day/max_daily_loss_pct/
+risk_per_trade_pct from the account's OWN live risk_config, plus a
+nominal equity from strategy_starting_capital + strategy_realized_pnl
+(falls back to RiskConfig()'s dataclass defaults only if the pull or
+file read fails). Also added the max_daily_loss_pct gate itself --
+risk_engine.validate_trade's actual daily-loss check, the single most
+commonly-hit real gate in this session's live logs ("Daily loss limit
+reached: 7.0% >= 6.0%") -- tracked as a running simulated $ P&L
+(r_multiple * risk_amount, where risk_amount = equity *
+risk_per_trade_pct/100 / REALIZED_LOSS_INFLATION, matching what
+_open_position actually sizes with) reset daily. Both the trade-count
+and daily-loss trackers now reset on the SGT day boundary (matching
+trade_journal.trades_opened_today's own documented convention) instead
+of UTC midnight, which the first fix had wrongly used. Currency-
+exposure and weekly-loss checks remain unmodeled (weekly_loss_pct=75.0
+on this account is loose enough it's unlikely to bind in 3 days;
+exposure needs live conversion-rate data this offline replay doesn't
+have) -- still not a full risk-engine replica, just the two gates that
+demonstrably matter most in practice.
+
+Re-verified against the multi-pair synthetic fixture with the new
+signature (max_trades_per_day=30 instead of the old hardcoded 5):
+14 trades across 7 pairs x 2 days, no longer artificially capped.
+Full suite green (541 tests, same one pre-existing unrelated flaky
+test). Handed back to the user for a third, hopefully-final run.

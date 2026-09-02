@@ -71,6 +71,46 @@ THIS SCRIPT (not the production code it replays):
    the local config/trade_journal.json had zero matching entries,
    almost certainly because the state-sync pull step wasn't run first.
    This script now pulls it automatically via git before reading.
+
+REVISION 2 (2026-09-03), after the SECOND real run: the fixes above
+worked (win rate converged to 30.0% replayed vs 31.0% actual -- a real,
+meaningful signal that the DETECTION code is faithful) but the specific
+trades barely overlapped (1 match out of 10 replayed / 42 actual) and
+the replayed count (10) was far below actual (42) even after fixing
+#1 and #2. Root cause: MAX_TRADES_PER_DAY=5 was RiskConfig's CODE
+DEFAULT, not what this account is actually configured to -- the live
+dashboard_state.json (pulled and checked) has max_trades_per_day=30 and
+max_daily_loss_pct=6.0, deliberately loosened by the user for data
+collection (see DEVELOPMENT_LOG.md, "can i set this weekly loss limit
+as a toggle setting for the purpose of collecting data"). A real
+account's own trade of 19 VWAP Scalp trades in a single day (2026-08-31)
+is flatly impossible under a cap of 5. This script now:
+
+- Pulls dashboard_state.json from state-sync alongside the journal, and
+  reads max_trades_per_day/max_daily_loss_pct/risk_per_trade_pct from
+  its OWN live risk_config, and a nominal equity from
+  strategy_starting_capital + strategy_realized_pnl -- instead of
+  hardcoding either the code defaults or a guessed number. Falls back
+  to RiskConfig's own dataclass defaults only if that pull fails.
+- Tracks a running SIMULATED daily realized P&L (in the same $ terms
+  the real account uses: risk_amount = equity * risk_per_trade_pct/100
+  / REALIZED_LOSS_INFLATION, applied per resolved trade's r_multiple)
+  and gates further signals once it crosses -max_daily_loss_pct% of
+  equity -- risk_engine.validate_trade's own actual daily-loss check,
+  the single most commonly-hit real gate per this session's live logs
+  ("Daily loss limit reached: 7.0% >= 6.0%"). Currency-exposure and
+  weekly-loss checks are still NOT modeled (weekly_loss_pct=75.0 on
+  this account is loose enough it's very unlikely to bind in a 3-day
+  window; currency exposure would need real-time conversion-rate data
+  this offline replay doesn't have) -- still not a full risk-engine
+  replica, just the two gates that demonstrably matter most in
+  practice.
+- Both the trades-per-day counter AND the daily-loss tracker now reset
+  on the SGT day boundary, not UTC midnight -- trade_journal.
+  trades_opened_today's own documented convention (every other day
+  boundary in this system is SGT; UTC midnight falls at 8am SGT, mid
+  trading day, so a UTC-day reset could let a cluster of trades near
+  that boundary blow past what a human would call one trading day's cap).
 """
 import bisect
 import os
@@ -83,12 +123,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), encoding="utf-8-sig", override=True)
 
-MAX_TRADES_PER_DAY = 5  # RiskConfig's own default; see the revision note above for why this is
-                         # applied globally across all 17 pairs rather than a full risk-engine replay
-
 from oanda_client import OandaClient
 from candle_history import fetch_history_cached
 from spread_aware_trade_simulator import simulate_scalp_trade
+from market_hours import SGT
+from risk_engine import RiskConfig
 import vwap_scalp_addon as live
 import trade_journal as tj
 
@@ -168,32 +207,44 @@ def _resolve_candidate(instrument: str, direction: str, target: float, std_at_si
     }
 
 
-def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime) -> tuple:
-    """Single global tick loop across ALL pairs, sharing one
-    max_trades_per_day counter -- see the module docstring's revision
-    note for why this (not a per-instrument loop) is what makes the
-    trade count comparable to real live trading, which gates the WHOLE
-    account, not each strategy independently. Returns (trades, rejected
-    dict of {reason: count})."""
+def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
+                 max_trades_per_day: int, max_daily_loss_pct: float, equity: float, risk_amount: float) -> tuple:
+    """Single global tick loop across ALL pairs, sharing the SAME two
+    gates risk_engine.validate_trade actually enforces on this account:
+    a per-SGT-day trade-count cap and a per-SGT-day realized-loss-pct
+    cap (currency-exposure and weekly-loss are NOT modeled -- see the
+    module docstring's revision 2 note for why). risk_amount is a fixed
+    $ figure (equity * risk_per_trade_pct/100 / REALIZED_LOSS_INFLATION,
+    matching what _open_position actually sizes with) used to convert
+    each resolved trade's r_multiple into simulated $ P&L for the daily-
+    loss tracker -- a simplification (real equity/risk_amount drift as
+    the account's own P&L compounds), but far closer to reality than
+    ignoring these gates entirely. Returns (trades, rejected dict of
+    {reason: count})."""
     times_by_instrument = {i: [_parse_time(c) for c in c_list] for i, c_list in candles_by_instrument.items()}
     last_opened_at = {}  # instrument -> datetime, cooldown tracker mirroring _recently_signaled
     rejected = {}
     trades = []
 
     trades_today = 0
-    current_day = None
+    daily_pnl = 0.0
+    current_sgt_day = None
     tick = from_date.replace(hour=live.WATCH_START_HOUR, minute=0, second=0, microsecond=0)
     while tick <= now:
-        if tick.date() != current_day:
-            current_day = tick.date()
+        sgt_day = tick.astimezone(SGT).date()
+        if sgt_day != current_sgt_day:
+            current_sgt_day = sgt_day
             trades_today = 0
+            daily_pnl = 0.0
         if not (live.WATCH_START_HOUR <= tick.hour < live.WATCH_END_HOUR):
             tick += timedelta(minutes=TICK_MINUTES)
             continue
 
         for instrument, candles in candles_by_instrument.items():
-            if trades_today >= MAX_TRADES_PER_DAY:
+            if trades_today >= max_trades_per_day:
                 break  # no slots left today, for ANY pair -- matches account.trades_today being global
+            if daily_pnl < 0 and (100 * -daily_pnl / equity) >= max_daily_loss_pct:
+                break  # matches risk_engine.validate_trade's own daily-loss gate, also global
             times = times_by_instrument[instrument]
             if not times:
                 continue
@@ -214,34 +265,71 @@ def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime)
             trades.append(candidate)
             last_opened_at[instrument] = candidate["entry_time"]
             trades_today += 1
+            if candidate["r_multiple"] is not None:
+                daily_pnl += candidate["r_multiple"] * risk_amount
 
         tick += timedelta(minutes=TICK_MINUTES)
 
     return trades, rejected
 
 
-def _pull_actual_journal_from_state_sync() -> bool:
+def _pull_from_state_sync(repo_relative_path: str) -> bool:
     """Auto-runs the two git commands this script used to just print as
     a manual pre-step -- the first real run came back with an entirely
     empty ACTUAL section because that step was easy to miss. Returns
     True on success; on any failure, prints the manual fallback and
-    leaves the existing local config/trade_journal.json in place."""
+    leaves the existing local copy in place."""
     repo_root = os.path.join(os.path.dirname(__file__), "..")
     try:
         subprocess.run(["git", "fetch", "origin", "state-sync"], cwd=repo_root, check=True,
                         capture_output=True, text=True, timeout=30)
-        result = subprocess.run(["git", "show", "origin/state-sync:config/trade_journal.json"],
+        result = subprocess.run(["git", "show", f"origin/state-sync:{repo_relative_path}"],
                                  cwd=repo_root, check=True, capture_output=True, text=True, timeout=30)
-        with open(os.path.join(repo_root, "config", "trade_journal.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(repo_root, repo_relative_path), "w", encoding="utf-8") as f:
             f.write(result.stdout)
-        print("Pulled the latest trade_journal.json from origin/state-sync.\n")
         return True
     except Exception as e:
-        print(f"WARNING: could not auto-pull state-sync ({e}). Run manually if the ACTUAL section "
-              f"below looks stale or empty:\n"
+        print(f"WARNING: could not auto-pull {repo_relative_path} from state-sync ({e}). Run manually "
+              f"if this looks stale:\n"
               f"  git fetch origin state-sync\n"
-              f"  git show origin/state-sync:config/trade_journal.json > config/trade_journal.json\n")
+              f"  git show origin/state-sync:{repo_relative_path} > {repo_relative_path}\n")
         return False
+
+
+def _load_live_risk_config() -> dict:
+    """Reads THIS ACCOUNT's actual live risk_config (pulled from state-
+    sync) rather than assuming RiskConfig's code defaults -- the first
+    revision of this script hardcoded max_trades_per_day=5 (the
+    dataclass default) when the real account is actually configured to
+    30, deliberately loosened for data collection. Falls back to
+    RiskConfig()'s own defaults and DEFAULT_STRATEGY_CAPITAL only if the
+    pull or the file itself is unavailable."""
+    import json
+    from dashboard_state import DEFAULT_STRATEGY_CAPITAL
+    defaults = RiskConfig()
+    repo_root = os.path.join(os.path.dirname(__file__), "..")
+    path = os.path.join(repo_root, "config", "dashboard_state.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+        rc = state.get("risk_config", {})
+        equity = state.get("strategy_starting_capital", DEFAULT_STRATEGY_CAPITAL) + \
+            state.get("strategy_realized_pnl", 0.0)
+        return {
+            "max_trades_per_day": rc.get("max_trades_per_day", defaults.max_trades_per_day),
+            "max_daily_loss_pct": rc.get("max_daily_loss_pct", defaults.max_daily_loss_pct),
+            "risk_per_trade_pct": rc.get("risk_per_trade_pct", defaults.risk_per_trade_pct),
+            "equity": equity,
+        }
+    except Exception as e:
+        print(f"WARNING: could not read live risk_config from {path} ({e}) -- falling back to "
+              f"RiskConfig()'s own code defaults and DEFAULT_STRATEGY_CAPITAL.\n")
+        return {
+            "max_trades_per_day": defaults.max_trades_per_day,
+            "max_daily_loss_pct": defaults.max_daily_loss_pct,
+            "risk_per_trade_pct": defaults.risk_per_trade_pct,
+            "equity": DEFAULT_STRATEGY_CAPITAL,
+        }
 
 
 def main():
@@ -249,6 +337,15 @@ def main():
     now = datetime.now(timezone.utc)
     from_date = (now - timedelta(days=REPORT_DAYS + WARMUP_DAYS)).replace(hour=0, minute=0, second=0, microsecond=0)
     report_cutoff = (now - timedelta(days=REPORT_DAYS)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    print("Pulling the latest journal + risk config from state-sync...")
+    _pull_from_state_sync("config/trade_journal.json")
+    _pull_from_state_sync("config/dashboard_state.json")
+    risk = _load_live_risk_config()
+    risk_amount = risk["equity"] * risk["risk_per_trade_pct"] / 100.0 / live.REALIZED_LOSS_INFLATION
+    print(f"Live risk config: max_trades_per_day={risk['max_trades_per_day']} "
+          f"max_daily_loss_pct={risk['max_daily_loss_pct']}% risk_per_trade_pct={risk['risk_per_trade_pct']}% "
+          f"equity={risk['equity']:.2f} -> simulated risk_amount/trade={risk_amount:.2f}\n")
 
     print(f"Replaying VWAP Scalp's live production code from {from_date.date()} to {now.date()} "
           f"({REPORT_DAYS}-day report window starts {report_cutoff.date()}), {len(live.VWAP_SCALP_PAIRS)} pairs...")
@@ -261,8 +358,11 @@ def main():
         candles_by_instrument[instrument] = candles
         print(f"  {instrument:10s}  {len(candles):>7,} candles")
 
-    print(f"\nReplaying tick-by-tick (max_trades_per_day={MAX_TRADES_PER_DAY}, shared across all pairs)...")
-    all_trades_full, rejected = _replay_all(candles_by_instrument, from_date, now)
+    print(f"\nReplaying tick-by-tick (max_trades_per_day={risk['max_trades_per_day']}, "
+          f"max_daily_loss_pct={risk['max_daily_loss_pct']}%, shared across all pairs, SGT day boundary)...")
+    all_trades_full, rejected = _replay_all(candles_by_instrument, from_date, now,
+                                             risk["max_trades_per_day"], risk["max_daily_loss_pct"],
+                                             risk["equity"], risk_amount)
     all_trades = [t for t in all_trades_full if t["signal_time"] >= report_cutoff]
     if rejected:
         print(f"Rejected as invalid orders (entry price crossed stop/target before the fresh fetch): "
@@ -282,7 +382,6 @@ def main():
         print(f"\nresolved={len(resolved)} win_rate={win_rate:.1f}% mean_R={mean_r:+.4f}")
 
     print(f"\n{'='*78}\nACTUAL LIVE trade_journal.json, same {REPORT_DAYS}-day window\n{'='*78}")
-    _pull_actual_journal_from_state_sync()
     entries = tj.load_journal()
     actual = [e for e in entries if e.get("experiment_tag") == "VWAP_SCALP"
               and e.get("opened_at") and datetime.fromisoformat(e["opened_at"]) >= report_cutoff]
