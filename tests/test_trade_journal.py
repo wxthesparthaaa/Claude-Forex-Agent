@@ -296,6 +296,23 @@ def test_weekly_gain_series_totals_each_week_separately_not_cumulative():
     assert series[1][1] == 10.0  # this week, on its own
 
 
+def test_weekly_gain_series_since_excludes_pre_reset_weeks():
+    # A capital reset must make the chart start fresh -- entries closed
+    # before the reset timestamp shouldn't still show up as "this week's"
+    # or "last week's" gain once the user has explicitly reset.
+    reset_at = (_MONDAY + timedelta(hours=1)).isoformat()
+    entries = [
+        {"status": "FAILED", "closed_at": (_MONDAY - timedelta(weeks=1)).isoformat(), "realized_pnl": -50.0},
+        {"status": "FAILED", "closed_at": (_MONDAY + timedelta(minutes=30)).isoformat(), "realized_pnl": -20.0},  # before reset, same week
+        {"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=3)).isoformat(), "realized_pnl": 15.0},  # after reset
+    ]
+    now = _MONDAY + timedelta(hours=5)
+
+    series = tj.weekly_gain_series(entries, now=now, num_weeks=2, since=reset_at)
+
+    assert [pnl for _, pnl in series] == [0.0, 15.0]  # last week and the pre-reset trade both excluded
+
+
 def test_weekly_gain_series_returns_a_zero_point_for_a_week_with_no_trades():
     entries = [{"status": "SUCCESSFUL", "closed_at": (_MONDAY + timedelta(hours=2)).isoformat(), "realized_pnl": 10.0}]
     now = _MONDAY + timedelta(weeks=2)  # two quiet weeks after the one trade

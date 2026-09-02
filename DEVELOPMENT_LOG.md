@@ -5684,3 +5684,71 @@ signal quality -- queued as the next piece of work, a question the
 backtest can actually answer (it never touches account-currency
 conversion, so it's blind to the issue above, but it can test whether
 restricting to specific hours changes per-pair historical performance).
+
+## 2026-09-02 (continued) -- Two dashboard bugs fixed; full-history VWAP Scalp review finds the real problem isn't sizing
+
+User reported two dashboard bugs from a screenshot and asked for a
+full-history review of VWAP Scalp given it's "still losing."
+
+**Bug 1 (fixed)**: the "Reset capital" button always forced
+`DEFAULT_STRATEGY_CAPITAL` (2000) regardless of what was typed in the
+adjacent field -- e.g. typing 1433 intending to reset to 1433 got
+silently overridden back to 2000. This was actually the ORIGINAL
+documented design ("the org value... independent of whatever the user
+later edits it to"), but conflicted with the user's stated expectation.
+Asked which behavior they wanted via AskUserQuestion; they chose making
+Reset use the typed value (falling back to 2000 only when the field is
+empty), unifying it with what "Save settings" already did. Fixed in
+app.py's `/settings` route, 2 new tests in test_settings_capital_reset.py.
+
+**Bug 2 (fixed)**: the weekly-gain history chart never respected a
+capital reset -- `weekly_gain_series` bucketed EVERY closed trade ever
+by calendar week regardless of any reset, so right after resetting
+capital to start fresh, the chart still showed pre-reset weeks' P&L,
+reading as "capital is still down" when it wasn't. Added a new
+`capital_reset_at` field to DashboardState (deliberately separate from
+`last_review_timestamp`/`week_start_timestamp`, which also get bumped
+by the nightly/Friday review process and would've collapsed the
+multi-week trend view every day), set on both capital-reset code paths,
+and a new `since` parameter on `weekly_gain_series` that excludes
+entries closed before it. 1 new test. Full suite green (533 tests).
+
+**Trade review -- the real finding**: pulled all 42 closed VWAP Scalp
+trades since inception (2026-08-31 through today). Overall: 31.0% win
+rate, -914.38 SGD total realized loss -- against a backtest that
+validated 70-95% day-win-rates. This is NOT primarily the sizing/
+conversion issue from earlier today (already addressed via
+REALIZED_LOSS_INFLATION) -- it's a fundamentally low WIN RATE, an order
+of magnitude below what was backtested. Segmented by which code was
+live at the time: pre-compensation (24 trades) 29.2% WR/-511.55;
+17-pair+1.18-compensated (6 trades) 16.7% WR/-230.90; today's
+1.29-recalibrated period (12 trades) 41.7% WR/-171.93 -- improving but
+still deeply net-negative and far below backtest even under current
+code.
+
+Checked exit mechanics for an explanation: wins mostly hit ~100-105% of
+their intended target cleanly (only 2-3 were cut short by the 30-minute
+MAX_HOLD cap); losses hit their stop cleanly 29/29 times (not spread/
+whipsaw noise) with a median hold under 5 minutes -- 8 of 29 losses
+closed within 2 minutes, several within seconds. Checked whether these
+fast losses had abnormally tight stops (would point to a stale-signal-
+vs-fresh-entry-price gap, since stop_loss is computed from the SIGNAL
+bar's target/std while entry_price is a fresh live fetch moments later)
+-- found no strong systematic pattern (stop distances ranged 0.44x-1.19x
+the pair's own typical distance, not uniformly tiny). Also checked the
+live `_find_confirmed_signal` against the backtest's own
+`find_scalp_signals_confirmed` definition -- they match; "confirmed
+1-bar" is, by design, a weak filter (any bar that's merely not-more-
+extreme than the prior bar counts as confirmation), consistent with
+what was validated, not a live-vs-backtest code divergence.
+
+Honest conclusion: could not fully explain the win-rate gap from
+journal data alone. Either a genuinely unlucky ~3-day window (a much
+smaller, less diverse sample than the 180-day/17-pair backtest) despite
+a real underlying edge, or a residual gap between validated and live
+behavior not yet found. Given -914.38 SGD against a ~2000 target
+capital (over 45% drawn down) with no confirmed fix in hand, recommended
+to the user that VWAP Scalp be seriously considered for pausing
+(`vwap_scalp_enabled` off) while this gets properly root-caused, rather
+than continuing to risk capital on sizing tweaks that don't address the
+actual problem.

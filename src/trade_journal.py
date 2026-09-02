@@ -249,7 +249,8 @@ def realized_pnl_since(entries: list, since_iso: str | None) -> float:
     return total
 
 
-def weekly_gain_series(entries: list, now: datetime = None, num_weeks: int = 8) -> list[tuple[str, float]]:
+def weekly_gain_series(entries: list, now: datetime = None, num_weeks: int = 8,
+                        since: str | None = None) -> list[tuple[str, float]]:
     """Total realized P&L PER calendar week (Mon-Fri trading week, SGT),
     one point per week -- the most recent num_weeks, up to and including
     the current (possibly still in-progress) week -- so the dashboard's
@@ -263,7 +264,14 @@ def weekly_gain_series(entries: list, now: datetime = None, num_weeks: int = 8) 
     CURRENT week's own start, not past week boundaries, so it can't be
     used to derive prior weeks' totals. A week with no closed trades
     still appears as an explicit 0.0 point rather than being skipped, so
-    a quiet week is visible as a real zero, not a gap in the timeline."""
+    a quiet week is visible as a real zero, not a gap in the timeline.
+
+    `since` (an ISO timestamp, typically state.capital_reset_at) excludes
+    entries that closed before it -- so a capital reset genuinely starts
+    the chart fresh instead of still mixing in weeks of pre-reset P&L,
+    which otherwise reads as "capital is still down" right after a reset
+    meant to start clean. None (the default) keeps the full history,
+    matching every existing caller before this parameter was added."""
     now = now or datetime.now(timezone.utc)
     today_sgt = now.astimezone(SGT).date()
     current_week_monday = today_sgt - timedelta(days=today_sgt.weekday())
@@ -274,6 +282,8 @@ def weekly_gain_series(entries: list, now: datetime = None, num_weeks: int = 8) 
             continue
         closed_at = e.get("closed_at")
         if not closed_at:
+            continue
+        if since is not None and closed_at <= since:
             continue
         day = datetime.fromisoformat(closed_at).astimezone(SGT).date()
         week_monday = day - timedelta(days=day.weekday())

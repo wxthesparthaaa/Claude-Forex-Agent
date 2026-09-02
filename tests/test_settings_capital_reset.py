@@ -139,3 +139,39 @@ def test_explicit_capital_override_gets_the_same_fix(tmp_path, monkeypatch):
     live_equity = tracked_equity_live(post_state, post_entries)
     assert abs(live_equity - 3000.0) < 0.01, \
         f"expected an explicit capital override to also read back exactly, got {live_equity}"
+
+
+def test_reset_capital_button_uses_the_typed_value_not_the_hardcoded_default(tmp_path, monkeypatch):
+    # Real bug (2026-09-02): clicking "Reset capital" with a custom value
+    # typed in the adjacent field used to ALWAYS force DEFAULT_STRATEGY_CAPITAL
+    # (2000), silently discarding whatever the user typed -- e.g. typing
+    # 1433 intending to reset to 1433 got overridden back to 2000.
+    client = _client(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    _seed_pre_reset_history(now)
+
+    response = client.post("/settings", data={"reset_capital": "on", "strategy_capital": "1433"},
+                            follow_redirects=False)
+    assert response.status_code in (302, 303)
+
+    post_state = ds.load_state()
+    post_entries = tj.load_journal()
+    live_equity = tracked_equity_live(post_state, post_entries)
+    assert abs(live_equity - 1433.0) < 0.01, \
+        f"expected the typed reset target (1433) to be applied, not the {DEFAULT_STRATEGY_CAPITAL} default, got {live_equity}"
+
+
+def test_reset_capital_button_falls_back_to_default_when_field_is_empty(tmp_path, monkeypatch):
+    # The empty-field case (the pattern every OTHER test in this file
+    # already exercises) must keep working exactly as before.
+    client = _client(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    _seed_pre_reset_history(now)
+
+    client.post("/settings", data={"reset_capital": "on", "strategy_capital": ""}, follow_redirects=False)
+
+    post_state = ds.load_state()
+    post_entries = tj.load_journal()
+    live_equity = tracked_equity_live(post_state, post_entries)
+    assert abs(live_equity - DEFAULT_STRATEGY_CAPITAL) < 0.01, \
+        f"expected the {DEFAULT_STRATEGY_CAPITAL} fallback when the field is empty, got {live_equity}"

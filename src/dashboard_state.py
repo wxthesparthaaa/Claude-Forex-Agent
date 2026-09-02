@@ -17,9 +17,11 @@ from state_paths import atomic_write_json, load_json_resilient
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 STATE_PATH = os.path.join(STATE_DIR, "dashboard_state.json")
 
-# The "org value" Settings' Reset button restores -- the strategy's
-# original target capital, independent of whatever the user later edits
-# strategy_starting_capital to.
+# Fallback the Settings "Reset capital" button uses ONLY when the
+# strategy-capital field is left empty -- see app.py's /settings route.
+# The button otherwise applies whatever value is typed in that field
+# (changed 2026-09-02: it used to always force this default regardless
+# of the field, which silently discarded a typed custom reset target).
 DEFAULT_STRATEGY_CAPITAL = 2000.0
 
 
@@ -41,6 +43,15 @@ class DashboardState:
     strategy_realized_pnl: float = 0.0
     last_review_timestamp: str | None = None  # filters our own journal to "since last night's review"
     week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
+    # Set by /settings whenever strategy capital is reset or explicitly
+    # overridden (both branches -- see app.py) -- lets the dashboard's
+    # weekly-gain history chart start fresh from the reset point instead
+    # of still showing pre-reset weeks' P&L mixed in with the new
+    # baseline. Distinct from last_review_timestamp/week_start_timestamp,
+    # which also get bumped by the nightly/Friday review process and
+    # would otherwise collapse this chart's multi-week trend view every
+    # single day.
+    capital_reset_at: str | None = None
     # How often Autopilot re-scans each instrument once its own trading
     # window is open (see scheduled_jobs.run_autopilot_interval_scan).
     # Minutes; one of 15/30/60/240.

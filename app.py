@@ -84,6 +84,14 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-02", "Dashboard: fixed 'Reset capital' ignoring the typed amount (always forced $2,000 "
+                    "regardless of the field -- now uses the typed value, defaulting only if empty), and the "
+                    "weekly-gain chart not respecting a capital reset (added capital_reset_at so it starts "
+                    "fresh instead of still showing pre-reset weeks). Full-history VWAP Scalp review: 42 "
+                    "trades, 31.0% win rate, -914.38 SGD total -- an order of magnitude below the 70-95% "
+                    "backtested. Not a sizing issue (already addressed); exits are clean (wins hit target, "
+                    "losses hit stop, no whipsaw), so this is a genuine win-rate gap, root cause not yet "
+                    "found. Recommended considering a pause pending further diagnosis."),
     ("2026-09-02", "VWAP Scalp: the 'JPY-specific' diagnosis was wrong -- a deeper check isolating the "
                     "realized-vs-sizing conversion gap (separate from a compounding stop-slippage effect on "
                     "one trade) showed it's GENERAL across every quote currency (CAD 1.22x, JPY 1.40x, USD "
@@ -501,7 +509,7 @@ def dashboard():
     week_start_capital = strategy_capital - week_gain  # equity before this week's trades
     week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
     WEEKLY_GAIN_TARGET = 200.0
-    weekly_gain_chart = weekly_gain_series(journal)
+    weekly_gain_chart = weekly_gain_series(journal, since=state.capital_reset_at)
     daily_gain_chart = daily_gain_series(journal, state.week_start_timestamp)
     overall_gain = strategy_capital - state.strategy_starting_capital
     overall_gain_pct = (100 * overall_gain / state.strategy_starting_capital
@@ -910,11 +918,21 @@ def settings():
         # scheduled_jobs.py's own nightly review and Friday reflection
         # already do when they roll each of these forward.
         if request.form.get("reset_capital"):
-            state.strategy_starting_capital = DEFAULT_STRATEGY_CAPITAL
+            # Real bug (found live 2026-09-02): this used to ALWAYS force
+            # DEFAULT_STRATEGY_CAPITAL regardless of what was typed in the
+            # adjacent field -- a user typing a custom target (e.g. 1433)
+            # and clicking "Reset capital" (the intuitively-named button
+            # for resetting TO a new number) got silently overridden back
+            # to 2000. Now uses the typed value if present, falling back
+            # to the $2,000 default only when the field is empty.
+            typed = request.form.get("strategy_capital")
+            target_capital = float(typed) if typed not in (None, "") else DEFAULT_STRATEGY_CAPITAL
+            state.strategy_starting_capital = target_capital
             state.strategy_realized_pnl = 0.0
             state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
             state.week_start_timestamp = state.last_review_timestamp
-            flash(f"Strategy capital reset to {DEFAULT_STRATEGY_CAPITAL:.2f}.", "success")
+            state.capital_reset_at = state.last_review_timestamp
+            flash(f"Strategy capital reset to {target_capital:.2f}.", "success")
         else:
             new_capital = request.form.get("strategy_capital")
             if new_capital not in (None, ""):
@@ -924,6 +942,7 @@ def settings():
                     state.strategy_realized_pnl = 0.0
                     state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
                     state.week_start_timestamp = state.last_review_timestamp
+                    state.capital_reset_at = state.last_review_timestamp
                     flash(f"Strategy capital set to {new_capital:.2f}.", "success")
 
         state.risk_config = asdict(risk_config)
