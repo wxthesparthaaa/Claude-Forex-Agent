@@ -229,16 +229,30 @@ def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
     trades_today = 0
     daily_pnl = 0.0
     current_sgt_day = None
+    gate_was_tripped = False  # debug: prints once per trip/reset transition, not every tick
     tick = from_date.replace(hour=live.WATCH_START_HOUR, minute=0, second=0, microsecond=0)
     while tick <= now:
         sgt_day = tick.astimezone(SGT).date()
         if sgt_day != current_sgt_day:
+            if current_sgt_day is not None:
+                print(f"  [gate] SGT day {current_sgt_day} -> {sgt_day} at tick {tick.isoformat()} -- "
+                      f"reset (was daily_pnl={daily_pnl:+.2f}, trades_today={trades_today}, "
+                      f"gate_tripped={gate_was_tripped})")
             current_sgt_day = sgt_day
             trades_today = 0
             daily_pnl = 0.0
+            gate_was_tripped = False
         if not (live.WATCH_START_HOUR <= tick.hour < live.WATCH_END_HOUR):
             tick += timedelta(minutes=TICK_MINUTES)
             continue
+
+        daily_loss_pct = (100 * -daily_pnl / equity) if daily_pnl < 0 else 0.0
+        gate_tripped_now = (trades_today >= max_trades_per_day) or (daily_loss_pct >= max_daily_loss_pct)
+        if gate_tripped_now and not gate_was_tripped:
+            print(f"  [gate] TRIPPED at tick {tick.isoformat()} (sgt_day={sgt_day}): "
+                  f"trades_today={trades_today}/{max_trades_per_day} "
+                  f"daily_pnl={daily_pnl:+.2f} ({daily_loss_pct:.2f}% >= {max_daily_loss_pct}%)")
+            gate_was_tripped = True
 
         for instrument, candles in candles_by_instrument.items():
             if trades_today >= max_trades_per_day:
@@ -355,6 +369,23 @@ def main():
     candles_by_instrument = {}
     for instrument in live.VWAP_SCALP_PAIRS:
         candles = fetch_history_cached(client, instrument, "M1", from_date, now, price="MBA")
+        # candle_history.fetch_history_cached returns whatever's cached
+        # UNCONDITIONALLY once a cache file exists, regardless of whether
+        # it covers the requested [from_date, now] range at all -- real
+        # incident: this script's own pairs were cached at genuinely
+        # different points earlier in this session (the original 5 in
+        # one backtest run, the other 12 in a later one), so their cache
+        # files can have different real-world end times even when asked
+        # for the SAME range. A stale cache silently truncates that
+        # instrument's replay early instead of erroring, which is easy
+        # to miss. Force a fresh fetch for just this instrument if its
+        # cache doesn't reach within an hour of `now`.
+        stale = not candles or _parse_time(candles[-1]) < (now - timedelta(hours=1))
+        if stale:
+            last = _parse_time(candles[-1]).isoformat() if candles else "no data"
+            print(f"  {instrument:10s}  cache stale (last candle {last}) -- re-fetching...")
+            candles = fetch_history_cached(client, instrument, "M1", from_date, now,
+                                            force_refresh=True, price="MBA")
         candles_by_instrument[instrument] = candles
         print(f"  {instrument:10s}  {len(candles):>7,} candles")
 

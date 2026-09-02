@@ -5942,3 +5942,58 @@ signature (max_trades_per_day=30 instead of the old hardcoded 5):
 14 trades across 7 pairs x 2 days, no longer artificially capped.
 Full suite green (541 tests, same one pre-existing unrelated flaky
 test). Handed back to the user for a third, hopefully-final run.
+
+## 2026-09-03 (continued) -- Third run: an apparent gate bypass that couldn't be reproduced in isolation, plus a real, separate stale-cache bug found while chasing it
+
+Third run: 16 trades, win_rate=25.0%. But the raw trade list showed
+something that looked like a real bug: 4 losses at 06:58-07:00 UTC on
+2026-08-31 should have tripped the new max_daily_loss_pct=6.0% gate
+(4 * -31.01 = -124.04, 6.20% of the 2000.00 equity >= 6.0%) and kept it
+tripped until the SGT day boundary (16:00 UTC) -- but the trade list
+showed MORE trades firing at 15:56-15:59 UTC, still the same SGT day,
+9 hours before that boundary.
+
+Chased this with an isolated unit test: patched _find_signal_at_tick/
+_resolve_candidate to force a signal + a guaranteed loss on every pair
+at every tick, spanning multiple SGT-day boundaries. Result: the gate
+worked EXACTLY as designed -- tripped after exactly 4 losses, stayed
+tripped for the rest of that SGT day, reset cleanly at each 16:00 UTC
+boundary, every time. Could not reproduce the apparent bypass in
+isolation, which is itself informative: the gating LOGIC in
+_replay_all is very likely correct.
+
+While chasing this, found a real, separate, and more likely
+explanation: candle_history.fetch_history_cached() returns whatever's
+already cached UNCONDITIONALLY once a cache file exists for an
+instrument, completely ignoring whether that cache actually covers the
+requested [from_date, now] range. Confirmed directly: EUR_USD's local
+cache file's last candle is 2026-08-31T14:57, stale by more than a day
+relative to a run against "now". Different pairs in this replay were
+originally cached at genuinely different points earlier in this
+session (the original 5 pairs in one backtest run, the other 12 in a
+later one) -- their cache files can have different real-world end
+times even when this script requests the identical range for all of
+them. A stale cache silently truncates that specific instrument's
+candle array early rather than erroring, which reads as "this pair ran
+out of signals" rather than the real cause, and -- more importantly for
+what looked like a gate bug -- means different pairs may not even be
+looking at the same real-world day at the same simulated tick,
+undermining any conclusion drawn from a shared day-boundary/gate state
+across pairs with mismatched data vintages.
+
+Fixed in the replay script specifically (not the shared candle_history
+module, to avoid changing behavior for every OTHER script that uses
+it): after fetching, checks whether each instrument's last cached
+candle is within an hour of `now`; if not, forces a fresh fetch for
+just that instrument. Also added lightweight diagnostic logging to
+_replay_all itself -- prints a line the moment the gate trips (with the
+exact trades_today/daily_pnl/pct that tripped it) and a line at every
+SGT-day reset -- so if anything still looks inconsistent on the next
+real run, the actual gate state at that moment will be right there in
+the output instead of needing to be inferred after the fact.
+
+Full suite green (542 tests, the SGT-midnight-boundary flaky test also
+passing again now that real time has moved past that window). Handed
+back to the user for a fourth run -- this one should either behave
+correctly (if the stale cache was the real cause) or, if not, the new
+[gate] lines will show exactly what's happening.
