@@ -156,6 +156,8 @@ def generate_candidate(
     try:
         validate_trade(proposed, account, risk_config)
     except RiskViolation as e:
+        from dashboard_state import record_risk_limit_skip
+        record_risk_limit_skip("Base strategy scan", str(e))
         candidate.rejected_reason = str(e)
 
     return candidate

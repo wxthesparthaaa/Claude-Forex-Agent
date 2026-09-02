@@ -38,6 +38,53 @@ def test_load_journal_degrades_to_empty_on_a_corrupt_file(tmp_path, monkeypatch)
     assert tj.load_journal() == []
 
 
+def test_load_journal_dedupes_ghost_duplicate_keeping_the_real_entry(tmp_path, monkeypatch):
+    # Real incident (2026-09-02): reconcile_orphan_trades raced a fill
+    # and journaled a ghost duplicate under the SAME trade_id -- zeroed
+    # sizing/confidence, no experiment_tag, but a real (duplicated)
+    # realized_pnl. Whichever order they land in the file, the real
+    # entry must win.
+    _isolate(tmp_path, monkeypatch)
+    ghost = {"trade_id": "3190", "instrument": "USD_CAD", "direction": "SHORT", "status": "SUCCESSFUL",
+             "confidence_pct": 0.0, "risk_amount": 0.0, "experiment_tag": None, "realized_pnl": 3.27}
+    real = {"trade_id": "3190", "instrument": "USD_CAD", "direction": "SHORT", "status": "SUCCESSFUL",
+            "confidence_pct": 89.2, "risk_amount": 31.01, "experiment_tag": "VWAP_SCALP", "realized_pnl": 3.27}
+    with open(tj.JOURNAL_PATH, "w") as f:
+        import json
+        json.dump([ghost, real], f)
+
+    entries = tj.load_journal()
+
+    assert len(entries) == 1
+    assert entries[0]["experiment_tag"] == "VWAP_SCALP"
+    assert entries[0]["risk_amount"] == 31.01
+
+
+def test_load_journal_dedup_keeps_real_entry_regardless_of_file_order(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    ghost = {"trade_id": "3190", "confidence_pct": 0.0, "risk_amount": 0.0, "experiment_tag": None}
+    real = {"trade_id": "3190", "confidence_pct": 89.2, "risk_amount": 31.01, "experiment_tag": "VWAP_SCALP"}
+    with open(tj.JOURNAL_PATH, "w") as f:
+        import json
+        json.dump([real, ghost], f)  # real one first this time
+
+    entries = tj.load_journal()
+
+    assert len(entries) == 1
+    assert entries[0]["experiment_tag"] == "VWAP_SCALP"
+
+
+def test_load_journal_dedup_leaves_distinct_trade_ids_alone(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    with open(tj.JOURNAL_PATH, "w") as f:
+        import json
+        json.dump([{"trade_id": "1"}, {"trade_id": "2"}, {"trade_id": "3"}], f)
+
+    entries = tj.load_journal()
+
+    assert [e["trade_id"] for e in entries] == ["1", "2", "3"]
+
+
 def test_save_journal_is_atomic_no_temp_file_left_behind(tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())

@@ -25,6 +25,34 @@ def test_load_state_degrades_to_default_on_a_corrupt_file(tmp_path, monkeypatch)
     assert state.strategy_starting_capital == ds.DEFAULT_STRATEGY_CAPITAL
 
 
+def test_record_risk_limit_skip_appends_and_persists(tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+
+    ds.record_risk_limit_skip("VWAP Scalp", "Daily loss limit reached: 7.0% >= 6.0%")
+    ds.record_risk_limit_skip("Autopilot batch", "Weekly loss limit reached: 12.0% >= 10.0%")
+
+    state = ds.load_state()
+    assert state.risk_limit_skips_since_digest == [
+        "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
+        "Autopilot batch: Weekly loss limit reached: 12.0% >= 10.0%",
+    ]
+
+
+def test_record_risk_limit_skip_never_raises_even_if_state_io_fails(tmp_path, monkeypatch):
+    # Best-effort: a state-write hiccup here must never cascade into the
+    # strategy tick that's already busy handling a real trade rejection.
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+
+    def _broken_save(state):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ds, "save_state", _broken_save)
+
+    ds.record_risk_limit_skip("VWAP Scalp", "Daily loss limit reached: 7.0% >= 6.0%")  # must not raise
+
+
 def test_risk_config_from_state_keeps_the_users_actual_adjustable_settings():
     state = ds.default_state()
     state.risk_config["risk_per_trade_pct"] = 1.5

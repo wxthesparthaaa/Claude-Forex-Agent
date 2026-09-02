@@ -479,11 +479,13 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
                         # might occasionally not go out) instead of failing
                         # unsafe (the counters never advance, so the next
                         # tick sees a stale timestamp and re-sends immediately).
+                        risk_skips = state.risk_limit_skips_since_digest
                         state.last_scan_digest_sent_at = now_utc.isoformat()
                         state.interval_scan_count_since_digest = 0
                         state.interval_scanned_instruments_since_digest = []
+                        state.risk_limit_skips_since_digest = []
                         save_state(state)
-                        send_args = (scan_count, instruments, window_start_sgt)
+                        send_args = (scan_count, instruments, window_start_sgt, risk_skips)
 
     # Sent outside the lock -- a slow Telegram call has no reason to hold
     # up run_autopilot_interval_scan's own tally increment.
@@ -500,7 +502,9 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
             open_trades = live_trades_view(client)
         except Exception as e:
             print(f"WARNING: could not fetch open-trade status for the scan digest: {e}", flush=True)
-        send_message(format_scan_digest_message(*send_args, open_trades=open_trades))
+        scan_count, instruments, window_start_sgt, risk_skips = send_args
+        send_message(format_scan_digest_message(scan_count, instruments, window_start_sgt,
+                                                  open_trades=open_trades, risk_skips=risk_skips))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:

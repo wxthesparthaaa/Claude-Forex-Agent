@@ -176,3 +176,36 @@ def test_format_scan_digest_message_handles_missing_pnl_gracefully():
         {"instrument": "EUR_USD", "direction": "LONG", "unrealized_pnl": None, "account_currency": "SGD"},
     ])
     assert "P&L unavailable" in msg
+
+
+def test_format_scan_digest_message_omits_risk_section_when_none_hit():
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=None)
+    assert "Risk limit" not in msg
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=[])
+    assert "Risk limit" not in msg
+
+
+def test_format_scan_digest_message_groups_and_counts_repeated_risk_skips():
+    # User request: surface WHY nothing traded, not just "no new trades".
+    # A busy window can trip the exact same limit many times over --
+    # must be grouped/counted, not one line per occurrence.
+    skips = [
+        "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
+        "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
+        "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
+        "Autopilot batch: Weekly loss limit reached: 12.0% >= 10.0%",
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=skips)
+    assert "Risk limit reached, trades restricted" in msg
+    assert "4 total this window" in msg
+    assert "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0% (×3)" in msg
+    assert "Autopilot batch: Weekly loss limit reached: 12.0% >= 10.0%" in msg
+    assert "Weekly loss limit reached: 12.0% >= 10.0% (×1)" not in msg  # no "(×1)" clutter for a single hit
+
+
+def test_format_scan_digest_message_caps_risk_skip_lines_at_five_distinct():
+    skips = [f"Strategy{i}: some distinct limit reached {i}%" for i in range(8)]
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=skips)
+    assert "8 total this window" in msg
+    shown = sum(1 for i in range(8) if f"limit reached {i}%" in msg)
+    assert shown == 5

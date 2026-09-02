@@ -46,6 +46,7 @@ load_dotenv(encoding="utf-8-sig", override=True)
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
     DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
+    record_risk_limit_skip,
 )
 from autopilot import PHASE_LABELS
 from market_hours import (is_forex_market_open, time_until_forex_reopen, format_duration,
@@ -84,6 +85,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-02", "Fixed a real duplicate-trade race: place_and_record() placed the order then journaled it "
+                    "as two unlocked steps, letting reconcile_orphan_trades journal a ghost duplicate under "
+                    "the same trade_id if it ran in that gap (found live: 2 real incidents, ~$83 double-"
+                    "counted). JOURNAL_LOCK now held across the whole span; load_journal() also self-heals any "
+                    "existing duplicate. Also added risk-limit visibility to the periodic scan digest -- any "
+                    "strategy's RiskViolation now records to a tally the digest reports and resets."),
     ("2026-09-02", "Dashboard: fixed 'Reset capital' ignoring the typed amount (always forced $2,000 "
                     "regardless of the field -- now uses the typed value, defaulting only if empty), and the "
                     "weekly-gain chart not respecting a capital reset (added capital_reset_at so it starts "
@@ -677,6 +684,7 @@ def execute(instrument):
     try:
         validate_trade(proposed, account, risk_config_from_state(state))
     except RiskViolation as e:
+        record_risk_limit_skip("Manual execute", str(e))
         flash(f"Execute blocked -- risk limits no longer clear: {e}", "error")
         return redirect(url_for("dashboard"))
 

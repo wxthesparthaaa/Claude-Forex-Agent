@@ -63,7 +63,7 @@ def format_market_open_message(close_sgt) -> str:
 
 
 def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None,
-                                open_trades: list | None = None) -> str:
+                                open_trades: list | None = None, risk_skips: list | None = None) -> str:
     """The interval scanner is deliberately silent otherwise -- only an
     actual executed trade notifies -- so this periodic digest is the only
     proof-of-life during a stretch where nothing qualified. window_start_sgt:
@@ -85,7 +85,17 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
     app doesn't actually know. Second piece of real feedback this
     addresses: no visibility into whether a trade was quietly open (and
     how it was doing) between the sparser trade-executed/trade-closed
-    alerts."""
+    alerts.
+
+    risk_skips: dashboard_state.record_risk_limit_skip()'s own raw
+    "{source}: {message}" strings accumulated since the last digest, or
+    None/empty to omit this section. User request: the digest already
+    says "no new trades" every ~3 hours but gave no indication a risk/
+    tolerance limit was WHY -- that was only ever visible in Render's
+    own logs. Grouped and counted (a busy window can trip the exact same
+    limit many times over) rather than listed one line per occurrence,
+    capped at the 5 most common so one especially noisy limit can't blow
+    up the message length."""
     since = f" since {window_start_sgt.strftime('%H:%M')} SGT" if window_start_sgt else ""
     if scan_count == 0:
         base = f"✅ <b>Periodic scan complete</b>\nNo pairs were in their trading window{since}. No new trades."
@@ -99,18 +109,29 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
         )
 
     if open_trades is None:
-        return base
-    if not open_trades:
-        return base + "\n\nNo trade currently open."
+        pass
+    elif not open_trades:
+        base += "\n\nNo trade currently open."
+    else:
+        lines = [
+            f"  {t['instrument']} {t['direction']}: "
+            f"{t['unrealized_pnl']:+.2f} {t.get('account_currency', '')}" if t.get("unrealized_pnl") is not None
+            else f"  {t['instrument']} {t['direction']}: P&L unavailable"
+            for t in open_trades
+        ]
+        header = "Open trade" if len(open_trades) == 1 else "Open trades"
+        base += f"\n\n📈 <b>{header}</b>\n" + "\n".join(lines)
 
-    lines = []
-    for t in open_trades:
-        pnl = t.get("unrealized_pnl")
-        currency = t.get("account_currency", "")
-        pnl_str = f"{pnl:+.2f} {currency}" if pnl is not None else "P&L unavailable"
-        lines.append(f"  {t['instrument']} {t['direction']}: {pnl_str}")
-    header = "Open trade" if len(open_trades) == 1 else "Open trades"
-    return base + f"\n\n📈 <b>{header}</b>\n" + "\n".join(lines)
+    if risk_skips:
+        from collections import Counter
+        counts = Counter(risk_skips)
+        lines = [f"  {msg}" + (f" (×{n})" if n > 1 else "") for msg, n in counts.most_common(5)]
+        base += (
+            f"\n\n⚠️ <b>Risk limit reached, trades restricted</b> ({len(risk_skips)} total this window)\n"
+            + "\n".join(lines)
+        )
+
+    return base
 
 
 def format_trade_executed_message(trade: dict) -> str:

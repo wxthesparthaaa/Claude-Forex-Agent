@@ -79,7 +79,14 @@ class FakeClient:
 
     def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
         self.orders_placed.append(instrument)
-        return {"orderFillTransaction": {"tradeOpened": {"tradeID": self._fill_trade_id}}}
+        # A unique ID per call, not a fixed constant -- real OANDA never
+        # reuses a trade_id across different positions, and trade_journal's
+        # own dedup-by-trade_id (added 2026-09-02, after a real incident
+        # where reconcile_orphan_trades raced a fill and journaled a
+        # duplicate under the SAME id) would otherwise collapse these
+        # 17 genuinely-different opened positions down to 1 in this test.
+        trade_id = f"{self._fill_trade_id}-{len(self.orders_placed)}"
+        return {"orderFillTransaction": {"tradeOpened": {"tradeID": trade_id}}}
 
     def close_trade(self, trade_id):
         self.closed_ids.append(trade_id)

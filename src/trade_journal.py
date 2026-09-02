@@ -35,7 +35,16 @@ JOURNAL_PATH = os.path.join(STATE_DIR, "trade_journal.json")
 # silently drop a trade; check_open_trades is a cheap, frequent
 # background poll and acquires this same lock non-blockingly instead,
 # happy to just skip this pass and retry in 5 minutes if it's busy.
-JOURNAL_LOCK = threading.Lock()
+#
+# RLock, not Lock: trade_execution.place_and_record() (2026-09-02 fix)
+# now holds this lock across its ENTIRE body -- placing the order on
+# OANDA through calling record_open_trade(), which itself acquires this
+# same lock for its own load-mutate-save. A plain Lock would deadlock
+# the holding thread on that inner acquisition; RLock lets the SAME
+# thread re-enter while still fully blocking every OTHER thread, which
+# is exactly what closes the race that caused the duplicate-trade_id
+# incident this same date (see _dedupe_by_trade_id's own docstring).
+JOURNAL_LOCK = threading.RLock()
 
 # Committed straight to the repo root (not config/, not served by the
 # app) -- a real, standalone .xlsx you can open directly on GitHub,
@@ -120,8 +129,49 @@ CARRY_TRADE_TAG = "CARRY_TRADE"
 TREND_FOLLOWING_TAG = "TREND_FOLLOWING"
 
 
+def _dedupe_by_trade_id(entries: list) -> list:
+    """Real incident (2026-09-02): place_and_record() places the order on
+    OANDA, THEN journals it, with no lock held across that gap. If
+    reconcile_orphan_trades() (which does hold JOURNAL_LOCK for its own
+    read-check-write) ran in that exact window, it would see the
+    position live on OANDA but not yet in the journal, correctly-by-its-
+    own-logic conclude "untracked", and journal a ghost duplicate under
+    the SAME trade_id -- confidence 0, risk 0, no experiment_tag, but a
+    real (duplicated) realized_pnl that silently double-counted into
+    every equity total. Fixed at the source in trade_execution.py (the
+    whole place-and-journal span is now atomic), but this self-heals any
+    duplicate already sitting in a persisted journal -- runs on every
+    load, so the very next normal save (from any caller, anywhere) also
+    persists the cleanup, with no separate migration step needed.
+
+    When trade_ids collide, keeps the entry that looks genuinely
+    recorded (a non-None experiment_tag, or a nonzero risk_amount/
+    confidence_pct -- the base strategy's own real trades also carry
+    those, just no tag) over one that looks like the reconcile_orphan_
+    trades placeholder (confidence 0.0, risk 0.0, tag None, entirely
+    zeroed sizing -- see that function's own docstring). Ties (both or
+    neither look "real", which real duplicates from this exact incident
+    never did) keep whichever was seen first, to stay deterministic."""
+    def _looks_real(e: dict) -> bool:
+        return bool(e.get("experiment_tag")) or bool(e.get("risk_amount")) or bool(e.get("confidence_pct"))
+
+    by_id: dict = {}
+    order: list = []
+    for e in entries:
+        tid = e.get("trade_id")
+        if tid is None:
+            order.append(e)
+            continue
+        if tid not in by_id:
+            by_id[tid] = e
+            order.append(tid)
+        elif _looks_real(e) and not _looks_real(by_id[tid]):
+            by_id[tid] = e
+    return [by_id[o] if isinstance(o, str) and o in by_id else o for o in order]
+
+
 def load_journal() -> list:
-    return load_json_resilient(JOURNAL_PATH, [])
+    return _dedupe_by_trade_id(load_json_resilient(JOURNAL_PATH, []))
 
 
 def save_journal(entries: list) -> None:

@@ -389,6 +389,8 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     try:
         validate_trade(proposed, account, risk_config)
     except RiskViolation as e:
+        from dashboard_state import record_risk_limit_skip
+        record_risk_limit_skip("VWAP Scalp", str(e))
         print(f"VWAP Scalp skipped {instrument}: {e}", flush=True)
         return False
 

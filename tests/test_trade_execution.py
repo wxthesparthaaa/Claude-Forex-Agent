@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 from dataclasses import dataclass
 from unittest.mock import patch
 
@@ -93,6 +94,44 @@ def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch
     assert len(entries) == 1
     assert entries[0]["trade_id"] == "999"
     assert entries[0]["confidence_components"] == cd["confidence_components"]
+
+
+def test_place_and_record_holds_journal_lock_across_the_whole_fill(tmp_path, monkeypatch):
+    # Real incident (2026-09-02): the order used to be placed on OANDA,
+    # then journaled, as two separate unlocked steps -- a concurrent
+    # reconcile_orphan_trades() call landing in that gap would see the
+    # fill on OANDA but not yet in the journal, and journal a ghost
+    # duplicate under the SAME trade_id. Simulates that concurrent
+    # caller directly: while place_and_record is "inside" its OANDA
+    # call (order filled, not yet journaled), a background thread tries
+    # to acquire JOURNAL_LOCK the same way reconcile_orphan_trades does
+    # -- it must BLOCK until place_and_record's own journal write is
+    # already done.
+    _isolate(tmp_path, monkeypatch)
+    order_filled = threading.Event()
+    lock_acquired_after_journal_write = []
+
+    class SlowFillClient(FakeClient):
+        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
+            self.orders_placed.append(instrument)
+            order_filled.set()  # "OANDA filled the order" -- but not journaled yet
+            import time
+            time.sleep(0.05)  # give the concurrent thread a real window to try
+            return {"orderFillTransaction": {"tradeOpened": {"tradeID": self._fill_trade_id}}}
+
+    def concurrent_reconcile_attempt():
+        order_filled.wait(timeout=2)
+        with tj.JOURNAL_LOCK:  # blocks here if the fix works
+            entries = tj.load_journal()
+            lock_acquired_after_journal_write.append(len(entries) == 1)
+
+    t = threading.Thread(target=concurrent_reconcile_attempt)
+    t.start()
+    trade_execution.place_and_record(SlowFillClient(), candidate().__dict__)
+    t.join(timeout=2)
+
+    assert lock_acquired_after_journal_write == [True], \
+        "a concurrent JOURNAL_LOCK acquirer must never observe the fill without the journal entry already present"
 
 
 @patch("trade_execution.send_message")

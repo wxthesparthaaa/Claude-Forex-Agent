@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from oanda_client import OandaClient
-from trade_journal import record_open_trade
+from trade_journal import JOURNAL_LOCK, record_open_trade
 from risk_engine import AccountState, ProposedTrade, RiskConfig, validate_trade, RiskViolation
 from currency_exposure import currency_deltas_for_trade
 from autopilot import PhaseState, is_auto_execute_mode, should_auto_execute
@@ -34,17 +34,37 @@ def instrument_already_open(client: OandaClient, instrument: str) -> bool:
 
 def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool = False) -> dict:
     """candidate: a TradeCandidate as a dict (already risk-validated,
-    rounded to instrument precision). Returns {"success", "trade_id", "reason"}."""
+    rounded to instrument precision). Returns {"success", "trade_id", "reason"}.
+
+    Real incident (2026-09-02): this used to place the order on OANDA
+    and journal it as two separate, unlocked steps. reconcile_orphan_
+    trades() (which DOES hold JOURNAL_LOCK for its own read-check-write)
+    could run in the gap between "OANDA filled the order" and "this
+    function got around to journaling it" -- see the position live on
+    OANDA, correctly-by-its-own-logic conclude it was untracked, and
+    journal a ghost duplicate under the SAME trade_id (confidence 0,
+    risk 0, no tag, but a real duplicated realized_pnl once it closed --
+    found live: trades 1331 and 3190 both existed twice, silently
+    double-counting ~$83 into every equity total until
+    trade_journal._dedupe_by_trade_id cleaned them up after the fact).
+    Holding JOURNAL_LOCK across the whole span -- order placement
+    through record_open_trade() -- makes the two atomic with respect to
+    the journal: any concurrent reconcile_orphan_trades() call now
+    blocks until this trade is already journaled, so it can never
+    observe the gap. JOURNAL_LOCK is an RLock specifically so this
+    outer acquisition doesn't deadlock against record_open_trade()'s own
+    inner one."""
     if not allow_duplicate and instrument_already_open(client, candidate["instrument"]):
         return {"success": False, "trade_id": None, "reason": "duplicate"}
 
-    result = client.place_market_order_with_sltp(
-        instrument=candidate["instrument"], units=candidate["units"],
-        stop_loss_price=str(candidate["stop_loss"]), take_profit_price=str(candidate["take_profit"]),
-    )
-    trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
-    if trade_id:
-        record_open_trade(trade_id, candidate)
+    with JOURNAL_LOCK:
+        result = client.place_market_order_with_sltp(
+            instrument=candidate["instrument"], units=candidate["units"],
+            stop_loss_price=str(candidate["stop_loss"]), take_profit_price=str(candidate["take_profit"]),
+        )
+        trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
+        if trade_id:
+            record_open_trade(trade_id, candidate)
     return {"success": trade_id is not None, "trade_id": trade_id, "reason": None if trade_id else "no_fill"}
 
 
@@ -95,7 +115,13 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
         )
         try:
             validate_trade(proposed, fresh_account, risk_config)
-        except RiskViolation:
+        except RiskViolation as e:
+            # This candidate cleared the scan-time check but became unsafe
+            # given what THIS batch has already placed (running heat/
+            # exposure) -- a genuinely different moment than scan_workflow's
+            # own record_risk_limit_skip call, not a duplicate of it.
+            from dashboard_state import record_risk_limit_skip
+            record_risk_limit_skip("Autopilot batch", str(e))
             continue  # no longer safe given what this batch has already placed
 
         try:

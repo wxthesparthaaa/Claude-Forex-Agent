@@ -7,6 +7,7 @@ this once Render deployment needs it (see github_state_sync.py).
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import asdict, dataclass, field, fields
 
 from autopilot import PhaseState
@@ -75,6 +76,13 @@ class DashboardState:
     # in-window pair due, however many pairs each covered.
     interval_scan_count_since_digest: int = 0
     interval_scanned_instruments_since_digest: list = field(default_factory=list)
+    # Running tally of RiskViolation messages (e.g. "Daily loss limit
+    # reached: 7.0% >= 6.0%") hit by ANY strategy since the last digest --
+    # user request, so the periodic scan digest also surfaces "a risk/
+    # tolerance limit was reached and trades were restricted" instead of
+    # that only ever being visible in Render's own logs. Reset alongside
+    # the other digest counters above; see record_risk_limit_skip().
+    risk_limit_skips_since_digest: list = field(default_factory=list)
     # Precise UTC ISO timestamp of the last digest send -- also doubles as
     # "since when" the current tally has been accumulating, shown in the
     # next digest's own message.
@@ -323,6 +331,29 @@ def save_state(state: DashboardState) -> None:
     except Exception as e:
         print(f"WARNING: failed to push dashboard_state.json to GitHub: {e}", flush=True)
 
+
+_risk_skip_lock = threading.Lock()
+
+
+def record_risk_limit_skip(source: str, message: str) -> None:
+    """Call this from any strategy's existing `except RiskViolation as e:`
+    block (VWAP Scalp, ORB Fade, Range Confluence, the base strategy's
+    scan/autopilot paths) -- appends "{source}: {message}" to
+    risk_limit_skips_since_digest so scheduled_jobs.check_scan_digest can
+    surface it in the periodic scan digest. User request: the digest
+    already reports "N scans, no new trades" every ~3 hours, but gave no
+    indication a risk/tolerance limit was WHY nothing traded -- that was
+    only ever visible in Render's own logs. Best-effort and MUST NOT ever
+    block or fail the caller's real trade-skip handling -- swallows its
+    own errors rather than letting a state-write hiccup cascade into the
+    strategy tick that's already handling a rejection."""
+    try:
+        with _risk_skip_lock:
+            state = load_state()
+            state.risk_limit_skips_since_digest.append(f"{source}: {message}")
+            save_state(state)
+    except Exception as e:
+        print(f"WARNING: could not record risk-limit skip for the scan digest: {e}", flush=True)
 
 
 # The only fields /settings actually lets a user change (see app.py's

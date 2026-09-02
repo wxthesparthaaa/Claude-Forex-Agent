@@ -5752,3 +5752,68 @@ to the user that VWAP Scalp be seriously considered for pausing
 (`vwap_scalp_enabled` off) while this gets properly root-caused, rather
 than continuing to risk capital on sizing tweaks that don't address the
 actual problem.
+
+## 2026-09-02 (continued) -- Fixed a real duplicate-trade race; added risk-limit visibility to the scan digest
+
+User did not accept the "unlucky variance" framing for VWAP Scalp and
+asked to keep digging (see next entry) -- but first flagged a Telegram
+screenshot showing "Open trades: USD_CAD SHORT: P&L unavailable" TWICE
+in the same digest, plus an earlier "Found 1 untracked open position...
+an earlier order confirmation was lost somewhere" message, and asked to
+trace or clear it.
+
+**Traced, not just cleared**: pulled the fresh journal and found exactly
+2 real trade_id collisions (1331, 3190), each existing as TWO entries --
+one properly recorded (real tag/confidence/risk), one a zeroed-out
+ghost (confidence 0, risk 0, no tag) with reconcile_orphan_trades's own
+"an earlier order confirmation was likely lost" rationale text. Root
+cause: trade_execution.place_and_record() placed the order on OANDA,
+then journaled it, as two UNLOCKED steps -- reconcile_orphan_trades()
+(which does hold JOURNAL_LOCK for its own read-check-write) could run
+in that exact gap, see the fill on OANDA but not yet in the journal,
+and correctly-by-its-own-logic conclude "untracked", journaling a
+duplicate under the SAME id. Each ghost's own realized_pnl then double-
+counted into every equity total (~$83 total across the 2 incidents).
+Very likely made much more likely by the still-unexplained `Go-http-
+client/1.1` traffic hitting `/` every ~5-6 seconds found earlier this
+session, since that fires reconcile_orphan_trades far more often than
+its intended 5-minute schedule.
+
+Fixed at the source: JOURNAL_LOCK switched from Lock to RLock, and
+place_and_record() now holds it across its ENTIRE body (order placement
+through record_open_trade()) -- makes the two atomic with respect to
+the journal, so a concurrent reconcile_orphan_trades() call now blocks
+until the trade is already journaled and can never observe the gap.
+Also added trade_journal._dedupe_by_trade_id(), run on every
+load_journal() call, so the fix self-heals the 2 already-persisted
+duplicates (and any that already exist elsewhere) the moment the app
+does any normal journal read -- no separate migration/cleanup script
+needed, and no need to hand-edit the live state-sync journal directly.
+Keeps whichever entry "looks real" (non-None tag, or nonzero risk/
+confidence) over the zeroed placeholder. Found and fixed a test fixture
+that would have masked this: test_range_confluence_addon.py's FakeClient
+returned the SAME fixed trade_id for all 17 opened positions in one
+test, which the new dedup correctly (and rightly) started collapsing --
+fixed the fixture to generate a unique id per call, matching real OANDA
+behavior, rather than weakening the dedup logic. New regression tests
+for both the dedup (3 tests) and the lock fix itself (1 test, using a
+real background thread to prove a concurrent JOURNAL_LOCK acquirer
+never observes the fill without the journal write already done).
+
+**Second request**: surface "a risk/tolerance limit was reached" in the
+same periodic scan-digest Telegram message that already reports "N
+scans, no new trades" every ~3 hours -- previously only visible in
+Render's own logs. Added `risk_limit_skips_since_digest` to
+DashboardState and a new `record_risk_limit_skip(source, message)`
+helper (dashboard_state.py) that any strategy's existing `except
+RiskViolation as e:` block can call -- wired into all 6 real call sites
+(VWAP Scalp, ORB Fade, Range Confluence, the base strategy's shared
+scan-time check, the autopilot batch's own re-validation, and manual
+Execute). format_scan_digest_message() gained a `risk_skips` param that
+groups and counts repeated hits (a busy window can trip the same limit
+many times) and caps the message at the 5 most common, so one
+especially noisy limit can't blow up the message length.
+check_scan_digest reads and resets the tally alongside its existing
+scan-count/instrument counters, same lock, same pattern. 7 new tests.
+Full suite green (542 tests) before commit. Held commit/push per the
+established pattern for anything touching live-trading code paths.

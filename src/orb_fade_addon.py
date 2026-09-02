@@ -226,6 +226,8 @@ def _open_position(client, instrument: str, breakout_direction: str, range_width
     try:
         validate_trade(proposed, account, risk_config)
     except RiskViolation as e:
+        from dashboard_state import record_risk_limit_skip
+        record_risk_limit_skip("ORB Fade", str(e))
         print(f"ORB Fade skipped {instrument}: {e}", flush=True)
         return False
 
