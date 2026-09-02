@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-09-02T02:41:26.446038+00:00",
-  "candidates": [
-    {
-      "instrument": "NZD_USD",
-      "direction": "SHORT",
-      "entry_price": 0.5853,
-      "stop_loss": 0.58975,
-      "take_profit": 0.5764,
-      "confidence_pct": 67.6,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 50.35190070555629,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": -6296,
-      "unit_label": "units",
-      "risk_amount": 35.6748,
-      "notional_account_currency": 4692.04,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 25 (oversold -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
-      ],
-      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    }
-  ]
+  "scanned_at": "2026-09-02T03:01:27.116965+00:00",
+  "candidates": []
 }
