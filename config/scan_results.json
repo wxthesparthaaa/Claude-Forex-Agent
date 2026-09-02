@@ -1,70 +1,37 @@
 {
-  "scanned_at": "2026-09-02T02:01:27.555117+00:00",
+  "scanned_at": "2026-09-02T02:21:27.442544+00:00",
   "candidates": [
     {
       "instrument": "NZD_USD",
       "direction": "SHORT",
-      "entry_price": 0.58618,
+      "entry_price": 0.58564,
       "stop_loss": 0.58956,
-      "take_profit": 0.57942,
-      "confidence_pct": 69.1,
+      "take_profit": 0.5778,
+      "confidence_pct": 59.5,
       "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 48.23179895851986,
+        "breadth": 85.71428571428571,
+        "rsi": 37.94352571373139,
         "candlestick": 50.0,
-        "news": 58.33333333333333
+        "news": 50.0
       },
-      "units": -8285,
+      "units": -7146,
       "unit_label": "units",
       "risk_amount": 35.6748,
-      "notional_account_currency": 6186.84,
+      "notional_account_currency": 5329.51,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 25 (oversold -- some chase risk).",
+        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 23 (oversold -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
+        "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
       ],
       "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
         "candlestick": false,
-        "news": true
-      }
-    },
-    {
-      "instrument": "USD_JPY",
-      "direction": "LONG",
-      "entry_price": 160.388,
-      "stop_loss": 160.133,
-      "take_profit": 160.898,
-      "confidence_pct": 64.4,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 49.48306983403576,
-        "candlestick": 50.0,
-        "news": 37.96296296296296
-      },
-      "units": 17613,
-      "unit_label": "units",
-      "risk_amount": 35.6748,
-      "notional_account_currency": 22438.2,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 75 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: works against this direction -- worth a second look."
-      ],
-      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
+        "news": false
       }
     }
   ]
