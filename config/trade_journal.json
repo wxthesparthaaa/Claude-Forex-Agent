@@ -3849,5 +3849,30 @@
     "pyramided": false,
     "experiment_tag": null,
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "3190",
+    "instrument": "USD_CAD",
+    "direction": "SHORT",
+    "units": 72151,
+    "entry_price": 1.39183,
+    "stop_loss": 1.39235,
+    "take_profit": 1.39178,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "Reconciled from an OANDA position with no matching journal entry -- an earlier order confirmation was likely lost. See reconcile_orphan_trades()."
+    ],
+    "opened_at": "2026-09-02T12:21:38.731523772Z",
+    "account_currency": "",
+    "risk_amount": 0.0,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": null,
+    "parent_trade_id": null
   }
 ]
