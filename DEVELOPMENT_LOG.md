@@ -5817,3 +5817,30 @@ check_scan_digest reads and resets the tally alongside its existing
 scan-count/instrument counters, same lock, same pattern. 7 new tests.
 Full suite green (542 tests) before commit. Held commit/push per the
 established pattern for anything touching live-trading code paths.
+
+**User did not accept the "unlucky variance" explanation for VWAP
+Scalp's win-rate collapse and asked to dig further** -- then, mid-turn,
+proposed a sharper test: run the backtest on just the last 3 days and
+compare directly against what actually happened live over that same
+window, as a check on whether the backtest methodology itself is
+sound. Built `scripts/replay_vwap_scalp_recent_days.py` -- deliberately
+NOT another run of the 180-day backtest script's own signal-detection
+reimplementation, but a direct replay of vwap_scalp_addon.py's OWN
+production functions (`_compute_vwap_series`/`_find_confirmed_signal`),
+driven tick-by-tick exactly the way the real 5-minute scheduler would
+(today's UTC-midnight-to-tick candle slice, the same cooldown/already-
+open gating), then resolved with the same bid/ask-aware
+`simulate_scalp_trade` every backtest this session uses. This closes
+the one remaining gap in every diagnosis so far: until now, nothing had
+directly proven the backtest script's "mirrors the live functions"
+claim was actually still true, rather than assumed. The script also
+pulls the real trade_journal.json for the same window and does a
+direct trade-by-trade match (instrument + direction + entry within 10
+minutes) against the replay, printing REPLAY-ONLY signals (live should
+have traded these but didn't) and ACTUAL-ONLY trades (live traded
+something the replay's own detection never found) separately -- either
+would be a genuine, still-unexplained live-code gap; neither would mean
+the backtest methodology itself is unsound. Smoke-tested against a
+hand-built extension+confirmation+reversion fixture (no crashes,
+plausible signal/outcome). No production code changed by this script.
+Needs real OANDA credentials -- handed to the user to run.
