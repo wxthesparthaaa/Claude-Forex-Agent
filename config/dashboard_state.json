@@ -53,7 +53,9 @@
     "USD_CAD",
     "WTICO_USD"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%"
+  ],
   "last_scan_digest_sent_at": "2026-09-03T16:30:51.729550+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
