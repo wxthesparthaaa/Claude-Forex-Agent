@@ -32,6 +32,7 @@
   "strategy_realized_pnl": 0.0,
   "last_review_timestamp": "2026-09-03T07:35:51.998510+00:00",
   "week_start_timestamp": "2026-09-03T07:35:51.998510+00:00",
+  "capital_reset_at": null,
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-03T13:41:28.227621+08:00",
@@ -49,6 +50,9 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6"
+  ],
   "last_scan_digest_sent_at": "2026-09-03T10:26:18.323223+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
