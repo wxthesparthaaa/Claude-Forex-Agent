@@ -51,6 +51,7 @@
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6",
     "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6"
   ],
   "last_scan_digest_sent_at": "2026-09-03T13:27:25.832828+00:00",
