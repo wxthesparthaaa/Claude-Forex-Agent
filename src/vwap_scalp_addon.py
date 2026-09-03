@@ -160,6 +160,22 @@ COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing conv
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- don't chase a stale setup
 
+# Real incident (2026-08-31, 2026-09-02): VWAP Scalp alone opened 18 of the
+# account's shared 30-trade daily allowance on each of two separate days
+# (the base strategy managed only 4-5 those same days), tripping the
+# shared max_daily_loss_pct gate from its own losses and locking OUT
+# base/ORB Fade/Range Confluence for the rest of that day too --
+# risk_engine.validate_trade's trades-today and daily-loss checks are
+# account-wide, not per-strategy (see dashboard_state.trades_opened_today/
+# realized_pnl_since, which both scan the WHOLE journal). A strategy
+# this high-frequency needs its own tighter cap, on top of and separate
+# from that shared one, so one bad VWAP Scalp session can no longer burn
+# through the whole account's risk budget for every other strategy.
+# Counted by UTC day (today_start below), matching this module's own
+# session-VWAP-reset boundary -- not the SGT day the account-wide cap
+# uses elsewhere.
+VWAP_SCALP_MAX_TRADES_PER_DAY = 6
+
 # Real live data (2026-09-01/02, 30 closed VWAP Scalp trades, 22 losses):
 # realized losses run noticeably bigger than their own intended
 # risk_amount, NOT the clean -1.0R a hit stop should produce (exit_price
@@ -311,6 +327,24 @@ def _recently_signaled(entries: list, instrument: str, now: datetime) -> bool:
     return False
 
 
+def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
+    """Real count of VWAP_SCALP entries opened since UTC midnight --
+    VWAP Scalp's OWN daily cap, independent of and tighter than the
+    shared account-wide max_trades_per_day. See VWAP_SCALP_MAX_TRADES_PER_DAY's
+    own comment for the real incident this fixes."""
+    count = 0
+    for e in entries:
+        if e.get("experiment_tag") != VWAP_SCALP_TAG:
+            continue
+        try:
+            opened_at = datetime.fromisoformat(e["opened_at"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if opened_at >= today_start:
+            count += 1
+    return count
+
+
 def _force_close(client, entry: dict) -> None:
     try:
         result = client.close_trade(entry["trade_id"])
@@ -367,6 +401,28 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     entry_price = float(round_price(meta, price))
     stop_loss = float(round_price(meta, stop_loss))
     take_profit = float(round_price(meta, target))
+
+    # A real OANDA bracket order requires stop_loss < entry < take_profit
+    # for a LONG (mirrored for SHORT). stop_loss/take_profit are frozen
+    # from the CONFIRMATION bar (up to SIGNAL_RECENCY_MINUTES old), while
+    # entry_price is a FRESH fetch just now -- price can drift enough in
+    # that gap for their relative order to flip, which OANDA then rejects
+    # outright rather than filling. Real live incident: this exact gap
+    # has been silently burning VWAP Scalp order attempts since it
+    # shipped (a steady stream of "Market Order Rejected" tickets on the
+    # OANDA account, unconnected to any risk gate) -- found and fixed in
+    # scripts/replay_vwap_scalp_recent_days.py's _resolve_candidate
+    # weeks before it occurred to anyone to port the same check back
+    # here. Checking BEFORE submitting means a doomed order never
+    # reaches OANDA at all, and the reason is visible in the logs
+    # instead of a bare broker rejection.
+    valid = (stop_loss < entry_price < take_profit) if direction == "LONG" \
+        else (take_profit < entry_price < stop_loss)
+    if not valid:
+        print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- entry price {entry_price} has already "
+              f"crossed its frozen stop/target ({stop_loss}/{take_profit}) since signal confirmation; "
+              f"a real broker would reject this order", flush=True)
+        return False
 
     summary = client.get_account_summary()
     account_currency = summary.get("currency", "USD")
@@ -462,6 +518,16 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
           f"({'inside' if in_watch_window else 'outside'} the {WATCH_START_HOUR:02d}:00-{WATCH_END_HOUR:02d}:00 "
           f"UTC watch window)", flush=True)
 
+    trades_today = _vwap_scalp_trades_today(load_journal(), today_start)
+    capped = trades_today >= VWAP_SCALP_MAX_TRADES_PER_DAY
+    if capped:
+        from dashboard_state import record_risk_limit_skip
+        record_risk_limit_skip("VWAP Scalp", f"VWAP Scalp's own daily trade cap reached: "
+                                              f"{trades_today}/{VWAP_SCALP_MAX_TRADES_PER_DAY}")
+        print(f"INFO: VWAP Scalp own daily cap reached ({trades_today}/{VWAP_SCALP_MAX_TRADES_PER_DAY}) -- "
+              f"no new entries this tick; existing positions still monitored for the hold-cap force-close",
+              flush=True)
+
     for instrument in VWAP_SCALP_PAIRS:
         try:
             entries = load_journal()
@@ -473,6 +539,9 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
                 if (now - opened_at) >= timedelta(minutes=MAX_HOLD_MINUTES):
                     _force_close(client, entry)
                 continue  # a position we already hold this tick -- never a candidate for a fresh entry
+
+            if capped:
+                continue  # own daily cap reached -- force-closes above still run, just no new entries
 
             if not (WATCH_START_HOUR <= now.hour < WATCH_END_HOUR):
                 continue  # outside today's liquid watch window -- no new entries checked

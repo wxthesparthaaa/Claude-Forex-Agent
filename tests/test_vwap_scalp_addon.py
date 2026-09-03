@@ -80,6 +80,23 @@ def _flat_session_candles(n=31, end_time=None):
     return [_m1_candle(day_start + timedelta(minutes=i), 100.0) for i in range(n)]
 
 
+def _valid_entry_price(candles, direction):
+    """A fresh entry price that sits on the correct side of the frozen
+    stop/target implied by `candles`' own confirmed signal -- what the
+    live broker-validity check in vwap_scalp_addon._open_position now
+    requires before it will submit an order. Tests that exercise a real
+    open need this instead of FakeClient's default price (1.1000),
+    which is disconnected from the 95-105 VWAP scale these candle
+    fixtures use and would otherwise always fail that check."""
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, direction_found = vs._find_confirmed_signal(times, z, times[-1])
+    target = vwap[signal_index]
+    stop_distance = (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
+    if direction == "LONG":
+        return target - stop_distance / 2  # inside (target - stop_distance, target)
+    return target + stop_distance / 2      # inside (target, target + stop_distance)
+
+
 class FakeClient:
     def __init__(self, candles_by_instrument=None, price=1.1000, fill_trade_id="999",
                  close_result=None, account_currency="USD"):
@@ -210,7 +227,7 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
@@ -237,7 +254,7 @@ def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send,
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     vs.check_vwap_scalp_opportunities(client)
 
@@ -254,7 +271,7 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    client = FakeClient(candles_by_instrument={"GBP_USD": candles})
+    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
@@ -262,6 +279,29 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
     entries = tj.load_journal()
     scalp_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
     assert scalp_entries[0]["direction"] == "LONG"  # fades the downward extension back up
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_skips_entry_when_fresh_price_has_crossed_frozen_stop_or_target(mock_send, tmp_path, monkeypatch):
+    # Real live incident: stop/target are frozen from the confirmation
+    # bar, but entry_price is a FRESH fetch -- if price drifted past
+    # either one in the gap, a real OANDA bracket order would be
+    # rejected outright. Must be caught and skipped locally, not
+    # submitted and left to fail on the broker's side.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    # FakeClient's default price (1.1000) is nowhere near this fixture's
+    # ~100-105 VWAP scale -- exactly the drifted-price scenario.
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    assert tj.load_journal() == []
+    mock_send.assert_not_called()
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -391,6 +431,115 @@ def test_force_closes_after_hold_cap_without_reopening_same_tick(mock_send, tmp_
     assert journal_entries[0]["realized_pnl"] == 5.0
     sent_texts = [call.args[0] for call in mock_send.call_args_list]
     assert any("VWAP Scalp" in t and "force-closed" in t for t in sent_texts)
+
+
+def _seed_closed_vwap_trades(n, opened_at):
+    """N already-closed VWAP_SCALP journal entries opened at `opened_at`
+    -- used to simulate "already traded N times today" without any of
+    them looking like a currently-open position."""
+    for i in range(n):
+        tj.record_open_trade(f"seed-{i}", {
+            "instrument": "USD_CHF", "direction": "LONG", "units": 1000, "entry_price": 1.0,
+            "stop_loss": 0.99, "take_profit": 1.01, "confidence_pct": 89.2,
+            "account_currency": "USD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
+        })
+    entries = tj.load_journal()
+    for e in entries:
+        if e.get("experiment_tag") == vs.VWAP_SCALP_TAG:
+            e["opened_at"] = opened_at.isoformat()
+            e["status"] = tj.SUCCESSFUL
+            e["realized_pnl"] = -10.0
+            e["closed_at"] = opened_at.isoformat()
+    tj.save_journal(entries)
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_own_daily_cap_blocks_new_entries_once_reached(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(hours=1))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_own_daily_cap_records_one_risk_skip_per_tick_not_per_pair(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(hours=1))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={p: candles for p in vs.VWAP_SCALP_PAIRS})
+
+    vs.check_vwap_scalp_opportunities(client)
+
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "own daily trade cap" in s]
+    assert len(skips) == 1
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_own_daily_cap_does_not_block_force_close_of_an_existing_position(mock_send, tmp_path, monkeypatch):
+    # A strategy-level cap on OPENING new trades must never suppress the
+    # 30-min hold-cap safeguard on a position already held -- that's a
+    # real risk action on an open trade, unrelated to how many new
+    # entries have fired today.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(hours=1))
+    tj.record_open_trade("501", {
+        "instrument": "EUR_USD", "direction": "SHORT", "units": 1000, "entry_price": 1.1050,
+        "stop_loss": 1.1080, "take_profit": 1.1020, "confidence_pct": 89.2,
+        "account_currency": "USD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
+    })
+    entries = tj.load_journal()
+    for e in entries:
+        if e["trade_id"] == "501":
+            e["opened_at"] = (FIXED_NOW - timedelta(minutes=31)).isoformat()  # past the 30-minute cap
+    tj.save_journal(entries)
+
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    client = FakeClient()
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.closed_ids == ["501"]  # force-close still fires despite the daily cap being reached
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_below_own_daily_cap_still_opens_normally(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW - timedelta(hours=1))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_own_daily_cap_resets_on_a_new_utc_day(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    # All seeded trades opened yesterday (UTC) -- must not count toward today's cap.
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(days=1))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
 
 
 @patch("vwap_scalp_addon.send_message")

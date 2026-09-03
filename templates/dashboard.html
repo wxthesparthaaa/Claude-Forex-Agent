@@ -487,6 +487,9 @@
           compromise made after the fact. Every trade it places is tagged "VWAP Scalp" in the journal and on
           Telegram.
         </p>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Runs its own separate daily trade cap (independent of the shared Trades per day limit above) so a busy scalping day can no longer burn through the whole account's risk budget for every other strategy.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

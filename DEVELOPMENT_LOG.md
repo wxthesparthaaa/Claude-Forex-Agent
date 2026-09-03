@@ -5997,3 +5997,135 @@ passing again now that real time has moved past that window). Handed
 back to the user for a fourth run -- this one should either behave
 correctly (if the stale cache was the real cause) or, if not, the new
 [gate] lines will show exactly what's happening.
+
+## 2026-09-03 (continued) -- Fourth run resolves the gate mystery as a display artifact, not a bug; and a real, separate live finding: the shared risk budget is account-wide, and VWAP Scalp dominates it
+
+Fourth run: all 17 pairs correctly detected as stale and re-fetched, the
+new [gate] log printed a fully clean, internally consistent trip/reset
+sequence across 6 SGT-day boundaries, 19 trades resolved at win_rate=
+10.5%. The apparent "trades firing hours before the gate should have
+reset" pattern from the third run turned out to be a display artifact
+in the replay script itself, not a logic bug: the trade list prints
+`signal_time` (when the setup was first confirmed), but the gate check
+and actual order fire at `entry_time`, which SIGNAL_RECENCY_MINUTES=10
+lets land up to 10 minutes later -- late enough, for a signal confirmed
+at 15:56-15:59, to cross the 16:00 UTC SGT-day reset and correctly land
+in the NEW day's gate state. The [gate] log itself (keyed on the real
+entry tick, not the display column) never showed an inconsistency at
+any point across all four rounds -- confirming the gate mechanism has
+been correct the whole time.
+
+With the replay now fully trustworthy, the honest headline: 19 replayed
+trades at 10.5% win rate vs. 42 actual trades at 31.0% over the same 3
+real days, with only 2/19 matching a real trade by pair/direction/time
+(one, USD_JPY, matching on outcome too). The remaining gap is explained
+by two modeling simplifications flagged in the replay script's own
+docstring from the start, not a new bug: the replay gives VWAP Scalp
+the account's ENTIRE max_trades_per_day/max_daily_loss_pct budget
+exclusively, and uses a static $2000 equity, while the real account
+shares that budget across all four strategies and tracks real, evolving
+equity. Closing that gap fully would mean replaying all four strategies
+together against real account state -- out of scope for a single-
+strategy diagnostic tool.
+
+That "shared budget" detail turned out to be a real, LIVE issue worth
+fixing on its own, independent of the backtest question. Confirmed in
+the actual gating code: dashboard_state.trades_opened_today() and
+realized_pnl_since() both scan the WHOLE journal with no experiment_tag
+filter, so risk_engine's max_trades_per_day (30) and max_daily_loss_pct
+(6%) are pooled across the base strategy, ORB Fade, Range Confluence,
+and VWAP Scalp -- one shared bucket, not four. Pulling the real live
+journal showed WHO actually dominates that bucket: on 2026-08-31 and
+2026-09-02, VWAP Scalp alone opened 18 of the account's 30-trade daily
+allowance (base managed only 5 and 4 those same days), and per the
+[gate] log, tripped the shared 6% daily-loss cap from its own losses
+early in the day -- which shuts down base/ORB Fade/Range Confluence too,
+for the rest of that SGT day, even if one of them had a good setup
+coming.
+
+**Fix**: gave VWAP Scalp its own daily trade cap, `VWAP_SCALP_MAX_TRADES_PER_DAY
+= 6` in src/vwap_scalp_addon.py, independent of and nested inside the
+shared account-wide cap -- counted by UTC day (matching this module's
+own session-VWAP-reset boundary, not the SGT day the account-wide cap
+uses). Checked once per tick (not once per pair, to avoid spamming the
+scan-digest's risk-skip log), and deliberately does NOT suppress the
+existing 30-minute hold-cap force-close on a position already open --
+that's a real safeguard on an existing position, unrelated to how many
+NEW entries have fired today. Six new tests in
+tests/test_vwap_scalp_addon.py cover: blocks new entries once reached,
+records exactly one risk-skip per tick (not one per pair), does NOT
+block an existing position's hold-cap force-close, still opens normally
+below the cap, and resets on a new UTC day. Dashboard copy (templates/
+dashboard.html, VWAP Scalp's own explanatory paragraph) gained one line
+noting it now runs its own separate daily cap.
+
+Full suite green (547 tests, no regressions). The signal-quality
+question itself (10.5-31% real win rate, well below breakeven at
+roughly 1:1 R:R) remains open and is a strategy-edge decision for the
+user, not a code bug -- both the detection logic and the gating logic
+have now been independently verified correct through four rounds of
+replay scrutiny.
+
+## 2026-09-03 (continued) -- Found and ported back a real live bug the replay script had already fixed for itself weeks earlier: VWAP Scalp's live order placement had no broker-validity check
+
+User feedback surfaced two things the replay-vs-actual work above
+didn't catch, because the replay script never touches OANDA:
+1. `check_open_trades` was repeatedly losing the JOURNAL_LOCK race on
+   the deployed app (3+ consecutive 5-minute ticks skipped), leaving
+   already-stopped-out trades showing as OPEN/"P&L unavailable" on the
+   dashboard for extended stretches.
+2. A steady stream of "Market Order Rejected" tickets in the real
+   OANDA account activity, specifically since VWAP Scalp shipped, not
+   tied to any risk-gate skip in the app's own logs.
+
+First checked whether local fixes from earlier today (and the prior
+session) were even live: **they weren't** -- local `main` was 6 commits
+ahead of `origin/main` (Render's deploy branch), none pushed. This
+directly explains the still-broken capital-reset behavior reported
+separately (the fix for it, commit 72bf3dbd, was never deployed) and
+ruled out this session's own JOURNAL_LOCK-as-RLock change as (1)'s
+cause, since the deployed `place_and_record()` is still the old,
+pre-fix version. (1) is more likely explained by `reconcile_orphan_
+trades()` and `check_open_trades()` itself both holding JOURNAL_LOCK
+across real, occasionally-slow OANDA network calls with essentially no
+success-path logging on reconcile's side -- a real, separate,
+not-yet-fixed structural issue (network I/O should never happen while
+holding a lock meant only to guard the local journal file), flagged
+for a future pass rather than fixed today given the scope already in
+flight.
+
+(2) had a concrete, already-known fix sitting unapplied: `scripts/
+replay_vwap_scalp_recent_days.py`'s `_resolve_candidate` (added
+2026-09-03, see the Round-1 entry above) already checks that a real
+OANDA bracket order needs `stop_loss < entry < take_profit` for a LONG
+(mirrored for SHORT) before accepting a candidate -- because
+stop_loss/take_profit are frozen from the CONFIRMATION bar while
+entry_price is fetched fresh, up to SIGNAL_RECENCY_MINUTES=10 minutes
+later, price can drift enough for their relative order to flip. That
+check was built for the diagnostic replay and never ported back to the
+real `_open_position()` in src/vwap_scalp_addon.py, which was
+submitting these doomed orders straight to OANDA and letting them get
+rejected on the broker's side -- exactly matching the user's report of
+rejections tracking VWAP Scalp's introduction, not any particular day's
+API health.
+
+**Fix**: added the identical validity check to `_open_position()`
+right after entry/stop/target are rounded to instrument precision, and
+before any conversion-rate/sizing/order-placement work -- a failing
+check now returns False with a clear INFO log line naming the drifted
+entry price and the frozen stop/target, instead of a wasted OANDA round
+trip and a bare rejection. Uncovered a real gap in 5 existing tests'
+fixtures in the process: FakeClient's default price (1.1000) was
+completely disconncted from the 95-105 VWAP scale `_extended_session_
+candles` uses, so every test that expected a real fill was silently
+relying on a price that would never have been valid against a real
+broker -- fixed with a `_valid_entry_price()` test helper that derives
+a price actually inside the confirmed signal's own valid bracket,
+rather than loosening the new check. One new test (`test_skips_entry_
+when_fresh_price_has_crossed_frozen_stop_or_target`) pins the rejection
+path down directly using that same unrealistic default price as the
+drifted-price scenario.
+
+Full suite green (548 tests). Not pushed yet -- holding for a batched
+review alongside the other 6 pending local commits and today's earlier
+VWAP daily-cap fix.

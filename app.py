@@ -85,6 +85,27 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-03", "VWAP Scalp: found and fixed a real live bug -- order placement had no check that a fresh "
+                    "entry price still sits on the correct side of its frozen stop/target (a real OANDA "
+                    "bracket order needs stop_loss < entry < take_profit for a LONG, mirrored for SHORT), so "
+                    "signals that drifted past their own stop/target between confirmation and the fresh "
+                    "entry fetch were submitted anyway and rejected by the broker -- matching the user's "
+                    "report of rejections tracking VWAP Scalp's introduction. The exact same check already "
+                    "existed in the offline replay script (added earlier today) but was never ported back to "
+                    "the live code until now. Also discovered this session's local fixes (6+ commits, "
+                    "including today's work) were never pushed to origin/main -- the deployed app is still "
+                    "running old code, which independently explains why the capital-reset fix didn't seem to "
+                    "take effect. Held for a batched push rather than deploying immediately."),
+    ("2026-09-03", "VWAP Scalp: gave it its own daily trade cap (6/day, src/vwap_scalp_addon.py), separate "
+                    "from the shared account-wide max_trades_per_day (30). Real journal data showed VWAP "
+                    "Scalp alone opened 18 of the account's 30 daily slots on two separate days, tripping "
+                    "the shared max_daily_loss_pct gate and locking out base/ORB Fade/Range Confluence for "
+                    "the rest of those days too -- confirmed both gates are account-wide, not per-strategy. "
+                    "Also: a 4th backtest-replay run resolved the apparent gate-bypass mystery as a "
+                    "signal_time-vs-entry_time display artifact, not a bug -- gate logic proven correct "
+                    "across all four rounds. Final trustworthy comparison: 10.5% replayed win rate vs 31.0% "
+                    "actual over the same 3 days -- detection code confirmed faithful; the remaining gap is "
+                    "a genuine signal-quality question, not a bug."),
     ("2026-09-02", "Fixed a real duplicate-trade race: place_and_record() placed the order then journaled it "
                     "as two unlocked steps, letting reconcile_orphan_trades journal a ghost duplicate under "
                     "the same trade_id if it ran in that gap (found live: 2 real incidents, ~$83 double-"
