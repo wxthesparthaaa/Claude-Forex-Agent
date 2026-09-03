@@ -111,6 +111,23 @@ is flatly impossible under a cap of 5. This script now:
   boundary in this system is SGT; UTC midnight falls at 8am SGT, mid
   trading day, so a UTC-day reset could let a cluster of trades near
   that boundary blow past what a human would call one trading day's cap).
+
+REVISION 3 (2026-09-03) -- tests a specific user hypothesis after real
+data showed 3 of one day's 6 VWAP Scalp trades firing within 15 minutes,
+two of them (GBP_USD SHORT, NZD_USD SHORT) sharing a USD leg:
+risk_engine's own max_currency_exposure_pct already guards correlated
+currency exposure, but only across CONCURRENTLY open positions -- VWAP
+Scalp's trades close fast enough (often minutes) that a rapid SEQUENCE
+of same-direction bets across different instruments never overlaps in
+time, so that gate never sees them as related. This adds an optional
+correlation-cooldown gate to _replay_all (see its own docstring) and
+runs it as an additional scenario sweep (CORRELATION_COOLDOWN_MINUTES_
+SWEEP) alongside the existing baseline replay -- reports worst single-
+day realized loss and the REAL replayed outcome of every blocked
+candidate, since this is a risk-concentration hypothesis, not a win-
+rate one (see the sweep report's own closing note). REPORT_DAYS also
+widened 3 -> 30 so the comparison draws on more than the single day
+that prompted the question.
 """
 import bisect
 import os
@@ -126,14 +143,35 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), encoding="utf
 from oanda_client import OandaClient
 from candle_history import fetch_history_cached
 from spread_aware_trade_simulator import simulate_scalp_trade
+from currency_exposure import currency_deltas_for_trade
 from market_hours import SGT
 from risk_engine import RiskConfig
 import vwap_scalp_addon as live
 import trade_journal as tj
 
-REPORT_DAYS = 3          # what we actually report on
+REPORT_DAYS = 30         # what we actually report on -- widened from 3 (2026-09-03) so the
+                          # correlation-cooldown hypothesis below is tested against enough real
+                          # clustering incidents to mean something, not just the one day that
+                          # prompted it
 WARMUP_DAYS = 2          # extra days fetched so day 1 of the report window has real session history
 TICK_MINUTES = 5         # matches the real scheduler's IntervalTrigger
+
+# REVISION 3 (2026-09-03): tests a specific user hypothesis -- 3 of one
+# real day's 6 VWAP Scalp trades fired within 15 minutes, two of them
+# (GBP_USD SHORT, NZD_USD SHORT) sharing a USD leg. risk_engine's own
+# max_currency_exposure_pct already guards against correlated exposure,
+# but only across CONCURRENTLY open positions -- VWAP Scalp's trades
+# fully close (often within minutes) before the next one opens, so a
+# rapid SEQUENCE of same-direction bets never trips it. This sweep
+# tests an ADDITIONAL gate: block a new candidate if its currency
+# exposure would compound (not diversify) the exposure of trades closed
+# within the last N minutes. Kept short (2 values) rather than a wide
+# sweep -- each value requires a full independent tick-loop pass over
+# the whole REPORT_DAYS+WARMUP_DAYS window (see _replay_all's own
+# per-instrument cooldown note for why this can't be a cheap filter
+# over a shared candidate stream), so widen this list only if the
+# 2-value result looks like it needs finer resolution.
+CORRELATION_COOLDOWN_MINUTES_SWEEP = [30, 60]
 
 
 def _parse_time(c):
@@ -200,15 +238,57 @@ def _resolve_candidate(instrument: str, direction: str, target: float, std_at_si
         reward = (result.exit_price - entry_price) if direction == "LONG" else (entry_price - result.exit_price)
         r_multiple = reward / risk if risk else None
 
+    # exit_time/currency_deltas: added 2026-09-03 for the correlation-
+    # cooldown hypothesis test -- exit_time is when THIS simulated trade
+    # closed (needed to know whether a LATER candidate falls within a
+    # recency window of it); currency_deltas is the same +1/-1-per-
+    # currency shape risk_engine's own max_currency_exposure_pct uses,
+    # computed once here since every consumer of a resolved candidate
+    # needs it identically.
+    exit_index = min(result.exit_index, len(times) - 1)
     return {
         "instrument": instrument, "direction": direction, "entry_time": times[entry_idx_full],
         "entry_price": entry_price, "stop_loss": stop_loss, "take_profit": take_profit,
-        "outcome": result.outcome, "r_multiple": r_multiple,
+        "outcome": result.outcome, "r_multiple": r_multiple, "exit_time": times[exit_index],
+        "currency_deltas": currency_deltas_for_trade(instrument, direction),
     }
 
 
+def _recent_currency_exposure(accepted_trades: list, tick: datetime, cooldown_minutes: int) -> dict:
+    """Signed currency exposure from `accepted_trades` that CLOSED within
+    the last `cooldown_minutes` before `tick` -- deliberately only
+    already-closed trades, not still-open ones (a concurrently-open
+    correlated position is a different, already-covered concern --
+    risk_engine.validate_trade's own max_currency_exposure_pct). This is
+    exactly the gap that check doesn't cover: VWAP Scalp's trades close
+    fast enough that a correlated SEQUENCE of bets never overlaps in
+    time, so max_currency_exposure_pct never sees them as related."""
+    exposure = {}
+    cutoff = tick - timedelta(minutes=cooldown_minutes)
+    for t in accepted_trades:
+        if not (cutoff <= t["exit_time"] <= tick):
+            continue
+        for currency, sign in t["currency_deltas"].items():
+            exposure[currency] = exposure.get(currency, 0) + sign
+    return exposure
+
+
+def _would_compound_recent_exposure(candidate_deltas: dict, recent_exposure: dict) -> str | None:
+    """The first currency where the candidate's own exposure sign
+    matches (compounds, doesn't diversify) the recent-exposure sign, or
+    None if there's no such overlap -- e.g. a fresh GBP_USD SHORT (long
+    USD) proposed while a just-closed NZD_USD SHORT (also long USD) is
+    still within the cooldown window would return "USD"."""
+    for currency, sign in candidate_deltas.items():
+        recent = recent_exposure.get(currency, 0)
+        if recent != 0 and (recent > 0) == (sign > 0):
+            return currency
+    return None
+
+
 def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
-                 max_trades_per_day: int, max_daily_loss_pct: float, equity: float, risk_amount: float) -> tuple:
+                 max_trades_per_day: int, max_daily_loss_pct: float, equity: float, risk_amount: float,
+                 correlation_cooldown_minutes: int = None) -> tuple:
     """Single global tick loop across ALL pairs, sharing the SAME two
     gates risk_engine.validate_trade actually enforces on this account:
     a per-SGT-day trade-count cap and a per-SGT-day realized-loss-pct
@@ -220,11 +300,34 @@ def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
     loss tracker -- a simplification (real equity/risk_amount drift as
     the account's own P&L compounds), but far closer to reality than
     ignoring these gates entirely. Returns (trades, rejected dict of
-    {reason: count})."""
+    {reason: count}, blocked_by_correlation).
+
+    correlation_cooldown_minutes (2026-09-03, REVISION 3): None (default)
+    reproduces the exact, already-validated Scenario A behavior from
+    revisions 1/2, byte-for-byte -- every line below this docstring that
+    doesn't mention correlation is untouched. When given a value, ALSO
+    blocks a candidate whose currency exposure would compound (not
+    diversify) the exposure of trades THIS SAME RUN already accepted and
+    closed within that many minutes (see _recent_currency_exposure/
+    _would_compound_recent_exposure) -- tests the hypothesis that a
+    rapid same-direction sequence (e.g. GBP_USD SHORT then NZD_USD
+    SHORT, both effectively long USD) is really one correlated bet
+    wearing two instrument labels, not two independent ones.
+
+    Deliberately a full independent second tick-loop pass, not a cheap
+    filter over a shared candidate list: per-instrument cooldown
+    (last_opened_at below) only advances on ACCEPTED candidates, exactly
+    matching how the live account's own trades_opened_today/
+    _recently_signaled work -- so once a correlation-blocked candidate
+    changes what got accepted, it can change which LATER signals even
+    fire for that instrument. Splitting candidate generation from
+    acceptance would silently drift from that real behavior."""
     times_by_instrument = {i: [_parse_time(c) for c in c_list] for i, c_list in candles_by_instrument.items()}
     last_opened_at = {}  # instrument -> datetime, cooldown tracker mirroring _recently_signaled
     rejected = {}
     trades = []
+    blocked_by_correlation = []  # (candidate, blocking_currency) -- only ever populated when
+                                   # correlation_cooldown_minutes is given
 
     trades_today = 0
     daily_pnl = 0.0
@@ -276,6 +379,14 @@ def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
             if candidate is None:
                 continue
             candidate["signal_time"] = day_times[signal_index]
+
+            if correlation_cooldown_minutes is not None:
+                recent_exposure = _recent_currency_exposure(trades, tick, correlation_cooldown_minutes)
+                blocking_currency = _would_compound_recent_exposure(candidate["currency_deltas"], recent_exposure)
+                if blocking_currency is not None:
+                    blocked_by_correlation.append((candidate, blocking_currency))
+                    continue  # not accepted -- no last_opened_at/trades_today/daily_pnl update
+
             trades.append(candidate)
             last_opened_at[instrument] = candidate["entry_time"]
             trades_today += 1
@@ -284,7 +395,7 @@ def _replay_all(candles_by_instrument: dict, from_date: datetime, now: datetime,
 
         tick += timedelta(minutes=TICK_MINUTES)
 
-    return trades, rejected
+    return trades, rejected, blocked_by_correlation
 
 
 def _pull_from_state_sync(repo_relative_path: str) -> bool:
@@ -346,6 +457,23 @@ def _load_live_risk_config() -> dict:
         }
 
 
+def _max_single_day_loss(trades: list, risk_amount: float) -> float:
+    """Worst single SGT-day realized P&L across `trades`, in the same $
+    terms _replay_all's own daily-loss tracker uses (grouped by
+    entry_time's SGT day, matching how that tracker actually resets) --
+    the metric that actually tests the correlation-cooldown hypothesis
+    (a risk-CONCENTRATION claim), not win rate, which the gate isn't
+    expected to move on its own -- see the sweep report's own closing
+    note for why."""
+    by_day = {}
+    for t in trades:
+        if t["r_multiple"] is None:
+            continue
+        day = t["entry_time"].astimezone(SGT).date()
+        by_day[day] = by_day.get(day, 0.0) + t["r_multiple"] * risk_amount
+    return min(by_day.values()) if by_day else 0.0
+
+
 def main():
     client = OandaClient()
     now = datetime.now(timezone.utc)
@@ -391,9 +519,9 @@ def main():
 
     print(f"\nReplaying tick-by-tick (max_trades_per_day={risk['max_trades_per_day']}, "
           f"max_daily_loss_pct={risk['max_daily_loss_pct']}%, shared across all pairs, SGT day boundary)...")
-    all_trades_full, rejected = _replay_all(candles_by_instrument, from_date, now,
-                                             risk["max_trades_per_day"], risk["max_daily_loss_pct"],
-                                             risk["equity"], risk_amount)
+    all_trades_full, rejected, _ = _replay_all(candles_by_instrument, from_date, now,
+                                                risk["max_trades_per_day"], risk["max_daily_loss_pct"],
+                                                risk["equity"], risk_amount)
     all_trades = [t for t in all_trades_full if t["signal_time"] >= report_cutoff]
     if rejected:
         print(f"Rejected as invalid orders (entry price crossed stop/target before the fresh fetch): "
@@ -453,6 +581,56 @@ def main():
         if e["trade_id"] not in matched_actual_ids:
             print(f"  ACTUAL-ONLY   {e['instrument']:10s} {e['direction']:6s} {e['opened_at'][:19]} "
                   f"status={e['status']} (trade {e['trade_id']}) -- replay never found this signal")
+
+    print(f"\n{'='*78}\nCORRELATION-COOLDOWN HYPOTHESIS TEST\n{'='*78}")
+    print("Does blocking a new trade whose currency exposure compounds (not diversifies) a")
+    print("just-closed trade's exposure reduce clustered risk, without just deleting opportunity?")
+    print("Scenario A (baseline) is the exact run above -- same window, same gates, no correlation rule.\n")
+
+    baseline_max_day_loss = _max_single_day_loss(all_trades, risk_amount)
+    baseline_win_rate = (100 * len(wins) / len(resolved)) if resolved else None
+    baseline_summary = f"win_rate={baseline_win_rate:.1f}%" if baseline_win_rate is not None else "no resolved trades"
+    print(f"Scenario A (baseline): {len(all_trades)} trades, {baseline_summary}, "
+          f"worst single SGT day: {baseline_max_day_loss:+.2f}\n")
+
+    for cooldown in CORRELATION_COOLDOWN_MINUTES_SWEEP:
+        print(f"--- Scenario B: correlation cooldown = {cooldown} min ---")
+        b_trades_full, b_rejected, b_blocked_full = _replay_all(
+            candles_by_instrument, from_date, now, risk["max_trades_per_day"], risk["max_daily_loss_pct"],
+            risk["equity"], risk_amount, correlation_cooldown_minutes=cooldown)
+        b_trades = [t for t in b_trades_full if t["signal_time"] >= report_cutoff]
+        b_blocked = [(c, cur) for c, cur in b_blocked_full if c["signal_time"] >= report_cutoff]
+        b_resolved = [t for t in b_trades if t["outcome"] in ("WIN", "LOSS")]
+        b_wins = [t for t in b_resolved if t["outcome"] == "WIN"]
+        b_max_day_loss = _max_single_day_loss(b_trades, risk_amount)
+
+        print(f"  trades={len(b_trades)} (vs {len(all_trades)} baseline)  blocked_by_correlation={len(b_blocked)}")
+        if b_resolved:
+            b_win_rate = 100 * len(b_wins) / len(b_resolved)
+            b_mean_r = sum(t["r_multiple"] for t in b_resolved if t["r_multiple"] is not None) / len(b_resolved)
+            print(f"  resolved={len(b_resolved)} win_rate={b_win_rate:.1f}% mean_R={b_mean_r:+.4f} "
+                  f"({baseline_summary} in baseline)")
+        print(f"  worst single SGT day: {b_max_day_loss:+.2f}  (baseline: {baseline_max_day_loss:+.2f})")
+
+        if b_blocked:
+            blocked_wins = sum(1 for c, _ in b_blocked if c["outcome"] == "WIN")
+            blocked_losses = sum(1 for c, _ in b_blocked if c["outcome"] == "LOSS")
+            print(f"  Of {len(b_blocked)} blocked candidates, their REAL replayed outcome: "
+                  f"{blocked_wins} would have WON, {blocked_losses} would have LOST")
+            print(f"  {'instrument':10s} {'dir':6s} {'entry_time':20s} {'currency':9s} {'would-have':10s}")
+            for c, currency in sorted(b_blocked, key=lambda x: x[0]["entry_time"]):
+                print(f"  {c['instrument']:10s} {c['direction']:6s} {c['entry_time'].isoformat()[:19]:20s} "
+                      f"{currency:9s} {c['outcome']:10s}")
+        print()
+
+    print(f"{'='*78}")
+    print("How to read this: win rate isn't the right signal here -- a blocked candidate's own edge")
+    print("doesn't depend on whether it's correlated with the trade before it, so win rate can (and")
+    print("probably should) stay roughly flat. The real evidence is (1) worst single SGT day loss")
+    print("shrinking meaningfully relative to how many trades got blocked, and (2) blocked candidates")
+    print("skewing toward LOSS rather than an even WIN/LOSS split -- that split near 50/50 would mean")
+    print("the gate is just as likely to remove a winner as a loser, i.e. it isn't catching genuine")
+    print("correlation, just adding noise and cutting real opportunity for no risk benefit.")
 
 
 if __name__ == "__main__":
