@@ -209,3 +209,35 @@ def test_format_scan_digest_message_caps_risk_skip_lines_at_five_distinct():
     assert "8 total this window" in msg
     shown = sum(1 for i in range(8) if f"limit reached {i}%" in msg)
     assert shown == 5
+
+
+def test_format_scan_digest_message_omits_vwap_bucket_section_when_none():
+    msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=None)
+    assert "VWAP Scalp trades today" not in msg
+
+
+def test_format_scan_digest_message_shows_vwap_bucket_breakdown_even_when_all_zero():
+    # User request: shown even with zero activity, so it's visible proof
+    # the tracking itself is working, not just when something tripped.
+    buckets = [
+        {"label_sgt": "15:00-20:00 SGT", "session": "London morning", "count": 0, "cap": 2},
+        {"label_sgt": "20:00-00:00 SGT", "session": "London/NY overlap", "count": 0, "cap": 2},
+        {"label_sgt": "00:00-04:00 SGT", "session": "NY afternoon", "count": 0, "cap": 2},
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=buckets)
+    assert "VWAP Scalp trades today by session (SGT)" in msg
+    assert "15:00-20:00 SGT: 0/2" in msg
+    assert "20:00-00:00 SGT: 0/2" in msg
+    assert "00:00-04:00 SGT: 0/2" in msg
+
+
+def test_format_scan_digest_message_shows_real_vwap_bucket_counts():
+    buckets = [
+        {"label_sgt": "15:00-20:00 SGT", "session": "London morning", "count": 2, "cap": 2},
+        {"label_sgt": "20:00-00:00 SGT", "session": "London/NY overlap", "count": 1, "cap": 2},
+        {"label_sgt": "00:00-04:00 SGT", "session": "NY afternoon", "count": 0, "cap": 2},
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=buckets)
+    assert "15:00-20:00 SGT: 2/2" in msg
+    assert "20:00-00:00 SGT: 1/2" in msg
+    assert "00:00-04:00 SGT: 0/2" in msg

@@ -217,6 +217,17 @@ class DashboardState:
     # infrastructure needed). Off by default. See src/vwap_scalp_addon.py
     # and DEVELOPMENT_LOG.md 2026-08-30.
     vwap_scalp_enabled: bool = False
+    # VWAP Scalp's OWN daily trade cap (2026-09-03) -- separate from and
+    # tighter than the shared account-wide max_trades_per_day (real
+    # incident: VWAP Scalp alone burned 18 of the account's 30-trade
+    # daily allowance on two separate days, tripping the shared daily-
+    # loss gate and locking out every other strategy too). User-
+    # adjustable 5-25 via Settings; default 6 matches the value that
+    # incident was fixed with. Read live by vwap_scalp_addon.py on every
+    # tick -- not a module constant.
+    vwap_scalp_max_trades_per_day: int = 6
+    vwap_scalp_max_trades_per_day_min: int = 5
+    vwap_scalp_max_trades_per_day_max: int = 25
     # User request (2026-09-01): a way to stop the ORIGINAL base
     # strategy (currency-strength/pivot/RSI confluence -- the one every
     # add-on above was built alongside, not instead of) from

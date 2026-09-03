@@ -502,9 +502,22 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
             open_trades = live_trades_view(client)
         except Exception as e:
             print(f"WARNING: could not fetch open-trade status for the scan digest: {e}", flush=True)
+        # Best-effort, same reasoning as open_trades above -- a failed
+        # lookup must omit the section (None), not claim all-zero
+        # activity. Only computed when VWAP Scalp is actually enabled;
+        # showing an always-zero breakdown for a disabled strategy would
+        # just be noise every ~3 hours.
+        vwap_buckets = None
+        try:
+            if load_state().vwap_scalp_enabled:
+                from vwap_scalp_addon import vwap_scalp_bucket_summary
+                vwap_buckets = vwap_scalp_bucket_summary(now_utc)
+        except Exception as e:
+            print(f"WARNING: could not compute VWAP Scalp bucket summary for the scan digest: {e}", flush=True)
         scan_count, instruments, window_start_sgt, risk_skips = send_args
         send_message(format_scan_digest_message(scan_count, instruments, window_start_sgt,
-                                                  open_trades=open_trades, risk_skips=risk_skips))
+                                                  open_trades=open_trades, risk_skips=risk_skips,
+                                                  vwap_buckets=vwap_buckets))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:

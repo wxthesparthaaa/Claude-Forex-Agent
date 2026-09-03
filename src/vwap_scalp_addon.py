@@ -173,8 +173,31 @@ SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- d
 # through the whole account's risk budget for every other strategy.
 # Counted by UTC day (today_start below), matching this module's own
 # session-VWAP-reset boundary -- not the SGT day the account-wide cap
-# uses elsewhere.
+# uses elsewhere. User-adjustable via Settings (5-25) since 2026-09-03
+# -- this constant is now only the dataclass default for a fresh state
+# (see DashboardState.vwap_scalp_max_trades_per_day); the real gating
+# value is read fresh from state on every tick, in
+# _check_vwap_scalp_opportunities_unsafe below, not from this constant.
 VWAP_SCALP_MAX_TRADES_PER_DAY = 6
+
+# Time-of-day spreading (2026-09-03): the whole-day cap alone still let
+# a burst of correlated signals (one volatile stretch moving several
+# pairs the same way at once) consume the ENTIRE day's allowance in a
+# single tight cluster -- real incident, 2026-09-03: 3 of that day's 6
+# trades fired within a 15-minute stretch. Splits WATCH_START_HOUR-
+# WATCH_END_HOUR into three real trading sessions (not arbitrary equal
+# clock-hour slices) and caps each one's OWN share of the daily total
+# separately, ON TOP OF (never instead of) the existing daily cap -- so
+# the day's total can never exceed what Settings says; this only
+# smooths how it's allowed to land within the day. Each bucket's cap is
+# ceil(daily_cap / 3), so a bucket can occasionally get slightly more
+# than an even third, but three buckets can never together exceed the
+# daily cap since that's still checked independently.
+VWAP_SCALP_TIME_BUCKETS_UTC = [
+    (7, 12, "London morning"),
+    (12, 16, "London/NY overlap"),
+    (16, 20, "NY afternoon"),
+]
 
 # Real live data (2026-09-01/02, 30 closed VWAP Scalp trades, 22 losses):
 # realized losses run noticeably bigger than their own intended
@@ -327,11 +350,10 @@ def _recently_signaled(entries: list, instrument: str, now: datetime) -> bool:
     return False
 
 
-def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
-    """Real count of VWAP_SCALP entries opened since UTC midnight --
-    VWAP Scalp's OWN daily cap, independent of and tighter than the
-    shared account-wide max_trades_per_day. See VWAP_SCALP_MAX_TRADES_PER_DAY's
-    own comment for the real incident this fixes."""
+def _vwap_scalp_trades_between(entries: list, start: datetime, end: datetime) -> int:
+    """Real count of VWAP_SCALP entries opened in [start, end) -- the
+    shared building block for both the whole-day cap and the per-
+    time-bucket cap below."""
     count = 0
     for e in entries:
         if e.get("experiment_tag") != VWAP_SCALP_TAG:
@@ -340,9 +362,68 @@ def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
             opened_at = datetime.fromisoformat(e["opened_at"])
         except (KeyError, ValueError, TypeError):
             continue
-        if opened_at >= today_start:
+        if start <= opened_at < end:
             count += 1
     return count
+
+
+def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
+    """Real count of VWAP_SCALP entries opened since UTC midnight --
+    VWAP Scalp's OWN daily cap, independent of and tighter than the
+    shared account-wide max_trades_per_day. See VWAP_SCALP_MAX_TRADES_PER_DAY's
+    own comment for the real incident this fixes."""
+    return _vwap_scalp_trades_between(entries, today_start, today_start + timedelta(days=1))
+
+
+def _bucket_label_sgt(start_hour_utc: int, end_hour_utc: int) -> str:
+    """SGT (UTC+8, no DST) display label for a UTC hour range, e.g.
+    (7, 12) -> "15:00-20:00 SGT". Two of the three buckets cross
+    midnight SGT (VWAP_SCALP_TIME_BUCKETS_UTC's own 12-16/16-20 UTC
+    ranges land at 20:00-24:00/00:00-04:00 SGT) -- the %24 wrap handles
+    that correctly, it's a real, expected part of the mapping, not a
+    display bug."""
+    start_sgt = (start_hour_utc + 8) % 24
+    end_sgt = (end_hour_utc + 8) % 24
+    return f"{start_sgt:02d}:00-{end_sgt:02d}:00 SGT"
+
+
+def _current_bucket(now: datetime):
+    """(start_hour_utc, end_hour_utc, session_label) for the bucket
+    `now` falls into, or None if outside all of them -- which only
+    happens outside WATCH_START_HOUR-WATCH_END_HOUR anyway, where the
+    per-pair loop already refuses new entries regardless."""
+    for start_h, end_h, label in VWAP_SCALP_TIME_BUCKETS_UTC:
+        if start_h <= now.hour < end_h:
+            return (start_h, end_h, label)
+    return None
+
+
+def vwap_scalp_bucket_summary(now: datetime = None) -> list:
+    """Today's VWAP Scalp trade count per time bucket, capped value
+    included -- feeds the periodic scan digest so the user can see
+    WHERE (not just how many) trades landed today, in their own local
+    (SGT) terms. Read-only, no lock needed; safe to call from anywhere
+    (e.g. scheduled_jobs.py), independent of whether a tick is running."""
+    from dashboard_state import load_state
+
+    now = now or datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    entries = load_journal()
+    max_trades_per_day = load_state().vwap_scalp_max_trades_per_day
+    per_bucket_cap = math.ceil(max_trades_per_day / len(VWAP_SCALP_TIME_BUCKETS_UTC))
+
+    summary = []
+    for start_h, end_h, session_label in VWAP_SCALP_TIME_BUCKETS_UTC:
+        bucket_start = today_start + timedelta(hours=start_h)
+        bucket_end = today_start + timedelta(hours=end_h)
+        count = _vwap_scalp_trades_between(entries, bucket_start, bucket_end)
+        summary.append({
+            "label_sgt": _bucket_label_sgt(start_h, end_h),
+            "session": session_label,
+            "count": count,
+            "cap": per_bucket_cap,
+        })
+    return summary
 
 
 def _force_close(client, entry: dict) -> None:
@@ -518,15 +599,44 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
           f"({'inside' if in_watch_window else 'outside'} the {WATCH_START_HOUR:02d}:00-{WATCH_END_HOUR:02d}:00 "
           f"UTC watch window)", flush=True)
 
-    trades_today = _vwap_scalp_trades_today(load_journal(), today_start)
-    capped = trades_today >= VWAP_SCALP_MAX_TRADES_PER_DAY
+    # User-adjustable via Settings (5-25) since 2026-09-03 -- read fresh
+    # from state every tick, not the module constant (which is now only
+    # the dataclass default for a brand-new state).
+    max_trades_per_day = state.vwap_scalp_max_trades_per_day
+    journal_snapshot = load_journal()
+    trades_today = _vwap_scalp_trades_today(journal_snapshot, today_start)
+    daily_capped = trades_today >= max_trades_per_day
+
+    # Time-bucket cap (2026-09-03) -- an independent, additional gate on
+    # top of the daily one, so a correlated burst can't consume the
+    # whole day's allowance in one tight cluster. See
+    # VWAP_SCALP_TIME_BUCKETS_UTC's own comment for the real incident.
+    per_bucket_cap = math.ceil(max_trades_per_day / len(VWAP_SCALP_TIME_BUCKETS_UTC))
+    bucket = _current_bucket(now)
+    if bucket is not None:
+        bucket_start_h, bucket_end_h, bucket_session = bucket
+        bucket_start = today_start + timedelta(hours=bucket_start_h)
+        bucket_end = today_start + timedelta(hours=bucket_end_h)
+        trades_in_bucket = _vwap_scalp_trades_between(journal_snapshot, bucket_start, bucket_end)
+        bucket_capped = trades_in_bucket >= per_bucket_cap
+    else:
+        # Outside all three buckets -- only possible outside the watch
+        # window itself, where the per-pair loop below already refuses
+        # new entries regardless, so this can never actually gate anything.
+        trades_in_bucket = 0
+        bucket_capped = False
+
+    capped = daily_capped or bucket_capped
     if capped:
         from dashboard_state import record_risk_limit_skip
-        record_risk_limit_skip("VWAP Scalp", f"VWAP Scalp's own daily trade cap reached: "
-                                              f"{trades_today}/{VWAP_SCALP_MAX_TRADES_PER_DAY}")
-        print(f"INFO: VWAP Scalp own daily cap reached ({trades_today}/{VWAP_SCALP_MAX_TRADES_PER_DAY}) -- "
-              f"no new entries this tick; existing positions still monitored for the hold-cap force-close",
-              flush=True)
+        if daily_capped:
+            reason = f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}"
+        else:
+            reason = (f"VWAP Scalp's {bucket_session} ({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) "
+                      f"time-bucket cap reached: {trades_in_bucket}/{per_bucket_cap}")
+        record_risk_limit_skip("VWAP Scalp", reason)
+        print(f"INFO: VWAP Scalp capped this tick ({reason}) -- no new entries; existing positions "
+              f"still monitored for the hold-cap force-close", flush=True)
 
     for instrument in VWAP_SCALP_PAIRS:
         try:

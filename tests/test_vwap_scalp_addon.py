@@ -1,3 +1,4 @@
+import itertools
 import os
 import sys
 from dataclasses import asdict
@@ -131,6 +132,15 @@ class FakeClient:
     def close_trade(self, trade_id):
         self.closed_ids.append(trade_id)
         return self._close_result
+
+    def get_trade(self, trade_id):
+        # Fully protected by default -- place_and_record's own post-fill
+        # verification (2026-09-03) checks this on every successful
+        # placement; without a real implementation here it would fall
+        # through to that check's "lookup failed" path on every single
+        # test, incurring a real retry sleep and masking what's actually
+        # being tested.
+        return {"stopLossOrder": {"price": "1.095"}, "takeProfitOrder": {"price": "1.11"}}
 
 
 def test_compute_vwap_series_none_on_flat_session():
@@ -433,19 +443,27 @@ def test_force_closes_after_hold_cap_without_reopening_same_tick(mock_send, tmp_
     assert any("VWAP Scalp" in t and "force-closed" in t for t in sent_texts)
 
 
+_seed_counter = itertools.count()
+
+
 def _seed_closed_vwap_trades(n, opened_at):
     """N already-closed VWAP_SCALP journal entries opened at `opened_at`
     -- used to simulate "already traded N times today" without any of
-    them looking like a currently-open position."""
-    for i in range(n):
-        tj.record_open_trade(f"seed-{i}", {
+    them looking like a currently-open position. trade_ids are drawn
+    from a shared counter (never reused across calls) and only THOSE
+    entries get their opened_at/status set -- a test seeding multiple
+    batches at different times must not have a later call silently
+    overwrite an earlier batch's timestamps too."""
+    new_ids = {f"seed-{next(_seed_counter)}" for _ in range(n)}
+    for trade_id in new_ids:
+        tj.record_open_trade(trade_id, {
             "instrument": "USD_CHF", "direction": "LONG", "units": 1000, "entry_price": 1.0,
             "stop_loss": 0.99, "take_profit": 1.01, "confidence_pct": 89.2,
             "account_currency": "USD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
         })
     entries = tj.load_journal()
     for e in entries:
-        if e.get("experiment_tag") == vs.VWAP_SCALP_TAG:
+        if e.get("trade_id") in new_ids:
             e["opened_at"] = opened_at.isoformat()
             e["status"] = tj.SUCCESSFUL
             e["realized_pnl"] = -10.0
@@ -518,13 +536,103 @@ def test_below_own_daily_cap_still_opens_normally(mock_send, tmp_path, monkeypat
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW - timedelta(hours=1))
+    # Seeded well outside FIXED_NOW's own time bucket (07:00-12:00 UTC)
+    # so this exercises the DAILY cap specifically, not the per-bucket
+    # one -- see test_time_bucket_cap_* below for that.
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW.replace(hour=17))
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
     assert opened == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_own_daily_cap_respects_a_user_adjusted_settings_value(mock_send, tmp_path, monkeypatch):
+    # 2026-09-03: the cap became Settings-adjustable (5-25), read live
+    # from state.vwap_scalp_max_trades_per_day rather than the module
+    # constant. A user who raised it to, say, 10 must get 10, not the
+    # default of 6.
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.vwap_scalp_max_trades_per_day = 10
+    ds.save_state(state)
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    # 6 prior trades -- would trip the OLD default cap, must not trip the
+    # raised one. Seeded outside FIXED_NOW's own bucket so this isolates
+    # the daily cap from the per-bucket one (raised cap=10 -> per-bucket
+    # cap ceil(10/3)=4, which 6 trades in the SAME bucket would still trip).
+    _seed_closed_vwap_trades(6, FIXED_NOW.replace(hour=17))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_time_bucket_cap_blocks_a_burst_within_one_session_even_below_the_daily_cap(
+        mock_send, tmp_path, monkeypatch):
+    # Real incident, 2026-09-03: 3 of that day's 6 trades fired within a
+    # 15-minute stretch. FIXED_NOW (10:00 UTC) falls in the "London
+    # morning" bucket (07:00-12:00 UTC); default daily cap 6 -> per-
+    # bucket cap ceil(6/3)=2. Seeding 2 trades in THAT SAME bucket must
+    # block a 3rd even though the day's total (2) is nowhere near 6.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=8))  # same bucket as FIXED_NOW
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "time-bucket cap" in s]
+    assert len(skips) == 1
+    assert "London morning" in skips[0] and "15:00-20:00 SGT" in skips[0]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_time_bucket_cap_does_not_block_a_fresh_session(mock_send, tmp_path, monkeypatch):
+    # The same 2 trades that trip the bucket cap above must NOT block a
+    # signal once they're in a DIFFERENT bucket from FIXED_NOW's own.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=17))  # "NY afternoon" -- a different bucket
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
+def test_bucket_label_sgt_converts_and_wraps_past_midnight():
+    assert vs._bucket_label_sgt(7, 12) == "15:00-20:00 SGT"
+    assert vs._bucket_label_sgt(12, 16) == "20:00-00:00 SGT"
+    assert vs._bucket_label_sgt(16, 20) == "00:00-04:00 SGT"
+
+
+def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    state = ds.default_state()
+    state.vwap_scalp_max_trades_per_day = 6
+    ds.save_state(state)
+    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=8))   # London morning
+    _seed_closed_vwap_trades(1, FIXED_NOW.replace(hour=13))  # London/NY overlap
+
+    summary = vs.vwap_scalp_bucket_summary(FIXED_NOW)
+
+    assert [b["session"] for b in summary] == ["London morning", "London/NY overlap", "NY afternoon"]
+    assert [b["label_sgt"] for b in summary] == ["15:00-20:00 SGT", "20:00-00:00 SGT", "00:00-04:00 SGT"]
+    assert [b["count"] for b in summary] == [2, 1, 0]
+    assert all(b["cap"] == 2 for b in summary)  # ceil(6/3)
 
 
 @patch("vwap_scalp_addon.send_message")

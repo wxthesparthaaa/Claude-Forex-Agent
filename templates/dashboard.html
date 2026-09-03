@@ -490,6 +490,13 @@
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
           Runs its own separate daily trade cap (independent of the shared Trades per day limit above) so a busy scalping day can no longer burn through the whole account's risk budget for every other strategy.
         </p>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          That cap is also spread evenly across three sessions instead of allowing it to fire all at once: 15:00-20:00 SGT / 20:00-00:00 SGT / 00:00-04:00 SGT -- so one correlated burst can't use up the whole day's allowance in a single tight cluster. Breakdown by session shown in the periodic scan digest on Telegram.
+        </p>
+        <label>VWAP Scalp trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
+        <input type="range" name="vwap_scalp_max_trades_per_day"
+               min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
+               value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

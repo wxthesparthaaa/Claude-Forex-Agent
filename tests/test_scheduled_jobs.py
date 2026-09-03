@@ -1034,6 +1034,73 @@ def test_scan_digest_still_sends_when_the_open_trade_lookup_fails(mock_send, moc
     assert "No trade currently open" not in sent_text
 
 
+@patch("vwap_scalp_addon.vwap_scalp_bucket_summary")
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_includes_vwap_bucket_breakdown_when_enabled(mock_send, mock_buckets, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.vwap_scalp_enabled = True
+    dashboard_state.save_state(state)
+
+    mock_buckets.return_value = [
+        {"label_sgt": "15:00-20:00 SGT", "session": "London morning", "count": 2, "cap": 2},
+        {"label_sgt": "20:00-00:00 SGT", "session": "London/NY overlap", "count": 0, "cap": 2},
+        {"label_sgt": "00:00-04:00 SGT", "session": "NY afternoon", "count": 0, "cap": 2},
+    ]
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+    sent_text = mock_send.call_args[0][0]
+    assert "VWAP Scalp trades today by session (SGT)" in sent_text
+    assert "15:00-20:00 SGT: 2/2" in sent_text
+
+
+@patch("vwap_scalp_addon.vwap_scalp_bucket_summary")
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_omits_vwap_bucket_breakdown_when_disabled(mock_send, mock_buckets, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.vwap_scalp_enabled = False
+    dashboard_state.save_state(state)
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+    assert "VWAP Scalp trades today" not in mock_send.call_args[0][0]
+    mock_buckets.assert_not_called()  # not even computed when the strategy is off
+
+
+@patch("vwap_scalp_addon.vwap_scalp_bucket_summary")
+@patch("scheduled_jobs.send_message")
+def test_scan_digest_still_sends_when_the_vwap_bucket_lookup_fails(mock_send, mock_buckets, tmp_path, monkeypatch):
+    # Best-effort, same reasoning as the open-trade lookup -- a failure
+    # here must not block the digest itself from sending.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
+    state.scan_digest_interval_minutes = 180
+    state.last_scan_digest_sent_at = datetime(2026, 8, 17, 8, 0, tzinfo=timezone.utc).isoformat()
+    state.vwap_scalp_enabled = True
+    dashboard_state.save_state(state)
+
+    mock_buckets.side_effect = Exception("journal read failed")
+
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    scheduled_jobs.check_scan_digest(now)
+
+    mock_send.assert_called_once()
+    assert "VWAP Scalp trades today" not in mock_send.call_args[0][0]
+
+
 @patch("scheduled_jobs.send_message")
 def test_scan_digest_skips_send_when_a_fresh_github_pull_shows_another_process_already_sent(
         mock_send, tmp_path, monkeypatch):

@@ -63,7 +63,8 @@ def format_market_open_message(close_sgt) -> str:
 
 
 def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None,
-                                open_trades: list | None = None, risk_skips: list | None = None) -> str:
+                                open_trades: list | None = None, risk_skips: list | None = None,
+                                vwap_buckets: list | None = None) -> str:
     """The interval scanner is deliberately silent otherwise -- only an
     actual executed trade notifies -- so this periodic digest is the only
     proof-of-life during a stretch where nothing qualified. window_start_sgt:
@@ -95,7 +96,16 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
     own logs. Grouped and counted (a busy window can trip the exact same
     limit many times over) rather than listed one line per occurrence,
     capped at the 5 most common so one especially noisy limit can't blow
-    up the message length."""
+    up the message length.
+
+    vwap_buckets: vwap_scalp_addon.vwap_scalp_bucket_summary()'s own
+    per-time-bucket rows (label_sgt/session/count/cap), or None to omit
+    this section entirely (VWAP Scalp disabled, or the lookup failed --
+    distinct from "computed and genuinely zero everywhere", which still
+    shows). User request: the daily/per-bucket caps this restricts
+    trades to are otherwise invisible outside Render's own logs -- shown
+    even when every count is 0 so the user can confirm this is actually
+    being tracked, not just when something happened to trip a cap."""
     since = f" since {window_start_sgt.strftime('%H:%M')} SGT" if window_start_sgt else ""
     if scan_count == 0:
         base = f"✅ <b>Periodic scan complete</b>\nNo pairs were in their trading window{since}. No new trades."
@@ -130,6 +140,10 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
             f"\n\n⚠️ <b>Risk limit reached, trades restricted</b> ({len(risk_skips)} total this window)\n"
             + "\n".join(lines)
         )
+
+    if vwap_buckets:
+        lines = [f"  {b['label_sgt']}: {b['count']}/{b['cap']}" for b in vwap_buckets]
+        base += "\n\n📊 <b>VWAP Scalp trades today by session (SGT)</b>\n" + "\n".join(lines)
 
     return base
 
