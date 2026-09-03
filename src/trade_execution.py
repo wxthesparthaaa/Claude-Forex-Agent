@@ -17,6 +17,7 @@ execution.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import asdict
 
 from oanda_client import OandaClient
@@ -30,6 +31,87 @@ from telegram_notifier import send_message
 def instrument_already_open(client: OandaClient, instrument: str) -> bool:
     open_trades = client.get_open_trades()
     return any(t["instrument"] == instrument for t in open_trades)
+
+
+def _verify_protective_orders_attached(client: OandaClient, trade_id: str, candidate: dict) -> None:
+    """Real incident class (2026-09-03): every order this app places
+    attaches stopLossOnFill/takeProfitOnFill so a position stays broker-
+    protected even if this app goes offline -- but place_and_record's
+    own success check only ever looks at orderFillTransaction.
+    tradeOpened.tradeID, never whether OANDA actually created those
+    attached orders. OANDA can fill the market order while separately
+    rejecting a dependent order (e.g. the real fill lands at a worse
+    spread-adjusted price than a mid-price pre-check assumed, putting
+    the stop/target on the wrong side of the ACTUAL fill) -- a cluster
+    of unexplained "Order Cancelled" activity around VWAP Scalp opens
+    is the real, live evidence this can happen. Left unchecked, the
+    journal records the INTENDED stop_loss/take_profit from `candidate`
+    with nothing anywhere verifying OANDA actually attached them --  a
+    real, unprotected position that looks completely normal in the app.
+
+    Checked directly against OANDA (never assumed from the order
+    response), with one short retry for the unlikely case the dependent
+    orders aren't queryable yet a moment after the fill. A position
+    missing either one is closed immediately via cancel_all_open_trades
+    (reusing its own close-and-journal-and-notify path rather than a
+    second hand-rolled copy) -- consistent with this app's existing
+    "always broker-protected" invariant elsewhere: an unprotected
+    position is a direct violation of that, worth eliminating right
+    away rather than paging a human and hoping they react before it
+    moves against the account. Sends its own CRITICAL alert only for
+    the cases cancel_all_open_trades can't cover itself (the
+    verification lookup failing, or the close attempt itself failing)."""
+    trade = None
+    for attempt in range(2):
+        try:
+            trade = client.get_trade(trade_id)
+        except Exception as e:
+            if attempt == 0:
+                time.sleep(1)
+                continue
+            try:
+                send_message(
+                    f"\U0001F6A8 <b>CRITICAL</b>: could not verify {candidate['instrument']} "
+                    f"{candidate['direction']} (trade {trade_id}) has its stop-loss/take-profit attached "
+                    f"after opening -- OANDA lookup failed ({e}). Check this position manually right now."
+                )
+            except Exception:
+                pass
+            return
+
+        has_stop = trade.get("stopLossOrder") is not None
+        has_target = trade.get("takeProfitOrder") is not None
+        if has_stop and has_target:
+            return
+        if attempt == 0:
+            time.sleep(1)  # a brief real-world margin against dependent-order query lag right after a fill
+
+    missing_parts = []
+    if not trade.get("stopLossOrder"):
+        missing_parts.append("stop-loss")
+    if not trade.get("takeProfitOrder"):
+        missing_parts.append("take-profit")
+    missing = " and ".join(missing_parts)
+
+    print(f"WARNING: {candidate['instrument']} {candidate['direction']} (trade {trade_id}) opened without "
+          f"its {missing} attached -- closing immediately", flush=True)
+    from trade_monitor import cancel_all_open_trades
+    try:
+        closed = cancel_all_open_trades(
+            client, reason=f"immediately -- opened without its {missing} attached, a real unprotected position",
+            trade_ids={trade_id})
+    except Exception as e:
+        closed = []
+        print(f"WARNING: auto-close of unprotected trade {trade_id} itself raised: {e}", flush=True)
+    if not closed:
+        try:
+            send_message(
+                f"\U0001F6A8 <b>CRITICAL</b>: {candidate['instrument']} {candidate['direction']} (trade "
+                f"{trade_id}) opened WITHOUT its {missing} attached, AND the auto-close attempt itself "
+                f"failed -- this position is genuinely unprotected right now. Close it manually immediately."
+            )
+        except Exception:
+            pass
 
 
 def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool = False) -> dict:
@@ -64,7 +146,14 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
     by reconcile_orphan_trades()'s own grace period (see that function),
     which no longer treats an OANDA position younger than that window
     as an orphan -- a legitimate fill's journal write lands within low
-    seconds, comfortably inside it."""
+    seconds, comfortably inside it.
+
+    Also verifies (2026-09-03) that a successful fill's attached stop-
+    loss/take-profit actually exist on OANDA's side -- see
+    _verify_protective_orders_attached's own docstring for the real
+    incident this closes: a fill can succeed while its dependent SL/TP
+    order is separately rejected, leaving a real, unprotected position
+    that would otherwise look completely normal in the journal."""
     if not allow_duplicate and instrument_already_open(client, candidate["instrument"]):
         return {"success": False, "trade_id": None, "reason": "duplicate"}
 
@@ -75,6 +164,7 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
     trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
     if trade_id:
         record_open_trade(trade_id, candidate)
+        _verify_protective_orders_attached(client, trade_id, candidate)
     return {"success": trade_id is not None, "trade_id": trade_id, "reason": None if trade_id else "no_fill"}
 
 

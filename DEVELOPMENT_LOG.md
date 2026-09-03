@@ -6200,3 +6200,205 @@ that check_open_trades completes correctly despite a concurrent
 JOURNAL_LOCK holder.
 
 Full suite green (552 tests). Not pushed yet.
+
+## 2026-09-03 (continued) -- Made VWAP Scalp's daily trade cap Settings-adjustable (5-25)
+
+The cap shipped earlier today as a hardcoded module constant
+(`VWAP_SCALP_MAX_TRADES_PER_DAY = 6` in vwap_scalp_addon.py). User
+request: expose it as a Settings slider, 5-25. Added `vwap_scalp_max_
+trades_per_day` (default 6) plus `_min`/`_max` bounds (5/25) to
+DashboardState; `/settings` parses and clamps it the same way `max_
+trades_per_day` already is; the dashboard gained a slider under VWAP
+Scalp's own section. vwap_scalp_addon.py now reads `state.vwap_scalp_
+max_trades_per_day` fresh on every tick instead of the module constant,
+which stays only as the dataclass default. One new test confirms a
+user-raised value (10) is actually respected instead of the old
+default (6). Full suite green (553 tests). Not pushed yet.
+
+## 2026-09-03 (continued) -- Time-of-day spreading for VWAP Scalp's daily cap, plus a Telegram breakdown by session
+
+User observation, grounded in real data pulled from the live journal:
+3 of that day's 6 VWAP Scalp trades fired within a 15-minute stretch
+(GBP_USD 20:11, XAG_USD 20:21, NZD_USD 20:26 SGT) -- the whole-day cap
+alone doesn't stop a correlated burst from consuming the entire day's
+allowance in one tight cluster.
+
+**Fix**: `VWAP_SCALP_TIME_BUCKETS_UTC` splits the 07:00-20:00 UTC watch
+window into three real trading sessions -- London morning (07-12 UTC),
+London/NY overlap (12-16 UTC), NY afternoon (16-20 UTC) -- rather than
+arbitrary equal clock-hour slices. Each bucket gets its own cap,
+`ceil(daily_cap / 3)`, checked as an ADDITIONAL gate alongside (never
+instead of) the existing daily cap, so the day's total can never exceed
+what Settings says -- this only smooths how it's allowed to land within
+the day. `_current_bucket()` resolves which bucket "now" falls into;
+`_vwap_scalp_trades_between()` (refactored out of the existing daily-
+count helper) counts real journal entries in any [start, end) window,
+shared by both the daily and per-bucket checks.
+
+Bucket boundaries are UTC (matching this module's own convention) but
+displayed in SGT for the user: `_bucket_label_sgt()` converts via
+UTC+8, correctly wrapping past midnight for two of the three buckets
+(15:00-20:00 / 20:00-00:00 / 00:00-04:00 SGT).
+
+**Visibility, both requested explicitly**: a new liner under VWAP
+Scalp's Settings section spells out the three SGT windows plainly.
+`vwap_scalp_bucket_summary()` computes today's real count per bucket
+(read-only, no lock needed) and feeds a new section in the periodic
+scan digest -- `format_scan_digest_message`'s new `vwap_buckets` param,
+rendered as "📊 VWAP Scalp trades today by session (SGT)" with one
+count/cap line per bucket. Wired in `scheduled_jobs.check_scan_digest`
+as best-effort (a failed lookup omits the section, matching the
+existing open_trades convention) and only computed when VWAP Scalp is
+actually enabled -- an always-zero breakdown for a disabled strategy
+would just be noise every ~3 hours. Shown even when every count is 0
+(not omitted), so the user gets visible proof the tracking itself is
+working, not just when a cap actually trips.
+
+Nine new tests: bucket gating (blocks within a session even below the
+daily cap; doesn't block a fresh session), `_bucket_label_sgt`'s
+midnight-wrapping conversion, `vwap_scalp_bucket_summary`'s per-bucket
+counts, the digest's new section (omitted when None, shown even at all
+zero, real counts), and the scheduled_jobs wiring (included when
+enabled, omitted and never even computed when disabled, best-effort on
+a failed lookup). Also fixed a real bug in the test file's own
+`_seed_closed_vwap_trades` helper along the way: it reused fixed
+trade_ids across calls and reassigned opened_at to EVERY VWAP_SCALP
+journal entry rather than just the ones it had just added, so seeding
+two batches at different times in one test silently collapsed them
+both onto the second batch's timestamp.
+
+Full suite green (563 tests). Not pushed yet.
+
+## 2026-09-03 (continued) -- Correlation-cooldown hypothesis test added to the replay script; REPORT_DAYS widened to 30
+
+User question, following directly from the time-bucket work above: were
+the 3 clustered trades that day actually independent bets, or the same
+underlying view (2 of 3 -- GBP_USD SHORT, NZD_USD SHORT -- share a USD
+leg) wearing different instrument labels? risk_engine's own
+max_currency_exposure_pct already guards correlated currency exposure,
+but only across CONCURRENTLY open positions -- VWAP Scalp's trades
+close fast enough (often minutes) that a rapid SEQUENCE of same-
+direction bets across different instruments never overlaps in time, so
+that gate never sees them as related. A real, confirmed gap, not
+speculation: GBP_USD had already closed before XAG_USD opened, which
+had already closed before NZD_USD opened.
+
+Rather than build the live gating mechanism on a hunch, extended
+scripts/replay_vwap_scalp_recent_days.py to test the hypothesis first
+-- and widened REPORT_DAYS 3 -> 30 (user's own suggestion) so the test
+draws on more than the single day that prompted the question.
+
+**New optional gate in `_replay_all`** (`correlation_cooldown_minutes`,
+default None -- reproduces the exact, already-validated baseline
+byte-for-byte when omitted): blocks a candidate whose currency exposure
+would compound (not diversify) the exposure of trades THIS SAME RUN
+already accepted and closed within that many minutes.
+`_recent_currency_exposure`/`_would_compound_recent_exposure` reuse
+`currency_exposure.currency_deltas_for_trade` -- the exact same +1/-1
+shape risk_engine's own exposure check uses. `_resolve_candidate` now
+also returns `exit_time` and `currency_deltas` per candidate, needed by
+the new gate.
+
+Deliberately a full independent second tick-loop pass per cooldown
+value, not a cheap filter over one shared candidate list: per-
+instrument cooldown only advances on ACCEPTED candidates (matching the
+real account's own `_recently_signaled`), so a correlation-blocked
+candidate can change which LATER signals even fire for that instrument
+-- splitting generation from acceptance would silently drift from real
+behavior. `CORRELATION_COOLDOWN_MINUTES_SWEEP = [30, 60]` kept short
+(not a wide sweep) given the runtime cost of a 32-day, 17-pair
+independent pass per value.
+
+**Reporting, run alongside the existing baseline**: for each cooldown
+value, trades accepted vs baseline, count blocked, and -- the actual
+test of the hypothesis -- the REAL replayed outcome (WIN/LOSS) of every
+blocked candidate, plus worst single SGT-day realized loss vs baseline
+(`_max_single_day_loss`, grouped by entry_time's SGT day to match how
+the daily-loss tracker itself resets). Explicitly NOT graded on win
+rate: this is a risk-CONCENTRATION hypothesis (correlated bets going
+wrong together), not a win-rate one -- a blocked candidate's own edge
+doesn't depend on whether it's correlated with the trade before it, so
+win rate should stay roughly flat regardless of whether the hypothesis
+is true. The real signal is whether worst-day loss shrinks meaningfully
+and whether blocked candidates skew toward LOSS rather than splitting
+~50/50 (an even split would mean the gate is just as likely to remove a
+winner as a loser -- noise, not signal).
+
+Verified via 5 isolated smoke tests (this script has no pytest
+coverage by established convention -- a manual diagnostic tool, run by
+the user against real OANDA credentials this environment doesn't have):
+`_recent_currency_exposure`'s recency filtering, `_would_compound_
+recent_exposure` correctly flagging a same-direction USD compound
+(GBP_USD SHORT then NZD_USD SHORT) while correctly clearing a
+diversifying candidate (LONG EUR_USD, opposite USD sign) and an
+unrelated one (AUD_JPY), and `_max_single_day_loss`'s SGT-day grouping.
+Full test suite (pytest) unaffected -- this script isn't covered by it
+and no production code changed. Handed back to the user to run.
+
+## 2026-09-03 (continued) -- Verify every fill actually got its stop-loss/take-profit attached, not just that the order filled
+
+Chased down a real, unexplained pattern from the OANDA activity feed:
+a cluster of 4 "Order Cancelled" entries in the 6 seconds before a
+NZD_USD fill, not tied to any of that window's actual closes (which
+account for exactly 2 cancellations -- one sibling order each for
+GBP_USD's and XAG_USD's real Take Profit fills, confirmed by matching
+trade_id/ticket numbers directly against the real journal). 2 of the 4
+are unexplained by normal close activity. The OANDA app's own UI
+couldn't expand a cancelled entry for more detail, so this was chased
+at the code level instead.
+
+Root confirmed at the code level regardless of the exact live
+mechanism: `place_and_record()` only ever checks `orderFillTransaction.
+tradeOpened.tradeID` to decide success -- it never verifies OANDA
+actually created the attached stopLossOnFill/takeProfitOnFill orders.
+OANDA can fill a market order while separately rejecting a dependent
+order (plausible cause here: the broker-validity pre-check added
+earlier today uses a MID price, but the real fill lands on the bid or
+ask -- for VWAP Scalp's very tight stops, that spread gap alone could
+put the stop/target on the wrong side of the ACTUAL fill even after
+the mid-based check passed). Left unchecked, the journal records the
+INTENDED stop_loss/take_profit from the candidate, with nothing
+anywhere verifying OANDA actually attached them -- a real, unprotected
+position that looks completely normal in the app.
+
+**Fix**: `trade_execution._verify_protective_orders_attached()`, called
+from `place_and_record()` right after every successful fill. Checks
+the freshly-opened trade directly against OANDA for both a
+stopLossOrder and a takeProfitOrder (one short retry first, for the
+unlikely case they're not queryable an instant after the fill). A
+position missing either is closed immediately -- reusing `trade_
+monitor.cancel_all_open_trades()`'s own close-and-journal-and-notify
+path rather than a second hand-rolled copy -- consistent with this
+app's existing "always broker-protected" invariant: an unprotected
+position is a direct violation of that, worth eliminating right away
+rather than paging a human and hoping they react before it moves.
+Sends its own CRITICAL alert for the two cases cancel_all_open_trades
+can't cover itself: the verification lookup failing, or the auto-close
+attempt itself failing. Applies uniformly to every strategy through
+the shared `place_and_record()`, not just VWAP Scalp.
+
+7 new tests in test_trade_execution.py: no action when both legs are
+attached, closes and notifies on a missing stop-loss, closes and
+notifies on a missing take-profit, the retry correctly tolerates a
+one-check-late attachment without panic-closing a fine trade, and
+CRITICAL alerts for both failure-of-verification and failure-of-close.
+One real bug caught while writing these: `cancel_all_open_trades`'s own
+notification goes through `trade_monitor.send_message`, a DIFFERENT
+reference than `trade_execution.send_message` -- the first draft only
+mocked the latter, so two tests would have made a real, unmocked
+Telegram call every run.
+
+Also surfaced and fixed a real gap in three OTHER test files along the
+way: `test_vwap_scalp_addon.py`, `test_range_confluence_addon.py`, and
+`test_orb_fade_addon.py`'s own FakeClient classes had no `get_trade` at
+all -- every one of their successful-fill tests was silently falling
+through the new verification's "lookup failed" path (an AttributeError
+caught as a generic Exception) and paying a real 1-second retry sleep,
+without ever failing outright. Full suite runtime went 20s -> 34s ->
+back to 21s once all three got a `get_trade` returning a fully-
+protected trade by default, matching test_trade_execution.py's own
+FakeClient. A quiet, easy-to-miss failure mode worth remembering: a
+new check added to shared production code can silently degrade
+unrelated tests elsewhere without ever making them fail.
+
+Full suite green (569 tests). Not pushed yet.

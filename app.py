@@ -85,6 +85,26 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-03", "Real safety gap closed: place_and_record() only ever checked that an order FILLED, "
+                    "never that OANDA actually attached the stop-loss/take-profit that went with it -- "
+                    "traced from an unexplained cluster of 'Order Cancelled' activity on OANDA that didn't "
+                    "match any real close. A fill can succeed while a dependent order is separately "
+                    "rejected, leaving a real, unprotected position that looks completely normal in the "
+                    "journal. Now verifies both legs are attached right after every fill (one short retry "
+                    "first) and closes the position immediately if either is missing, with a CRITICAL "
+                    "Telegram alert -- applies to every strategy via the shared place_and_record(), not "
+                    "just VWAP Scalp. Also caught and fixed a real gap in 3 other test files' fake OANDA "
+                    "clients that were silently falling through this new check's failure path on every "
+                    "run, adding real 1-second sleeps without ever failing (suite runtime crept from 20s "
+                    "to 34s before the fix)."),
+    ("2026-09-03", "VWAP Scalp: added time-of-day spreading for its daily trade cap after real data showed 3 of "
+                    "one day's 6 trades firing within a 15-minute stretch -- the daily cap alone didn't stop a "
+                    "correlated burst from using up the whole day's allowance at once. Splits the 07:00-20:00 "
+                    "UTC watch window into three real sessions (London morning / London-NY overlap / NY "
+                    "afternoon), each capped at its own even share on top of the existing daily cap. Also made "
+                    "the daily cap itself Settings-adjustable (5-25, was a hardcoded 6), and added a per-session "
+                    "trade breakdown (in SGT) to the periodic scan digest on Telegram so the caps aren't only "
+                    "visible in Render's logs."),
     ("2026-09-03", "Fixed the JOURNAL_LOCK contention issue: place_and_record() and three functions in "
                     "trade_monitor.py (check_open_trades, reconcile_orphan_trades, cancel_all_open_trades) "
                     "were all holding JOURNAL_LOCK across real OANDA network calls, so whichever one was "
@@ -589,6 +609,9 @@ def dashboard():
         range_confluence_enabled=state.range_confluence_enabled,
         orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
+        vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
+        vwap_scalp_max_trades_per_day_min=state.vwap_scalp_max_trades_per_day_min,
+        vwap_scalp_max_trades_per_day_max=state.vwap_scalp_max_trades_per_day_max,
         base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -919,6 +942,9 @@ def settings():
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
         state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
+        state.vwap_scalp_max_trades_per_day = int(_clamp(
+            float(request.form.get("vwap_scalp_max_trades_per_day", state.vwap_scalp_max_trades_per_day)),
+            state.vwap_scalp_max_trades_per_day_min, state.vwap_scalp_max_trades_per_day_max))
 
         # Base strategy: ON by default -- this is the original strategy
         # the app was built around, not a new experiment. Turning it off

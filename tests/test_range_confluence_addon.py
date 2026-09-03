@@ -92,6 +92,15 @@ class FakeClient:
         self.closed_ids.append(trade_id)
         return self._close_result
 
+    def get_trade(self, trade_id):
+        # Fully protected by default -- place_and_record's own post-fill
+        # verification (2026-09-03) checks this on every successful
+        # placement; without a real implementation here it would fall
+        # through to that check's "lookup failed" path on every single
+        # test, incurring a real retry sleep and masking what's actually
+        # being tested.
+        return {"stopLossOrder": {"price": "1.095"}, "takeProfitOrder": {"price": "1.11"}}
+
 
 def test_evaluate_signal_none_with_insufficient_history():
     closes = [100.0] * 10

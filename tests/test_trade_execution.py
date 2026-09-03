@@ -18,10 +18,21 @@ def _isolate(tmp_path, monkeypatch):
 
 
 class FakeClient:
-    def __init__(self, open_trades=None, fill_trade_id="999"):
+    def __init__(self, open_trades=None, fill_trade_id="999", trade_detail=None,
+                 get_trade_side_effect=None, close_trade_result=None):
         self._open = open_trades or []
         self._fill_trade_id = fill_trade_id
         self.orders_placed = []
+        self.closed_ids = []
+        # Default: fully protected (both legs attached) -- matches every
+        # existing test's implicit expectation of a normal, successful
+        # fill. Tests that exercise the missing-protection path override
+        # trade_detail/get_trade_side_effect explicitly.
+        self._trade_detail = trade_detail if trade_detail is not None else {
+            "stopLossOrder": {"price": "1.095"}, "takeProfitOrder": {"price": "1.11"},
+        }
+        self._get_trade_side_effect = get_trade_side_effect
+        self._close_trade_result = close_trade_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
 
     def get_open_trades(self):
         return self._open
@@ -29,6 +40,15 @@ class FakeClient:
     def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
         self.orders_placed.append(instrument)
         return {"orderFillTransaction": {"tradeOpened": {"tradeID": self._fill_trade_id}}}
+
+    def get_trade(self, trade_id):
+        if self._get_trade_side_effect is not None:
+            raise self._get_trade_side_effect
+        return self._trade_detail
+
+    def close_trade(self, trade_id):
+        self.closed_ids.append(trade_id)
+        return self._close_trade_result
 
 
 @dataclass
@@ -148,6 +168,111 @@ def test_place_and_record_still_journals_correctly_under_the_new_unlocked_design
     entries = tj.load_journal()
     assert len(entries) == 1
     assert entries[0]["trade_id"] == result["trade_id"]
+
+
+@patch("trade_execution.send_message")
+def test_place_and_record_takes_no_action_when_both_protective_orders_are_attached(
+        mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()  # default trade_detail has both legs attached
+
+    result = trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert result["success"] is True
+    assert client.closed_ids == []
+    mock_send.assert_not_called()
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.OPEN
+
+
+@patch("trade_monitor.send_message")  # cancel_all_open_trades' own notification -- a DIFFERENT
+                                        # send_message reference than trade_execution's own
+@patch("trade_execution.send_message")
+def test_place_and_record_closes_a_fill_missing_its_stop_loss(mock_send_te, mock_send_tm, tmp_path, monkeypatch):
+    # Real incident class (2026-09-03): a fill can succeed while OANDA
+    # separately rejects the dependent stop-loss order, leaving a real,
+    # unprotected position that would otherwise look completely normal
+    # in the journal.
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(trade_execution.time, "sleep", lambda *a, **k: None)
+    client = FakeClient(trade_detail={"stopLossOrder": None, "takeProfitOrder": {"price": "1.11"}})
+
+    result = trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert result["success"] is True  # the fill itself DID succeed -- the danger is the missing protection
+    assert client.closed_ids == [result["trade_id"]]  # auto-closed immediately, via cancel_all_open_trades
+    mock_send_te.assert_not_called()  # its own critical alert only fires when the close itself fails
+    sent_texts = [call.args[0] for call in mock_send_tm.call_args_list]
+    assert any("stop-loss" in t and "unprotected" in t for t in sent_texts)
+
+
+@patch("trade_monitor.send_message")
+@patch("trade_execution.send_message")
+def test_place_and_record_closes_a_fill_missing_its_take_profit(mock_send_te, mock_send_tm, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(trade_execution.time, "sleep", lambda *a, **k: None)
+    client = FakeClient(trade_detail={"stopLossOrder": {"price": "1.095"}, "takeProfitOrder": None})
+
+    result = trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert client.closed_ids == [result["trade_id"]]
+    mock_send_te.assert_not_called()
+    sent_texts = [call.args[0] for call in mock_send_tm.call_args_list]
+    assert any("take-profit" in t and "unprotected" in t for t in sent_texts)
+
+
+@patch("trade_execution.send_message")
+def test_place_and_record_retries_once_before_concluding_protection_is_missing(mock_send, tmp_path, monkeypatch):
+    # A brief real-world margin against the dependent orders not being
+    # queryable yet the instant after a fill -- must not panic-close a
+    # perfectly normal, fully-protected trade over a transient lag.
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(trade_execution.time, "sleep", lambda *a, **k: None)
+    responses = [
+        {"stopLossOrder": None, "takeProfitOrder": None},  # first check: not visible yet
+        {"stopLossOrder": {"price": "1.095"}, "takeProfitOrder": {"price": "1.11"}},  # second: there
+    ]
+
+    class DelayedClient(FakeClient):
+        def get_trade(self, trade_id):
+            return responses.pop(0)
+
+    client = DelayedClient()
+    trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert client.closed_ids == []
+    mock_send.assert_not_called()
+
+
+@patch("trade_execution.send_message")
+def test_place_and_record_sends_critical_alert_when_verification_lookup_fails(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(trade_execution.time, "sleep", lambda *a, **k: None)
+    client = FakeClient(get_trade_side_effect=Exception("OANDA timeout"))
+
+    result = trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert result["success"] is True  # the fill itself isn't in question, only whether it's protected
+    assert client.closed_ids == []  # never attempts to close on an inconclusive lookup
+    sent_texts = [call.args[0] for call in mock_send.call_args_list]
+    assert any("CRITICAL" in t and "could not verify" in t for t in sent_texts)
+
+
+@patch("trade_execution.send_message")
+def test_place_and_record_sends_critical_alert_when_the_auto_close_itself_fails(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(trade_execution.time, "sleep", lambda *a, **k: None)
+
+    class UncloseableClient(FakeClient):
+        def close_trade(self, trade_id):
+            raise Exception("close also failed")
+
+    client = UncloseableClient(trade_detail={"stopLossOrder": None, "takeProfitOrder": {"price": "1.11"}})
+
+    trade_execution.place_and_record(client, candidate().__dict__)
+
+    sent_texts = [call.args[0] for call in mock_send.call_args_list]
+    assert any("CRITICAL" in t and "genuinely unprotected" in t for t in sent_texts)
 
 
 @patch("trade_execution.send_message")
