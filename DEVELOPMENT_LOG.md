@@ -6129,3 +6129,74 @@ drifted-price scenario.
 Full suite green (548 tests). Not pushed yet -- holding for a batched
 review alongside the other 6 pending local commits and today's earlier
 VWAP daily-cap fix.
+
+## 2026-09-03 (continued) -- All 7 pending commits pushed to origin/main; then fixed the JOURNAL_LOCK contention issue flagged above
+
+Pushed everything sitting local at the user's request: the 6 commits
+from earlier in the day (capital-reset fix, duplicate-trade race fix,
+the replay script and its own fixes) plus today's VWAP daily-cap and
+broker-validity fixes, as one commit. This is what makes the capital-
+reset fix (and everything else this session) actually live for the
+first time -- it had been sitting unpushed the whole time this was
+being debugged.
+
+Then tackled the JOURNAL_LOCK contention issue flagged in the previous
+entry. Root cause, precisely: `place_and_record()` (fixed 2026-09-02 to
+close the duplicate-trade race by holding JOURNAL_LOCK across the whole
+OANDA order-placement call) and three functions in trade_monitor.py --
+`check_open_trades`, `reconcile_orphan_trades`, `cancel_all_open_trades`
+-- all held JOURNAL_LOCK across real OANDA network calls (each with its
+own 20s timeout, `check_open_trades` up to 2 calls PER pending trade on
+a 404 fallback). Every one of these can run on the same 5-minute
+schedule; whichever one is mid-call blocks every other journal reader/
+writer in the app for however long that takes. `reconcile_orphan_trades`
+had zero success-path logging, so if it were the blocker, there'd be no
+way to tell from the logs at all.
+
+**Fix, consistently applied across all four**: JOURNAL_LOCK now only
+ever guards the brief, local, in-memory-to-disk journal write -- never
+a network call. Each function restructured into two phases: every
+OANDA call happens fully unlocked (phase 1), then every computed change
+is applied in one short locked read-modify-write at the end (phase 2),
+re-checking each entry is still in the expected state (e.g. still
+`"OPEN"`) before applying, in case something else changed it while
+phase 1 was busy.
+
+This reopens the exact race JOURNAL_LOCK-across-the-network-call was
+built to close (`place_and_record`'s fill landing on OANDA before its
+journal entry exists, which `reconcile_orphan_trades` could see mid-gap
+and duplicate-journal) -- closed instead with a grace period:
+`ORPHAN_GRACE_PERIOD_SECONDS = 120` in `reconcile_orphan_trades`, which
+now skips any OANDA position younger than that as "still mid-flight,"
+not orphaned. A legitimate fill's journal write lands in low seconds
+(one 20s-capped call plus a local write); 120s is a comfortable margin,
+not a tight one. A missing `openTime` (unexpected for a real OANDA
+trade) is treated the same conservative way -- skipped this pass rather
+than guessed at.
+
+`check_open_trades` also got a full split from JOURNAL_LOCK: it now
+guards against overlapping invocations of ITSELF (a scheduled tick
+landing on top of a dashboard page load, the original reason for its
+own lock) with a dedicated `_check_open_trades_lock`, entirely separate
+from JOURNAL_LOCK -- so a concurrent JOURNAL_LOCK holder elsewhere can
+never make it skip or stall the way it did in the real incident (3
+consecutive 5-minute ticks lost that race, hiding real SL/TP fills for
+15+ minutes).
+
+Updated/added tests throughout: two `reconcile_orphan_trades` fixtures
+needed a realistic `openTime` added (the new grace-period check
+correctly rejected them without one); one test asserting the OLD
+"save immediately per entry" behavior was replaced with one proving the
+NEW guarantee (a failed apply-and-save writes nothing, and a clean
+retry succeeds fully -- the new single atomic batch write is safer than
+the old per-entry saves, not just different); a vacuously-passing test
+that pre-acquired the WRONG lock (JOURNAL_LOCK, not the new dedicated
+one) was rewritten to actually exercise the intended guard; the
+duplicate-race test in test_trade_execution.py was replaced with one
+proving the new invariant directly (a concurrent JOURNAL_LOCK acquire
+succeeds immediately while an OANDA call is still in flight). Six new
+tests total covering the grace period, the missing-openTime case, and
+that check_open_trades completes correctly despite a concurrent
+JOURNAL_LOCK holder.
+
+Full suite green (552 tests). Not pushed yet.

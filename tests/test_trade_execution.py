@@ -96,42 +96,58 @@ def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch
     assert entries[0]["confidence_components"] == cd["confidence_components"]
 
 
-def test_place_and_record_holds_journal_lock_across_the_whole_fill(tmp_path, monkeypatch):
-    # Real incident (2026-09-02): the order used to be placed on OANDA,
-    # then journaled, as two separate unlocked steps -- a concurrent
-    # reconcile_orphan_trades() call landing in that gap would see the
-    # fill on OANDA but not yet in the journal, and journal a ghost
-    # duplicate under the SAME trade_id. Simulates that concurrent
-    # caller directly: while place_and_record is "inside" its OANDA
-    # call (order filled, not yet journaled), a background thread tries
-    # to acquire JOURNAL_LOCK the same way reconcile_orphan_trades does
-    # -- it must BLOCK until place_and_record's own journal write is
-    # already done.
+def test_place_and_record_does_not_hold_journal_lock_during_the_oanda_call(tmp_path, monkeypatch):
+    # JOURNAL_LOCK contention fix (2026-09-03): place_and_record used to
+    # hold JOURNAL_LOCK across the whole OANDA order-placement call
+    # (added 2026-09-02 to close a duplicate-trade race -- see below).
+    # That call has its own 20s timeout, so a single slow/degraded fill
+    # could hold JOURNAL_LOCK that long, and every OTHER journal reader/
+    # writer in the app (check_open_trades, reconcile_orphan_trades, a
+    # manual cancel) would queue up behind it -- confirmed live:
+    # check_open_trades lost its own lock race on 3 consecutive
+    # 5-minute ticks, hiding real SL/TP fills for 15+ minutes. Proven
+    # here directly: while place_and_record is "inside" its OANDA call
+    # (order filled, not yet journaled), a concurrent JOURNAL_LOCK
+    # acquire must succeed immediately, not block.
     _isolate(tmp_path, monkeypatch)
     order_filled = threading.Event()
-    lock_acquired_after_journal_write = []
+    lock_acquired_while_fill_in_progress = []
 
     class SlowFillClient(FakeClient):
         def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
             self.orders_placed.append(instrument)
             order_filled.set()  # "OANDA filled the order" -- but not journaled yet
             import time
-            time.sleep(0.05)  # give the concurrent thread a real window to try
+            time.sleep(0.2)  # stands in for a slow/degraded OANDA response
             return {"orderFillTransaction": {"tradeOpened": {"tradeID": self._fill_trade_id}}}
 
-    def concurrent_reconcile_attempt():
+    def concurrent_lock_attempt():
         order_filled.wait(timeout=2)
-        with tj.JOURNAL_LOCK:  # blocks here if the fix works
-            entries = tj.load_journal()
-            lock_acquired_after_journal_write.append(len(entries) == 1)
+        lock_acquired_while_fill_in_progress.append(tj.JOURNAL_LOCK.acquire(blocking=False))
+        if lock_acquired_while_fill_in_progress[-1]:
+            tj.JOURNAL_LOCK.release()
 
-    t = threading.Thread(target=concurrent_reconcile_attempt)
+    t = threading.Thread(target=concurrent_lock_attempt)
     t.start()
     trade_execution.place_and_record(SlowFillClient(), candidate().__dict__)
     t.join(timeout=2)
 
-    assert lock_acquired_after_journal_write == [True], \
-        "a concurrent JOURNAL_LOCK acquirer must never observe the fill without the journal entry already present"
+    assert lock_acquired_while_fill_in_progress == [True], \
+        "JOURNAL_LOCK must be free for other callers while the OANDA order call is still in flight"
+
+
+def test_place_and_record_still_journals_correctly_under_the_new_unlocked_design(tmp_path, monkeypatch):
+    # record_open_trade() keeps its own internal JOURNAL_LOCK for the
+    # actual write (see trade_journal.py) -- removing the OUTER lock
+    # from place_and_record must not change what ends up on disk.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()
+    result = trade_execution.place_and_record(client, candidate().__dict__)
+
+    assert result["success"] is True
+    entries = tj.load_journal()
+    assert len(entries) == 1
+    assert entries[0]["trade_id"] == result["trade_id"]
 
 
 @patch("trade_execution.send_message")

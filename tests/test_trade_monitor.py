@@ -294,16 +294,17 @@ def test_check_open_trades_recovered_loss_via_fallback_classifies_as_failed_not_
 
 
 @patch("trade_monitor.send_message")
-def test_check_open_trades_persists_a_fallback_recovery_immediately_not_batched_at_loop_end(
+def test_check_open_trades_applies_updates_atomically_and_retries_cleanly_after_a_save_failure(
         mock_send, tmp_path, monkeypatch):
-    # "Immediate save, not batched at the very end" regression test: this
-    # branch's classification (recovered via transaction history) is a
-    # final conclusion about the trade, so a crash anywhere AFTER it must
-    # not lose it. Simulated by making the safety-net save_journal() call
-    # at the very end of the pass raise, while the entry's OWN save
-    # (right after it resolves, inside the loop) is left to genuinely
-    # succeed -- stands in for a real mid-process crash/restart landing
-    # just after the per-entry save already did its job.
+    # The lock-contention fix (2026-09-03) restructured this function
+    # into two phases -- every OANDA lookup happens fully unlocked, then
+    # every computed update is applied in ONE locked save at the end --
+    # trading the old "save each entry immediately, inside the loop" for
+    # no longer holding JOURNAL_LOCK across the network calls at all
+    # (see JOURNAL_LOCK contention incident, 2026-09-03). Nothing is
+    # lost by this: a failed apply-and-save leaves the journal exactly
+    # as it was (this IS the one write), and the next pass just re-does
+    # the same OANDA lookups and succeeds cleanly.
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("922", candidate(instrument="NZD_USD"))
 
@@ -315,23 +316,22 @@ def test_check_open_trades_persists_a_fallback_recovery_immediately_not_batched_
     )
 
     real_save = trade_monitor.save_journal
-    calls = {"n": 0}
 
-    def flaky_save(entries):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            real_save(entries)  # the per-entry save, inside the loop -- must genuinely land on disk
-        else:
-            raise Exception("simulated crash on the end-of-pass safety-net save")
+    def failing_save(entries):
+        raise Exception("simulated crash on the apply-and-save step")
 
-    monkeypatch.setattr(trade_monitor, "save_journal", flaky_save)
-
+    monkeypatch.setattr(trade_monitor, "save_journal", failing_save)
     with pytest.raises(Exception):
         trade_monitor.check_open_trades(client)
 
     entries_on_disk = tj.load_journal()
-    assert entries_on_disk[0]["status"] == tj.SUCCESSFUL  # already saved before the safety-net crash
-    assert entries_on_disk[0]["realized_pnl"] == 2.2434
+    assert entries_on_disk[0]["status"] == tj.OPEN  # the one save failed -- nothing written, nothing corrupted
+
+    monkeypatch.setattr(trade_monitor, "save_journal", real_save)
+    changed = trade_monitor.check_open_trades(client)  # retried on a clean save -- succeeds fully now
+
+    assert changed[0]["status"] == tj.SUCCESSFUL
+    assert changed[0]["realized_pnl"] == 2.2434
 
 
 @patch("trade_monitor.send_message")
@@ -358,19 +358,63 @@ def test_check_open_trades_leaves_entry_open_on_a_non_404_lookup_error(mock_send
 def test_check_open_trades_skips_a_second_concurrent_call_instead_of_racing(tmp_path, monkeypatch):
     # Regression test: this function runs both from a 5-minute scheduled
     # tick and on every dashboard page load, so two overlapping calls
-    # are routine -- without a lock, both would load the same journal
-    # snapshot and whichever save_journal() ran last would silently
-    # overwrite the other's already-detected changes.
+    # are routine. Guarded by its OWN dedicated lock (_check_open_trades_
+    # lock), deliberately separate from JOURNAL_LOCK since 2026-09-03 --
+    # holding JOURNAL_LOCK itself across this function's own OANDA
+    # lookups used to block every other journal reader/writer in the
+    # app for however long those took (confirmed live: check_open_trades
+    # lost its own lock race 3 ticks running, hiding real SL/TP fills
+    # for 15+ minutes). JOURNAL_LOCK being free must not matter here --
+    # only a concurrent check_open_trades call itself should cause a skip.
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())
 
-    acquired_by_first_call = tj.JOURNAL_LOCK.acquire(blocking=False)
+    acquired_by_first_call = trade_monitor._check_open_trades_lock.acquire(blocking=False)
     assert acquired_by_first_call  # sanity check: lock starts free
     try:
         result = trade_monitor.check_open_trades(FakeClient(open_trades=[{"id": "101", "instrument": "EUR_USD"}]))
         assert result == []  # the second/concurrent caller skips entirely, doesn't race
     finally:
-        tj.JOURNAL_LOCK.release()
+        trade_monitor._check_open_trades_lock.release()
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_completes_despite_a_concurrent_journal_lock_holder(mock_send, tmp_path, monkeypatch):
+    # The actual fix: check_open_trades' OANDA lookups (phase 1) run
+    # fully unlocked, so a concurrent JOURNAL_LOCK holder elsewhere in
+    # the app can never make this whole function skip or stall the way
+    # it used to (confirmed live: 3 consecutive 5-minute ticks lost the
+    # old lock race, hiding real SL/TP fills for 15+ minutes). Proven
+    # with a real background thread holding JOURNAL_LOCK for a bounded
+    # window that outlives phase 1 -- this call must still complete and
+    # correctly reclassify the trade once phase 2's brief write gets its
+    # turn, not skip or give up.
+    import threading
+    import time as _time
+
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("922", candidate(instrument="NZD_USD"))
+
+    client = FakeClient(
+        open_trades=[], not_found_ids=["922"],
+        transaction_history={"922": {"realizedPL": "2.2434", "price": "0.59078",
+                                      "time": "2026-08-17T17:14:15.420843922Z"}},
+    )
+
+    def _hold_journal_lock_briefly():
+        with tj.JOURNAL_LOCK:
+            _time.sleep(0.3)
+
+    holder = threading.Thread(target=_hold_journal_lock_briefly)
+    holder.start()
+    _time.sleep(0.05)  # let the holder thread actually acquire JOURNAL_LOCK first
+
+    changed = trade_monitor.check_open_trades(client)  # phase 1 proceeds unimpeded; phase 2 waits
+                                                         # out the remainder of the hold automatically
+    holder.join(timeout=2)
+
+    assert changed[0]["status"] == tj.SUCCESSFUL
+    assert changed[0]["realized_pnl"] == 2.2434
 
 
 def test_record_open_trade_waits_for_a_concurrent_journal_write_instead_of_racing(tmp_path, monkeypatch):
@@ -570,9 +614,45 @@ def test_reconcile_orphan_trades_journals_a_real_untracked_position(mock_send, t
 
 
 @patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_skips_a_recent_position_within_the_grace_period(mock_send, tmp_path, monkeypatch):
+    # Core of the JOURNAL_LOCK contention fix (2026-09-03): place_and_
+    # record() now places its order fully unlocked, so a legitimate
+    # fill can briefly exist on OANDA before its journal entry is
+    # written. A position that recent must NOT be journaled as an
+    # orphan -- only ORPHAN_GRACE_PERIOD_SECONDS+ old ones are genuine.
+    _isolate(tmp_path, monkeypatch)
+    recent = datetime.now(timezone.utc) - timedelta(seconds=5)
+    client = FakeClient(open_trades=[{
+        "id": "558", "instrument": "EUR_USD", "currentUnits": "1000", "price": "1.10",
+        "openTime": recent.isoformat().replace("+00:00", "Z"),
+    }])
+
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert result == []
+    mock_send.assert_not_called()
+    assert tj.load_journal() == []
+
+
+@patch("trade_monitor.send_message")
+def test_reconcile_orphan_trades_skips_a_position_with_no_open_time(mock_send, tmp_path, monkeypatch):
+    # Treated conservatively -- missing openTime is unexpected enough
+    # that this must not risk orphan-journaling something still
+    # mid-flight; the next pass gets another chance to resolve it.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(open_trades=[{"id": "559", "instrument": "EUR_USD", "currentUnits": "1000", "price": "1.10"}])
+
+    result = trade_monitor.reconcile_orphan_trades(client)
+
+    assert result == []
+    assert tj.load_journal() == []
+
+
+@patch("trade_monitor.send_message")
 def test_reconcile_orphan_trades_infers_short_from_negative_units(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
-    client = FakeClient(open_trades=[{"id": "556", "instrument": "USD_JPY", "currentUnits": "-3000", "price": "150.0"}])
+    client = FakeClient(open_trades=[{"id": "556", "instrument": "USD_JPY", "currentUnits": "-3000",
+                                       "price": "150.0", "openTime": "2026-08-16T09:00:00.000000000Z"}])
 
     result = trade_monitor.reconcile_orphan_trades(client)
 
@@ -587,7 +667,8 @@ def test_reconcile_orphan_trades_defaults_missing_sl_tp_to_entry_price(mock_send
     # consumer of these fields (dashboard, journal_export) assumes a
     # real, plausible price.
     _isolate(tmp_path, monkeypatch)
-    client = FakeClient(open_trades=[{"id": "557", "instrument": "EUR_USD", "currentUnits": "1000", "price": "1.10"}])
+    client = FakeClient(open_trades=[{"id": "557", "instrument": "EUR_USD", "currentUnits": "1000",
+                                       "price": "1.10", "openTime": "2026-08-16T09:00:00.000000000Z"}])
 
     result = trade_monitor.reconcile_orphan_trades(client)
 

@@ -85,6 +85,19 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-03", "Fixed the JOURNAL_LOCK contention issue: place_and_record() and three functions in "
+                    "trade_monitor.py (check_open_trades, reconcile_orphan_trades, cancel_all_open_trades) "
+                    "were all holding JOURNAL_LOCK across real OANDA network calls, so whichever one was "
+                    "mid-call blocked every other journal reader/writer -- confirmed live as the cause of "
+                    "check_open_trades losing its own lock race 3 ticks running, hiding real SL/TP fills for "
+                    "15+ minutes. JOURNAL_LOCK now only ever guards the brief local journal write; each "
+                    "function does its OANDA calls fully unlocked first, then applies computed changes in "
+                    "one short locked pass, re-checking each entry's state first. The duplicate-trade race "
+                    "this used to prevent is now closed by a 120s grace period in reconcile_orphan_trades "
+                    "(skip anything that recent as still-mid-flight) instead. check_open_trades also got its "
+                    "own dedicated lock, separate from JOURNAL_LOCK, so a busy journal elsewhere can no "
+                    "longer make it skip. Also pushed everything pending to origin/main first (7 commits, "
+                    "including this session's earlier fixes that had never actually gone live)."),
     ("2026-09-03", "VWAP Scalp: found and fixed a real live bug -- order placement had no check that a fresh "
                     "entry price still sits on the correct side of its frozen stop/target (a real OANDA "
                     "bracket order needs stop_loss < entry < take_profit for a LONG, mirrored for SHORT), so "
