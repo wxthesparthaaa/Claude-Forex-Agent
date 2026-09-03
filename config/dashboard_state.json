@@ -48,7 +48,7 @@
     "BCO_USD": "2026-09-03T22:35:30.401607+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 3,
+  "interval_scan_count_since_digest": 2,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
@@ -60,6 +60,7 @@
     "BCO_USD"
   ],
   "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6",
     "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6",
     "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6",
     "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 6/6",
