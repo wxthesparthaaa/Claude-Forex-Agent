@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-09-04T12:21:08.892711+00:00",
-  "candidates": []
+  "scanned_at": "2026-09-04T12:41:11.071088+00:00",
+  "candidates": [
+    {
+      "instrument": "GBP_USD",
+      "direction": "SHORT",
+      "entry_price": 1.34963,
+      "stop_loss": 1.35388,
+      "take_profit": 1.34113,
+      "confidence_pct": 61.6,
+      "confidence_components": {
+        "breadth": 100.0,
+        "rsi": 43.22481359737225,
+        "candlestick": 50.0,
+        "news": 33.333333333333336
+      },
+      "units": -7048,
+      "unit_label": "units",
+      "risk_amount": 38.0,
+      "notional_account_currency": 12066.98,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 24 (oversold -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: supportive of this direction."
+      ],
+      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    }
+  ]
 }
