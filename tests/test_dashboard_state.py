@@ -58,12 +58,14 @@ def test_risk_config_from_state_keeps_the_users_actual_adjustable_settings():
     state.risk_config["risk_per_trade_pct"] = 1.5
     state.risk_config["max_trades_per_day"] = 8
     state.risk_config["autopilot_confidence_threshold_pct"] = 70.0
+    state.risk_config["max_daily_loss_pct"] = 0.0  # 2026-09-04: made adjustable, 0 = disabled
 
     risk_config = ds.risk_config_from_state(state)
 
     assert risk_config.risk_per_trade_pct == 1.5
     assert risk_config.max_trades_per_day == 8
     assert risk_config.autopilot_confidence_threshold_pct == 70.0
+    assert risk_config.max_daily_loss_pct == 0.0
 
 
 def test_risk_config_from_state_ignores_a_stale_persisted_bound_and_uses_the_current_code_default():

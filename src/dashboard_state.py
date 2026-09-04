@@ -228,6 +228,22 @@ class DashboardState:
     vwap_scalp_max_trades_per_day: int = 6
     vwap_scalp_max_trades_per_day_min: int = 5
     vwap_scalp_max_trades_per_day_max: int = 25
+    # Global cross-instrument cooldown (2026-09-04): real data showed 5 of
+    # one day's trades firing within a single scan tick, all on their own
+    # separate instrument cooldowns (COOLDOWN_MINUTES, per-pair) so none
+    # of them individually blocked the others -- one bad shared-driver
+    # tick could still cluster several trades at once. This is a SEPARATE,
+    # ACCOUNT-WIDE-FOR-VWAP-SCALP pacing gate: no new entry (any
+    # instrument) within this many minutes of the last one, regardless of
+    # currency/correlation -- simpler and more directly targeted at the
+    # observed clustering than the currency-correlation gate tested (and
+    # rejected as too blunt) in scripts/replay_vwap_scalp_recent_days.py.
+    # 20-120 in 20-minute steps; read live by vwap_scalp_addon.py, not a
+    # module constant.
+    vwap_scalp_global_cooldown_minutes: int = 20
+    vwap_scalp_global_cooldown_minutes_min: int = 20
+    vwap_scalp_global_cooldown_minutes_max: int = 120
+    vwap_scalp_global_cooldown_minutes_step: int = 20
     # User request (2026-09-01): a way to stop the ORIGINAL base
     # strategy (currency-strength/pivot/RSI confluence -- the one every
     # add-on above was built alongside, not instead of) from
@@ -372,7 +388,7 @@ def record_risk_limit_skip(source: str, message: str) -> None:
 # defaults, the risk-limit percentages) is a code-defined constant, never
 # written by any route.
 _USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct",
-                                 "max_weekly_loss_pct")
+                                 "max_weekly_loss_pct", "max_daily_loss_pct")
 
 
 def risk_config_from_state(state: DashboardState) -> RiskConfig:
@@ -387,8 +403,8 @@ def risk_config_from_state(state: DashboardState) -> RiskConfig:
     account whose state predated the change, because the frozen old
     value in the persisted dict always won.
 
-    Now only the three fields a user can actually change via /settings
-    come from the persisted dict; everything else -- bounds, suggested
+    Now only the fields a user can actually change via /settings (see
+    _USER_ADJUSTABLE_RISK_FIELDS) come from the persisted dict; everything else -- bounds, suggested
     defaults, the risk-limit percentages -- always comes from RiskConfig's
     own current code defaults, so a code-level tuning takes effect for
     every account immediately, the same way it would if state had never

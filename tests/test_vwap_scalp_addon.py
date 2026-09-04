@@ -636,6 +636,73 @@ def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, m
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_global_cooldown_blocks_a_different_instrument_within_the_window(mock_send, tmp_path, monkeypatch):
+    # Real incident, 2026-09-04: 5 trades fired in a single scan tick,
+    # each on a DIFFERENT instrument's own COOLDOWN_MINUTES clock, so
+    # none of them blocked each other. This is the fix: a global,
+    # cross-instrument pacing gate, independent of which pair.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=10))  # a DIFFERENT instrument (USD_CHF), 10 min ago
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "global cooldown" in s]
+    assert len(skips) == 1
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_global_cooldown_does_not_block_once_it_elapses(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=25))  # past the default 20-minute cooldown
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_global_cooldown_respects_a_user_adjusted_settings_value(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.vwap_scalp_global_cooldown_minutes = 40
+    ds.save_state(state)
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    # 25 min ago -- would clear the DEFAULT 20-min cooldown but not a raised 40-min one.
+    _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=25))
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+
+
+def test_most_recent_vwap_scalp_open_ignores_other_experiment_tags():
+    entries = [
+        {"experiment_tag": "RANGE_CONFLUENCE", "opened_at": "2026-03-02T09:59:00+00:00"},
+        {"experiment_tag": vs.VWAP_SCALP_TAG, "opened_at": "2026-03-02T09:00:00+00:00"},
+        {"experiment_tag": vs.VWAP_SCALP_TAG, "opened_at": "2026-03-02T09:30:00+00:00"},
+    ]
+    latest = vs._most_recent_vwap_scalp_open(entries)
+    assert latest == datetime(2026, 3, 2, 9, 30, tzinfo=timezone.utc)
+
+
+def test_most_recent_vwap_scalp_open_none_when_no_entries():
+    assert vs._most_recent_vwap_scalp_open([]) is None
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_own_daily_cap_resets_on_a_new_utc_day(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()

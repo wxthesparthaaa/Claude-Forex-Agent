@@ -85,93 +85,32 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
-    ("2026-09-03", "Real safety gap closed: place_and_record() only ever checked that an order FILLED, "
-                    "never that OANDA actually attached the stop-loss/take-profit that went with it -- "
-                    "traced from an unexplained cluster of 'Order Cancelled' activity on OANDA that didn't "
-                    "match any real close. A fill can succeed while a dependent order is separately "
-                    "rejected, leaving a real, unprotected position that looks completely normal in the "
-                    "journal. Now verifies both legs are attached right after every fill (one short retry "
-                    "first) and closes the position immediately if either is missing, with a CRITICAL "
-                    "Telegram alert -- applies to every strategy via the shared place_and_record(), not "
-                    "just VWAP Scalp. Also caught and fixed a real gap in 3 other test files' fake OANDA "
-                    "clients that were silently falling through this new check's failure path on every "
-                    "run, adding real 1-second sleeps without ever failing (suite runtime crept from 20s "
-                    "to 34s before the fix)."),
-    ("2026-09-03", "VWAP Scalp: added time-of-day spreading for its daily trade cap after real data showed 3 of "
-                    "one day's 6 trades firing within a 15-minute stretch -- the daily cap alone didn't stop a "
-                    "correlated burst from using up the whole day's allowance at once. Splits the 07:00-20:00 "
-                    "UTC watch window into three real sessions (London morning / London-NY overlap / NY "
-                    "afternoon), each capped at its own even share on top of the existing daily cap. Also made "
-                    "the daily cap itself Settings-adjustable (5-25, was a hardcoded 6), and added a per-session "
-                    "trade breakdown (in SGT) to the periodic scan digest on Telegram so the caps aren't only "
-                    "visible in Render's logs."),
-    ("2026-09-03", "Fixed the JOURNAL_LOCK contention issue: place_and_record() and three functions in "
-                    "trade_monitor.py (check_open_trades, reconcile_orphan_trades, cancel_all_open_trades) "
-                    "were all holding JOURNAL_LOCK across real OANDA network calls, so whichever one was "
-                    "mid-call blocked every other journal reader/writer -- confirmed live as the cause of "
-                    "check_open_trades losing its own lock race 3 ticks running, hiding real SL/TP fills for "
-                    "15+ minutes. JOURNAL_LOCK now only ever guards the brief local journal write; each "
-                    "function does its OANDA calls fully unlocked first, then applies computed changes in "
-                    "one short locked pass, re-checking each entry's state first. The duplicate-trade race "
-                    "this used to prevent is now closed by a 120s grace period in reconcile_orphan_trades "
-                    "(skip anything that recent as still-mid-flight) instead. check_open_trades also got its "
-                    "own dedicated lock, separate from JOURNAL_LOCK, so a busy journal elsewhere can no "
-                    "longer make it skip. Also pushed everything pending to origin/main first (7 commits, "
-                    "including this session's earlier fixes that had never actually gone live)."),
-    ("2026-09-03", "VWAP Scalp: found and fixed a real live bug -- order placement had no check that a fresh "
-                    "entry price still sits on the correct side of its frozen stop/target (a real OANDA "
-                    "bracket order needs stop_loss < entry < take_profit for a LONG, mirrored for SHORT), so "
-                    "signals that drifted past their own stop/target between confirmation and the fresh "
-                    "entry fetch were submitted anyway and rejected by the broker -- matching the user's "
-                    "report of rejections tracking VWAP Scalp's introduction. The exact same check already "
-                    "existed in the offline replay script (added earlier today) but was never ported back to "
-                    "the live code until now. Also discovered this session's local fixes (6+ commits, "
-                    "including today's work) were never pushed to origin/main -- the deployed app is still "
-                    "running old code, which independently explains why the capital-reset fix didn't seem to "
-                    "take effect. Held for a batched push rather than deploying immediately."),
-    ("2026-09-03", "VWAP Scalp: gave it its own daily trade cap (6/day, src/vwap_scalp_addon.py), separate "
-                    "from the shared account-wide max_trades_per_day (30). Real journal data showed VWAP "
-                    "Scalp alone opened 18 of the account's 30 daily slots on two separate days, tripping "
-                    "the shared max_daily_loss_pct gate and locking out base/ORB Fade/Range Confluence for "
-                    "the rest of those days too -- confirmed both gates are account-wide, not per-strategy. "
-                    "Also: a 4th backtest-replay run resolved the apparent gate-bypass mystery as a "
-                    "signal_time-vs-entry_time display artifact, not a bug -- gate logic proven correct "
-                    "across all four rounds. Final trustworthy comparison: 10.5% replayed win rate vs 31.0% "
-                    "actual over the same 3 days -- detection code confirmed faithful; the remaining gap is "
-                    "a genuine signal-quality question, not a bug."),
-    ("2026-09-02", "Fixed a real duplicate-trade race: place_and_record() placed the order then journaled it "
-                    "as two unlocked steps, letting reconcile_orphan_trades journal a ghost duplicate under "
-                    "the same trade_id if it ran in that gap (found live: 2 real incidents, ~$83 double-"
-                    "counted). JOURNAL_LOCK now held across the whole span; load_journal() also self-heals any "
-                    "existing duplicate. Also added risk-limit visibility to the periodic scan digest -- any "
-                    "strategy's RiskViolation now records to a tally the digest reports and resets."),
-    ("2026-09-02", "Dashboard: fixed 'Reset capital' ignoring the typed amount (always forced $2,000 "
-                    "regardless of the field -- now uses the typed value, defaulting only if empty), and the "
-                    "weekly-gain chart not respecting a capital reset (added capital_reset_at so it starts "
-                    "fresh instead of still showing pre-reset weeks). Full-history VWAP Scalp review: 42 "
-                    "trades, 31.0% win rate, -914.38 SGD total -- an order of magnitude below the 70-95% "
-                    "backtested. Not a sizing issue (already addressed); exits are clean (wins hit target, "
-                    "losses hit stop, no whipsaw), so this is a genuine win-rate gap, root cause not yet "
-                    "found. Recommended considering a pause pending further diagnosis."),
-    ("2026-09-02", "VWAP Scalp: the 'JPY-specific' diagnosis was wrong -- a deeper check isolating the "
-                    "realized-vs-sizing conversion gap (separate from a compounding stop-slippage effect on "
-                    "one trade) showed it's GENERAL across every quote currency (CAD 1.22x, JPY 1.40x, USD "
-                    "1.25x -- USD includes the single worst individual trade). Restored all 7 JPY-quoted "
-                    "pairs; recalibrated REALIZED_LOSS_INFLATION 1.18 -> 1.29 to cover the full 17-pair "
-                    "universe at an evidence-based value instead of excluding pairs that were never the "
-                    "sole cause."),
-    ("2026-09-02", "VWAP Scalp: removed all JPY-quoted pairs (USD_JPY + 6 crosses) after real post-deploy "
-                    "losses (CAD_JPY -1.65R, GBP_JPY -1.59R, CHF_JPY -1.56R) showed the loss-inflation "
-                    "compensation didn't fix JPY pairs specifically -- JPY-quoted losses average -1.44R vs "
-                    "-1.17R for everything else, and this predates the 17-pair extension (USD_JPY already "
-                    "ran hot). Back to 10 non-JPY pairs pending a real root-cause fix, likely in "
-                    "resolve_conversion_rate's JPY triangulation (no direct JPY_SGD pair on OANDA)."),
-    ("2026-09-02", "VWAP Scalp fix: real trade data showed losses landing ~1.18x bigger than their own "
-                    "intended risk_amount (base strategy's own losses average only -1.05x over the same "
-                    "window, ruling out an account-wide cause). Root mechanism not yet confirmed -- "
-                    "compensated by dividing VWAP Scalp's risk_amount by 1.18 (REALIZED_LOSS_INFLATION) so "
-                    "real losses land back near the configured risk_per_trade_pct, scoped to this strategy "
-                    "only so the already-correct base strategy sizing isn't touched."),
+    ("2026-09-04", "Daily loss limit is now Settings-adjustable (0-100%, 0 disables it) alongside weekly, "
+                    "after real equity erosion made the hardcoded 6% trip almost every day. VWAP Scalp got "
+                    "a global cross-instrument cooldown (20-120 min, Settings) after 5 trades fired in one "
+                    "scan tick since each was only on its own pair's separate cooldown clock. Also "
+                    "shortened Developer Notes and the strategy descriptions above -- full detail is now "
+                    "behind a \"More\" toggle instead of always shown."),
+    ("2026-09-03", "Every fill now gets verified to actually have its stop-loss/take-profit attached on "
+                    "OANDA, and is closed immediately with a CRITICAL alert if either is missing."),
+    ("2026-09-03", "VWAP Scalp: daily trade cap is now Settings-adjustable (5-25) and spread across 3 "
+                    "trading sessions so one burst can't use the whole day's allowance at once."),
+    ("2026-09-03", "Fixed a lock contention bug that was silently hiding real stop-loss/take-profit fills "
+                    "on the dashboard for 15+ minutes at a time."),
+    ("2026-09-03", "VWAP Scalp: fixed live orders getting rejected by the broker when a fresh entry price "
+                    "had drifted past its own frozen stop/target since the signal fired."),
+    ("2026-09-03", "VWAP Scalp: gave it its own daily trade cap, separate from the shared account-wide "
+                    "limit it was quietly monopolizing and tripping for every other strategy."),
+    ("2026-09-02", "Fixed a duplicate-trade race that had double-counted ~$83 into equity; the journal "
+                    "now self-heals any existing duplicates automatically."),
+    ("2026-09-02", "Dashboard: 'Reset capital' now uses the typed amount instead of always forcing "
+                    "$2,000, and the weekly gain chart correctly resets along with it."),
+    ("2026-09-02", "VWAP Scalp: corrected the realized-loss compensation to cover all 17 pairs with real "
+                    "evidence, not just the JPY ones originally (and wrongly) suspected."),
+    ("2026-09-02", "VWAP Scalp: briefly removed JPY-quoted pairs after they showed larger real losses -- "
+                    "restored the same day once the cause was found to be general, not JPY-specific."),
+    ("2026-09-02", "VWAP Scalp: compensated position sizing after real losses landed ~18% bigger than "
+                    "intended, scoped to this strategy only."),
     ("2026-08-30", "Shipped VWAP Scalp (src/vwap_scalp_addon.py) as a live Settings toggle, off by default: "
                     "the session's first genuine scalp (30-min max hold), fades a 2-stdev extension from the "
                     "session VWAP back toward it. Most rigorously tested result this session -- survived two "
@@ -505,7 +444,18 @@ def _news_summary() -> dict:
 
 
 def _out_of_range_warnings(risk_config) -> list:
+    # 0% on the daily/weekly loss limits is a deliberate "disabled" value
+    # (2026-09-04), not just an extreme threshold -- is_out_of_recommended_
+    # range's own "value > suggested" comparison silently misses it (0 is
+    # numerically BELOW every suggested default, so it reads as "stricter
+    # than default" when it's actually the single most permissive value
+    # possible: no automatic stop on losses at all). Flagged explicitly
+    # here rather than relying on that comparison to catch it.
     warnings = []
+    if risk_config.max_daily_loss_pct == 0:
+        warnings.append("Daily loss limit is DISABLED (0%) -- no automatic stop on daily losses")
+    if risk_config.max_weekly_loss_pct == 0:
+        warnings.append("Weekly loss limit is DISABLED (0%) -- no automatic stop on weekly losses")
     checks = [
         ("Portfolio heat", risk_config.max_portfolio_heat_pct, risk_config.suggested_max_portfolio_heat_pct),
         ("Daily loss limit", risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct),
@@ -513,7 +463,7 @@ def _out_of_range_warnings(risk_config) -> list:
         ("Max drawdown", risk_config.max_drawdown_pct, risk_config.suggested_max_drawdown_pct),
     ]
     for label, value, suggested in checks:
-        if is_out_of_recommended_range(value, suggested):
+        if value != 0 and is_out_of_recommended_range(value, suggested):
             warnings.append(f"{label} ({value}%) is more permissive than the suggested {suggested}%")
     return warnings
 
@@ -612,6 +562,11 @@ def dashboard():
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
         vwap_scalp_max_trades_per_day_min=state.vwap_scalp_max_trades_per_day_min,
         vwap_scalp_max_trades_per_day_max=state.vwap_scalp_max_trades_per_day_max,
+        vwap_scalp_global_cooldown_minutes=state.vwap_scalp_global_cooldown_minutes,
+        vwap_scalp_global_cooldown_minutes_min=state.vwap_scalp_global_cooldown_minutes_min,
+        vwap_scalp_global_cooldown_minutes_max=state.vwap_scalp_global_cooldown_minutes_max,
+        vwap_scalp_global_cooldown_minutes_step=state.vwap_scalp_global_cooldown_minutes_step,
+        vwap_scalp_global_cooldown_label=_format_cooldown_minutes(state.vwap_scalp_global_cooldown_minutes),
         base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -863,6 +818,19 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
+def _format_cooldown_minutes(minutes: int) -> str:
+    """Human-friendly slider label -- "20 min" below an hour, "1hr"/
+    "1hr 20min" etc above it. Mirrors templates/dashboard.html's own
+    formatCooldownMinutes() JS function exactly (that one drives the
+    LIVE label as the slider moves; this one renders the INITIAL page
+    load, since Jinja can't call a JS function server-side)."""
+    minutes = int(minutes)
+    if minutes < 60:
+        return f"{minutes} min"
+    h, m = divmod(minutes, 60)
+    return f"{h}hr" if m == 0 else f"{h}hr {m}min"
+
+
 @app.route("/settings", methods=["POST"])
 def settings():
     try:
@@ -881,14 +849,19 @@ def settings():
         risk_config.max_trades_per_day = int(_clamp(
             float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
             risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
-        # Adjustable 5-100% (explicit user request, 2026-08-31): raising
-        # this is the intended way to keep a candidate's live data
-        # collection (e.g. VWAP Scalp) running past what a normal week's
-        # losses would otherwise trip -- see RiskConfig's own comment for
-        # why this is account-wide, not per-strategy.
+        # Adjustable 0-100% (explicit user request, 2026-08-31 for weekly,
+        # 2026-09-04 for daily): raising either is the intended way to keep
+        # a candidate's live data collection (e.g. VWAP Scalp) running past
+        # what a normal day's/week's losses would otherwise trip -- see
+        # RiskConfig's own comment for why this is account-wide, not
+        # per-strategy. 0% is a real, deliberate value -- disables that
+        # specific breaker entirely (see risk_engine.validate_trade).
         risk_config.max_weekly_loss_pct = _clamp(
             float(request.form.get("max_weekly_loss_pct", risk_config.max_weekly_loss_pct)),
             risk_config.max_weekly_loss_pct_min, risk_config.max_weekly_loss_pct_max)
+        risk_config.max_daily_loss_pct = _clamp(
+            float(request.form.get("max_daily_loss_pct", risk_config.max_daily_loss_pct)),
+            risk_config.max_daily_loss_pct_min, risk_config.max_daily_loss_pct_max)
         risk_config.autopilot_confidence_threshold_pct = _clamp(
             float(request.form.get("autopilot_confidence_threshold_pct",
                                     risk_config.autopilot_confidence_threshold_pct)),
@@ -945,6 +918,14 @@ def settings():
         state.vwap_scalp_max_trades_per_day = int(_clamp(
             float(request.form.get("vwap_scalp_max_trades_per_day", state.vwap_scalp_max_trades_per_day)),
             state.vwap_scalp_max_trades_per_day_min, state.vwap_scalp_max_trades_per_day_max))
+        # 20-120 in 20-minute steps -- rounded to the nearest step (not just
+        # clamped to the range) since a malformed direct POST could send an
+        # off-step value the slider itself never would.
+        raw_cooldown = _clamp(
+            float(request.form.get("vwap_scalp_global_cooldown_minutes", state.vwap_scalp_global_cooldown_minutes)),
+            state.vwap_scalp_global_cooldown_minutes_min, state.vwap_scalp_global_cooldown_minutes_max)
+        step = state.vwap_scalp_global_cooldown_minutes_step
+        state.vwap_scalp_global_cooldown_minutes = round(raw_cooldown / step) * step
 
         # Base strategy: ON by default -- this is the original strategy
         # the app was built around, not a new experiment. Turning it off

@@ -36,7 +36,7 @@ def _client(tmp_path, monkeypatch):
 def test_max_weekly_loss_pct_has_real_bounds():
     config = RiskConfig()
     assert config.max_weekly_loss_pct == 10.0
-    assert config.max_weekly_loss_pct_min == 5.0
+    assert config.max_weekly_loss_pct_min == 0.0  # 2026-09-04: widened -- 0% deliberately disables the breaker
     assert config.max_weekly_loss_pct_max == 100.0
 
 
@@ -58,9 +58,13 @@ def test_settings_clamps_weekly_loss_limit_to_bounds(tmp_path, monkeypatch):
     state = ds.load_state()
     assert risk_config_from_state(state).max_weekly_loss_pct == 100.0  # clamped to max, not saved raw
 
+    client.post("/settings", data={"max_weekly_loss_pct": "-10"}, follow_redirects=False)
+    state = ds.load_state()
+    assert risk_config_from_state(state).max_weekly_loss_pct == 0.0  # clamped to min, not below it
+
     client.post("/settings", data={"max_weekly_loss_pct": "0"}, follow_redirects=False)
     state = ds.load_state()
-    assert risk_config_from_state(state).max_weekly_loss_pct == 5.0  # clamped to min
+    assert risk_config_from_state(state).max_weekly_loss_pct == 0.0  # 0 itself is valid, not clamped away
 
 
 def test_settings_omitting_weekly_loss_limit_leaves_it_unchanged(tmp_path, monkeypatch):

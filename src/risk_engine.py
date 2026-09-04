@@ -32,19 +32,26 @@ class RiskConfig:
     # Resets daily/weekly; stops NEW trades for the remainder of the period,
     # does not touch existing open positions (those stay broker-protected
     # by their own attached SL/TP regardless).
+    #
+    # Both adjustable 0-100% (explicit user request, 2026-08-31 for weekly,
+    # 2026-09-04 for daily): raising either temporarily is the intended way
+    # to keep a new candidate's live data collection (e.g. VWAP Scalp)
+    # running past what would otherwise be a normal day's/week's worth of
+    # losses tripping the SHARED breaker -- every strategy draws from the
+    # same daily_realized_pnl/weekly_realized_pnl figures, so this isn't
+    # per-strategy, it's a genuine (if temporary) loosening of the
+    # account-wide backstop. 0% is a real, deliberate value, not just the
+    # bottom of the slider -- it disables that specific breaker entirely
+    # (see validate_trade's own skip-when-zero handling below); the
+    # suggested_* values stay at their original defaults so the dashboard's
+    # red out-of-range disclaimer still flags a raised value (including 0)
+    # as a deliberate, non-default choice.
     max_daily_loss_pct: float = 6.0
+    max_daily_loss_pct_min: float = 0.0
+    max_daily_loss_pct_max: float = 100.0
     suggested_max_daily_loss_pct: float = 6.0
-    # Adjustable 5-100% (explicit user request, 2026-08-31): raising this
-    # temporarily is the intended way to keep a new candidate's live data
-    # collection (e.g. VWAP Scalp) running past what would otherwise be a
-    # normal week's worth of losses tripping the SHARED weekly breaker --
-    # every strategy draws from the same weekly_realized_pnl figure, so
-    # this isn't per-strategy, it's a genuine (if temporary) loosening of
-    # the account-wide backstop. suggested_max_weekly_loss_pct stays at
-    # the original 10.0 so the dashboard's red out-of-range disclaimer
-    # still flags a raised value as a deliberate, non-default choice.
     max_weekly_loss_pct: float = 10.0
-    max_weekly_loss_pct_min: float = 5.0
+    max_weekly_loss_pct_min: float = 0.0
     max_weekly_loss_pct_max: float = 100.0
     suggested_max_weekly_loss_pct: float = 10.0
 
@@ -119,13 +126,19 @@ def validate_trade(trade: ProposedTrade, account: AccountState, config: RiskConf
             f"Halted until manually reset from the dashboard."
         )
 
-    daily_loss_pct = 100 * -account.daily_realized_pnl / account.equity if account.daily_realized_pnl < 0 else 0
-    if daily_loss_pct >= config.max_daily_loss_pct:
-        raise RiskViolation(f"Daily loss limit reached: {daily_loss_pct:.1f}% >= {config.max_daily_loss_pct}%")
+    # 0% is a deliberate "disabled" value, not just an extreme threshold --
+    # naively plugging it into ">= 0" would trip on the very first cent of
+    # loss (the most restrictive setting possible), the opposite of what a
+    # 0 on this slider is supposed to mean. Skip the check entirely instead.
+    if config.max_daily_loss_pct > 0:
+        daily_loss_pct = 100 * -account.daily_realized_pnl / account.equity if account.daily_realized_pnl < 0 else 0
+        if daily_loss_pct >= config.max_daily_loss_pct:
+            raise RiskViolation(f"Daily loss limit reached: {daily_loss_pct:.1f}% >= {config.max_daily_loss_pct}%")
 
-    weekly_loss_pct = 100 * -account.weekly_realized_pnl / account.equity if account.weekly_realized_pnl < 0 else 0
-    if weekly_loss_pct >= config.max_weekly_loss_pct:
-        raise RiskViolation(f"Weekly loss limit reached: {weekly_loss_pct:.1f}% >= {config.max_weekly_loss_pct}%")
+    if config.max_weekly_loss_pct > 0:
+        weekly_loss_pct = 100 * -account.weekly_realized_pnl / account.equity if account.weekly_realized_pnl < 0 else 0
+        if weekly_loss_pct >= config.max_weekly_loss_pct:
+            raise RiskViolation(f"Weekly loss limit reached: {weekly_loss_pct:.1f}% >= {config.max_weekly_loss_pct}%")
 
     if account.trades_today >= config.max_trades_per_day:
         raise RiskViolation(f"Max trades/day reached: {account.trades_today} >= {config.max_trades_per_day}")

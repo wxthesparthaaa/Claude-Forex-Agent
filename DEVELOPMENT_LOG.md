@@ -6402,3 +6402,75 @@ new check added to shared production code can silently degrade
 unrelated tests elsewhere without ever making them fail.
 
 Full suite green (569 tests). Not pushed yet.
+
+## 2026-09-04 -- Real production feedback after the first live day on the pushed fixes: daily-loss gate made adjustable (0-100%), a global cross-instrument cooldown for VWAP Scalp, and two UI decluttering passes
+
+Four pieces of real user feedback from the first day running yesterday's
+push, all addressed together:
+
+**1. Daily loss limit stuck at 6%, no way to loosen it.** Root cause:
+strategy capital had been eroded by cumulative real losses (down to
+$1,860.72 from the $2,000 baseline), so the same dollar loss trips the
+`daily_realized_pnl / equity` percentage gate increasingly easily as
+equity shrinks -- a real death-spiral dynamic. `max_weekly_loss_pct`
+already had exactly this "loosen it temporarily for data collection"
+precedent (adjustable 5-100% since 2026-08-31); `max_daily_loss_pct`
+never got the same treatment and was still a hardcoded 6.0%, which is
+why only weekly could be loosened and the user kept needing a full
+capital reset to unstick VWAP Scalp. Fixed by making `max_daily_loss_pct`
+Settings-adjustable too, and -- per explicit follow-up request -- widened
+BOTH the daily and weekly bounds to 0-100% (was 5-100% for weekly),
+with 0% now a deliberate, real value meaning "fully disabled," not just
+the bottom of the slider. Required an actual logic change, not just a
+bounds change: `validate_trade`'s own `daily_loss_pct >= config.max_
+daily_loss_pct` check would trip on the very first cent of loss if 0
+were naively plugged in (0 is the MOST restrictive value under that
+comparison, the opposite of "disabled") -- both the daily and weekly
+checks now skip entirely when their config value is exactly 0. The
+dashboard's out-of-range disclaimer got the same fix: its own "value >
+suggested" comparison silently missed 0 (numerically below every
+suggested default, so it read as "stricter than default" instead of
+the most permissive value possible) -- now flagged explicitly as
+"DISABLED" rather than relying on that comparison.
+
+**2. 5 VWAP Scalp trades fired in one scan tick, one bad trade dragging
+the rest down.** Confirmed directly against real data: exactly what the
+user predicted. Root cause: each trade was on a DIFFERENT instrument's
+own `COOLDOWN_MINUTES` (per-pair) clock, so none of them blocked each
+other even though they fired in the same 5-minute tick. A currency-
+correlation gate was tested for this exact scenario the day before (see
+the replay-script entry above) and rejected as too blunt (blocked over
+half of all signals, didn't reduce worst-day loss). This is a simpler,
+more directly targeted fix instead: `vwap_scalp_global_cooldown_minutes`
+(default 20, Settings-adjustable 20-120 in 20-minute steps, displayed
+as "1hr"/"1hr 20min" etc above an hour) paces entries across the WHOLE
+strategy regardless of instrument -- no new VWAP Scalp trade at all
+within that many minutes of the last one, on top of the existing daily/
+session caps. `_most_recent_vwap_scalp_open()` finds the latest
+`opened_at` across every VWAP_SCALP journal entry, any instrument.
+Found and fixed a real edge case while testing: a future-dated
+`opened_at` (impossible with real data, but present in some existing
+test fixtures using a same-day-later-hour convention) produced a
+NEGATIVE "minutes since last," which the naive `< global_cooldown_
+minutes` comparison misread as "still cooling down" -- guarded with an
+explicit `0 <=` lower bound so a clock anomaly reads as "not cooling
+down" rather than an unbounded block.
+
+**3. Developer Notes and the three experimental-strategy descriptions
+were too long-winded.** Condensed all 10 of this session's own Developer
+Notes entries (2026-09-02/03) to one line each -- the full detail
+already lives in this file via the "Find out more" link, so the
+in-dashboard version didn't need to duplicate it. Range Confluence, ORB
+Fade, and VWAP Scalp's Settings descriptions each got the same
+treatment: a 1-2 sentence always-visible summary, full detail moved
+behind a "More" `<details>`/`<summary>` toggle (reusing the exact
+pattern already used elsewhere on the page for the per-pair trading-
+window list).
+
+Nine new tests across five files (risk_engine 0%-disable behavior x2,
+dashboard_state's adjustable-field passthrough, two full settings-route
+test files -- one new for daily loss limit, one updated for weekly's
+new bound -- a new settings-route test file for the cooldown slider
+including its rounding-to-nearest-20 behavior, and vwap_scalp_addon
+gating tests for the cooldown itself, its settings-adjustability, and
+the future-timestamp edge case). Full suite green. Not pushed yet.

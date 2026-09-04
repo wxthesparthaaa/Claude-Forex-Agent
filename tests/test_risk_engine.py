@@ -86,6 +86,19 @@ def test_net_exposure_stacks_correlated_pairs_on_same_currency():
     assert exposure["GBP"] == pytest.approx(2.0)
 
 
+def test_daily_loss_limit_of_zero_disables_the_check():
+    # 0% is a deliberate "disabled" value (2026-09-04), not the strictest
+    # possible threshold -- naively checking ">= 0" would trip on the very
+    # first cent of loss, the opposite of what a 0 on this slider means.
+    account = base_account(daily_realized_pnl=-500.0)  # 25% of equity -- would trip at any real threshold
+    validate_trade(base_trade(), account, RiskConfig(max_daily_loss_pct=0.0))  # no raise
+
+
+def test_weekly_loss_limit_of_zero_disables_the_check():
+    account = base_account(weekly_realized_pnl=-1000.0)  # 50% of equity
+    validate_trade(base_trade(), account, RiskConfig(max_weekly_loss_pct=0.0))  # no raise
+
+
 def test_out_of_range_disclaimer_flags_more_permissive_values():
     assert is_out_of_recommended_range(8.0, suggested=6.0) is True
     assert is_out_of_recommended_range(5.0, suggested=6.0) is False

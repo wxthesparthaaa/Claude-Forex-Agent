@@ -380,7 +380,17 @@
                min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
                value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
 
-        <label>Weekly loss limit: <span id="weeklyLossVal">{{ risk_config.max_weekly_loss_pct }}</span>%</label>
+        <label>Daily loss limit: <span id="dailyLossVal">{{ risk_config.max_daily_loss_pct }}</span>%{{ ' (DISABLED)' if risk_config.max_daily_loss_pct == 0 else '' }}</label>
+        <input type="range" name="max_daily_loss_pct"
+               min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
+               value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Account-wide, not per-strategy. Raise this temporarily to keep a candidate's live data collection
+          running past a normal day's losses; the default (6%) is a genuine safety limit, so lower it back
+          when you're done collecting data. 0% disables it entirely -- no automatic stop on daily losses.
+        </p>
+
+        <label>Weekly loss limit: <span id="weeklyLossVal">{{ risk_config.max_weekly_loss_pct }}</span>%{{ ' (DISABLED)' if risk_config.max_weekly_loss_pct == 0 else '' }}</label>
         <input type="range" name="max_weekly_loss_pct"
                min="{{ risk_config.max_weekly_loss_pct_min }}" max="{{ risk_config.max_weekly_loss_pct_max }}" step="1"
                value="{{ risk_config.max_weekly_loss_pct }}" oninput="weeklyLossVal.textContent = this.value">
@@ -388,7 +398,7 @@
           Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
           from the same weekly P&amp;L figure. Raise this temporarily to keep a candidate's live data collection
           running past a normal week's losses; the default (10%) is a genuine safety limit, so lower it back
-          when you're done collecting data.
+          when you're done collecting data. 0% disables it entirely -- no automatic stop on weekly losses.
         </p>
 
         <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
@@ -446,13 +456,18 @@
           </label>
         </div>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. A signal built from this session's own data-mining research (not a named
-          trader's strategy): trades when at least 2 of 3 range/trend-position readings agree, holds
-          for a fixed 40 trading days regardless of what the signal does in between, and uses a wide
-          stop purely as a disaster backstop. This is a forward test of a research finding, not a
-          confirmed edge -- every trade it places is tagged "Range Confluence" in the journal and on
-          Telegram so its real impact is easy to track separately from the base strategy.
+          Off by default. Research-based signal: trades when 2 of 3 range/trend readings agree, holds for 40 trading days.
         </p>
+        <details style="margin:-0.4rem 0 0.75rem;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
+          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
+            Not a named trader's strategy -- built from this session's own data-mining research. Uses a wide
+            stop purely as a disaster backstop, not a real target, and holds the fixed 40-trading-day term
+            regardless of what the signal does in between. This is a forward test of a research finding, not
+            a confirmed edge -- every trade it places is tagged "Range Confluence" in the journal and on
+            Telegram so its real impact is easy to track separately from the base strategy.
+          </p>
+        </details>
         <div class="toggle-row">
           <span>ORB Fade (experimental)</span>
           <label class="switch">
@@ -461,14 +476,19 @@
           </label>
         </div>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. Fades the first London-session breakout of the overnight Asian range (00:00-06:45
-          UTC), taking the opposite side with stop and target mirrored around entry at RR=2.0, force-closed
-          after 8 hours if neither fires first. Honest caveat: this is the SAME finding as a backtest that
-          decisively ruled out trading WITH that breakout, expressed as a trade rather than an independent
-          new discovery, and it was validated on a shorter ~270-day window of 15-minute data than Range
-          Confluence's multi-year daily history. Every trade it places is tagged "ORB Fade" in the journal
-          and on Telegram.
+          Off by default. Fades the first London-session breakout of the overnight Asian range, RR=2.0, force-closed after 8 hours.
         </p>
+        <details style="margin:-0.4rem 0 0.75rem;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
+          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
+            Takes the opposite side of the first breakout of the overnight Asian range (00:00-06:45 UTC),
+            stop and target mirrored around entry. Honest caveat: this is the SAME finding as a backtest
+            that decisively ruled out trading WITH that breakout, expressed as a trade rather than an
+            independent new discovery, and it was validated on a shorter ~270-day window of 15-minute data
+            than Range Confluence's multi-year daily history. Every trade it places is tagged "ORB Fade" in
+            the journal and on Telegram.
+          </p>
+        </details>
         <div class="toggle-row">
           <span>VWAP Scalp (experimental)</span>
           <label class="switch">
@@ -477,26 +497,40 @@
           </label>
         </div>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. This session's first genuine scalp: fades a 2-standard-deviation extension from
-          the session's own volume-weighted average price back toward it, force-closed after 30 minutes if
-          neither the stop nor target fires. The most rigorously tested result this session -- two real bug
-          fixes, a correction for trades on the same day not being independent observations, a check for
-          whether the 5 instruments move together on shared macro days, and a check for whether delayed
-          execution was artificially inflating the result, all confirmed clean before shipping. Runs on the
-          same 5-minute scheduler as every other add-on -- validated at exactly that execution delay, not a
-          compromise made after the fact. Every trade it places is tagged "VWAP Scalp" in the journal and on
-          Telegram.
+          Off by default. Fades a 2-standard-deviation extension from session VWAP back toward it, force-closed after 30 minutes. The most rigorously tested strategy this session.
         </p>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Runs its own separate daily trade cap (independent of the shared Trades per day limit above) so a busy scalping day can no longer burn through the whole account's risk budget for every other strategy.
-        </p>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          That cap is also spread evenly across three sessions instead of allowing it to fire all at once: 15:00-20:00 SGT / 20:00-00:00 SGT / 00:00-04:00 SGT -- so one correlated burst can't use up the whole day's allowance in a single tight cluster. Breakdown by session shown in the periodic scan digest on Telegram.
-        </p>
+        <details style="margin:-0.4rem 0 0.75rem;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
+          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
+            This session's first genuine scalp (minutes, not hours-to-months): survived two real bug fixes, a
+            correction for trades on the same day not being independent observations, a check for whether
+            the instruments move together on shared macro days, and a check for whether delayed execution
+            was artificially inflating the result, all confirmed clean before shipping. Runs on the same
+            5-minute scheduler as every other add-on -- validated at exactly that execution delay, not a
+            compromise made after the fact. Every trade it places is tagged "VWAP Scalp" in the journal and
+            on Telegram.
+          </p>
+          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
+            Runs its own separate daily trade cap (independent of the shared Trades per day limit above),
+            also spread evenly across three sessions -- 15:00-20:00 SGT / 20:00-00:00 SGT / 00:00-04:00 SGT
+            -- so one correlated burst can't use up the whole day's allowance in a single tight cluster.
+            Breakdown by session shown in the periodic scan digest on Telegram.
+          </p>
+        </details>
         <label>VWAP Scalp trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
         <input type="range" name="vwap_scalp_max_trades_per_day"
                min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
                value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
+
+        <label>VWAP Scalp cooldown between any two trades: <span id="vwapCooldownVal">{{ vwap_scalp_global_cooldown_label }}</span></label>
+        <input type="range" name="vwap_scalp_global_cooldown_minutes"
+               min="{{ vwap_scalp_global_cooldown_minutes_min }}" max="{{ vwap_scalp_global_cooldown_minutes_max }}"
+               step="{{ vwap_scalp_global_cooldown_minutes_step }}" value="{{ vwap_scalp_global_cooldown_minutes }}"
+               oninput="vwapCooldownVal.textContent = formatCooldownMinutes(this.value)">
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Paces entries across the WHOLE strategy, not per pair -- no new VWAP Scalp trade (any instrument)
+          within this long of the last one, on top of the daily/session caps above.
+        </p>
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
@@ -590,6 +624,13 @@
   </footer>
 
   <script>
+    function formatCooldownMinutes(mins) {
+      mins = parseInt(mins, 10);
+      if (mins < 60) return mins + ' min';
+      var h = Math.floor(mins / 60), m = mins % 60;
+      return m === 0 ? (h + 'hr') : (h + 'hr ' + m + 'min');
+    }
+
     new Chart(document.getElementById('winRateChart'), {
       type: 'pie',
       data: {

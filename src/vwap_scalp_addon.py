@@ -350,6 +350,27 @@ def _recently_signaled(entries: list, instrument: str, now: datetime) -> bool:
     return False
 
 
+def _most_recent_vwap_scalp_open(entries: list):
+    """The latest opened_at across EVERY VWAP_SCALP entry, any instrument
+    -- or None if there are none. Backs the global cross-instrument
+    cooldown (vwap_scalp_global_cooldown_minutes): unlike COOLDOWN_MINUTES
+    (per-instrument, prevents chasing the SAME pair too fast), this paces
+    entries across the WHOLE strategy regardless of instrument, so a
+    single tick can't open several trades at once just because they're on
+    different pairs."""
+    latest = None
+    for e in entries:
+        if e.get("experiment_tag") != VWAP_SCALP_TAG:
+            continue
+        try:
+            opened_at = datetime.fromisoformat(e["opened_at"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if latest is None or opened_at > latest:
+            latest = opened_at
+    return latest
+
+
 def _vwap_scalp_trades_between(entries: list, start: datetime, end: datetime) -> int:
     """Real count of VWAP_SCALP entries opened in [start, end) -- the
     shared building block for both the whole-day cap and the per-
@@ -626,14 +647,33 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
         trades_in_bucket = 0
         bucket_capped = False
 
-    capped = daily_capped or bucket_capped
+    # Global cross-instrument cooldown (2026-09-04) -- an independent,
+    # additional pacing gate on top of the daily/bucket caps: real data
+    # showed 5 trades firing in a single scan tick, each on a different
+    # instrument's own COOLDOWN_MINUTES clock, so none of them blocked
+    # each other. User-adjustable 20-120 minutes, in 20-minute steps.
+    global_cooldown_minutes = state.vwap_scalp_global_cooldown_minutes
+    most_recent_open = _most_recent_vwap_scalp_open(journal_snapshot)
+    minutes_since_last = None
+    if most_recent_open is not None:
+        minutes_since_last = (now - most_recent_open).total_seconds() / 60
+    # A negative minutes_since_last (opened_at in the future relative to
+    # `now`) can't happen with real data -- guarded defensively anyway so
+    # a clock anomaly reads as "not cooling down" rather than an
+    # unbounded block.
+    cooldown_capped = minutes_since_last is not None and 0 <= minutes_since_last < global_cooldown_minutes
+
+    capped = daily_capped or bucket_capped or cooldown_capped
     if capped:
         from dashboard_state import record_risk_limit_skip
         if daily_capped:
             reason = f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}"
-        else:
+        elif bucket_capped:
             reason = (f"VWAP Scalp's {bucket_session} ({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) "
                       f"time-bucket cap reached: {trades_in_bucket}/{per_bucket_cap}")
+        else:
+            reason = (f"VWAP Scalp's global cooldown active: last entry {minutes_since_last:.0f} min ago, "
+                      f"needs {global_cooldown_minutes}")
         record_risk_limit_skip("VWAP Scalp", reason)
         print(f"INFO: VWAP Scalp capped this tick ({reason}) -- no new entries; existing positions "
               f"still monitored for the hold-cap force-close", flush=True)
