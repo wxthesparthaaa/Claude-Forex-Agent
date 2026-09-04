@@ -50,7 +50,9 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%"
+  ],
   "last_scan_digest_sent_at": "2026-09-04T16:53:12.038348+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
