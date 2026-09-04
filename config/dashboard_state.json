@@ -53,7 +53,9 @@
     "USD_CAD",
     "WTICO_USD"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "Base strategy scan: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%"
+  ],
   "last_scan_digest_sent_at": "2026-09-04T19:53:12.038368+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
