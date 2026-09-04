@@ -30,9 +30,9 @@
   "week_start_equity": null,
   "strategy_starting_capital": 1900.0,
   "strategy_realized_pnl": 0.0,
-  "last_review_timestamp": "2026-09-04T09:10:58.874145+00:00",
-  "week_start_timestamp": "2026-09-04T09:10:58.874145+00:00",
-  "capital_reset_at": "2026-09-04T09:10:58.874145+00:00",
+  "last_review_timestamp": "2026-09-04T09:11:00.222598+00:00",
+  "week_start_timestamp": "2026-09-04T09:11:00.222598+00:00",
+  "capital_reset_at": "2026-09-04T09:11:00.222598+00:00",
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-04T13:46:01.206594+08:00",
