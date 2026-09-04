@@ -7,7 +7,7 @@
     "suggested_max_portfolio_heat_pct": 6.0,
     "max_daily_loss_pct": 6.0,
     "suggested_max_daily_loss_pct": 6.0,
-    "max_weekly_loss_pct": 90.0,
+    "max_weekly_loss_pct": 100.0,
     "max_weekly_loss_pct_min": 5.0,
     "max_weekly_loss_pct_max": 100.0,
     "suggested_max_weekly_loss_pct": 10.0,
