@@ -38,14 +38,14 @@
     "AUD_USD": "2026-09-04T13:46:01.206594+08:00",
     "NZD_USD": "2026-09-04T13:46:01.206594+08:00",
     "USD_JPY": "2026-09-04T16:45:59.683328+08:00",
-    "EUR_USD": "2026-09-04T20:01:11.682465+08:00",
-    "GBP_USD": "2026-09-04T20:01:11.682465+08:00",
-    "USD_CHF": "2026-09-04T20:01:11.682465+08:00",
-    "USD_CAD": "2026-09-04T20:01:11.682465+08:00",
-    "XAU_USD": "2026-09-04T20:01:11.682465+08:00",
-    "XAG_USD": "2026-09-04T20:01:11.682465+08:00",
-    "WTICO_USD": "2026-09-04T20:01:11.682465+08:00",
-    "BCO_USD": "2026-09-04T20:01:11.682465+08:00"
+    "EUR_USD": "2026-09-04T20:21:10.261480+08:00",
+    "GBP_USD": "2026-09-04T20:21:10.261480+08:00",
+    "USD_CHF": "2026-09-04T20:21:10.261480+08:00",
+    "USD_CAD": "2026-09-04T20:21:10.261480+08:00",
+    "XAU_USD": "2026-09-04T20:21:10.261480+08:00",
+    "XAG_USD": "2026-09-04T20:21:10.261480+08:00",
+    "WTICO_USD": "2026-09-04T20:21:10.261480+08:00",
+    "BCO_USD": "2026-09-04T20:21:10.261480+08:00"
   },
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
@@ -206,7 +206,8 @@
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
-    "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%"
+    "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%",
+    "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%"
   ],
   "last_scan_digest_sent_at": "2026-09-04T10:45:51.727854+00:00",
   "paused_instruments": {},
