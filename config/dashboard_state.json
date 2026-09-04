@@ -48,7 +48,7 @@
     "BCO_USD": "2026-09-04T23:58:29.346129+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 3,
+  "interval_scan_count_since_digest": 4,
   "interval_scanned_instruments_since_digest": [
     "USD_CAD",
     "WTICO_USD"
@@ -119,7 +119,7 @@
   },
   "peak_tracked_equity": 2090.0896,
   "friday_preclose_cancel_enabled": true,
-  "last_friday_preclose_cancel_at": "2026-08-28T17:00:00-04:00",
+  "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
   "range_confluence_enabled": false,
   "orb_fade_enabled": true,
   "vwap_scalp_enabled": true,
