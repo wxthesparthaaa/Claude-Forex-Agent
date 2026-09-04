@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-09-04T08:25:59.384382+00:00",
-  "candidates": []
+  "scanned_at": "2026-09-04T08:41:03.582677+00:00",
+  "candidates": [
+    {
+      "instrument": "GBP_USD",
+      "direction": "SHORT",
+      "entry_price": 1.35318,
+      "stop_loss": 1.35491,
+      "take_profit": 1.34972,
+      "confidence_pct": 71.1,
+      "confidence_components": {
+        "breadth": 71.42857142857143,
+        "rsi": 100.0,
+        "candlestick": 85.0,
+        "news": 33.333333333333336
+      },
+      "units": -18246,
+      "unit_label": "units",
+      "risk_amount": 40.0,
+      "notional_account_currency": 31286.71,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 45 (neutral range).",
+        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "News sentiment: supportive of this direction."
+      ],
+      "rejected_reason": "Daily loss limit reached: 7.0% >= 6.0%",
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": true,
+        "news": true
+      }
+    }
+  ]
 }
