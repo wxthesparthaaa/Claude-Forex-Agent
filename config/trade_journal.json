@@ -4430,5 +4430,30 @@
     "pyramided": false,
     "experiment_tag": "ORB_FADE",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "3770",
+    "instrument": "GBP_USD",
+    "direction": "LONG",
+    "units": 7426,
+    "entry_price": 1.35165,
+    "stop_loss": 1.34761,
+    "take_profit": 1.35367,
+    "confidence_pct": 76.5,
+    "rationale": [
+      "ORB Fade: faded a SHORT London-session breakout of the Asian range"
+    ],
+    "opened_at": "2026-09-04T14:35:56.312561+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 38.0,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "ORB_FADE",
+    "parent_trade_id": null
   }
 ]
