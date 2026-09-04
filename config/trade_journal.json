@@ -4532,5 +4532,30 @@
     "pyramided": false,
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "3790",
+    "instrument": "CAD_JPY",
+    "direction": "LONG",
+    "units": 2783,
+    "entry_price": 112.721,
+    "stop_loss": 111.039,
+    "take_profit": 113.562,
+    "confidence_pct": 76.5,
+    "rationale": [
+      "ORB Fade: faded a SHORT London-session breakout of the Asian range"
+    ],
+    "opened_at": "2026-09-04T14:51:24.475741+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 38.0,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "ORB_FADE",
+    "parent_trade_id": null
   }
 ]
