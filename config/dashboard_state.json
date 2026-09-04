@@ -38,9 +38,9 @@
     "AUD_USD": "2026-09-04T13:46:01.206594+08:00",
     "NZD_USD": "2026-09-04T13:46:01.206594+08:00",
     "USD_JPY": "2026-09-04T16:45:59.683328+08:00",
-    "EUR_USD": "2026-09-04T16:41:04.841030+08:00",
-    "GBP_USD": "2026-09-04T16:41:04.841030+08:00",
-    "USD_CHF": "2026-09-04T16:41:04.841030+08:00",
+    "EUR_USD": "2026-09-04T17:01:05.484478+08:00",
+    "GBP_USD": "2026-09-04T17:01:05.484478+08:00",
+    "USD_CHF": "2026-09-04T17:01:05.484478+08:00",
     "USD_CAD": "2026-09-04T04:40:59.340655+08:00",
     "XAU_USD": "2026-09-03T23:55:26.215182+08:00",
     "XAG_USD": "2026-09-03T23:55:26.215182+08:00",
@@ -48,12 +48,9 @@
     "BCO_USD": "2026-09-03T23:55:26.215182+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 5,
+  "interval_scan_count_since_digest": 4,
   "interval_scanned_instruments_since_digest": [
-    "USD_JPY",
-    "EUR_USD",
-    "GBP_USD",
-    "USD_CHF"
+    "USD_JPY"
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
