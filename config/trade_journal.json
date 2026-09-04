@@ -4288,17 +4288,18 @@
     "take_profit": 1.16287,
     "confidence_pct": 76.5,
     "rationale": [
-      "ORB Fade: faded a SHORT London-session breakout of the Asian range"
+      "ORB Fade: faded a SHORT London-session breakout of the Asian range",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L -39.41."
     ],
     "opened_at": "2026-09-04T10:05:54.326706+00:00",
     "account_currency": "SGD",
     "risk_amount": 38.0,
     "confidence_components": {},
     "confidence_components_available": {},
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-09-04T12:30:01.220488+00:00",
+    "exit_price": 1.15962,
+    "realized_pnl": -39.4119,
     "pyramided": false,
     "experiment_tag": "ORB_FADE",
     "parent_trade_id": null
