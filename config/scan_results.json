@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-09-04T10:01:00.915580+00:00",
-  "candidates": [
-    {
-      "instrument": "GBP_USD",
-      "direction": "SHORT",
-      "entry_price": 1.35236,
-      "stop_loss": 1.35491,
-      "take_profit": 1.34726,
-      "confidence_pct": 75.8,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 33.333333333333336
-      },
-      "units": -11755,
-      "unit_label": "units",
-      "risk_amount": 38.0,
-      "notional_account_currency": 20151.5,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 38 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-09-04T10:21:02.090433+00:00",
+  "candidates": []
 }
