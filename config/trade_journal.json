@@ -4379,5 +4379,30 @@
     "pyramided": false,
     "experiment_tag": "ORB_FADE",
     "parent_trade_id": null
+  },
+  {
+    "trade_id": "3752",
+    "instrument": "AUD_USD",
+    "direction": "LONG",
+    "units": 62822,
+    "entry_price": 0.7197,
+    "stop_loss": 0.71933,
+    "take_profit": 0.72002,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-04T13:21:13.283883+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 29.45736434108527,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null
   }
 ]
