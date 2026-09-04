@@ -48,7 +48,7 @@
     "BCO_USD": "2026-09-04T21:51:12.786902+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 2,
+  "interval_scan_count_since_digest": 1,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
@@ -99,6 +99,7 @@
     "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 7.6% > 6.0%",
+    "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
     "ORB Fade: Portfolio heat cap exceeded: opening this trade would bring open risk to 8.0% > 6.0%",
