@@ -72,7 +72,8 @@
     "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
     "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
     "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%",
-    "Base strategy scan: Daily loss limit reached: 7.0% >= 6.0%"
+    "Base strategy scan: Daily loss limit reached: 7.0% >= 6.0%",
+    "VWAP Scalp: Daily loss limit reached: 7.0% >= 6.0%"
   ],
   "last_scan_digest_sent_at": "2026-09-04T07:45:51.727760+00:00",
   "paused_instruments": {},
