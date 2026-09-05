@@ -137,26 +137,24 @@ def test_account_state_peak_equity_ratchets_up_but_never_down(tmp_path, monkeypa
     assert account.peak_equity == 2200.0
 
 
-def test_account_state_computes_real_daily_and_weekly_pnl(tmp_path, monkeypatch):
-    # Regression test: daily/weekly_realized_pnl used to be hardcoded to
-    # 0.0, which made the daily/weekly loss-limit checks always no-ops.
+def test_account_state_computes_real_daily_pnl(tmp_path, monkeypatch):
+    # Regression test: daily_realized_pnl used to be hardcoded to 0.0,
+    # which made the daily loss-limit check always a no-op.
     _isolate_state(tmp_path, monkeypatch)
     state = ds.default_state()
     state.strategy_starting_capital = 2000.0
     state.last_review_timestamp = "2026-08-15T21:00:00Z"
-    state.week_start_timestamp = "2026-08-10T00:00:00Z"
 
     entries = [
         {"status": "SUCCESSFUL", "closed_at": "2026-08-15T22:00:00Z", "realized_pnl": -30.0,
          "instrument": "EUR_USD", "direction": "LONG", "risk_amount": 40.0},  # after last review -- "today"
         {"status": "SUCCESSFUL", "closed_at": "2026-08-12T22:00:00Z", "realized_pnl": -100.0,
-         "instrument": "GBP_USD", "direction": "LONG", "risk_amount": 40.0},  # before last review, still this week
+         "instrument": "GBP_USD", "direction": "LONG", "risk_amount": 40.0},  # before last review, not "today"
     ]
 
     account = ds.account_state_from_tracked_capital(state, entries=entries)
 
     assert account.daily_realized_pnl == -30.0
-    assert account.weekly_realized_pnl == -130.0
 
 
 def test_account_state_builds_currency_exposure_from_real_open_positions(tmp_path, monkeypatch):

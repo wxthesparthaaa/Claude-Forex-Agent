@@ -200,21 +200,23 @@
     </div>
 
     <div class="card" style="flex:1; min-width:260px;">
-      <h3 style="margin-top:0;">
-        Win rate
-        {% if (wins + losses) > 0 %}
-        <span style="font-weight:700; font-size:1em;">&mdash; {{ "%.1f"|format(100 * wins / (wins + losses)) }}%</span>
-        {% endif %}
+      <h3 style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+        <button type="button" id="winRatePrevBtn" class="scan-btn" aria-label="Previous strategy"
+                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&lsaquo;</button>
+        <span><span id="winRateGroupLabel">Overall</span> win rate
+          <span id="winRatePct" style="font-weight:700; font-size:1em;">{% if (wins + losses) > 0 %}&mdash; {{ "%.1f"|format(100 * wins / (wins + losses)) }}%{% endif %}</span>
+        </span>
+        <button type="button" id="winRateNextBtn" class="scan-btn" aria-label="Next strategy"
+                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&rsaquo;</button>
       </h3>
       <div style="max-width:220px; margin:0 auto;">
         <canvas id="winRateChart" width="220" height="220"></canvas>
       </div>
       <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
-        {{ closed_trades }} closed trade{{ '' if closed_trades == 1 else 's' }}
-        {% if closed_trades > (wins + losses) %}
-        <br><span style="font-size:0.78rem;">({{ closed_trades - wins - losses }} with unrecoverable P&amp;L, excluded from win rate)</span>
-        {% endif %}
+        <span id="winRateClosedCount">{{ closed_trades }}</span> closed trade<span id="winRateClosedPlural">{{ '' if closed_trades == 1 else 's' }}</span>
+        <br><span id="winRateExcludedNote" style="font-size:0.78rem; {{ '' if closed_trades > (wins + losses) else 'display:none;' }}">({{ closed_trades - wins - losses }} with unrecoverable P&amp;L, excluded from win rate)</span>
       </p>
+      <p style="text-align:center; margin:0.35rem 0 0;" id="winRateDots"></p>
     </div>
   </div>
 
@@ -385,20 +387,10 @@
                min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
                value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Account-wide, not per-strategy. Raise this temporarily to keep a candidate's live data collection
+          Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
+          from the same daily P&amp;L figure. Raise this temporarily to keep a candidate's live data collection
           running past a normal day's losses; the default (6%) is a genuine safety limit, so lower it back
           when you're done collecting data. 0% disables it entirely -- no automatic stop on daily losses.
-        </p>
-
-        <label>Weekly loss limit: <span id="weeklyLossVal">{{ risk_config.max_weekly_loss_pct }}</span>%{{ ' (DISABLED)' if risk_config.max_weekly_loss_pct == 0 else '' }}</label>
-        <input type="range" name="max_weekly_loss_pct"
-               min="{{ risk_config.max_weekly_loss_pct_min }}" max="{{ risk_config.max_weekly_loss_pct_max }}" step="1"
-               value="{{ risk_config.max_weekly_loss_pct }}" oninput="weeklyLossVal.textContent = this.value">
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
-          from the same weekly P&amp;L figure. Raise this temporarily to keep a candidate's live data collection
-          running past a normal week's losses; the default (10%) is a genuine safety limit, so lower it back
-          when you're done collecting data. 0% disables it entirely -- no automatic stop on weekly losses.
         </p>
 
         <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
@@ -631,16 +623,75 @@
       return m === 0 ? (h + 'hr') : (h + 'hr ' + m + 'min');
     }
 
-    new Chart(document.getElementById('winRateChart'), {
-      type: 'pie',
-      data: {
-        labels: ['Wins', 'Losses'],
-        datasets: [{ data: [{{ wins }}, {{ losses }}], backgroundColor: ['#3fb950', '#f85149'] }]
-      },
-      options: {
-        plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
+    (function () {
+      // Carousel over per-strategy win rates (user request, 2026-09-05,
+      // now that base/VWAP Scalp/ORB Fade/Range Confluence all trade
+      // live off the same account) -- one shared pie chart, prev/next
+      // arrows and clickable dots switch which group's wins/losses it
+      // shows. Index 0 is always "Overall" so getting back to it is at
+      // most a couple of clicks (or one click on the first dot) from
+      // anywhere in the carousel.
+      var winRateGroups = {{ win_rate_breakdown|tojson }};
+      var winRateIndex = 0;
+
+      var winRateChart = new Chart(document.getElementById('winRateChart'), {
+        type: 'pie',
+        data: {
+          labels: ['Wins', 'Losses'],
+          datasets: [{ data: [winRateGroups[0].wins, winRateGroups[0].losses], backgroundColor: ['#3fb950', '#f85149'] }]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom', labels: { color: '#e8e6e0' } } }
+        }
+      });
+
+      function renderWinRateGroup(index) {
+        var g = winRateGroups[index];
+        var total = g.wins + g.losses;
+
+        winRateChart.data.datasets[0].data = [g.wins, g.losses];
+        winRateChart.update();
+
+        document.getElementById('winRateGroupLabel').textContent = g.label;
+        document.getElementById('winRatePct').textContent = total > 0 ? ('— ' + (100 * g.wins / total).toFixed(1) + '%') : '';
+
+        document.getElementById('winRateClosedCount').textContent = g.closed_trades;
+        document.getElementById('winRateClosedPlural').textContent = g.closed_trades === 1 ? '' : 's';
+
+        var excludedEl = document.getElementById('winRateExcludedNote');
+        var excluded = g.closed_trades - total;
+        if (excluded > 0) {
+          excludedEl.style.display = '';
+          excludedEl.textContent = '(' + excluded + ' with unrecoverable P&L, excluded from win rate)';
+        } else {
+          excludedEl.style.display = 'none';
+        }
+
+        var dotsContainer = document.getElementById('winRateDots');
+        dotsContainer.innerHTML = '';
+        winRateGroups.forEach(function (group, i) {
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.setAttribute('aria-label', 'Show ' + group.label + ' win rate');
+          dot.textContent = i === index ? '●' : '○';
+          dot.style.cssText = 'background:none; border:none; color:var(--muted); cursor:pointer; ' +
+            'font-size:0.7rem; padding:0 0.15rem;';
+          dot.addEventListener('click', function () { winRateIndex = i; renderWinRateGroup(i); });
+          dotsContainer.appendChild(dot);
+        });
       }
-    });
+
+      document.getElementById('winRatePrevBtn').addEventListener('click', function () {
+        winRateIndex = (winRateIndex - 1 + winRateGroups.length) % winRateGroups.length;
+        renderWinRateGroup(winRateIndex);
+      });
+      document.getElementById('winRateNextBtn').addEventListener('click', function () {
+        winRateIndex = (winRateIndex + 1) % winRateGroups.length;
+        renderWinRateGroup(winRateIndex);
+      });
+
+      renderWinRateGroup(0);
+    })();
 
     {% if weekly_gain_chart %}
     (function () {

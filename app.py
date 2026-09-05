@@ -68,9 +68,9 @@ from trade_execution import place_and_record, instrument_already_open, auto_exec
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
-from range_confluence_addon import check_range_confluence_opportunities
-from orb_fade_addon import check_orb_fade_opportunities
-from vwap_scalp_addon import check_vwap_scalp_opportunities
+from range_confluence_addon import check_range_confluence_opportunities, RANGE_CONFLUENCE_TAG
+from orb_fade_addon import check_orb_fade_opportunities, ORB_FADE_TAG
+from vwap_scalp_addon import check_vwap_scalp_opportunities, VWAP_SCALP_TAG
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
+                    "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
+                    "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
     ("2026-09-04", "Daily loss limit is now Settings-adjustable (0-100%, 0 disables it) alongside weekly, "
                     "after real equity erosion made the hardcoded 6% trip almost every day. VWAP Scalp got "
                     "a global cross-instrument cooldown (20-120 min, Settings) after 5 trades fired in one "
@@ -443,6 +446,31 @@ def _news_summary() -> dict:
     return {"configured": True, "currencies": currencies, "headlines": headlines, "most_recent_at": most_recent_at}
 
 
+def _win_rate_breakdown(journal: list) -> list:
+    """Per-strategy win/loss breakdown for the dashboard's win-rate pie
+    chart carousel (user request, 2026-09-05, now that 4 strategies --
+    base, Range Confluence, ORB Fade, VWAP Scalp -- all trade live off
+    the same account). "Overall" (index 0) covers every closed trade
+    regardless of tag; the base strategy is identified by the ABSENCE
+    of an experiment_tag, matching JournalEntry's own convention, not a
+    tag of its own. Retired-experiment tags (PYRAMID_ADDON, CARRY_TRADE,
+    TREND_FOLLOWING) still count toward Overall but get no dedicated
+    slide -- those features are gone, there's nothing live to break out.
+    """
+    groups = [
+        ("Overall", journal),
+        ("Base Strategy", [e for e in journal if e.get("experiment_tag") is None]),
+        ("VWAP Scalp", [e for e in journal if e.get("experiment_tag") == VWAP_SCALP_TAG]),
+        ("ORB Fade", [e for e in journal if e.get("experiment_tag") == ORB_FADE_TAG]),
+        ("Range Confluence", [e for e in journal if e.get("experiment_tag") == RANGE_CONFLUENCE_TAG]),
+    ]
+    breakdown = []
+    for label, subset in groups:
+        wins, losses = win_loss_counts(subset)
+        breakdown.append({"label": label, "wins": wins, "losses": losses, "closed_trades": len(closed_entries(subset))})
+    return breakdown
+
+
 def _out_of_range_warnings(risk_config) -> list:
     # 0% on the daily/weekly loss limits is a deliberate "disabled" value
     # (2026-09-04), not just an extreme threshold -- is_out_of_recommended_
@@ -454,12 +482,9 @@ def _out_of_range_warnings(risk_config) -> list:
     warnings = []
     if risk_config.max_daily_loss_pct == 0:
         warnings.append("Daily loss limit is DISABLED (0%) -- no automatic stop on daily losses")
-    if risk_config.max_weekly_loss_pct == 0:
-        warnings.append("Weekly loss limit is DISABLED (0%) -- no automatic stop on weekly losses")
     checks = [
         ("Portfolio heat", risk_config.max_portfolio_heat_pct, risk_config.suggested_max_portfolio_heat_pct),
         ("Daily loss limit", risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct),
-        ("Weekly loss limit", risk_config.max_weekly_loss_pct, risk_config.suggested_max_weekly_loss_pct),
         ("Max drawdown", risk_config.max_drawdown_pct, risk_config.suggested_max_drawdown_pct),
     ]
     for label, value, suggested in checks:
@@ -549,6 +574,7 @@ def dashboard():
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         scan_digest_interval_minutes=state.scan_digest_interval_minutes,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
+        win_rate_breakdown=_win_rate_breakdown(journal),
         forex_open=reopen_delta is None,
         reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
         strategy_capital=strategy_capital, broker_balance=broker_balance, account_currency=account_currency,
@@ -849,16 +875,12 @@ def settings():
         risk_config.max_trades_per_day = int(_clamp(
             float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
             risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
-        # Adjustable 0-100% (explicit user request, 2026-08-31 for weekly,
-        # 2026-09-04 for daily): raising either is the intended way to keep
-        # a candidate's live data collection (e.g. VWAP Scalp) running past
-        # what a normal day's/week's losses would otherwise trip -- see
-        # RiskConfig's own comment for why this is account-wide, not
-        # per-strategy. 0% is a real, deliberate value -- disables that
-        # specific breaker entirely (see risk_engine.validate_trade).
-        risk_config.max_weekly_loss_pct = _clamp(
-            float(request.form.get("max_weekly_loss_pct", risk_config.max_weekly_loss_pct)),
-            risk_config.max_weekly_loss_pct_min, risk_config.max_weekly_loss_pct_max)
+        # Adjustable 0-100% (explicit user request, 2026-09-04): raising this
+        # is the intended way to keep a candidate's live data collection
+        # (e.g. VWAP Scalp) running past what a normal day's losses would
+        # otherwise trip -- see RiskConfig's own comment for why this is
+        # account-wide, not per-strategy. 0% is a real, deliberate value --
+        # disables the breaker entirely (see risk_engine.validate_trade).
         risk_config.max_daily_loss_pct = _clamp(
             float(request.form.get("max_daily_loss_pct", risk_config.max_daily_loss_pct)),
             risk_config.max_daily_loss_pct_min, risk_config.max_daily_loss_pct_max)
@@ -955,13 +977,15 @@ def settings():
         # closed before this reset but after the last review kept
         # getting layered right back on top of the freshly-reset number
         # (a real report: reset to 2000.00, dashboard still showed
-        # 1885.42 -- exactly 2000 plus a pre-reset -114.58). Worse,
-        # weekly_realized_pnl (the actual weekly-loss-circuit-breaker
-        # input, and the "GAIN (THIS WEEK)" tile) is
-        # realized_pnl_since(entries, state.week_start_timestamp) -- if
-        # THAT isn't bumped too, a reset done specifically to get past a
-        # tripped weekly loss limit doesn't actually clear it; the
-        # breaker keeps seeing the same pre-reset week of losses.
+        # 1885.42 -- exactly 2000 plus a pre-reset -114.58). Worse, the
+        # "GAIN (THIS WEEK)" tile is realized_pnl_since(entries,
+        # state.week_start_timestamp) -- if THAT isn't bumped too, a
+        # capital reset leaves the tile showing a stale pre-reset week
+        # of P&L. (week_start_timestamp no longer feeds any risk-engine
+        # check -- the separate weekly loss limit it used to drive was
+        # retired 2026-09-05 as redundant with the daily limit -- but it
+        # still needs to move for this tile and the Friday reflection to
+        # stay accurate.)
         # Bumping both timestamps to now makes both "since" queries
         # start counting from a genuinely clean slate, matching what
         # scheduled_jobs.py's own nightly review and Friday reflection

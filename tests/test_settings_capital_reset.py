@@ -101,12 +101,14 @@ def test_reset_capital_makes_tracked_equity_exactly_the_reset_amount(tmp_path, m
         f"expected tracked equity to read exactly {DEFAULT_STRATEGY_CAPITAL} right after reset, got {live_equity}"
 
 
-def test_reset_capital_also_clears_the_weekly_loss_limit_input(tmp_path, monkeypatch):
-    # The user's own stated reason for resetting: they'd hit the weekly
-    # loss limit. weekly_realized_pnl (realized_pnl_since against
-    # week_start_timestamp) is the exact figure risk_engine checks
-    # against max_weekly_loss_pct -- if this doesn't reset too, the
-    # breaker stays tripped despite the "reset" succeeding cosmetically.
+def test_reset_capital_also_clears_the_gain_this_week_tile(tmp_path, monkeypatch):
+    # week_start_timestamp drives the "GAIN (THIS WEEK)" tile
+    # (realized_pnl_since against it) -- if a capital reset doesn't bump
+    # it too, the tile keeps showing a stale pre-reset week of P&L
+    # despite the reset succeeding cosmetically. (This timestamp used to
+    # also feed the weekly loss-limit breaker, retired 2026-09-05 as
+    # redundant with the daily limit -- the tile is the only thing left
+    # that depends on it moving here.)
     from trade_journal import realized_pnl_since
 
     client = _client(tmp_path, monkeypatch)
@@ -124,7 +126,7 @@ def test_reset_capital_also_clears_the_weekly_loss_limit_input(tmp_path, monkeyp
     post_entries = tj.load_journal()
     weekly_pnl = realized_pnl_since(post_entries, post_state.week_start_timestamp)
     assert weekly_pnl == 0.0, \
-        f"expected the weekly-loss-limit input to be genuinely cleared by the reset, got {weekly_pnl}"
+        f"expected the GAIN (THIS WEEK) tile's input to be genuinely cleared by the reset, got {weekly_pnl}"
 
 
 def test_explicit_capital_override_gets_the_same_fix(tmp_path, monkeypatch):

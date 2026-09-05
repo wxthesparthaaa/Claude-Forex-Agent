@@ -328,7 +328,6 @@ def account_state_from_tracked_capital(state: DashboardState, entries: list | No
     return AccountState(
         equity=equity, peak_equity=peak_equity,
         daily_realized_pnl=realized_pnl_since(entries, state.last_review_timestamp),
-        weekly_realized_pnl=realized_pnl_since(entries, state.week_start_timestamp),
         open_risk_amount=total_open_risk(entries), trades_today=trades_opened_today(entries),
         currency_net_exposure_pct=compute_net_currency_exposure_pct(open_positions, equity),
     )
@@ -388,7 +387,7 @@ def record_risk_limit_skip(source: str, message: str) -> None:
 # defaults, the risk-limit percentages) is a code-defined constant, never
 # written by any route.
 _USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct",
-                                 "max_weekly_loss_pct", "max_daily_loss_pct")
+                                 "max_daily_loss_pct")
 
 
 def risk_config_from_state(state: DashboardState) -> RiskConfig:

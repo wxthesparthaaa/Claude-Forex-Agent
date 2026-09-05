@@ -107,10 +107,6 @@ def test_out_of_range_warnings_flags_zero_as_disabled_not_silently_missed():
     warnings = flask_app._out_of_range_warnings(daily_off)
     assert any("Daily loss limit is DISABLED" in w for w in warnings)
 
-    weekly_off = RiskConfig(max_weekly_loss_pct=0.0)
-    warnings = flask_app._out_of_range_warnings(weekly_off)
-    assert any("Weekly loss limit is DISABLED" in w for w in warnings)
-
 
 def test_out_of_range_warnings_still_flags_ordinary_permissive_values():
     import app as flask_app

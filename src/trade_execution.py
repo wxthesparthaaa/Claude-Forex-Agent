@@ -204,7 +204,7 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
 
         fresh_account = AccountState(
             equity=account.equity, peak_equity=account.peak_equity,
-            daily_realized_pnl=account.daily_realized_pnl, weekly_realized_pnl=account.weekly_realized_pnl,
+            daily_realized_pnl=account.daily_realized_pnl,
             open_risk_amount=running_open_risk, trades_today=running_trades_today,
             currency_net_exposure_pct=running_currency_exposure,
         )

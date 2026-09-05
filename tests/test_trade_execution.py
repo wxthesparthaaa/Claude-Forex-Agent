@@ -79,7 +79,7 @@ def candidate(**overrides):
 
 
 def clean_account(**overrides):
-    defaults = dict(equity=2000.0, peak_equity=2000.0, daily_realized_pnl=0.0, weekly_realized_pnl=0.0,
+    defaults = dict(equity=2000.0, peak_equity=2000.0, daily_realized_pnl=0.0,
                      open_risk_amount=0.0, trades_today=0, currency_net_exposure_pct={})
     defaults.update(overrides)
     return AccountState(**defaults)

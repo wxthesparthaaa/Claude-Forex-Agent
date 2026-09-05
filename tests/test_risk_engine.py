@@ -12,7 +12,7 @@ from currency_exposure import currency_deltas_for_trade, compute_net_currency_ex
 def base_account(**overrides):
     defaults = dict(
         equity=2000.0, peak_equity=2000.0, daily_realized_pnl=0.0,
-        weekly_realized_pnl=0.0, open_risk_amount=0.0, trades_today=0,
+        open_risk_amount=0.0, trades_today=0,
         currency_net_exposure_pct={},
     )
     defaults.update(overrides)
@@ -40,12 +40,6 @@ def test_daily_loss_limit_blocks_new_trades():
     account = base_account(daily_realized_pnl=-125.0)  # 6.25% of 2000
     with pytest.raises(RiskViolation, match="Daily loss"):
         validate_trade(base_trade(), account, RiskConfig(max_daily_loss_pct=6.0))
-
-
-def test_weekly_loss_limit_blocks_new_trades():
-    account = base_account(weekly_realized_pnl=-205.0)  # 10.25%
-    with pytest.raises(RiskViolation, match="Weekly loss"):
-        validate_trade(base_trade(), account, RiskConfig(max_weekly_loss_pct=10.0))
 
 
 def test_trades_per_day_cap():
@@ -92,11 +86,6 @@ def test_daily_loss_limit_of_zero_disables_the_check():
     # first cent of loss, the opposite of what a 0 on this slider means.
     account = base_account(daily_realized_pnl=-500.0)  # 25% of equity -- would trip at any real threshold
     validate_trade(base_trade(), account, RiskConfig(max_daily_loss_pct=0.0))  # no raise
-
-
-def test_weekly_loss_limit_of_zero_disables_the_check():
-    account = base_account(weekly_realized_pnl=-1000.0)  # 50% of equity
-    validate_trade(base_trade(), account, RiskConfig(max_weekly_loss_pct=0.0))  # no raise
 
 
 def test_out_of_range_disclaimer_flags_more_permissive_values():

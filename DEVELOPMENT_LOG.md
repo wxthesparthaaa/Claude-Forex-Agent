@@ -6474,3 +6474,62 @@ new bound -- a new settings-route test file for the cooldown slider
 including its rounding-to-nearest-20 behavior, and vwap_scalp_addon
 gating tests for the cooldown itself, its settings-adjustability, and
 the future-timestamp edge case). Full suite green. Not pushed yet.
+
+## 2026-09-05 -- Retired the weekly loss limit, shipped a per-strategy win-rate carousel
+
+Two pieces of user feedback, addressed together.
+
+**1. Weekly loss limit retired as redundant.** User's own framing:
+"having a daily loss limit and weekly loss limit is redundant, i just
+need the daily loss limit." Both breakers drew from the exact same
+account-wide realized-P&L pool (every strategy's trades feed both), and
+in over a month of live running the weekly limit never once caught
+anything the daily limit wouldn't already have caught first -- it was
+just a second slider to keep in sync (and a second place to remember
+"0% means disabled") for no real extra protection. Removed end to end:
+`RiskConfig.max_weekly_loss_pct*`/`suggested_max_weekly_loss_pct` and
+`AccountState.weekly_realized_pnl` are gone from `risk_engine.py`, the
+weekly check in `validate_trade()` is gone, `/settings` no longer
+parses `max_weekly_loss_pct`, the dashboard's weekly slider and its
+out-of-range-warning branch are gone, and `_USER_ADJUSTABLE_RISK_FIELDS`
+no longer lists it. `state.week_start_timestamp` itself stays -- it
+still drives the "GAIN (THIS WEEK)" tile and the Friday reflection,
+both unrelated to the retired breaker; only the risk-engine input built
+from it (`weekly_realized_pnl`) is gone. Test suite updated to match:
+`tests/test_settings_weekly_loss_limit.py` deleted outright (the
+feature it tested no longer exists), the two weekly-specific
+`risk_engine` tests removed, and every `AccountState`/`RiskConfig`
+fixture across `test_dashboard_state.py`, `test_scan_workflow.py`, and
+`test_trade_execution.py` that constructed with the now-gone field
+updated.
+
+**2. Win-rate pie chart is now a per-strategy carousel.** With 4
+strategies now trading live off one account (base, Range Confluence,
+ORB Fade, VWAP Scalp), a single account-wide win rate no longer told
+the whole story -- a strategy quietly underperforming could hide behind
+the other three's better numbers. The dashboard's existing win-rate
+pie chart (previously always "Overall") is now a 5-slide carousel:
+Overall, Base Strategy, VWAP Scalp, ORB Fade, Range Confluence, with
+prev/next arrows and clickable dot indicators (clicking the first dot
+jumps straight back to Overall from anywhere in the carousel, per the
+user's own "should be able to switch back to the overall win rate
+easily" ask). New `app._win_rate_breakdown(journal)` computes each
+group's (wins, losses, closed_trades) -- the base strategy is
+identified by the ABSENCE of an `experiment_tag` (matching
+`JournalEntry`'s own convention), not a tag of its own; retired
+experiments (`PYRAMID_ADDON`, `CARRY_TRADE`, `TREND_FOLLOWING`) still
+count toward Overall but get no dedicated slide since those features no
+longer exist to break out. One shared Chart.js pie instance is mutated
+in place (`chart.data.datasets[0].data = [...]; chart.update()`) rather
+than destroying/recreating it on every carousel move.
+
+Verified by rendering `dashboard.html` standalone (Jinja2 `Environment`
+directly, mock context, Flask's `app.py` NOT started) and driving the
+carousel in a real browser tab served over a throwaway local HTTP
+server -- deliberately avoided booting the actual Flask app locally for
+this, since its scheduler would start a second live autopilot loop
+against the same real OANDA account already running on Render.
+
+Five new tests in `tests/test_win_rate_breakdown.py` covering the
+Overall/Base Strategy/per-addon grouping, retired-tag exclusion, and
+the empty-journal case. Full suite green (588 tests). Not pushed yet.
