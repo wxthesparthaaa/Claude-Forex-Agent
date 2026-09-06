@@ -13,7 +13,7 @@ import threading
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta, timezone
 
-from market_hours import SGT
+from market_hours import SGT, ALL_INSTRUMENT_WINDOWS, instrument_window_active
 from state_paths import atomic_write_json, load_json_resilient
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
@@ -114,6 +114,28 @@ class JournalEntry:
     # The base trade's own trade_id, for a PYRAMID_ADDON entry only --
     # ties the add-on back to what it was added to.
     parent_trade_id: str | None = None
+    # Whether market_hours.instrument_window_active(instrument) was True
+    # for this instrument at the moment this trade actually opened --
+    # stamped once, centrally, by record_open_trade() below (using the
+    # exact same "now" as opened_at itself), not reconstructed later from
+    # a raw timestamp. User request (2026-09-07): a "should the trading
+    # windows change?" review of the real journal had to rebuild this
+    # after the fact by re-running TODAY's window formula against each
+    # trade's opened_at, which is fragile -- the window definitions
+    # themselves changed twice early on (2026-08-15 per-pair windows
+    # introduced, 2026-08-16 DST-naive bug fixed), so applying the CURRENT
+    # formula to older trades silently conflated "wrong window today" with
+    # "no per-pair window existed yet." Only the base strategy actually
+    # GATES on this value (see scan_workflow.py/scheduled_jobs.py); VWAP
+    # Scalp/ORB Fade/Range Confluence get it stamped too even though none
+    # of them currently enforce it, purely so a future review of whether
+    # to extend gating to them has a trustworthy, point-in-time record
+    # instead of reconstructed guesswork. None means "no window defined
+    # for this instrument at all" (anything outside market_hours.
+    # ALL_INSTRUMENT_WINDOWS, e.g. the JPY crosses) or "trade journaled
+    # before this field existed" -- absence means unknown/not applicable,
+    # never treated the same as False.
+    in_liquidity_window: bool | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -203,18 +225,32 @@ def push_journal_xlsx_to_github(entries: list) -> bool:
         return False
 
 
+def _in_liquidity_window_now(instrument: str, now_utc: datetime) -> bool | None:
+    """None for an instrument with no defined liquidity window at all
+    (market_hours.ALL_INSTRUMENT_WINDOWS) -- distinguishes "no window
+    exists to check" from instrument_window_active's own "missing =
+    always open" convention, which is the right default for GATING
+    (widen coverage, don't silently exclude a pair) but the wrong one
+    for RECORDING (an unknown value shouldn't silently read as True)."""
+    if instrument not in ALL_INSTRUMENT_WINDOWS:
+        return None
+    return instrument_window_active(instrument, now_utc.astimezone(SGT))
+
+
 def record_open_trade(trade_id: str, candidate: dict) -> None:
     with JOURNAL_LOCK:
+        now_utc = datetime.now(timezone.utc)
         entries = load_journal()
         entry = JournalEntry(
             trade_id=trade_id, instrument=candidate["instrument"], direction=candidate["direction"],
             units=candidate["units"], entry_price=candidate["entry_price"], stop_loss=candidate["stop_loss"],
             take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
-            rationale=candidate.get("rationale", []), opened_at=datetime.now(timezone.utc).isoformat(),
+            rationale=candidate.get("rationale", []), opened_at=now_utc.isoformat(),
             account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
             confidence_components=candidate.get("confidence_components", {}),
             confidence_components_available=candidate.get("confidence_components_available", {}),
             experiment_tag=candidate.get("experiment_tag"), parent_trade_id=candidate.get("parent_trade_id"),
+            in_liquidity_window=_in_liquidity_window_now(candidate["instrument"], now_utc),
         )
         entries.append(asdict(entry))
         save_journal(entries)

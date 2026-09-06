@@ -6599,3 +6599,57 @@ holding the lock across a `time.sleep`, proving a concurrent
 ordering, not just outcome -- and correctly sees the post-reset empty
 list rather than reviving a pre-reset stale entry). Full suite green
 (590 tests).
+
+## 2026-09-07 (continued) -- Journal now stamps whether a trade opened inside its pair's liquidity window
+
+**Problem**: the "should the trading windows change?" review earlier
+today had to reconstruct, after the fact, whether each historical trade
+opened inside its instrument's configured `market_hours` window --
+re-running TODAY's window formula against each trade's raw `opened_at`
+timestamp. That's fragile: the window definitions themselves changed
+twice early on (2026-08-15 per-pair windows introduced, 2026-08-16
+DST-naive bug fixed), so applying the current formula to older trades
+silently conflated "wrong window today" with "no per-pair window
+existed yet at the time" -- exactly the ambiguity that made several of
+that review's per-pair numbers (NZD_USD, USD_JPY) look like live
+violations when they were really just pre-feature history.
+
+**Solution**: `JournalEntry` gets a new `in_liquidity_window: bool | None`
+field. Deliberately NOT computed inside `scan_workflow.generate_candidate`
+or `live_scan.py` -- both are shared verbatim with the backtest engine
+(`scripts/backtest_entry_filter.py` calls `generate_candidate` directly),
+and neither currently touches real wall-clock time at all; adding a
+`datetime.now()` call there would silently contaminate every backtest
+replay with the real current moment instead of the simulated historical
+one being replayed. Instead, `trade_journal.record_open_trade()` -- the
+one function every strategy funnels a real trade through, live-only,
+never called by a backtest -- computes it centrally via a new
+`_in_liquidity_window_now(instrument, now_utc)` helper, using the exact
+same `now_utc` timestamp it already stamps `opened_at` with, so the two
+fields can never drift apart from each other.
+
+`None` (not `False`) for an instrument with no defined window at all
+(the JPY crosses, VWAP-Scalp-only pairs outside `market_hours.
+ALL_INSTRUMENT_WINDOWS`) -- `instrument_window_active`'s own "missing =
+always open" default is the right call for GATING (widen coverage,
+don't silently exclude a pair) but the wrong one for RECORDING, where
+an unknown value must never silently read as a real `True`/`False`.
+Stamped for every strategy (base, VWAP Scalp, ORB Fade, Range
+Confluence) even though only the base strategy currently gates on it --
+purely informational for the other three, so a future review of
+whether to extend gating to them (VWAP Scalp/ORB Fade's own
+independent 5-minute ticks don't respect these per-pair windows at
+all, an existing observability gap flagged 2026-09-04/05) has a
+trustworthy, point-in-time record instead of more reconstructed
+guesswork.
+
+Five new tests in `tests/test_trade_journal.py`: three on the pure
+`_in_liquidity_window_now` helper (None for an unwindowed instrument,
+True/False for AUD_USD inside/outside its own window), and two
+integration tests on `record_open_trade` itself (using a frozen-`now`
+pattern matching `test_scheduled_jobs.py`'s own `_FrozenDatetime`
+convention) proving the stamped value and `opened_at` share the exact
+same instant, and that an unwindowed instrument records `None`. Full
+suite green (595 tests). Window-gating for VWAP Scalp/ORB Fade
+deliberately NOT extended yet -- explicit user request, holding off
+until there's more live data to justify it.

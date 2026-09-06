@@ -1,10 +1,12 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from datetime import datetime as _real_datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import trade_journal as tj
+from market_hours import SGT
 
 
 def _isolate(tmp_path, monkeypatch):
@@ -159,6 +161,61 @@ def test_record_open_trade_defaults_confidence_components_to_empty_dict(tmp_path
     tj.record_open_trade("101", candidate())  # no confidence_components in the candidate dict
     entries = tj.load_journal()
     assert entries[0]["confidence_components"] == {}
+
+
+def test_in_liquidity_window_none_for_an_instrument_with_no_configured_window():
+    # JPY crosses (VWAP Scalp-only pairs) have no entry in either of
+    # market_hours' window tables at all -- None must mean "no window to
+    # check", never silently coerced to True/False.
+    assert tj._in_liquidity_window_now("GBP_JPY", _real_datetime(2026, 8, 10, 8, 0, tzinfo=SGT)) is None
+
+
+def test_in_liquidity_window_true_inside_the_configured_window():
+    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT (see market_hours.py).
+    assert tj._in_liquidity_window_now("AUD_USD", _real_datetime(2026, 8, 10, 8, 0, tzinfo=SGT)) is True
+
+
+def test_in_liquidity_window_false_outside_the_configured_window():
+    assert tj._in_liquidity_window_now("AUD_USD", _real_datetime(2026, 8, 10, 22, 0, tzinfo=SGT)) is False
+
+
+class _FrozenDatetime(_real_datetime):
+    frozen_now = None
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls.frozen_now
+
+
+def _freeze_at(monkeypatch, dt):
+    _FrozenDatetime.frozen_now = dt
+    monkeypatch.setattr(tj, "datetime", _FrozenDatetime)
+
+
+def test_record_open_trade_stamps_in_liquidity_window_using_the_same_now_as_opened_at(tmp_path, monkeypatch):
+    # Regression test for a real gap (2026-09-07): a "should the trading
+    # windows change?" review had to reconstruct this after the fact from
+    # each trade's raw opened_at timestamp, re-run against TODAY's window
+    # formula -- fragile once window definitions themselves ever change
+    # again. Stamped once, centrally, at record time instead.
+    _isolate(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _real_datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))  # 16:00 SGT
+
+    tj.record_open_trade("101", candidate(instrument="AUD_USD"))  # AUD_USD's window is 05:00-14:00 SGT
+
+    entries = tj.load_journal()
+    assert entries[0]["opened_at"] == "2026-08-10T08:00:00+00:00"
+    assert entries[0]["in_liquidity_window"] is False  # 16:00 SGT is outside 05:00-14:00
+
+
+def test_record_open_trade_records_none_for_an_instrument_with_no_window(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _freeze_at(monkeypatch, _real_datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))
+
+    tj.record_open_trade("101", candidate(instrument="GBP_JPY"))
+
+    entries = tj.load_journal()
+    assert entries[0]["in_liquidity_window"] is None
 
 
 def test_trades_opened_today_counts_only_todays_entries():
