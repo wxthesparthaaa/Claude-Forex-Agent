@@ -5,12 +5,10 @@
     "risk_per_trade_pct_max": 2.0,
     "max_portfolio_heat_pct": 6.0,
     "suggested_max_portfolio_heat_pct": 6.0,
-    "max_daily_loss_pct": 6.0,
+    "max_daily_loss_pct": 0.0,
+    "max_daily_loss_pct_min": 0.0,
+    "max_daily_loss_pct_max": 100.0,
     "suggested_max_daily_loss_pct": 6.0,
-    "max_weekly_loss_pct": 70.0,
-    "max_weekly_loss_pct_min": 5.0,
-    "max_weekly_loss_pct_max": 100.0,
-    "suggested_max_weekly_loss_pct": 10.0,
     "max_drawdown_pct": 20.0,
     "suggested_max_drawdown_pct": 20.0,
     "max_currency_exposure_pct": 4.0,
@@ -136,7 +134,7 @@
   "peak_tracked_equity": 2090.0896,
   "friday_preclose_cancel_enabled": true,
   "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
-  "range_confluence_enabled": false,
+  "range_confluence_enabled": true,
   "orb_fade_enabled": true,
   "vwap_scalp_enabled": true,
   "vwap_scalp_max_trades_per_day": 15,
@@ -146,5 +144,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "base_strategy_enabled": true
+  "base_strategy_enabled": false
 }
