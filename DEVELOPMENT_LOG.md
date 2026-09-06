@@ -6533,3 +6533,69 @@ against the same real OANDA account already running on Render.
 Five new tests in `tests/test_win_rate_breakdown.py` covering the
 Overall/Base Strategy/per-addon grouping, retired-tag exclusion, and
 the empty-journal case. Full suite green (588 tests). Not pushed yet.
+
+## 2026-09-07 -- Fixed a lock mismatch that could revive or lose scan-digest risk-limit skips
+
+**Problem**: user pasted a Telegram scan digest reporting 2 risk-limit
+skips ("Base strategy scan: Portfolio heat cap exceeded... 8.0%>6.0%",
+"VWAP Scalp: Portfolio heat cap exceeded... 7.6%>6.0%") alongside "No
+trade currently open," and asked whether that was a bug -- Render's own
+logs for the digest's stated window showed nothing about either skip.
+Investigated by having the user paste the full Render log for that
+window (01:50am-4:35am SGT, covering essentially the entire "since
+03:53 SGT" digest period) and checking it line by line: VWAP Scalp's
+own risk-skip path DOES print to stdout on every real occurrence
+(`print(f"VWAP Scalp skipped {instrument}: {e}")`), and it was inside
+its active watch window (07:00-20:00 UTC) for the first 7 minutes of
+the claimed window -- yet no such line appears anywhere in either
+pasted excerpt. That ruled out "it happened but just isn't logged" and
+pointed at the skip being stale: recorded at some earlier point and
+resurfacing in a digest window that never actually produced it.
+
+**Root cause**: `record_risk_limit_skip()` (`dashboard_state.py`,
+called from every strategy's own `except RiskViolation:` handler) did
+its own `load_state()` -> mutate -> `save_state()` cycle under a
+PRIVATE lock (`_risk_skip_lock`) that never coordinated with
+`scheduled_jobs.py`'s `_scan_digest_lock` -- the lock already guarding
+`check_scan_digest()`'s own reset of the *other* three digest-window
+fields (`interval_scan_count_since_digest`,
+`interval_scanned_instruments_since_digest`, `last_scan_digest_sent_at`)
+against exactly this same class of race, first diagnosed and fixed
+back on 2026-08-xx for those three fields specifically. Two different
+`threading.Lock()` objects provide zero mutual exclusion against each
+other: a strategy's `record_risk_limit_skip` call (its own scheduled-
+job thread) could read state, then `check_scan_digest`'s reset (a
+separate scheduled job on the same 5-minute tick) could read-reset-save
+its own copy in between, and the strategy's save landing last would
+either wipe out its own fresh skip (lost update) or revive whatever
+stale entries it had read before the reset (resurrected into a later
+window that never produced them) -- `save_state()`'s synchronous GitHub
+push is slow enough to make this a real, not theoretical, window, same
+as the original incident.
+
+**Fix**: moved the lock into `dashboard_state.py` as a single shared
+`SCAN_DIGEST_LOCK`, imported by `scheduled_jobs.py` instead of defining
+its own -- every writer of the four digest-window fields (the tally
+increment, the digest reset, and every strategy's risk-skip recording)
+now serializes through the same real lock object.
+
+Verified the fix actually matters, not just structurally: reproduced
+the OLD two-lock behavior in an isolated script (a private lock
+standing in for the removed `_risk_skip_lock`) with the same
+hold-the-reset-lock-then-record-concurrently interleaving the new test
+uses -- confirmed it silently loses the concurrent skip entirely
+(`risk_limit_skips_since_digest` ends up `[]` instead of containing the
+new skip), the same class of corruption as the resurrection scenario,
+just the other direction. The real fix produces the correct, provably
+serialized ordering instead.
+
+Two new tests in `tests/test_scheduled_jobs.py`:
+`test_scan_digest_lock_is_shared_with_risk_skip_recording` (identity
+check -- `scheduled_jobs.SCAN_DIGEST_LOCK is dashboard_state.
+SCAN_DIGEST_LOCK`) and `test_risk_skip_recording_blocks_until_a_
+concurrent_digest_reset_releases_the_lock` (real `threading.Thread`
+holding the lock across a `time.sleep`, proving a concurrent
+`record_risk_limit_skip` call both genuinely blocks -- asserted via
+ordering, not just outcome -- and correctly sees the post-reset empty
+list rather than reviving a pre-reset stale entry). Full suite green
+(590 tests).

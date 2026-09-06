@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from oanda_client import OandaClient
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity,
-    confidence_weights_from_state, account_state_from_tracked_capital,
+    confidence_weights_from_state, account_state_from_tracked_capital, SCAN_DIGEST_LOCK,
 )
 from live_scan import run_live_scan
 from market_hours import (SGT, NY, is_forex_market_open, instrument_window_active,
@@ -102,11 +102,13 @@ _evening_scan_lock = threading.Lock()
 
 # Guards the read-modify-write cycle for the scan-digest counters
 # (interval_scan_count_since_digest / interval_scanned_instruments_
-# since_digest / last_scan_digest_sent_at) between run_autopilot_
-# interval_scan's tally increment and check_scan_digest's reset --
-# real incident: those two run as separate scheduled jobs anchored to
-# the SAME 5-minute IntervalTrigger, so they fire at nearly the exact
-# same instant on separate threads every single tick. An earlier fix
+# since_digest / risk_limit_skips_since_digest / last_scan_digest_sent_
+# at) between run_autopilot_interval_scan's tally increment, check_
+# scan_digest's reset, and dashboard_state.record_risk_limit_skip --
+# real incident: those run as separate scheduled jobs (or, for the risk-
+# skip case, an add-on strategy's own tick) anchored to the SAME
+# 5-minute IntervalTrigger, so they fire at nearly the exact same
+# instant on separate threads every single tick. An earlier fix
 # (reloading state fresh immediately before each one's own save)
 # narrowed the race window but didn't close it, because save_state()
 # itself is NOT fast -- it bundles a synchronous GitHub push that can
@@ -114,12 +116,23 @@ _evening_scan_lock = threading.Lock()
 # live: repeated digests only 5 minutes apart, the reset from one
 # check_scan_digest call silently lost to a concurrent tally-increment
 # save that had read state before the reset landed). A blocking lock
-# (not skip-if-busy, unlike _evening_scan_lock above) makes the two
+# (not skip-if-busy, unlike _evening_scan_lock above) makes these
 # read-modify-write cycles properly mutually exclusive regardless of
-# how long either save takes -- losing a tally increment or a digest
+# how long any one save takes -- losing a tally increment or a digest
 # reset to a race would be a real accuracy loss, so this waits instead
 # of skipping.
-_scan_digest_lock = threading.Lock()
+#
+# Defined in dashboard_state.py (as SCAN_DIGEST_LOCK) and imported here,
+# not redefined -- a second incident (2026-09-07) found risk_limit_
+# skips_since_digest was STILL exposed to this exact race because
+# record_risk_limit_skip (dashboard_state.py, called from every
+# strategy's own RiskViolation handler) used its own separate lock that
+# never coordinated with this one. A digest reported a "Portfolio heat
+# cap exceeded" skip with no corresponding evidence anywhere in Render's
+# logs for the window it claimed -- a stale entry that had survived an
+# earlier reset via that same lost-update pattern and kept resurfacing
+# in every digest since. One shared lock for every field this reset
+# touches closes that gap the same way it already closed the first one.
 
 # Minimum real-world gap enforced between two "Potential trades tonight"
 # sends, regardless of which process/thread/job is trying to send one --
@@ -338,14 +351,14 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
     # message -- doesn't also get folded into the "quiet interval scans"
     # count check_scan_digest reports on.
     #
-    # Lock-protected, not just a fresh reload -- see _scan_digest_lock's
+    # Lock-protected, not just a fresh reload -- see SCAN_DIGEST_LOCK's
     # own comment for the full incident. A "reload right before saving"
     # alone still isn't safe here, because save_state() bundles a
     # synchronous GitHub push that can take several seconds, giving
     # check_scan_digest's own read-modify-write cycle (a separate
     # scheduled job firing at nearly this same instant) a wide window to
     # interleave and silently lose one side's update.
-    with _scan_digest_lock:
+    with SCAN_DIGEST_LOCK:
         fresh_state = load_state()
         fresh_state.interval_scan_count_since_digest += 1
         for instrument in due:
@@ -396,7 +409,7 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
     producing several digests minutes apart instead of one every
     scan_digest_interval_minutes.
 
-    The whole decide-and-reset sequence runs under _scan_digest_lock (see
+    The whole decide-and-reset sequence runs under SCAN_DIGEST_LOCK (see
     its own comment) -- a SECOND real incident, after the cold-start fix
     above: digests kept firing every 5 minutes anyway, with the "since"
     timestamp never advancing, because run_autopilot_interval_scan's
@@ -405,7 +418,11 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
     moment later -- save_state() bundles a synchronous GitHub push that
     can take several seconds, wide enough for the two threads to
     interleave. A "reload right before saving" alone wasn't enough to
-    close that window; only mutual exclusion does."""
+    close that window; only mutual exclusion does. A THIRD incident
+    (2026-09-07) found risk_limit_skips_since_digest was still exposed
+    to this same race via record_risk_limit_skip's own separate lock --
+    fixed by moving to one shared SCAN_DIGEST_LOCK (see its definition
+    in dashboard_state.py) that every writer of these fields now uses."""
     now = now or datetime.now(timezone.utc)
     now_utc = now.astimezone(timezone.utc)
 
@@ -425,7 +442,7 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
         return
 
     send_args = None
-    with _scan_digest_lock:
+    with SCAN_DIGEST_LOCK:
         state = load_state()
         if phase_state_from_state(state).phase == "autopilot" and state.scan_digest_interval_minutes > 0:
             last_sent_iso = state.last_scan_digest_sent_at

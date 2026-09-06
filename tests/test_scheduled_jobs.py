@@ -1,5 +1,7 @@
 import os
 import sys
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -834,6 +836,63 @@ def test_interval_scan_digest_tally_does_not_revert_a_concurrent_digest_send(moc
     # reset's 0 (not the stale 7), and the send record isn't reverted.
     assert updated.interval_scan_count_since_digest == 1
     assert updated.last_scan_digest_sent_at == "2026-08-17T13:35:00+00:00"
+
+
+def test_scan_digest_lock_is_shared_with_risk_skip_recording(tmp_path, monkeypatch):
+    # Structural check for a real incident (2026-09-07): record_risk_
+    # limit_skip used to guard its own read-modify-write cycle with a
+    # SEPARATE lock (_risk_skip_lock in dashboard_state.py) that never
+    # coordinated with scheduled_jobs' own _scan_digest_lock guarding the
+    # other three digest-window fields' reset -- two different Lock
+    # objects give no mutual exclusion against each other at all. Fixed
+    # by moving to one lock (SCAN_DIGEST_LOCK, defined in dashboard_
+    # state.py) that both modules use. This just confirms it's genuinely
+    # the same object, not two equally-named locks.
+    assert scheduled_jobs.SCAN_DIGEST_LOCK is dashboard_state.SCAN_DIGEST_LOCK
+
+
+def test_risk_skip_recording_blocks_until_a_concurrent_digest_reset_releases_the_lock(tmp_path, monkeypatch):
+    # Regression test for the same incident, proving actual mutual
+    # exclusion (not just shared identity): while a digest reset holds
+    # SCAN_DIGEST_LOCK, a concurrent record_risk_limit_skip call must
+    # genuinely block until it's released -- and once it does proceed,
+    # it must see the RESET (empty) list, not a stale pre-reset snapshot
+    # it read before the reset landed. Before the fix, the two locks let
+    # this run unimpeded and could revive stale skip entries a reset had
+    # just cleared into a later digest window that never actually
+    # produced them (confirmed live).
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.risk_limit_skips_since_digest = ["stale entry from an earlier window"]
+    dashboard_state.save_state(state)
+
+    order = []
+
+    def held_reset():
+        with dashboard_state.SCAN_DIGEST_LOCK:
+            order.append("reset_acquired")
+            time.sleep(0.3)  # long enough for the main thread's call below to queue up on the lock
+            fresh = dashboard_state.load_state()
+            fresh.risk_limit_skips_since_digest = []
+            dashboard_state.save_state(fresh)
+            order.append("reset_released")
+
+    t = threading.Thread(target=held_reset)
+    t.start()
+    time.sleep(0.05)  # let the thread acquire the lock before the main thread tries to
+
+    dashboard_state.record_risk_limit_skip("VWAP Scalp", "Portfolio heat cap exceeded")
+    order.append("skip_recorded")
+    t.join(timeout=2)
+
+    # The skip call could only have run its own load/append/save AFTER
+    # the reset released the lock -- proven by ordering, not just the
+    # final state.
+    assert order == ["reset_acquired", "reset_released", "skip_recorded"]
+    # And because it saw the post-reset (empty) list, the stale entry is
+    # genuinely gone -- not revived alongside the new one.
+    assert dashboard_state.load_state().risk_limit_skips_since_digest == \
+        ["VWAP Scalp: Portfolio heat cap exceeded"]
 
 
 @patch("scheduled_jobs.run_evening_scan_and_notify")

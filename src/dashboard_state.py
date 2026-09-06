@@ -358,7 +358,32 @@ def save_state(state: DashboardState) -> None:
         print(f"WARNING: failed to push dashboard_state.json to GitHub: {e}", flush=True)
 
 
-_risk_skip_lock = threading.Lock()
+# Guards the read-modify-write cycle for EVERY field that
+# scheduled_jobs.check_scan_digest() reads and then resets as one unit:
+# interval_scan_count_since_digest, interval_scanned_instruments_since_
+# digest, risk_limit_skips_since_digest, and last_scan_digest_sent_at.
+# Shared with scheduled_jobs.py (imported there, not redefined) -- real
+# incident (2026-09-07): this used to be two SEPARATE locks, this one
+# guarding only risk_limit_skips_since_digest (from record_risk_limit_
+# skip below) and a different _scan_digest_lock in scheduled_jobs.py
+# guarding the other three fields' own read-modify-write cycle against
+# EACH OTHER. Two different Lock objects give no mutual exclusion
+# against each other at all -- a strategy's record_risk_limit_skip call
+# (running on its own scheduled-job thread) could read state, then
+# check_scan_digest's reset (a separate scheduled job, same 5-minute
+# tick) could read-reset-save its own copy (wiping risk_limit_skips_
+# since_digest to []), and THEN the strategy's save would land last,
+# reviving whatever stale skip entries it had read before the reset --
+# resurrecting them into a later digest window that never actually
+# produced them (confirmed live: a digest reported a "Portfolio heat
+# cap exceeded" skip with zero corresponding evidence anywhere in
+# Render's logs for the window it claimed). save_state() is slow enough
+# (a synchronous GitHub push) to make this a real, not theoretical,
+# window -- exactly the same race already fixed once for the other two
+# counters (see scheduled_jobs.py's own comment on this lock), just
+# missed here because the risk-skip list was added later and given its
+# own separate lock instead of joining the existing one.
+SCAN_DIGEST_LOCK = threading.Lock()
 
 
 def record_risk_limit_skip(source: str, message: str) -> None:
@@ -374,7 +399,7 @@ def record_risk_limit_skip(source: str, message: str) -> None:
     own errors rather than letting a state-write hiccup cascade into the
     strategy tick that's already handling a rejection."""
     try:
-        with _risk_skip_lock:
+        with SCAN_DIGEST_LOCK:
             state = load_state()
             state.risk_limit_skips_since_digest.append(f"{source}: {message}")
             save_state(state)

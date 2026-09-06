@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-07", "Fixed a race that could revive or lose scan-digest risk-limit skips: recording a skip "
+                    "used its own separate lock that never coordinated with the digest's reset, so the two "
+                    "could interleave and corrupt each other. Now share one lock."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
