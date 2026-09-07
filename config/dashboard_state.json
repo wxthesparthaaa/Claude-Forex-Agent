@@ -33,8 +33,8 @@
   "capital_reset_at": "2026-09-04T09:11:00.222598+00:00",
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
-    "AUD_USD": "2026-09-07T08:59:59.974127+08:00",
-    "NZD_USD": "2026-09-07T08:59:59.974127+08:00",
+    "AUD_USD": "2026-09-07T09:20:00.814140+08:00",
+    "NZD_USD": "2026-09-07T09:20:00.814140+08:00",
     "USD_JPY": "2026-09-07T09:04:57.754388+08:00",
     "EUR_USD": "2026-09-04T23:58:29.346129+08:00",
     "GBP_USD": "2026-09-04T23:58:29.346129+08:00",
@@ -46,11 +46,9 @@
     "BCO_USD": "2026-09-04T23:58:29.346129+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 5,
+  "interval_scan_count_since_digest": 4,
   "interval_scanned_instruments_since_digest": [
-    "USD_JPY",
-    "AUD_USD",
-    "NZD_USD"
+    "USD_JPY"
   ],
   "risk_limit_skips_since_digest": [],
   "last_scan_digest_sent_at": "2026-09-07T00:04:49.626988+00:00",
