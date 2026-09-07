@@ -159,5 +159,11 @@ def generate_candidate(
         from dashboard_state import record_risk_limit_skip
         record_risk_limit_skip("Base strategy scan", str(e))
         candidate.rejected_reason = str(e)
+        # Real incident (2026-09-07): this skip had NO trace in Render's
+        # logs at all -- only VWAP Scalp/ORB Fade/Range Confluence's own
+        # RiskViolation handlers printed anything, so a real portfolio-
+        # heat block here was invisible until dug out of state-sync git
+        # history. Matches those other strategies' own print convention.
+        print(f"Base strategy scan skipped {instrument}: {e}", flush=True)
 
     return candidate

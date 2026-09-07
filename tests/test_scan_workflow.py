@@ -147,3 +147,23 @@ def test_generate_candidate_flags_rejected_reason_when_risk_engine_blocks_it():
     assert candidate is not None  # still computed and shown, just flagged
     assert candidate.rejected_reason is not None
     assert "trades/day" in candidate.rejected_reason
+
+
+def test_generate_candidate_prints_the_risk_skip_to_render_logs(capsys):
+    # Regression test for a real incident (2026-09-07): this RiskViolation
+    # handler recorded the skip for the Telegram digest but never printed
+    # anything, unlike VWAP Scalp/ORB Fade/Range Confluence's own skip
+    # handlers -- a real portfolio-heat block here left zero trace in
+    # Render's logs and had to be dug out of state-sync git history.
+    higher_swings, entry_swings = bullish_setup()
+    account = clean_account(trades_today=99)
+    generate_candidate(
+        instrument="EUR_USD", entry_price=1.25,
+        entry_timeframe_swings=entry_swings, higher_timeframe_swings=higher_swings,
+        rsi_value=55, candlestick_pattern=None, breadth_agreement=0.9, edge_zscore=0.5, news_score=None,
+        meta=EUR_USD, account_currency="USD", get_price=lambda i: None,
+        account=account, risk_config=RiskConfig(max_trades_per_day=5),
+    )
+    captured = capsys.readouterr()
+    assert "Base strategy scan skipped EUR_USD" in captured.out
+    assert "trades/day" in captured.out

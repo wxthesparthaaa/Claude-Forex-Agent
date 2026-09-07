@@ -222,6 +222,11 @@ def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: 
             # own record_risk_limit_skip call, not a duplicate of it.
             from dashboard_state import record_risk_limit_skip
             record_risk_limit_skip("Autopilot batch", str(e))
+            # Real incident (2026-09-07): silent here too -- no trace in
+            # Render's logs, matching scan_workflow's own gap (see its
+            # comment). Matches VWAP Scalp/ORB Fade/Range Confluence's own
+            # print convention on their RiskViolation handlers.
+            print(f"Autopilot batch skipped {cd['instrument']}: {e}", flush=True)
             continue  # no longer safe given what this batch has already placed
 
         try:

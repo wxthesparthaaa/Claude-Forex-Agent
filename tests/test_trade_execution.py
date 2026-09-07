@@ -371,6 +371,28 @@ def test_auto_execute_second_candidate_blocked_by_first_within_same_batch(mock_s
 
 
 @patch("trade_execution.send_message")
+def test_auto_execute_prints_the_risk_skip_to_render_logs(mock_send, tmp_path, monkeypatch, capsys):
+    # Regression test for a real incident (2026-09-07): this RiskViolation
+    # handler recorded the skip for the Telegram digest but never printed
+    # anything, unlike VWAP Scalp/ORB Fade/Range Confluence's own skip
+    # handlers -- a real portfolio-heat block here left zero trace in
+    # Render's logs and had to be dug out of state-sync git history.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()
+    state = PhaseState(phase="autopilot")
+    risk_config = RiskConfig(autopilot_confidence_threshold_pct=50.0, max_portfolio_heat_pct=6.0)
+    account = clean_account(equity=2000.0, open_risk_amount=0.0)
+    candidates = [
+        candidate(instrument="EUR_USD", confidence_pct=80.0, risk_amount=70.0),
+        candidate(instrument="GBP_USD", confidence_pct=80.0, risk_amount=70.0),
+    ]
+    trade_execution.auto_execute_candidates(client, candidates, state, risk_config, account)
+    captured = capsys.readouterr()
+    assert "Autopilot batch skipped GBP_USD" in captured.out
+    assert "heat" in captured.out
+
+
+@patch("trade_execution.send_message")
 def test_auto_execute_second_candidate_blocked_by_currency_exposure_within_same_batch(
         mock_send, tmp_path, monkeypatch):
     # Real bug: running_trades_today/running_open_risk were tracked

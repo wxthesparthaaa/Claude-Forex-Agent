@@ -6653,3 +6653,40 @@ same instant, and that an unwindowed instrument records `None`. Full
 suite green (595 tests). Window-gating for VWAP Scalp/ORB Fade
 deliberately NOT extended yet -- explicit user request, holding off
 until there's more live data to justify it.
+
+## 2026-09-07 (continued) -- Base strategy and Autopilot batch risk-limit skips now print to Render logs
+
+**Problem**: user reported that during a ~2-day trading stall (nothing
+placed by any strategy), Render's logs showed no indication anything
+was wrong -- just a continuous stream of "0 opened" ticks. The real
+cause (dug out of state-sync git history, since it left no trace in
+Render's own logs): the account had genuinely hit its 6% portfolio-
+heat cap (`Portfolio heat cap exceeded: ... 8.0% > 6.0%` for the base
+strategy, `7.6% > 6.0%` for VWAP Scalp), correctly blocking every new
+trade. VWAP Scalp's own skip printed fine; the base strategy's
+`scan_workflow.py` skip and the autopilot batch executor's
+`trade_execution.py` skip did not -- both `RiskViolation` handlers
+called `record_risk_limit_skip()` (for the periodic Telegram digest)
+but had no `print()` of their own, unlike VWAP Scalp/ORB Fade/Range
+Confluence's matching handlers. This exact gap was flagged in this
+session days earlier (2026-09-05) but the fix landed on the wrong
+thing at the time -- a real lock-race bug around `record_risk_limit_
+skip` got fixed instead of the missing print statements themselves.
+
+**Solution**: added a `print(f"Base strategy scan skipped {instrument}:
+{e}", flush=True)` to `scan_workflow.py`'s handler
+([scan_workflow.py:156-166](src/scan_workflow.py:156)) and a matching
+`print(f"Autopilot batch skipped {cd['instrument']}: {e}", flush=True)`
+to `trade_execution.py`'s ([trade_execution.py:216-230](src/trade_execution.py:216)),
+exactly mirroring the other three strategies' own convention. Every
+risk-limit skip across all five sources now shows up in Render's logs
+the moment it happens, not just in the periodic digest (or, for these
+two, not at all until now).
+
+Two new tests using `capsys` (a pattern not previously used anywhere in
+this codebase for verifying a print, introduced here since that's
+exactly what needed proving): `test_generate_candidate_prints_the_
+risk_skip_to_render_logs` in `tests/test_scan_workflow.py` and
+`test_auto_execute_prints_the_risk_skip_to_render_logs` in
+`tests/test_trade_execution.py`, both asserting the exact printed text
+via `capsys.readouterr()`. Full suite green (597 tests).
