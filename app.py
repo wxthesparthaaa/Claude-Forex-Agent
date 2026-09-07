@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-07", "VWAP Scalp now rejects a trade if its stop is wider than its target (reward:risk below "
+                    "1:1) instead of taking it anyway -- 2 of today's 11 trades had the stop 3-4x wider "
+                    "than the target."),
     ("2026-09-07", "Base strategy and Autopilot batch risk-limit skips now print to Render logs, matching "
                     "VWAP Scalp/ORB Fade/Range Confluence -- a real portfolio-heat block previously left zero "
                     "trace and had to be dug out of state-sync git history to diagnose."),

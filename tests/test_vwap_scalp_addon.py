@@ -98,6 +98,21 @@ def _valid_entry_price(candles, direction):
     return target + stop_distance / 2      # inside (target, target + stop_distance)
 
 
+def _bad_reward_risk_entry_price(candles, direction):
+    """An entry price still on the correct (valid) side of the frozen
+    stop/target, but close enough to the target that tp_distance ends up
+    well under sl_distance -- the reward:risk-floor rejection scenario.
+    _valid_entry_price sits exactly halfway (1:1 by construction); this
+    sits 10% of the way from target toward stop_loss instead."""
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, direction_found = vs._find_confirmed_signal(times, z, times[-1])
+    target = vwap[signal_index]
+    stop_distance = (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
+    if direction == "LONG":
+        return target - stop_distance * 0.1
+    return target + stop_distance * 0.1
+
+
 class FakeClient:
     def __init__(self, candles_by_instrument=None, price=1.1000, fill_trade_id="999",
                  close_result=None, account_currency="USD"):
@@ -250,6 +265,56 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
     assert scalp_entries[0]["status"] == tj.OPEN
     sent_texts = [call.args[0] for call in mock_send.call_args_list]
     assert any("VWAP Scalp" in t for t in sent_texts)
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_rejects_entry_when_reward_risk_ratio_is_below_the_floor(mock_send, tmp_path, monkeypatch, capsys):
+    # User request (2026-09-07), after two same-day live trades (GBP_JPY,
+    # XAU_USD) showed the stop 3-4x wider than the target. Checked first
+    # whether this was previously tried and reverted: it wasn't -- the
+    # wide designed-R:R range was investigated twice as a suspected bug
+    # (2026-08-31, 2026-09-01) and both times concluded structural, and a
+    # placebo-signal backtest found the strategy's edge survives it. This
+    # floor is a new, not-backtested filter layered on top regardless,
+    # per explicit user choice to reject the worst tail.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles},
+                         price=_bad_reward_risk_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    entries = tj.load_journal()
+    assert [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG] == []
+    captured = capsys.readouterr()
+    assert "reward:risk" in captured.out
+    assert "below the 1:1 floor" in captured.out
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_a_favorable_reward_risk_ratio_still_opens_normally(mock_send, tmp_path, monkeypatch):
+    # The mirror image of the rejection test -- entry close to the STOP
+    # side instead of the target side, so tp_distance is well ABOVE
+    # sl_distance. Must not be caught by the new floor.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, _ = vs._find_confirmed_signal(times, z, times[-1])
+    target = vwap[signal_index]
+    stop_distance = (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
+    favorable_entry = target + stop_distance * 0.9  # close to the stop side -> small SL, big TP
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=favorable_entry)
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+    assert client.orders_placed == ["EUR_USD"]
 
 
 @patch("vwap_scalp_addon.send_message")

@@ -160,6 +160,27 @@ COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing conv
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- don't chase a stale setup
 
+# Reward:risk floor (2026-09-07), user request after two live trades on
+# the same day (GBP_JPY, XAU_USD) showed the stop distance sitting 3-4x
+# WIDER than the target distance -- risking meaningfully more than the
+# trade could make. take_profit is always the frozen session VWAP;
+# stop_loss is (Z_ENTRY + STOP_Z_BUFFER) stdevs BEYOND that same VWAP --
+# so unlike a fixed-R:R strategy, how favorable this ratio is on any
+# given trade depends entirely on how far price already was from VWAP
+# at signal time, not on anything this code controls directly. This is
+# NOT re-litigating settled research: the wide 0.35-4.24 designed-R:R
+# range itself was investigated twice (2026-08-31 live-detection-window
+# bug, 2026-09-01 post-fix check-in) and both times concluded structural,
+# not a defect -- and the 2026-08-31 placebo-signal backtest (see
+# DEVELOPMENT_LOG.md) found the strategy's real edge comes from genuine
+# z-extreme entries winning even under this same unfavorable-by-default
+# geometry, not from R:R consistency. This floor is a genuinely new,
+# NOT backtested filter layered on top of that validated signal -- an
+# explicit user choice to reject the worst tail (SL wider than TP)
+# rather than trust the aggregate backtest result to keep covering it,
+# not a claim that the wider validated range was ever wrong.
+MIN_REWARD_RISK_RATIO = 1.0
+
 # Real incident (2026-08-31, 2026-09-02): VWAP Scalp alone opened 18 of the
 # account's shared 30-trade daily allowance on each of two separate days
 # (the base strategy managed only 4-5 those same days), tripping the
@@ -524,6 +545,26 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- entry price {entry_price} has already "
               f"crossed its frozen stop/target ({stop_loss}/{take_profit}) since signal confirmation; "
               f"a real broker would reject this order", flush=True)
+        return False
+
+    # Reward:risk floor -- see MIN_REWARD_RISK_RATIO's own comment for
+    # why this is a new filter, not a fix to a previously-identified bug.
+    # sl_distance/tp_distance are both guaranteed > 0 here: the `valid`
+    # check above already confirmed stop_loss/take_profit sit strictly
+    # on either side of entry_price.
+    sl_distance = abs(entry_price - stop_loss)
+    tp_distance = abs(take_profit - entry_price)
+    floor_distance = MIN_REWARD_RISK_RATIO * sl_distance
+    # math.isclose guards against rejecting a genuinely-1:1 trade over a
+    # floating-point rounding artifact from round_price -- real fixture
+    # data hit exactly this (both distances printed identically at 5
+    # decimals, but compared unequal at full float precision).
+    if tp_distance < floor_distance and not math.isclose(tp_distance, floor_distance, rel_tol=1e-9):
+        from dashboard_state import record_risk_limit_skip
+        reason = (f"reward:risk {tp_distance / sl_distance:.2f}:1 is below the {MIN_REWARD_RISK_RATIO:.0f}:1 "
+                  f"floor (risking {sl_distance:.5f} to make {tp_distance:.5f})")
+        record_risk_limit_skip("VWAP Scalp", reason)
+        print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- {reason}", flush=True)
         return False
 
     summary = client.get_account_summary()

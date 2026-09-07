@@ -6690,3 +6690,71 @@ risk_skip_to_render_logs` in `tests/test_scan_workflow.py` and
 `test_auto_execute_prints_the_risk_skip_to_render_logs` in
 `tests/test_trade_execution.py`, both asserting the exact printed text
 via `capsys.readouterr()`. Full suite green (597 tests).
+
+## 2026-09-07 (continued) -- VWAP Scalp: reject a trade if the stop is wider than the target
+
+**Request**: after two same-day live trades (GBP_JPY, XAU_USD) showed
+the designed stop sitting 3-4x wider than the designed target, user
+asked for a reward:risk floor -- but first, whether this had already
+been tried and reverted after being found to cause further losses.
+
+**Checked before writing any code**: it hadn't. But the wide designed-
+R:R range itself (0.68-5.89 pre-fix, 0.35-4.24 post-fix) was
+investigated TWICE as a suspected bug and both times root-caused to
+something else -- `_compute_vwap_signal` only checking the single
+latest bar per poll (2026-08-31, fixed by scanning the whole window
+for confirmed reversals, commit `1eade67`), and separately confirmed
+"already understood to be structural (target/stop frozen at the
+confirmation bar, entry filled at a fresh live price moments later)...
+not a red flag" after the live-detection fix (2026-09-01 check-in).
+More consequential: the 2026-08-31 placebo-signal backtest (random,
+non-extreme entries run through the IDENTICAL target=VWAP/stop=fixed-
+buffer construction) found that construction alone produces the same
+"unfavorable R:R by default" geometry a low-R:R filter would target --
+and that placebo LOST decisively (11.6-33.5% day-win-rate) while the
+real z-extreme signal, under that same geometry, still won 85%+ of the
+time. The explicit conclusion on record: this strategy's edge comes
+from genuine z-extremes, not from R:R consistency, and the backtest
+validating live profitability already includes plenty of sub-1:1
+trades in its winning sample. Surfaced this plainly before building
+anything -- a blind floor risks cutting real backtested winners, not
+just losers, since R:R was never the variable the edge was shown to
+depend on. User's explicit choice, with that tradeoff on the table:
+reject anything below 1:1 anyway, as a deliberate new filter layered
+on top of the validated signal, not a fix to a previously-found defect.
+
+**Implementation**: new `MIN_REWARD_RISK_RATIO = 1.0` gate in
+`vwap_scalp_addon._open_position`
+([vwap_scalp_addon.py:486-544](src/vwap_scalp_addon.py:486)), placed
+right after the existing frozen-stop/target validity check (same
+fail-fast-before-API-calls position). Computes `sl_distance`/
+`tp_distance` from the already-validated entry/stop/target and skips
+(recording the reason via `record_risk_limit_skip` + printing it,
+matching every other VWAP Scalp skip) whenever `tp_distance` sits
+below the floor.
+
+**Bug caught before it shipped**: the naive `tp_distance < floor`
+comparison rejected the codebase's OWN test fixtures, which construct
+entry exactly halfway between target and stop (1:1 by design) --
+`round_price`'s own rounding made the two distances compare as
+unequal at full float precision despite printing identically at 5
+decimals. Fixed with a `math.isclose` tolerance so a genuine 1:1 trade
+is never falsely rejected by rounding noise; only a meaningfully-below-
+1:1 trade trips the gate.
+
+Sanity-checked against today's real trades using their actual
+opened_at entry/stop/target values: 3814 GBP_JPY (SL 0.145/TP 0.037)
+and 3856 XAU_USD (SL 2.995/TP 0.971) would both have been correctly
+rejected; 3872 XAG_USD (SL 0.036/TP 0.178, favorable) passes through
+untouched, confirming the gate targets the intended cases and nothing
+else from that data.
+
+Two new tests in `tests/test_vwap_scalp_addon.py`:
+`test_rejects_entry_when_reward_risk_ratio_is_below_the_floor` (a new
+`_bad_reward_risk_entry_price` fixture helper places entry 10% of the
+way from target toward stop instead of the existing helper's exact
+halfway point, producing a real sub-1:1 ratio; asserts no trade opens,
+no journal entry, and the printed skip reason) and
+`test_a_favorable_reward_risk_ratio_still_opens_normally` (the mirror
+case, entry close to the stop side, confirms the floor doesn't
+falsely catch a good ratio). Full suite green (599 tests).
