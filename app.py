@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Daily loss limit is now a real on/off switch plus a percentage that always means a real "
+                    "threshold (1-50%) -- the old 0-100% slider had 0% AND ~100% both quietly meaning "
+                    "\"no limit,\" for two different reasons."),
     ("2026-09-07", "VWAP Scalp now rejects a trade if its stop is wider than its target (reward:risk below "
                     "1:1) instead of taking it anyway -- 2 of today's 11 trades had the stop 3-4x wider "
                     "than the target."),
@@ -484,16 +487,14 @@ def _win_rate_breakdown(journal: list) -> list:
 
 
 def _out_of_range_warnings(risk_config) -> list:
-    # 0% on the daily/weekly loss limits is a deliberate "disabled" value
-    # (2026-09-04), not just an extreme threshold -- is_out_of_recommended_
-    # range's own "value > suggested" comparison silently misses it (0 is
-    # numerically BELOW every suggested default, so it reads as "stricter
-    # than default" when it's actually the single most permissive value
-    # possible: no automatic stop on losses at all). Flagged explicitly
-    # here rather than relying on that comparison to catch it.
+    # daily_loss_limit_enabled is a real on/off switch (2026-09-08
+    # redesign) -- max_daily_loss_pct itself is never a magic "disabled"
+    # value anymore, so this checks the switch directly instead of
+    # is_out_of_recommended_range's own "value > suggested" comparison
+    # (which has no way to represent "the check doesn't run at all").
     warnings = []
-    if risk_config.max_daily_loss_pct == 0:
-        warnings.append("Daily loss limit is DISABLED (0%) -- no automatic stop on daily losses")
+    if not risk_config.daily_loss_limit_enabled:
+        warnings.append("Daily loss limit is DISABLED -- no automatic stop on daily losses")
     checks = [
         ("Portfolio heat", risk_config.max_portfolio_heat_pct, risk_config.suggested_max_portfolio_heat_pct),
         ("Daily loss limit", risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct),
@@ -887,12 +888,14 @@ def settings():
         risk_config.max_trades_per_day = int(_clamp(
             float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
             risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
-        # Adjustable 0-100% (explicit user request, 2026-09-04): raising this
-        # is the intended way to keep a candidate's live data collection
-        # (e.g. VWAP Scalp) running past what a normal day's losses would
-        # otherwise trip -- see RiskConfig's own comment for why this is
-        # account-wide, not per-strategy. 0% is a real, deliberate value --
-        # disables the breaker entirely (see risk_engine.validate_trade).
+        # Redesigned 2026-09-08: a real on/off switch, separate from the
+        # percentage -- see RiskConfig's own comment for why (0%/100% both
+        # quietly meaning "no limit" on one slider was confusing). Raising
+        # the percentage is still the intended way to keep a candidate's
+        # live data collection (e.g. VWAP Scalp) running past what a
+        # normal day's losses would otherwise trip -- see RiskConfig's own
+        # comment for why this is account-wide, not per-strategy.
+        risk_config.daily_loss_limit_enabled = request.form.get("daily_loss_limit_enabled") == "on"
         risk_config.max_daily_loss_pct = _clamp(
             float(request.form.get("max_daily_loss_pct", risk_config.max_daily_loss_pct)),
             risk_config.max_daily_loss_pct_min, risk_config.max_daily_loss_pct_max)

@@ -80,12 +80,19 @@ def test_net_exposure_stacks_correlated_pairs_on_same_currency():
     assert exposure["GBP"] == pytest.approx(2.0)
 
 
-def test_daily_loss_limit_of_zero_disables_the_check():
-    # 0% is a deliberate "disabled" value (2026-09-04), not the strictest
-    # possible threshold -- naively checking ">= 0" would trip on the very
-    # first cent of loss, the opposite of what a 0 on this slider means.
+def test_daily_loss_limit_disabled_switch_skips_the_check():
+    # 2026-09-08 redesign: daily_loss_limit_enabled is the sole on/off
+    # control -- max_daily_loss_pct itself no longer has a magic
+    # "disabled" value, so this must be off via the real switch, not by
+    # driving the percentage to some extreme.
     account = base_account(daily_realized_pnl=-500.0)  # 25% of equity -- would trip at any real threshold
-    validate_trade(base_trade(), account, RiskConfig(max_daily_loss_pct=0.0))  # no raise
+    validate_trade(base_trade(), account, RiskConfig(daily_loss_limit_enabled=False))  # no raise
+
+
+def test_daily_loss_limit_enabled_by_default():
+    account = base_account(daily_realized_pnl=-125.0)  # 6.25% of 2000, above the 6% default threshold
+    with pytest.raises(RiskViolation, match="Daily loss"):
+        validate_trade(base_trade(), account, RiskConfig())
 
 
 def test_out_of_range_disclaimer_flags_more_permissive_values():

@@ -6758,3 +6758,50 @@ no journal entry, and the printed skip reason) and
 `test_a_favorable_reward_risk_ratio_still_opens_normally` (the mirror
 case, entry close to the stop side, confirms the floor doesn't
 falsely catch a good ratio). Full suite green (599 tests).
+
+## 2026-09-08 -- Daily loss limit redesign: a real on/off switch, separate from the percentage
+
+**Problem**: user feedback -- "the daily loss limit slider dont make
+sense, 0% means disabled, but 100 percent means indirectly there isnt
+a loss limit- make it make sense." Correct: the 2026-09-04 design used
+0% as the slider's own "disabled" value, but the slider's OTHER end
+(100%) also meant "no real limit" for a completely different reason --
+`daily_realized_pnl / equity` would have to wipe out the account's
+entire starting equity in ONE day to ever reach a 100% threshold,
+something normal position sizing makes practically unreachable. Two
+different values on the same control both quietly meant "off," and it
+was easy to lose track of "0 = deliberately disabled" once the
+percentage had also been cranked up for VWAP Scalp data collection
+(exactly what happened live on 2026-09-07 -- the daily limit ended up
+at 100%, mistaken for a workaround to an unrelated portfolio-heat
+block).
+
+**Fix**: split into two orthogonal `RiskConfig` fields.
+`daily_loss_limit_enabled: bool = True` is now the SOLE on/off
+control -- `validate_trade`'s daily-loss check gates on this flag
+directly, not on the percentage. `max_daily_loss_pct` no longer has a
+magic disable value at all; its bounds moved from 0-100% to 1-50%, so
+every position on the slider now means a real, crossable threshold
+(50% is still generous headroom for data collection, but an account
+CAN realistically lose that much in a day under leverage, unlike
+100%). Both fields added to `_USER_ADJUSTABLE_RISK_FIELDS`.
+`app._out_of_range_warnings` now flags the DISABLED state off the
+real switch instead of `value == 0`. `templates/dashboard.html`'s
+slider became a toggle-row (matching the existing
+`vwap_scalp_enabled`/`base_strategy_enabled` switch pattern) plus the
+slider underneath, with copy explaining the threshold stays wherever
+it's set while the switch is off, ready for when it's switched back on.
+
+Nine tests updated/added across `tests/test_risk_engine.py`
+(`test_daily_loss_limit_disabled_switch_skips_the_check` replaces the
+old "0 disables it" test; new `test_daily_loss_limit_enabled_by_default`),
+`tests/test_dashboard_state.py` (adjustable-field passthrough now
+covers the boolean too), and a rewritten
+`tests/test_settings_daily_loss_limit.py` (new bounds, the toggle
+persisting independently of the percentage, re-enabling restores
+enforcement, clamping to the new 1-50 range, and the DISABLED warning
+firing off the switch). Full suite green (600 tests; 1 pre-existing,
+unrelated flaky test in `test_trade_journal.py` -- confirmed failing
+identically on a clean checkout with none of this change applied,
+tied to `trades_opened_today`'s SGT-day-boundary math coinciding with
+the real time this session happened to run at, not a regression here).

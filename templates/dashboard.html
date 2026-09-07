@@ -382,15 +382,23 @@
                min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
                value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
 
-        <label>Daily loss limit: <span id="dailyLossVal">{{ risk_config.max_daily_loss_pct }}</span>%{{ ' (DISABLED)' if risk_config.max_daily_loss_pct == 0 else '' }}</label>
+        <div class="toggle-row">
+          <span>Daily loss limit{{ ' -- DISABLED' if not risk_config.daily_loss_limit_enabled else '' }}</span>
+          <label class="switch">
+            <input type="checkbox" name="daily_loss_limit_enabled" {{ 'checked' if risk_config.daily_loss_limit_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <label>Daily loss threshold: <span id="dailyLossVal">{{ risk_config.max_daily_loss_pct }}</span>%</label>
         <input type="range" name="max_daily_loss_pct"
                min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
                value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
           Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
-          from the same daily P&amp;L figure. Raise this temporarily to keep a candidate's live data collection
-          running past a normal day's losses; the default (6%) is a genuine safety limit, so lower it back
-          when you're done collecting data. 0% disables it entirely -- no automatic stop on daily losses.
+          from the same daily P&amp;L figure. Switch this off temporarily to keep a candidate's live data
+          collection running past a normal day's losses (the threshold below stays wherever you leave it,
+          ready for when you switch back on); the default (6%) is a genuine safety limit, so turn it back on
+          when you're done collecting data.
         </p>
 
         <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>

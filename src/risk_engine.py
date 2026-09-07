@@ -33,18 +33,27 @@ class RiskConfig:
     # touch existing open positions (those stay broker-protected by their
     # own attached SL/TP regardless).
     #
-    # Adjustable 0-100% (explicit user request, 2026-09-04): raising this
-    # temporarily is the intended way to keep a new candidate's live data
-    # collection (e.g. VWAP Scalp) running past what would otherwise be a
-    # normal day's worth of losses tripping the SHARED breaker -- every
-    # strategy draws from the same daily_realized_pnl figure, so this isn't
-    # per-strategy, it's a genuine (if temporary) loosening of the
-    # account-wide backstop. 0% is a real, deliberate value, not just the
-    # bottom of the slider -- it disables the breaker entirely (see
-    # validate_trade's own skip-when-zero handling below); suggested_*
-    # stays at its original default so the dashboard's red out-of-range
-    # disclaimer still flags a raised value (including 0) as a deliberate,
-    # non-default choice.
+    # Redesigned 2026-09-08 (explicit user request): a 0-100% slider used
+    # to double as its own on/off switch (0% = disabled), but 100% ALSO
+    # meant "no real limit" in practice -- realized_pnl would have to wipe
+    # out the account's entire starting equity in one day to ever reach
+    # it, something that essentially can't happen given normal position
+    # sizing. Two different values on the same slider both quietly meant
+    # "no limit," for two unrelated reasons -- confusing, and it made "0%
+    # disabled" easy to lose track of once someone had also cranked the
+    # percentage up for data collection. Split into two orthogonal
+    # controls: daily_loss_limit_enabled (a genuine on/off switch) and
+    # max_daily_loss_pct (which now ALWAYS means a real, meaningful
+    # threshold within max_daily_loss_pct_min/_max -- no more magic
+    # values). Raising the percentage temporarily is still the intended
+    # way to keep a new candidate's live data collection (e.g. VWAP
+    # Scalp) running past what would otherwise be a normal day's worth of
+    # losses tripping the SHARED breaker -- every strategy draws from the
+    # same daily_realized_pnl figure, so this isn't per-strategy, it's a
+    # genuine (if temporary) loosening of the account-wide backstop.
+    # suggested_max_daily_loss_pct stays at its original default so the
+    # dashboard's red out-of-range disclaimer still flags a raised value
+    # as a deliberate, non-default choice.
     #
     # A separate weekly loss limit existed 2026-08-31 through 2026-09-05
     # but was retired as redundant (user feedback, 2026-09-05): it drew
@@ -52,9 +61,10 @@ class RiskConfig:
     # never blocked anything the daily limit wouldn't already have caught
     # first, so it was just a second slider to keep in sync for no real
     # extra protection.
+    daily_loss_limit_enabled: bool = True
     max_daily_loss_pct: float = 6.0
-    max_daily_loss_pct_min: float = 0.0
-    max_daily_loss_pct_max: float = 100.0
+    max_daily_loss_pct_min: float = 1.0
+    max_daily_loss_pct_max: float = 50.0
     suggested_max_daily_loss_pct: float = 6.0
 
     # Circuit breaker: halts ALL new trading (any mode) until a human
@@ -127,11 +137,11 @@ def validate_trade(trade: ProposedTrade, account: AccountState, config: RiskConf
             f"Halted until manually reset from the dashboard."
         )
 
-    # 0% is a deliberate "disabled" value, not just an extreme threshold --
-    # naively plugging it into ">= 0" would trip on the very first cent of
-    # loss (the most restrictive setting possible), the opposite of what a
-    # 0 on this slider is supposed to mean. Skip the check entirely instead.
-    if config.max_daily_loss_pct > 0:
+    # daily_loss_limit_enabled is the sole on/off control (2026-09-08
+    # redesign) -- max_daily_loss_pct is never itself a magic disable
+    # value anymore, so this check no longer inspects the percentage to
+    # decide whether it's "really" active.
+    if config.daily_loss_limit_enabled:
         daily_loss_pct = 100 * -account.daily_realized_pnl / account.equity if account.daily_realized_pnl < 0 else 0
         if daily_loss_pct >= config.max_daily_loss_pct:
             raise RiskViolation(f"Daily loss limit reached: {daily_loss_pct:.1f}% >= {config.max_daily_loss_pct}%")

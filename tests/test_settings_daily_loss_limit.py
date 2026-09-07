@@ -3,10 +3,16 @@ User request (2026-09-04): make max_daily_loss_pct adjustable via
 /settings, the same way max_weekly_loss_pct already was -- previously
 only the weekly breaker could be loosened for live data collection, so
 a user who'd already raised weekly still got stuck by the daily gate
-(with no way to loosen it short of a full capital reset). 0% is a real,
-deliberate value here, not just the bottom of the slider -- it disables
-the daily breaker entirely (see risk_engine.validate_trade's own
-skip-when-zero handling).
+(with no way to loosen it short of a full capital reset).
+
+Redesigned 2026-09-08: the original 0-100% slider used 0% as its own
+"disabled" value, but 100% ALSO meant "no real limit" in practice (an
+account can't realistically lose 100% of its starting equity in one
+day under normal position sizing) -- two different slider positions
+both quietly meaning "no limit," for unrelated reasons. Replaced with
+two orthogonal controls: daily_loss_limit_enabled (a genuine on/off
+switch) and max_daily_loss_pct (now ALWAYS a real, meaningful threshold
+within its own min/max -- no more magic disable value).
 """
 import os
 import sys
@@ -37,28 +43,45 @@ def _client(tmp_path, monkeypatch):
 def test_max_daily_loss_pct_has_real_bounds():
     config = RiskConfig()
     assert config.max_daily_loss_pct == 6.0
-    assert config.max_daily_loss_pct_min == 0.0
-    assert config.max_daily_loss_pct_max == 100.0
+    assert config.max_daily_loss_pct_min == 1.0
+    assert config.max_daily_loss_pct_max == 50.0
+    assert config.daily_loss_limit_enabled is True  # on by default -- a real safety limit, not opt-in
 
 
 def test_settings_raises_daily_loss_limit_and_it_persists(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
-    response = client.post("/settings", data={"max_daily_loss_pct": "50"}, follow_redirects=False)
+    response = client.post("/settings", data={"max_daily_loss_pct": "30",
+                                                "daily_loss_limit_enabled": "on"}, follow_redirects=False)
     assert response.status_code in (302, 303)
 
     state = ds.load_state()
     risk_config = risk_config_from_state(state)
-    assert risk_config.max_daily_loss_pct == 50.0
+    assert risk_config.max_daily_loss_pct == 30.0
 
 
-def test_settings_can_disable_daily_loss_limit_with_zero(tmp_path, monkeypatch):
+def test_settings_can_disable_daily_loss_limit_with_the_toggle(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
-    client.post("/settings", data={"max_daily_loss_pct": "0"}, follow_redirects=False)
+    # An unchecked HTML checkbox sends no form field at all -- matches
+    # every other toggle in this app (vwap_scalp_enabled etc.).
+    client.post("/settings", data={"max_daily_loss_pct": "20"}, follow_redirects=False)
 
     state = ds.load_state()
-    assert risk_config_from_state(state).max_daily_loss_pct == 0.0  # 0 itself is valid, not clamped away
+    risk_config = risk_config_from_state(state)
+    assert risk_config.daily_loss_limit_enabled is False
+    assert risk_config.max_daily_loss_pct == 20.0  # the threshold itself is untouched by disabling it
+
+
+def test_settings_re_enabling_the_toggle_restores_enforcement(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    client.post("/settings", data={"max_daily_loss_pct": "20"}, follow_redirects=False)
+    assert risk_config_from_state(ds.load_state()).daily_loss_limit_enabled is False
+
+    client.post("/settings", data={"max_daily_loss_pct": "20",
+                                    "daily_loss_limit_enabled": "on"}, follow_redirects=False)
+
+    assert risk_config_from_state(ds.load_state()).daily_loss_limit_enabled is True
 
 
 def test_settings_clamps_daily_loss_limit_to_bounds(tmp_path, monkeypatch):
@@ -66,11 +89,11 @@ def test_settings_clamps_daily_loss_limit_to_bounds(tmp_path, monkeypatch):
 
     client.post("/settings", data={"max_daily_loss_pct": "500"}, follow_redirects=False)
     state = ds.load_state()
-    assert risk_config_from_state(state).max_daily_loss_pct == 100.0  # clamped to max, not saved raw
+    assert risk_config_from_state(state).max_daily_loss_pct == 50.0  # clamped to max, not saved raw
 
     client.post("/settings", data={"max_daily_loss_pct": "-10"}, follow_redirects=False)
     state = ds.load_state()
-    assert risk_config_from_state(state).max_daily_loss_pct == 0.0  # clamped to min, not below it
+    assert risk_config_from_state(state).max_daily_loss_pct == 1.0  # clamped to min, not below it
 
 
 def test_settings_omitting_daily_loss_limit_leaves_it_unchanged(tmp_path, monkeypatch):
@@ -92,18 +115,18 @@ def test_a_raised_daily_loss_limit_survives_a_code_level_default_change(tmp_path
     # (once saved) is never silently overwritten by a later code change
     # to the field's default.
     client = _client(tmp_path, monkeypatch)
-    client.post("/settings", data={"max_daily_loss_pct": "75"}, follow_redirects=False)
+    client.post("/settings", data={"max_daily_loss_pct": "35",
+                                    "daily_loss_limit_enabled": "on"}, follow_redirects=False)
     state = ds.load_state()
-    assert risk_config_from_state(state).max_daily_loss_pct == 75.0
+    assert risk_config_from_state(state).max_daily_loss_pct == 35.0
 
 
-def test_out_of_range_warnings_flags_zero_as_disabled_not_silently_missed():
-    # is_out_of_recommended_range's own "value > suggested" comparison
-    # would silently MISS 0 (it's numerically below every suggested
-    # default, so it reads as "stricter than default" rather than "the
-    # single most permissive value possible: no limit at all").
+def test_out_of_range_warnings_flags_the_toggle_being_off():
+    # The old "0% is silently missed by value > suggested" gap doesn't
+    # exist anymore -- there's no magic value to miss -- but the DISABLED
+    # warning still needs to fire off the real switch.
     import app as flask_app
-    daily_off = RiskConfig(max_daily_loss_pct=0.0)
+    daily_off = RiskConfig(daily_loss_limit_enabled=False)
     warnings = flask_app._out_of_range_warnings(daily_off)
     assert any("Daily loss limit is DISABLED" in w for w in warnings)
 

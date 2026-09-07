@@ -412,7 +412,7 @@ def record_risk_limit_skip(source: str, message: str) -> None:
 # defaults, the risk-limit percentages) is a code-defined constant, never
 # written by any route.
 _USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct",
-                                 "max_daily_loss_pct")
+                                 "max_daily_loss_pct", "daily_loss_limit_enabled")
 
 
 def risk_config_from_state(state: DashboardState) -> RiskConfig:
