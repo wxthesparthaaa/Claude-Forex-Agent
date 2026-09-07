@@ -59,6 +59,7 @@
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 5/5",
+    "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 5/5"
   ],
   "last_scan_digest_sent_at": "2026-09-07T15:18:43.840903+00:00",
