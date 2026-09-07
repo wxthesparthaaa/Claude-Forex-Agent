@@ -65,7 +65,8 @@
     "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 11 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 9 min ago, needs 20",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 19 min ago, needs 20"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 19 min ago, needs 20",
+    "VWAP Scalp: reward:risk 0.57:1 is below the 1:1 floor (risking 0.12500 to make 0.07100)"
   ],
   "last_scan_digest_sent_at": "2026-09-07T15:18:43.840903+00:00",
   "paused_instruments": {},
