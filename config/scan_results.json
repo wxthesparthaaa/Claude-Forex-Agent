@@ -1,65 +1,65 @@
 {
-  "scanned_at": "2026-09-07T08:25:03.847477+00:00",
+  "scanned_at": "2026-09-07T08:45:02.213851+00:00",
   "candidates": [
     {
       "instrument": "GBP_USD",
       "direction": "LONG",
-      "entry_price": 1.35398,
+      "entry_price": 1.35353,
       "stop_loss": 1.3522,
-      "take_profit": 1.35754,
-      "confidence_pct": 60.7,
+      "take_profit": 1.35619,
+      "confidence_pct": 68.7,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 44.80531398760576,
-        "candlestick": 50.0,
+        "rsi": 95.93418332983035,
+        "candlestick": 20.0,
         "news": 50.0
       },
-      "units": 16082,
+      "units": 21519,
       "unit_label": "units",
       "risk_amount": 36.227199999999996,
-      "notional_account_currency": 27556.11,
+      "notional_account_currency": 36867.15,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 76 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.6) -- higher reversal risk than usual.",
+        "RSI is 66 (neutral range).",
+        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "Caution: the broader currency move looks stretched (z=-2.5) -- higher reversal risk than usual.",
         "News sentiment: no GBP-relevant headlines in the latest fetch (neutral)."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": false
       }
     },
     {
-      "instrument": "EUR_USD",
-      "direction": "LONG",
-      "entry_price": 1.16321,
-      "stop_loss": 1.16114,
-      "take_profit": 1.16735,
-      "confidence_pct": 57.8,
+      "instrument": "USD_CHF",
+      "direction": "SHORT",
+      "entry_price": 0.8091,
+      "stop_loss": 0.81092,
+      "take_profit": 0.80546,
+      "confidence_pct": 68.1,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 48.766008511916965,
-        "candlestick": 50.0,
-        "news": 33.333333333333336
+        "rsi": 100.0,
+        "candlestick": 20.0,
+        "news": 43.33333333333333
       },
-      "units": 13829,
+      "units": -12724,
       "unit_label": "units",
       "risk_amount": 36.227199999999996,
-      "notional_account_currency": 20357.03,
+      "notional_account_currency": 16105.04,
       "account_currency": "SGD",
       "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 75 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.6) -- higher reversal risk than usual.",
-        "News sentiment: works against this direction -- worth a second look."
+        "RSI is 37 (neutral range).",
+        "Candlestick pattern at this level: bullish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "Caution: the broader currency move looks stretched (z=-2.5) -- higher reversal risk than usual.",
+        "News sentiment: neutral."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
@@ -70,36 +70,36 @@
       }
     },
     {
-      "instrument": "USD_CHF",
-      "direction": "SHORT",
-      "entry_price": 0.8088,
-      "stop_loss": 0.81092,
-      "take_profit": 0.80456,
-      "confidence_pct": 68.0,
+      "instrument": "EUR_USD",
+      "direction": "LONG",
+      "entry_price": 1.16258,
+      "stop_loss": 1.16114,
+      "take_profit": 1.16546,
+      "confidence_pct": 65.8,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 83.25733940218527,
-        "candlestick": 50.0,
-        "news": 43.33333333333333
+        "rsi": 100.0,
+        "candlestick": 20.0,
+        "news": 33.333333333333336
       },
-      "units": -10921,
+      "units": 19876,
       "unit_label": "units",
       "risk_amount": 36.227199999999996,
-      "notional_account_currency": 13820.42,
+      "notional_account_currency": 29247.78,
       "account_currency": "SGD",
       "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 32 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.6) -- higher reversal risk than usual.",
-        "News sentiment: neutral."
+        "RSI is 62 (neutral range).",
+        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "Caution: the broader currency move looks stretched (z=-2.5) -- higher reversal risk than usual.",
+        "News sentiment: works against this direction -- worth a second look."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": true
       }
     }
