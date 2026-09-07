@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Found and fixed why ticket 3879's \"Market Order Rejected\" left zero trace anywhere: "
+                    "a rejected OANDA order isn't an HTTP error, so all 5 order-placing strategies silently "
+                    "discarded the real rejection reason. Now printed for every one of them."),
     ("2026-09-08", "Daily loss limit is now a real on/off switch plus a percentage that always means a real "
                     "threshold (1-50%) -- the old 0-100% slider had 0% AND ~100% both quietly meaning "
                     "\"no limit,\" for two different reasons."),

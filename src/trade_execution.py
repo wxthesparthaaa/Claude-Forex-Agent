@@ -155,6 +155,8 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
     order is separately rejected, leaving a real, unprotected position
     that would otherwise look completely normal in the journal."""
     if not allow_duplicate and instrument_already_open(client, candidate["instrument"]):
+        print(f"INFO: order skipped for {candidate['instrument']} -- a position is already open "
+              f"on this instrument", flush=True)
         return {"success": False, "trade_id": None, "reason": "duplicate"}
 
     result = client.place_market_order_with_sltp(
@@ -165,7 +167,28 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
     if trade_id:
         record_open_trade(trade_id, candidate)
         _verify_protective_orders_attached(client, trade_id, candidate)
-    return {"success": trade_id is not None, "trade_id": trade_id, "reason": None if trade_id else "no_fill"}
+        return {"success": True, "trade_id": trade_id, "reason": None}
+
+    # Real incident (ticket 3879, 2026-09-07): a rejected market order is
+    # NOT an HTTP error -- OANDA's own convention returns a normal 2xx
+    # response carrying an orderRejectTransaction instead of an
+    # orderFillTransaction, so oanda_client._request's raise_for_status()
+    # never fires and this function silently fell through to "no fill."
+    # Every one of this function's five callers (base strategy/Autopilot
+    # batch, VWAP Scalp, ORB Fade, Range Confluence) just did `if not
+    # result["success"]: continue`/`return False` with zero trace of WHY
+    # -- OANDA's own real rejection reason was computed, then discarded,
+    # every single time. Extracted and printed here, once, so every
+    # caller gets it for free instead of needing five separate fixes.
+    # Field name is a best-effort guess at OANDA's v3 shape (not
+    # verifiable from this environment, no live OANDA access) -- falls
+    # back to dumping the raw response rather than a bare "no_fill" if
+    # the guess is wrong, so a genuinely new rejection shape is still
+    # diagnosable from the log line alone.
+    reject_txn = result.get("orderRejectTransaction", {})
+    reason = reject_txn.get("reason") or reject_txn.get("rejectReason") or f"unrecognized rejection shape: {result}"
+    print(f"WARNING: order rejected by OANDA for {candidate['instrument']}: {reason}", flush=True)
+    return {"success": False, "trade_id": None, "reason": reason}
 
 
 def auto_execute_candidates(client: OandaClient, candidates: list, phase_state: PhaseState,

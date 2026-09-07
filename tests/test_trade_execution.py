@@ -99,6 +99,68 @@ def test_place_and_record_blocks_duplicate_by_default(tmp_path, monkeypatch):
     assert client.orders_placed == []
 
 
+def test_place_and_record_surfaces_the_real_oanda_rejection_reason(tmp_path, monkeypatch, capsys):
+    # Regression test for a real incident (ticket 3879, 2026-09-07): a
+    # rejected market order is not an HTTP error -- OANDA returns a
+    # normal response carrying orderRejectTransaction instead of
+    # orderFillTransaction -- so this used to silently return "no_fill"
+    # with zero trace of the actual reason anywhere in Render's logs.
+    _isolate(tmp_path, monkeypatch)
+
+    class RejectingClient(FakeClient):
+        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
+            self.orders_placed.append(instrument)
+            return {"orderRejectTransaction": {"reason": "INSUFFICIENT_MARGIN"}}
+
+    client = RejectingClient()
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    result = trade_execution.place_and_record(client, cd)
+
+    assert result == {"success": False, "trade_id": None, "reason": "INSUFFICIENT_MARGIN"}
+    assert tj.load_journal() == []  # never journaled -- no trade actually opened
+    captured = capsys.readouterr()
+    assert "order rejected by OANDA for EUR_USD: INSUFFICIENT_MARGIN" in captured.out
+
+
+def test_place_and_record_falls_back_to_the_raw_response_for_an_unrecognized_rejection_shape(
+        tmp_path, monkeypatch, capsys):
+    # If OANDA's rejection response ever takes a shape this code doesn't
+    # anticipate, the raw response must still show up in the log line --
+    # never silently back to a bare, uninformative "no_fill".
+    _isolate(tmp_path, monkeypatch)
+
+    class OddShapeClient(FakeClient):
+        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
+            self.orders_placed.append(instrument)
+            return {"someOtherTransactionType": {"whatever": "value"}}
+
+    client = OddShapeClient()
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    result = trade_execution.place_and_record(client, cd)
+
+    assert result["success"] is False
+    assert "unrecognized rejection shape" in result["reason"]
+    captured = capsys.readouterr()
+    assert "unrecognized rejection shape" in captured.out
+
+
+def test_place_and_record_prints_when_skipping_a_duplicate(tmp_path, monkeypatch, capsys):
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(open_trades=[{"instrument": "EUR_USD"}])
+
+    trade_execution.place_and_record(client, {"instrument": "EUR_USD"})
+
+    captured = capsys.readouterr()
+    assert "order skipped for EUR_USD" in captured.out
+    assert "already open" in captured.out
+
+
 def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     client = FakeClient()

@@ -6805,3 +6805,66 @@ unrelated flaky test in `test_trade_journal.py` -- confirmed failing
 identically on a clean checkout with none of this change applied,
 tied to `trades_opened_today`'s SGT-day-boundary math coinciding with
 the real time this session happened to run at, not a regression here).
+
+## 2026-09-08 (continued) -- Found ticket 3879's real cause: OANDA order rejections were silently discarded, everywhere
+
+**Problem**: user asked to pin down the Render-log slice around ticket
+3879's "Market Order Rejected" (10:39:52 PM SGT, 2026-09-07). The
+pasted window (22:34-22:44 SGT) had no explicit rejection line at all
+-- the closest lead was a base-strategy scan at 22:34:49 finding "2
+candidate(s), 2 qualifying," with no matching skip/rejection print
+anywhere after it.
+
+**Root cause**: `trade_execution.place_and_record()` -- the single
+function every one of the 5 order-placing paths (base strategy's
+Autopilot batch, VWAP Scalp, ORB Fade, Range Confluence) funnels a
+real order through -- computed `trade_id = result.get(
+"orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")`
+and, when OANDA rejects the order, this is simply `None`. A rejected
+market order is NOT an HTTP error on OANDA's side (their own
+convention returns a normal 2xx response carrying an
+`orderRejectTransaction` instead of an `orderFillTransaction`), so
+`oanda_client._request`'s `raise_for_status()` never fires -- nothing
+throws, nothing prints. `place_and_record` returned a bare
+`{"success": False, "reason": "no_fill"}`, discarding whatever real
+reason OANDA actually gave, and EVERY ONE of its 5 callers did
+`if not result["success"]: continue`/`return False` with zero print
+of their own -- the exact same silent-skip pattern already fixed
+twice this session (2026-09-07, scan_workflow.py/trade_execution.py's
+`RiskViolation` handlers), but in a different, shared location this
+time, and for a genuinely different reason (a broker-level rejection,
+not a local risk-gate check).
+
+**Fix**: centralized in `place_and_record` itself rather than patched
+in all 5 callers separately -- on a rejection, extracts OANDA's real
+reason from `result["orderRejectTransaction"]` (tries both `reason`
+and `rejectReason` as the field name, since the exact OANDA v3 shape
+isn't independently verifiable from this environment -- no live OANDA
+access here) and prints it; if neither field is present, dumps the
+raw response instead of a bare "no_fill" so a genuinely new rejection
+shape is still diagnosable from the log line alone. Also added a
+print for the pre-existing "duplicate" skip (an OANDA position already
+open on this instrument), which was equally silent despite already
+having a clean, specific reason available.
+
+**Caveat, not yet resolved**: this pins down WHY nothing appeared in
+the logs, and means the NEXT such rejection will show its real reason
+immediately -- but ticket 3879's OWN specific reason (INSUFFICIENT_
+MARGIN vs a stale price vs something else) is still unknown; the fix
+only prevents recurrence, it doesn't retroactively recover what OANDA
+actually said for that one ticket.
+
+Three new tests in `tests/test_trade_execution.py`:
+`test_place_and_record_surfaces_the_real_oanda_rejection_reason`
+(a `RejectingClient` returning a real `orderRejectTransaction` shape,
+asserts the reason flows through to both the returned dict and the
+printed log line, and confirms nothing gets journaled),
+`test_place_and_record_falls_back_to_the_raw_response_for_an_
+unrecognized_rejection_shape` (an unrecognized response shape still
+produces a diagnosable log line, not a silent "no_fill"), and
+`test_place_and_record_prints_when_skipping_a_duplicate`. Full test
+suite (603 tests) plus `tests/test_orb_fade_addon.py`,
+`tests/test_range_confluence_addon.py`, and
+`tests/test_vwap_scalp_addon.py` all re-run in full (all 5 callers of
+`place_and_record` verified unaffected by the return-shape change) --
+all green.
