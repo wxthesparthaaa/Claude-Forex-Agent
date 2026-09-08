@@ -7238,3 +7238,94 @@ no template changes needed.
 `tests/test_settings_daily_loss_limit.py`; the function's existing
 tests updated for the new required parameter. Full suite green;
 `py_compile` + real `import app` both clean.
+
+## 2026-09-09 -- VWAP Scalp's same-tick clustering was STILL happening after yesterday's fix -- real root cause found
+
+**Problem**: user reported at least 6 same-night instances of VWAP
+Scalp trades opening well under the 40-minute global cooldown apart,
+several literally seconds apart (AUD_JPY then NZD_JPY, 5 seconds;
+USD_CAD then USD_CHF, 7 seconds; AUD/JPY-pattern repeating through the
+whole night) -- despite the 2026-09-08 fix for exactly this symptom.
+Pulled the real `trade_journal.json` from `state-sync` (had to
+`git fetch origin state-sync` first -- the initial pull was stale) and
+computed every VWAP_SCALP entry's gap from the previous one: this has
+been happening on nearly every trading session since VWAP Scalp's
+first live day (2026-08-31), not a new regression, and continued
+happening AFTER yesterday's within-tick-loop fix deployed (confirmed
+against `git log`'s commit timestamp, ~11.5 hours before the latest
+incident -- Render had clearly redeployed by then).
+
+**Real root cause**: yesterday's fix made `_pacing_cap_reason` re-read
+`entries` fresh every loop iteration, which was necessary but not
+sufficient -- it still received the SAME `now`, captured ONCE before
+the per-pair loop started (`now = datetime.now(timezone.utc)`,
+line ~758). By the time a later pair's iteration runs, several
+real seconds have passed (each earlier pair's OANDA calls -- candles,
+price, order placement -- all cost real wall-clock time), so a pair
+that opened moments earlier in the SAME tick gets an `opened_at`
+(stamped by `record_open_trade`'s own fresh `datetime.now()` at write
+time) that is *later* than the loop's stale `now`. `_pacing_cap_reason`'s
+cooldown check computed `minutes_since_last = (now - most_recent_open)`
+-- now negative -- and its own defensive guard,
+`if 0 <= minutes_since_last < global_cooldown_minutes`, read that
+negative gap as "not cooling down," the exact opposite of correct. The
+guard's own comment ("can't happen with real data") was wrong -- it's
+the single most common outcome of a same-tick cluster, which is
+precisely the case this cooldown exists to catch.
+
+**Fix** (`src/vwap_scalp_addon.py`): two changes, defense in depth.
+(1) `now`/`today_start` are now refreshed at the top of every loop
+iteration, not just `entries` -- the primary fix, since it means `now`
+is (almost) never stale relative to a same-tick write. (2)
+`_pacing_cap_reason`'s guard changed from `0 <= minutes_since_last` to
+`max(minutes_since_last, 0)` -- a negative gap now clamps to "just
+opened, definitely still cooling down" instead of "not cooling down."
+Not an unbounded block: `now` keeps advancing on later ticks until the
+real cooldown genuinely elapses.
+
+**Verification**: new direct unit test of `_pacing_cap_reason` (an
+`opened_at` 10 seconds after `now` must still report "cooldown"), plus
+a new integration-level test using a shared ticking fake clock
+(patching both `vs.datetime` and `tj.datetime` to the same
+monotonically-advancing class, mirroring the exact ordering that broke
+live) confirming a second pair confirming moments after the first
+within one tick gets blocked. `git stash`-verified both fail against
+the pre-fix code (`['EUR_USD', 'GBP_USD']` both open, reproducing the
+live AUD_JPY/NZD_JPY incident exactly) before restoring the fix. Also
+had to fix 3 pre-existing tests whose fixtures seeded trades at a
+FUTURE timestamp relative to their frozen "now" (purely to land in a
+different hour bucket) -- they were unknowingly passing BECAUSE of
+this exact bug, and started failing once the negative-gap clamp
+correctly flagged them as "just opened." Moved the seed times into the
+past instead, preserving each test's original intent. Full suite
+(614+ tests) green; `py_compile` clean.
+
+## 2026-09-09 -- Base strategy's interval scanner was silent whenever nothing was due yet
+
+**Problem**: user reported (via Render logs) that only VWAP Scalp
+seemed active -- no sign the base strategy was scanning at all for a
+full day, despite being enabled.
+
+**Diagnosis**: pulled live `dashboard_state.json` and confirmed
+`base_strategy_enabled=True`, `phase=autopilot`, and --
+`last_autopilot_scan_timestamps` showed same-day activity for every
+instrument (several within the last hour). The real journal also
+showed a base-strategy trade (WTICO_USD) opened barely a day earlier.
+The scanner was never actually broken. The real gap:
+`run_autopilot_interval_scan`'s `if not due: return None` produced
+ZERO log output -- unlike VWAP Scalp's own tick (and the dispatcher's),
+which print unconditionally every invocation. Since every instrument's
+own trading window (`market_hours.INSTRUMENT_WINDOWS_SGT`) and
+per-instrument scan cooldown together mean `due` is legitimately empty
+for long stretches, "ran and correctly found nothing due yet" and
+"this scanner isn't running at all" were indistinguishable in the
+logs -- the exact ambiguity already fixed for every other add-on's tick
+(see the 2026-09-08 VWAP Scalp tick-logging entry), just missed here.
+
+**Fix**: added an unconditional `INFO: autopilot interval scan ...
+nothing due yet` print to the `due`-empty branch in
+`src/scheduled_jobs.py`, matching the existing convention exactly.
+
+**Verification**: `tests/test_scheduled_jobs.py`'s existing 90 tests
+(none assert on stdout emptiness) all still pass unchanged.
+`py_compile` clean.

@@ -344,6 +344,20 @@ def run_autopilot_interval_scan(client: OandaClient = None) -> list | None:
         due.append(instrument)
 
     if not due:
+        # Unconditional (2026-09-09), matching the same "one line per
+        # actual tick" convention VWAP Scalp/the dispatcher already use --
+        # real user report: "the base strategy doesn't seem to scan for
+        # anything," traced to this early return producing ZERO log
+        # output whenever every instrument's own window is closed or its
+        # cooldown hasn't elapsed yet, which can span hours. Confirmed the
+        # scanner was actually running fine the whole time (state.last_
+        # autopilot_scan_timestamps showed same-day activity per
+        # instrument) -- the log just never said so, making "ran and
+        # correctly found nothing due yet" indistinguishable from "this
+        # scanner isn't running at all," the exact ambiguity already
+        # fixed for every other add-on's own tick.
+        print(f"INFO: autopilot interval scan at {now.isoformat()} -- nothing due yet "
+              f"({len(state.paused_instruments)} paused)", flush=True)
         return None
 
     # Tallied here (not inside run_evening_scan_and_notify) so the fixed

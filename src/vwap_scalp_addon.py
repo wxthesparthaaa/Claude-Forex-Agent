@@ -524,11 +524,24 @@ def _pacing_cap_reason(entries: list, now: datetime, today_start: datetime, max_
     most_recent_open = _most_recent_vwap_scalp_open(entries)
     if most_recent_open is not None:
         minutes_since_last = (now - most_recent_open).total_seconds() / 60
-        # A negative minutes_since_last (opened_at in the future relative
-        # to `now`) can't happen with real data -- guarded defensively
-        # anyway so a clock anomaly reads as "not cooling down" rather
-        # than an unbounded block.
-        if 0 <= minutes_since_last < global_cooldown_minutes:
+        # Real live incident (2026-09-09): a negative minutes_since_last
+        # (opened_at in the future relative to `now`) does happen with
+        # real data -- record_open_trade() stamps opened_at with its OWN
+        # fresh datetime.now() at write time, which lands a few real
+        # seconds AFTER this tick's own `now` was captured (each pair's
+        # OANDA calls burn real wall-clock time). A pair that just opened
+        # moments earlier in this SAME tick therefore has an opened_at
+        # newer than `now`. The old `if 0 <= minutes_since_last < ...`
+        # guard treated that negative gap as "not cooling down" -- the
+        # exact opposite of correct, since a same-tick open is the
+        # single most important case this cooldown exists to catch.
+        # Confirmed live: AUD_JPY then NZD_JPY opened 5 seconds apart,
+        # 2026-09-08 22:10 UTC, one of many such pairs going back to VWAP
+        # Scalp's first live day. Clamping to 0 instead treats "opened
+        # in the apparent future" as "just opened, definitely still
+        # cooling down" -- not an unbounded block, since `now` keeps
+        # advancing on later ticks until the real cooldown elapses.
+        if max(minutes_since_last, 0) < global_cooldown_minutes:
             return ("cooldown", f"VWAP Scalp's global cooldown active: last entry {minutes_since_last:.0f} min "
                                  f"ago, needs {global_cooldown_minutes}")
 
@@ -782,6 +795,17 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
 
     for instrument in VWAP_SCALP_PAIRS:
         try:
+            # Refreshed every iteration (2026-09-09), same rationale as
+            # `entries` reloading below -- the tick-start `now` captured
+            # above the loop goes stale by real seconds/minutes once
+            # several pairs' own OANDA calls (candles, price, order
+            # placement) have run, which is exactly what let the cooldown
+            # guard in _pacing_cap_reason miscompute a same-tick open as
+            # "in the future." Using the real current time on every
+            # iteration is the primary fix; the clamp in
+            # _pacing_cap_reason is the defense-in-depth backstop.
+            now = datetime.now(timezone.utc)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             entries = load_journal()
             open_for_pair = [e for e in open_entries(entries)
                               if e["instrument"] == instrument and e.get("experiment_tag") == VWAP_SCALP_TAG]

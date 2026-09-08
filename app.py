@@ -85,6 +85,14 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-09", "Found the REAL cause of VWAP Scalp's same-tick trade clustering (yesterday's fix wasn't "
+                    "enough): the per-pair loop reused one stale `now` for its cooldown check, so a pair that "
+                    "just opened moments earlier could look like it opened 'in the future,' silently defeating "
+                    "the cooldown. `now` now refreshes every pair; the guard also no longer inverts on a "
+                    "negative gap."),
+    ("2026-09-09", "Base strategy's interval scanner was silently producing no log output whenever nothing was "
+                    "due yet (which can span hours) -- looked identical to 'not running' in Render's logs. "
+                    "Confirmed it was actually scanning fine the whole time; added the missing log line."),
     ("2026-09-08", "Settings now warns if VWAP Scalp's own trades-per-day is set higher than the shared "
                     "Trades per day cap -- the shared cap counts every strategy combined and always binds "
                     "first, so anything above it was silently unreachable."),
@@ -96,12 +104,6 @@ DEVELOPER_NOTES = [
                     "Base-only), Range Confluence's toggle removed, and VWAP Scalp's daily-trade ceiling "
                     "raised 25 -> 50. Also fixed a disabled Daily loss limit showing a second, meaningless "
                     "\"more permissive than suggested\" warning alongside it."),
-    ("2026-09-08", "Widened VWAP Scalp's live watch window from 07:00-20:00 to 04:00-24:00 UTC, on a real "
-                    "180-day hour-of-day backtest -- CAD_JPY/EUR_JPY/CHF_JPY excluded from just the "
-                    "04:00-07:00 UTC bucket, where their edge wasn't clearly established."),
-    ("2026-09-08", "Settings' Save and Reset capital buttons were silently coupled -- one shared form meant "
-                    "Save settings could reset capital by accident, and Reset capital visually showed Save "
-                    "settings as the one pressed. Split into two independent forms."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),

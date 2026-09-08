@@ -603,10 +603,16 @@ def test_below_own_daily_cap_still_opens_normally(mock_send, tmp_path, monkeypat
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    # Seeded well outside FIXED_NOW's own time bucket (07:00-12:00 UTC)
-    # so this exercises the DAILY cap specifically, not the per-bucket
-    # one -- see test_time_bucket_cap_* below for that.
-    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW.replace(hour=17))
+    # Seeded well outside FIXED_NOW's own time bucket (07:00-12:00 UTC) --
+    # and in the PAST relative to it (hour 6, not 17) -- so this exercises
+    # the DAILY cap specifically, not the per-bucket one (see
+    # test_time_bucket_cap_* below for that) and not the global cooldown
+    # either: a future-dated seed used to accidentally dodge the cooldown
+    # check by tripping its old (buggy) "negative gap = not cooling down"
+    # guard, which real trades can never do (opened_at is never in the
+    # future relative to a freshly-computed now -- see _pacing_cap_reason's
+    # own comment on the 2026-09-09 fix).
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW.replace(hour=6))
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -627,10 +633,12 @@ def test_own_daily_cap_respects_a_user_adjusted_settings_value(mock_send, tmp_pa
     ds.save_state(state)
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     # 6 prior trades -- would trip the OLD default cap, must not trip the
-    # raised one. Seeded outside FIXED_NOW's own bucket so this isolates
-    # the daily cap from the per-bucket one (raised cap=10 -> per-bucket
-    # cap ceil(10/5)=2, which 6 trades in the SAME bucket would still trip).
-    _seed_closed_vwap_trades(6, FIXED_NOW.replace(hour=17))
+    # raised one. Seeded outside FIXED_NOW's own bucket (and in the past,
+    # hour 6 not 17 -- see test_below_own_daily_cap_still_opens_normally's
+    # own comment for why) so this isolates the daily cap from the
+    # per-bucket one (raised cap=10 -> per-bucket cap ceil(10/5)=2, which
+    # 6 trades in the SAME bucket would still trip).
+    _seed_closed_vwap_trades(6, FIXED_NOW.replace(hour=6))
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -671,7 +679,12 @@ def test_time_bucket_cap_does_not_block_a_fresh_session(mock_send, tmp_path, mon
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=17))  # "NY afternoon" -- a different bucket
+    # "Asian late / pre-London" (04-07 UTC) -- a different bucket from
+    # FIXED_NOW's own, and in the past (not hour 17, which is in the
+    # future relative to FIXED_NOW=10:00 and would trip the global
+    # cooldown instead -- see test_below_own_daily_cap_still_opens_
+    # normally's own comment).
+    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=6))
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -848,6 +861,71 @@ def test_global_cooldown_does_not_block_once_it_elapses(mock_send, tmp_path, mon
     opened = vs.check_vwap_scalp_opportunities(client)
 
     assert opened == ["EUR_USD"]
+
+
+def test_pacing_cap_reason_treats_an_opened_at_after_now_as_still_cooling_down(tmp_path, monkeypatch):
+    # Real live bug (2026-09-09): a same-tick trade's opened_at is stamped
+    # with record_open_trade()'s OWN fresh datetime.now() at write time,
+    # which naturally lands a few real seconds after the tick's own `now`
+    # was captured (each pair's OANDA calls burn real wall-clock time
+    # first) -- making minutes_since_last NEGATIVE for the exact case this
+    # cooldown exists to catch. The old `if 0 <= minutes_since_last < ...`
+    # guard read that as "not cooling down" -- confirmed live: AUD_JPY
+    # then NZD_JPY opened 5 seconds apart despite a 40-minute cooldown.
+    # Direct unit test of the fix: an opened_at 10 seconds AFTER `now`
+    # must still report "cooldown", not None.
+    _isolate(tmp_path, monkeypatch)
+    now = FIXED_NOW
+    entries = [{
+        "instrument": "USD_CHF", "experiment_tag": vs.VWAP_SCALP_TAG,
+        "opened_at": (now + timedelta(seconds=10)).isoformat(), "status": tj.OPEN,
+    }]
+
+    result = vs._pacing_cap_reason(entries, now, now.replace(hour=0, minute=0, second=0, microsecond=0),
+                                    max_trades_per_day=25, per_bucket_cap=25, global_cooldown_minutes=40)
+
+    assert result is not None
+    assert result[0] == "cooldown"
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_global_cooldown_blocks_a_second_pair_confirming_moments_after_the_first_within_one_tick(
+        mock_send, tmp_path, monkeypatch):
+    # Integration-level regression for the same bug (real incident,
+    # 2026-09-08 22:10 UTC: AUD_JPY then NZD_JPY opened 5 seconds apart
+    # despite a 40-minute cooldown), reproduced end-to-end through
+    # check_vwap_scalp_opportunities rather than just the unit-level
+    # clamp above. `now` is refreshed every loop iteration (the actual
+    # fix) using a clock that ticks forward a few real seconds on each
+    # call -- close enough together that both pairs' candle fixtures
+    # (anchored to the same FIXED_NOW) still read as fresh signals, but
+    # far enough that the first pair's real opened_at (stamped by
+    # trade_journal.record_open_trade's OWN datetime.now() call, also
+    # patched to the same ticking clock) lands after the SECOND pair's
+    # own `now` snapshot was taken moments earlier in the same tick --
+    # exactly the ordering that exposed the bug live.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+
+    class _TickingDatetime(_FrozenDatetime):
+        _t = FIXED_NOW
+
+        @classmethod
+        def now(cls, tz=None):
+            current = cls._t
+            cls._t = cls._t + timedelta(seconds=3)
+            return current
+
+    monkeypatch.setattr(vs, "datetime", _TickingDatetime)
+    monkeypatch.setattr(tj, "datetime", _TickingDatetime)
+    candles_a = _extended_session_candles(extension_price=105.0, confirmation_price=104.0, end_time=FIXED_NOW)
+    candles_b = _extended_session_candles(extension_price=105.0, confirmation_price=104.0, end_time=FIXED_NOW)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles_a, "GBP_USD": candles_b},
+                         price=_valid_entry_price(candles_a, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]  # only the first pair -- GBP_USD must be cooldown-blocked, not a second open
 
 
 @patch("vwap_scalp_addon.send_message")
