@@ -135,3 +135,16 @@ def test_out_of_range_warnings_still_flags_ordinary_permissive_values():
     import app as flask_app
     warnings = flask_app._out_of_range_warnings(RiskConfig(max_daily_loss_pct=20.0))
     assert any("Daily loss limit" in w and "DISABLED" not in w for w in warnings)
+
+
+def test_out_of_range_warnings_disabled_and_permissive_shows_only_disabled():
+    # Real live bug (2026-09-08): a disabled toggle with a permissive
+    # threshold (e.g. 50%) showed BOTH "DISABLED" and "more permissive
+    # than suggested" -- the second is meaningless while the switch is
+    # off. Must be either/or, never both.
+    import app as flask_app
+    daily_off_and_permissive = RiskConfig(daily_loss_limit_enabled=False, max_daily_loss_pct=50.0)
+    warnings = flask_app._out_of_range_warnings(daily_off_and_permissive)
+    daily_loss_warnings = [w for w in warnings if "Daily loss limit" in w]
+    assert len(daily_loss_warnings) == 1
+    assert "DISABLED" in daily_loss_warnings[0]

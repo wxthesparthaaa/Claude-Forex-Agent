@@ -227,7 +227,7 @@ class DashboardState:
     # tick -- not a module constant.
     vwap_scalp_max_trades_per_day: int = 6
     vwap_scalp_max_trades_per_day_min: int = 5
-    vwap_scalp_max_trades_per_day_max: int = 25
+    vwap_scalp_max_trades_per_day_max: int = 50
     # Global cross-instrument cooldown (2026-09-04): real data showed 5 of
     # one day's trades firing within a single scan tick, all on their own
     # separate instrument cooldowns (COOLDOWN_MINUTES, per-pair) so none

@@ -373,15 +373,6 @@
     <details>
       <summary style="cursor:pointer; font-weight:600;">Settings</summary>
       <form method="post" action="/settings" style="margin-top:0.75rem;">
-        <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
-        <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
-               value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
-
-        <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
-        <input type="range" name="max_trades_per_day"
-               min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
-               value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
-
         <div class="toggle-row">
           <span>Daily loss limit{{ ' -- DISABLED' if not risk_config.daily_loss_limit_enabled else '' }}</span>
           <label class="switch">
@@ -394,16 +385,25 @@
                min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
                value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Account-wide, not per-strategy -- every strategy (base, Range Confluence, ORB Fade, VWAP Scalp) draws
+          Account-wide, not per-strategy -- every strategy (base, ORB Fade, VWAP Scalp) draws
           from the same daily P&amp;L figure. Switch this off temporarily to keep a candidate's live data
           collection running past a normal day's losses (the threshold below stays wherever you leave it,
           ready for when you switch back on); the default (6%) is a genuine safety limit, so turn it back on
           when you're done collecting data.
         </p>
 
-        <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
-        <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
-               value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
+        <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
+        <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
+               value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
+
+        <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
+        <input type="range" name="max_trades_per_day"
+               min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
+               value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Also account-wide, like the daily loss limit above -- position sizing and this cap apply the same
+          way to every strategy below, not just the base strategy.
+        </p>
 
         <div class="toggle-row">
           <span>Autopilot</span>
@@ -423,51 +423,15 @@
           On by default -- this is the original strategy, not an experiment. Turning it off stops IT from
           auto-executing (while Autopilot is on) without touching any add-on below -- useful for letting a
           candidate like VWAP Scalp collect live data without the base strategy's own trades competing for
-          the shared trades/day cap or contributing to the shared weekly loss limit.
+          the shared trades/day cap or contributing to the shared daily loss limit.
         </p>
-        <div class="toggle-row">
-          <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
-            <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
-          </label>
-        </div>
+        <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
+        <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
+               value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Emergency stop -- when on, Autopilot will not place any new trades, regardless of
-          confidence or phase. Existing open trades are unaffected and stay broker-protected
-          by their own SL/TP. Switch off to resume.
+          Base strategy only -- ORB Fade and VWAP Scalp trade on their own binary signal rather than a
+          scanned confidence score, so this threshold has no effect on them.
         </p>
-        <div class="toggle-row">
-          <span>Cancel all trades before weekend close</span>
-          <label class="switch">
-            <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          On by default. Closes every open trade 10 minutes before forex closes for the
-          weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
-        </p>
-        <div class="toggle-row">
-          <span>Range Confluence (experimental)</span>
-          <label class="switch">
-            <input type="checkbox" name="range_confluence_enabled" {{ 'checked' if range_confluence_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. Research-based signal: trades when 2 of 3 range/trend readings agree, holds for 40 trading days.
-        </p>
-        <details style="margin:-0.4rem 0 0.75rem;">
-          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
-          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
-            Not a named trader's strategy -- built from this session's own data-mining research. Uses a wide
-            stop purely as a disaster backstop, not a real target, and holds the fixed 40-trading-day term
-            regardless of what the signal does in between. This is a forward test of a research finding, not
-            a confirmed edge -- every trade it places is tagged "Range Confluence" in the journal and on
-            Telegram so its real impact is easy to track separately from the base strategy.
-          </p>
-        </details>
         <div class="toggle-row">
           <span>ORB Fade (experimental)</span>
           <label class="switch">
@@ -534,6 +498,31 @@
           Paces entries across the WHOLE strategy, not per pair -- no new VWAP Scalp trade (any instrument)
           within this long of the last one, on top of the daily/session caps above.
         </p>
+
+        <div class="toggle-row">
+          <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
+          <label class="switch">
+            <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
+            <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Emergency stop -- when on, Autopilot will not place any new trades, regardless of
+          confidence or phase. Existing open trades are unaffected and stay broker-protected
+          by their own SL/TP. Switch off to resume.
+        </p>
+        <div class="toggle-row">
+          <span>Cancel all trades before weekend close</span>
+          <label class="switch">
+            <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          On by default. Closes every open trade 10 minutes before forex closes for the
+          weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
+        </p>
+
         <label>Autopilot re-scan every, during each pair's own window
           <select name="autopilot_scan_interval_minutes">
             <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>

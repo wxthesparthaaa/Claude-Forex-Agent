@@ -85,6 +85,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Settings reorganized: Daily loss limit is now the top-level section, Autopilot confidence "
+                    "threshold moved under Base strategy (it's the only one of the risk sliders that's really "
+                    "Base-only), Range Confluence's toggle removed, and VWAP Scalp's daily-trade ceiling "
+                    "raised 25 -> 50. Also fixed a disabled Daily loss limit showing a second, meaningless "
+                    "\"more permissive than suggested\" warning alongside it."),
     ("2026-09-08", "Widened VWAP Scalp's live watch window from 07:00-20:00 to 04:00-24:00 UTC, on a real "
                     "180-day hour-of-day backtest -- CAD_JPY/EUR_JPY/CHF_JPY excluded from just the "
                     "04:00-07:00 UTC bucket, where their edge wasn't clearly established."),
@@ -97,12 +102,6 @@ DEVELOPER_NOTES = [
     ("2026-09-08", "Found and fixed why ticket 3879's \"Market Order Rejected\" left zero trace anywhere: "
                     "a rejected OANDA order isn't an HTTP error, so all 5 order-placing strategies silently "
                     "discarded the real rejection reason. Now printed for every one of them."),
-    ("2026-09-08", "Daily loss limit is now a real on/off switch plus a percentage that always means a real "
-                    "threshold (1-50%) -- the old 0-100% slider had 0% AND ~100% both quietly meaning "
-                    "\"no limit,\" for two different reasons."),
-    ("2026-09-07", "VWAP Scalp now rejects a trade if its stop is wider than its target (reward:risk below "
-                    "1:1) instead of taking it anyway -- 2 of today's 11 trades had the stop 3-4x wider "
-                    "than the target."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
@@ -495,12 +494,21 @@ def _out_of_range_warnings(risk_config) -> list:
     # value anymore, so this checks the switch directly instead of
     # is_out_of_recommended_range's own "value > suggested" comparison
     # (which has no way to represent "the check doesn't run at all").
+    # Real bug (found live 2026-09-08): the "more permissive than
+    # suggested" check ran unconditionally, so a disabled daily loss
+    # limit showed BOTH "DISABLED" and "is more permissive than
+    # suggested" -- the second line is meaningless while the switch is
+    # off (there's no threshold in effect to be permissive about). Now
+    # strictly either/or: DISABLED when off, the permissiveness check
+    # only when on.
     warnings = []
     if not risk_config.daily_loss_limit_enabled:
         warnings.append("Daily loss limit is DISABLED -- no automatic stop on daily losses")
+    elif is_out_of_recommended_range(risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct):
+        warnings.append(f"Daily loss limit ({risk_config.max_daily_loss_pct}%) is more permissive than "
+                         f"the suggested {risk_config.suggested_max_daily_loss_pct}%")
     checks = [
         ("Portfolio heat", risk_config.max_portfolio_heat_pct, risk_config.suggested_max_portfolio_heat_pct),
-        ("Daily loss limit", risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct),
         ("Max drawdown", risk_config.max_drawdown_pct, risk_config.suggested_max_drawdown_pct),
     ]
     for label, value, suggested in checks:
@@ -598,7 +606,6 @@ def dashboard():
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
-        range_confluence_enabled=state.range_confluence_enabled,
         orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -941,10 +948,13 @@ def settings():
         # checkbox pattern as the toggles above.
         state.friday_preclose_cancel_enabled = request.form.get("friday_preclose_cancel_enabled") == "on"
 
-        # Range Confluence: off by default -- see src/range_confluence_addon.py
-        # and DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it
-        # ships as a live forward test rather than a confirmed edge.
-        state.range_confluence_enabled = request.form.get("range_confluence_enabled") == "on"
+        # Range Confluence's toggle was removed from Settings (2026-09-08,
+        # user request) -- no longer parsed here. state.range_confluence_enabled
+        # stays frozen at whatever it last was (False on the live account) rather
+        # than being force-set from an absent checkbox on every save; the
+        # scheduler job (see start_scheduler below) and src/range_confluence_addon.py
+        # itself are untouched, so it can still be re-enabled directly in
+        # dashboard_state.json if ever needed.
 
         # ORB Fade: off by default -- see src/orb_fade_addon.py and
         # DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it fades

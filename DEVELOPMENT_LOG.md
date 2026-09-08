@@ -7085,3 +7085,81 @@ recorded, the same pair trades normally in a different bucket
 in the excluded bucket (04:00-07:00 UTC) -- confirming the exclusion is
 pair-specific, not bucket-wide. Full suite (607 tests) green;
 `py_compile` + real `import app` both clean.
+
+## 2026-09-08 (continued) -- Settings page cleanup: reorganized, a stale double-warning fixed, VWAP cap raised
+
+**Request**: user reported a real render-log observation (VWAP Scalp's
+London morning bucket hit "5/5" after a capital reset, prompting the
+question of whether resetting capital should also reset that count),
+plus four Settings UI requests in one batch: raise VWAP Scalp's trades-
+per-day ceiling from 25 to 50; move Risk per trade/Trades per day/
+Autopilot confidence threshold under the Base strategy toggle since
+(as understood by the user) only Base strategy uses them, leaving Daily
+loss limit/threshold as the only top-level ("account-wide") settings;
+remove the Range Confluence toggle; and move Kill switch/Cancel-all-
+before-weekend-close to after VWAP Scalp.
+
+**Capital reset vs. trade-count cap -- clarified, not a bug**: checked
+`/settings`' `reset_capital` branch (`app.py`) against VWAP Scalp's
+daily/bucket cap logic (`_vwap_scalp_trades_today`/`_pacing_cap_reason`
+in `src/vwap_scalp_addon.py`). They're deliberately unrelated: capital
+reset only touches `strategy_starting_capital`/`strategy_realized_pnl`/
+timestamp fields in `dashboard_state.json` (a P&L-accounting baseline),
+while the trade-count caps are a live COUNT of real entries in
+`trade_journal.json` opened since UTC midnight -- a pacing/risk control,
+not an accounting figure. Coupling them would mean a capital reset
+could silently reopen the exact same-tick clustering protection built
+earlier today. No code change; explained to the user instead.
+
+**Verified before moving anything**: whether Risk per trade/Trades per
+day are actually Base-strategy-specific, since misplacing them under
+"Base strategy" would be actively misleading if wrong. Checked every
+strategy module (`src/scan_workflow.py`, `src/vwap_scalp_addon.py`,
+`src/orb_fade_addon.py`, `src/range_confluence_addon.py`) -- all four
+call the same shared `risk_config_from_state`/`calculate_units`/
+`validate_trade` pipeline, so `risk_per_trade_pct` (position sizing)
+and `max_trades_per_day` (checked directly in `risk_engine.validate_trade`)
+gate every strategy equally, exactly like the daily loss limit.
+`autopilot_confidence_threshold_pct`, by contrast, is only ever read in
+`trade_execution.auto_execute_candidates`, which `scheduled_jobs.py`
+only calls for the base strategy's own scanned candidates (gated on
+`state.base_strategy_enabled`) -- the 3 add-ons place trades directly
+with a hardcoded `confidence_pct` never compared against this
+threshold. So: kept Risk per trade/Trades per day as shared, top-level
+settings alongside Daily loss limit (moving them under Base strategy
+would have been wrong); moved only Autopilot confidence threshold under
+Base strategy, where it genuinely belongs.
+
+**Shipped** (`templates/dashboard.html`, `app.py`, `src/dashboard_state.py`):
+- Daily loss limit/threshold now the first section in Settings.
+- Risk per trade/Trades per day follow immediately after, explicitly
+  labeled account-wide in their own paragraph.
+- Autopilot confidence threshold moved inside the Base strategy block,
+  with a new paragraph noting it has no effect on ORB Fade/VWAP Scalp.
+- Range Confluence's toggle and "More" details removed from Settings.
+  `/settings` no longer parses `range_confluence_enabled` (it would
+  otherwise force-set it False on every save from now on, since no
+  checkbox exists to submit "on") -- `state.range_confluence_enabled`
+  stays frozen at its current value (False, live) rather than being
+  silently overwritten; the scheduler job and `range_confluence_addon.py`
+  itself are untouched.
+- Kill switch and Cancel-all-trades-before-weekend-close moved to right
+  after the VWAP Scalp section (after its cooldown slider), ahead of
+  the re-scan-interval/digest-interval settings.
+- `vwap_scalp_max_trades_per_day_max` raised from 25 to 50
+  (`src/dashboard_state.py`) -- the render log showed the daily cap
+  already at its old ceiling.
+
+**Also fixed, spotted in the same screenshots**: `_out_of_range_warnings`
+(`app.py`) showed BOTH "Daily loss limit is DISABLED" and "Daily loss
+limit (50.0%) is more permissive than the suggested 6.0%" at once --
+the second line is meaningless while the switch is off, since no
+threshold is actually in effect. Now strictly either/or: the
+permissiveness check only runs when the toggle is enabled.
+
+**Verification**: new test
+`test_out_of_range_warnings_disabled_and_permissive_shows_only_disabled`
+in `tests/test_settings_daily_loss_limit.py` reproduces the exact
+disabled+50% combo from the screenshot and asserts only one Daily loss
+limit line appears. Template re-parses under Jinja2. Full suite (608
+tests) green; `py_compile` + real `import app` both clean.
