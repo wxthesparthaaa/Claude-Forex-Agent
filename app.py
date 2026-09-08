@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Settings now warns if VWAP Scalp's own trades-per-day is set higher than the shared "
+                    "Trades per day cap -- the shared cap counts every strategy combined and always binds "
+                    "first, so anything above it was silently unreachable."),
     ("2026-09-08", "VWAP Scalp's trades-per-day ceiling (raised 25 -> 50) silently had no effect live -- "
                     "load_state() was replaying the OLD ceiling frozen in an already-persisted state file. "
                     "Same bug class already fixed once for RiskConfig's own bounds, missed here."),
@@ -99,9 +102,6 @@ DEVELOPER_NOTES = [
     ("2026-09-08", "Settings' Save and Reset capital buttons were silently coupled -- one shared form meant "
                     "Save settings could reset capital by accident, and Reset capital visually showed Save "
                     "settings as the one pressed. Split into two independent forms."),
-    ("2026-09-08", "Fixed VWAP Scalp's cooldown/pacing caps only being checked once per tick, before the "
-                    "loop over all 17 pairs -- 3 real trades opened in the same minute today despite the "
-                    "40-min cooldown. Now re-checked fresh for every pair, using that tick's own earlier opens."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
@@ -488,7 +488,7 @@ def _win_rate_breakdown(journal: list) -> list:
     return breakdown
 
 
-def _out_of_range_warnings(risk_config) -> list:
+def _out_of_range_warnings(risk_config, vwap_scalp_max_trades_per_day) -> list:
     # daily_loss_limit_enabled is a real on/off switch (2026-09-08
     # redesign) -- max_daily_loss_pct itself is never a magic "disabled"
     # value anymore, so this checks the switch directly instead of
@@ -514,6 +514,22 @@ def _out_of_range_warnings(risk_config) -> list:
     for label, value, suggested in checks:
         if value != 0 and is_out_of_recommended_range(value, suggested):
             warnings.append(f"{label} ({value}%) is more permissive than the suggested {suggested}%")
+    # User-spotted interaction (2026-09-08): VWAP Scalp's own daily cap is
+    # a strategy-specific SUB-limit meant to sit under the shared,
+    # account-wide Trades per day cap (see DashboardState.vwap_scalp_max_
+    # trades_per_day's own comment -- it exists specifically because VWAP
+    # alone once burned most of the shared daily allowance). The shared
+    # cap counts every strategy's trades combined, so it always binds
+    # first once reached -- if VWAP's own number is set higher than the
+    # shared cap, that extra room is unreachable and the setting silently
+    # does nothing above the shared cap's value. Surfaced as a warning
+    # rather than clamped, since clamping would make this slider's own
+    # max jump around every time the unrelated Trades per day slider moves.
+    if vwap_scalp_max_trades_per_day > risk_config.max_trades_per_day:
+        warnings.append(f"VWAP Scalp trades per day ({vwap_scalp_max_trades_per_day}) is higher than the "
+                         f"shared Trades per day ({risk_config.max_trades_per_day}) -- the shared cap counts "
+                         f"every strategy combined and always binds first, so VWAP Scalp can never actually "
+                         f"reach this many on its own")
     return warnings
 
 
@@ -594,7 +610,8 @@ def dashboard():
         live_trades=live_trades, news=news,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
-        risk_config=asdict(risk_config), out_of_range_warnings=_out_of_range_warnings(risk_config),
+        risk_config=asdict(risk_config),
+        out_of_range_warnings=_out_of_range_warnings(risk_config, state.vwap_scalp_max_trades_per_day),
         autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         scan_digest_interval_minutes=state.scan_digest_interval_minutes,
         candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,

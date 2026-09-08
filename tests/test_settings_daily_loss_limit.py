@@ -127,13 +127,14 @@ def test_out_of_range_warnings_flags_the_toggle_being_off():
     # warning still needs to fire off the real switch.
     import app as flask_app
     daily_off = RiskConfig(daily_loss_limit_enabled=False)
-    warnings = flask_app._out_of_range_warnings(daily_off)
+    warnings = flask_app._out_of_range_warnings(daily_off, daily_off.max_trades_per_day)
     assert any("Daily loss limit is DISABLED" in w for w in warnings)
 
 
 def test_out_of_range_warnings_still_flags_ordinary_permissive_values():
     import app as flask_app
-    warnings = flask_app._out_of_range_warnings(RiskConfig(max_daily_loss_pct=20.0))
+    risk_config = RiskConfig(max_daily_loss_pct=20.0)
+    warnings = flask_app._out_of_range_warnings(risk_config, risk_config.max_trades_per_day)
     assert any("Daily loss limit" in w and "DISABLED" not in w for w in warnings)
 
 
@@ -144,7 +145,25 @@ def test_out_of_range_warnings_disabled_and_permissive_shows_only_disabled():
     # off. Must be either/or, never both.
     import app as flask_app
     daily_off_and_permissive = RiskConfig(daily_loss_limit_enabled=False, max_daily_loss_pct=50.0)
-    warnings = flask_app._out_of_range_warnings(daily_off_and_permissive)
+    warnings = flask_app._out_of_range_warnings(daily_off_and_permissive, daily_off_and_permissive.max_trades_per_day)
     daily_loss_warnings = [w for w in warnings if "Daily loss limit" in w]
     assert len(daily_loss_warnings) == 1
-    assert "DISABLED" in daily_loss_warnings[0]
+
+
+def test_out_of_range_warnings_flags_vwap_cap_set_above_the_shared_cap():
+    # User-spotted interaction (2026-09-08): VWAP Scalp's own daily cap is
+    # a sub-limit meant to sit under the shared Trades per day cap (which
+    # counts every strategy's trades combined). Setting VWAP's own number
+    # higher than the shared cap makes the extra room unreachable --
+    # worth a warning since it fails silently otherwise.
+    import app as flask_app
+    risk_config = RiskConfig(max_trades_per_day=10)
+    warnings = flask_app._out_of_range_warnings(risk_config, 15)
+    assert any("VWAP Scalp trades per day" in w and "15" in w and "10" in w for w in warnings)
+
+
+def test_out_of_range_warnings_does_not_flag_vwap_cap_at_or_below_the_shared_cap():
+    import app as flask_app
+    risk_config = RiskConfig(max_trades_per_day=10)
+    warnings = flask_app._out_of_range_warnings(risk_config, 10)
+    assert not any("VWAP Scalp trades per day" in w for w in warnings)

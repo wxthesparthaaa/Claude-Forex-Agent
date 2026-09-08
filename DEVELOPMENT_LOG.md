@@ -7201,3 +7201,40 @@ current_code_default` in `tests/test_dashboard_state.py`) fails against
 it (25 != 50) before restoring the fix. A second new test confirms the
 fix doesn't throw out a real user-set value along with the bounds. Full
 suite (610 tests) green; `py_compile` + real `import app` both clean.
+
+## 2026-09-08 (continued) -- Warn when VWAP Scalp's own daily cap is set higher than the shared one
+
+**User question**: after VWAP Scalp's own trades-per-day ceiling was
+raised to 50, does that setting contradict the general "Trades per
+day" cap that also applies to VWAP Scalp?
+
+**Diagnosis, discussed with the user before any code change**: not a
+contradiction -- confirmed in code that `trade_journal.trades_opened_
+today` (which feeds the shared `RiskConfig.max_trades_per_day` check in
+`risk_engine.validate_trade`) counts every strategy's trades combined,
+while VWAP Scalp's own cap (`_vwap_scalp_trades_today`) counts only its
+own tag. Both gates run (AND, not OR) -- the shared cap is the account-
+wide ceiling, VWAP's own cap is a strategy-specific SUB-limit meant to
+sit under it (see `DashboardState.vwap_scalp_max_trades_per_day`'s own
+comment -- it exists precisely because VWAP once burned most of the
+shared daily allowance alone). The real, newly-introduced problem:
+raising VWAP's own slider ceiling to 50 without any guard means a user
+can now set VWAP's own number ABOVE the shared cap, where it becomes
+unreachable -- the shared cap (counting every strategy) always binds
+first, so the extra room silently does nothing. User chose a warning
+over a hard clamp (a dynamic clamp would make VWAP's own slider max
+jump around every time the unrelated Trades-per-day slider moves).
+
+**Fix**: `_out_of_range_warnings` (`app.py`) now also takes
+`vwap_scalp_max_trades_per_day` and appends a warning when it exceeds
+`risk_config.max_trades_per_day`, explaining why the extra room is
+unreachable. Renders through the same existing warnings block Settings
+already uses for the daily-loss-limit/portfolio-heat/drawdown checks --
+no template changes needed.
+
+**Verification**: two new tests
+(`test_out_of_range_warnings_flags_vwap_cap_set_above_the_shared_cap`,
+`..._does_not_flag_vwap_cap_at_or_below_the_shared_cap`) in
+`tests/test_settings_daily_loss_limit.py`; the function's existing
+tests updated for the new required parameter. Full suite green;
+`py_compile` + real `import app` both clean.
