@@ -54,7 +54,8 @@
     "USD_CHF"
   ],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: reward:risk 0.07:1 is below the 1:1 floor (risking 0.00046 to make 0.00003)"
+    "VWAP Scalp: reward:risk 0.07:1 is below the 1:1 floor (risking 0.00046 to make 0.00003)",
+    "VWAP Scalp: reward:risk 0.21:1 is below the 1:1 floor (risking 0.00029 to make 0.00006)"
   ],
   "last_scan_digest_sent_at": "2026-09-08T06:31:15.255047+00:00",
   "paused_instruments": {},
