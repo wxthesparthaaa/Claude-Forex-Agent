@@ -1,39 +1,4 @@
 {
-  "scanned_at": "2026-09-08T13:00:24.440012+00:00",
-  "candidates": [
-    {
-      "instrument": "XAG_USD",
-      "direction": "LONG",
-      "entry_price": 66.4095,
-      "stop_loss": 65.7509,
-      "take_profit": 67.7267,
-      "confidence_pct": 72.5,
-      "confidence_components": {
-        "breadth": 100.0,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 50,
-      "unit_label": "oz",
-      "risk_amount": 42.4562,
-      "notional_account_currency": 4200.5,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 57 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "Caution: the broader currency move looks stretched (z=-2.6) -- higher reversal risk than usual.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    }
-  ]
+  "scanned_at": "2026-09-08T13:05:20.475437+00:00",
+  "candidates": []
 }
