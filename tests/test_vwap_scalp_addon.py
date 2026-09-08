@@ -14,7 +14,7 @@ import trade_journal as tj
 import vwap_scalp_addon as vs
 from autopilot import PhaseState
 
-FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 07:00-20:00 UTC watch window
+FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 04:00-24:00 UTC watch window
 
 
 class _FrozenDatetime(datetime):
@@ -414,7 +414,9 @@ def test_outside_watch_window_skips_fresh_entries(mock_send, tmp_path, monkeypat
     _autopilot_state()
 
     class _OutsideWindow(_FrozenDatetime):
-        _frozen = FIXED_NOW.replace(hour=22)  # 22:00 UTC -- past WATCH_END_HOUR
+        _frozen = FIXED_NOW.replace(hour=2)  # 02:00 UTC -- before WATCH_START_HOUR (the
+        # 00:00-04:00 UTC dead zone the 2026-09-08 hour-of-day backtest found genuinely
+        # negative and deliberately left dark, unlike every other hour of the day)
 
     monkeypatch.setattr(vs, "datetime", _OutsideWindow)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
@@ -627,7 +629,7 @@ def test_own_daily_cap_respects_a_user_adjusted_settings_value(mock_send, tmp_pa
     # 6 prior trades -- would trip the OLD default cap, must not trip the
     # raised one. Seeded outside FIXED_NOW's own bucket so this isolates
     # the daily cap from the per-bucket one (raised cap=10 -> per-bucket
-    # cap ceil(10/3)=4, which 6 trades in the SAME bucket would still trip).
+    # cap ceil(10/5)=2, which 6 trades in the SAME bucket would still trip).
     _seed_closed_vwap_trades(6, FIXED_NOW.replace(hour=17))
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
@@ -643,7 +645,7 @@ def test_time_bucket_cap_blocks_a_burst_within_one_session_even_below_the_daily_
     # Real incident, 2026-09-03: 3 of that day's 6 trades fired within a
     # 15-minute stretch. FIXED_NOW (10:00 UTC) falls in the "London
     # morning" bucket (07:00-12:00 UTC); default daily cap 6 -> per-
-    # bucket cap ceil(6/3)=2. Seeding 2 trades in THAT SAME bucket must
+    # bucket cap ceil(6/5)=2. Seeding 2 trades in THAT SAME bucket must
     # block a 3rd even though the day's total (2) is nowhere near 6.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
@@ -678,10 +680,79 @@ def test_time_bucket_cap_does_not_block_a_fresh_session(mock_send, tmp_path, mon
     assert opened == ["EUR_USD"]
 
 
+@patch("vwap_scalp_addon.send_message")
+def test_weak_hour_pair_exclusion_blocks_a_listed_pair_in_its_excluded_bucket(mock_send, tmp_path, monkeypatch):
+    # 2026-09-08 window widening: CAD_JPY/EUR_JPY/CHF_JPY's edge wasn't
+    # clearly established specifically in the 04:00-07:00 UTC bucket (see
+    # WEAK_HOUR_PAIR_EXCLUSIONS), even though the same 3 pairs are fine in
+    # every other bucket the widened window opened up. Must be a SILENT
+    # skip -- no risk-limit skip recorded, since this isn't a dynamic risk
+    # event, just a pair not being tradeable in this one specific window.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+
+    class _WeakBucket(_FrozenDatetime):
+        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+
+    monkeypatch.setattr(vs, "datetime", _WeakBucket)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_WeakBucket._frozen)
+    client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    state = ds.load_state()
+    assert state.risk_limit_skips_since_digest == []
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_weak_hour_pair_exclusion_does_not_block_the_same_pair_in_a_different_bucket(mock_send, tmp_path, monkeypatch):
+    # The exact same 3 pairs backtested fine in 20:00-24:00 UTC -- the
+    # exclusion is scoped to the one weak bucket, not the pair globally.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+
+    class _StrongBucket(_FrozenDatetime):
+        _frozen = FIXED_NOW.replace(hour=21)  # inside 20:00-24:00 UTC
+
+    monkeypatch.setattr(vs, "datetime", _StrongBucket)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_StrongBucket._frozen)
+    client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["CAD_JPY"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_weak_hour_pair_exclusion_does_not_block_an_unlisted_pair_in_the_same_bucket(mock_send, tmp_path, monkeypatch):
+    # The exclusion is pair-specific, not bucket-wide -- a pair not in
+    # WEAK_HOUR_PAIR_EXCLUSIONS must still trade normally in 04:00-07:00 UTC.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+
+    class _WeakBucket(_FrozenDatetime):
+        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+
+    monkeypatch.setattr(vs, "datetime", _WeakBucket)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_WeakBucket._frozen)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
 def test_bucket_label_sgt_converts_and_wraps_past_midnight():
+    assert vs._bucket_label_sgt(4, 7) == "12:00-15:00 SGT"
     assert vs._bucket_label_sgt(7, 12) == "15:00-20:00 SGT"
     assert vs._bucket_label_sgt(12, 16) == "20:00-00:00 SGT"
     assert vs._bucket_label_sgt(16, 20) == "00:00-04:00 SGT"
+    assert vs._bucket_label_sgt(20, 24) == "04:00-08:00 SGT"
 
 
 def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, monkeypatch):
@@ -694,10 +765,14 @@ def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, m
 
     summary = vs.vwap_scalp_bucket_summary(FIXED_NOW)
 
-    assert [b["session"] for b in summary] == ["London morning", "London/NY overlap", "NY afternoon"]
-    assert [b["label_sgt"] for b in summary] == ["15:00-20:00 SGT", "20:00-00:00 SGT", "00:00-04:00 SGT"]
-    assert [b["count"] for b in summary] == [2, 1, 0]
-    assert all(b["cap"] == 2 for b in summary)  # ceil(6/3)
+    assert [b["session"] for b in summary] == [
+        "Asian late / pre-London", "London morning", "London/NY overlap", "NY afternoon", "NY late / early Asian",
+    ]
+    assert [b["label_sgt"] for b in summary] == [
+        "12:00-15:00 SGT", "15:00-20:00 SGT", "20:00-00:00 SGT", "00:00-04:00 SGT", "04:00-08:00 SGT",
+    ]
+    assert [b["count"] for b in summary] == [0, 2, 1, 0, 0]
+    assert all(b["cap"] == 2 for b in summary)  # ceil(6/5)
 
 
 @patch("vwap_scalp_addon.send_message")

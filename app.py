@@ -85,6 +85,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Widened VWAP Scalp's live watch window from 07:00-20:00 to 04:00-24:00 UTC, on a real "
+                    "180-day hour-of-day backtest -- CAD_JPY/EUR_JPY/CHF_JPY excluded from just the "
+                    "04:00-07:00 UTC bucket, where their edge wasn't clearly established."),
+    ("2026-09-08", "Settings' Save and Reset capital buttons were silently coupled -- one shared form meant "
+                    "Save settings could reset capital by accident, and Reset capital visually showed Save "
+                    "settings as the one pressed. Split into two independent forms."),
     ("2026-09-08", "Fixed VWAP Scalp's cooldown/pacing caps only being checked once per tick, before the "
                     "loop over all 17 pairs -- 3 real trades opened in the same minute today despite the "
                     "40-min cooldown. Now re-checked fresh for every pair, using that tick's own earlier opens."),
@@ -97,15 +103,6 @@ DEVELOPER_NOTES = [
     ("2026-09-07", "VWAP Scalp now rejects a trade if its stop is wider than its target (reward:risk below "
                     "1:1) instead of taking it anyway -- 2 of today's 11 trades had the stop 3-4x wider "
                     "than the target."),
-    ("2026-09-07", "Base strategy and Autopilot batch risk-limit skips now print to Render logs, matching "
-                    "VWAP Scalp/ORB Fade/Range Confluence -- a real portfolio-heat block previously left zero "
-                    "trace and had to be dug out of state-sync git history to diagnose."),
-    ("2026-09-07", "Every new trade now records whether its pair's liquidity window was active the moment "
-                    "it opened, so a future \"should trading hours change?\" review no longer has to "
-                    "reconstruct this from raw timestamps against whatever today's window formula happens to be."),
-    ("2026-09-07", "Fixed a race that could revive or lose scan-digest risk-limit skips: recording a skip "
-                    "used its own separate lock that never coordinated with the digest's reset, so the two "
-                    "could interleave and corrupt each other. Now share one lock."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),

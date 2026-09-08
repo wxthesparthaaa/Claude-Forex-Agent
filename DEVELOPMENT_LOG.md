@@ -6992,3 +6992,96 @@ WATCH_END_HOUR was already a reasonable choice. If one or more do, the
 per-instrument breakdown decides whether it's worth a new live
 session bucket versus a few pairs' edge sitting close enough to the
 existing window to not need a separate one.
+
+## 2026-09-08 (continued) -- Settings' Save and Reset capital buttons were silently coupled
+
+**Problem**: user reported the two Settings buttons behaving as one --
+clicking "Save settings" would sometimes reset strategy capital (wiping
+P&L tracking) with no capital-related change intended, and clicking
+"Reset capital" visually showed "Save settings" as the button that got
+pressed (greyed out, labeled "Saving..." instead of "Resetting...").
+
+**Root cause**: both buttons lived inside one `<form>`, so every submit
+-- regardless of which button was clicked -- sent the `strategy_capital`
+field along with everything else. `/settings`' non-reset branch
+re-baselines capital (zeroes `strategy_realized_pnl`, bumps
+`capital_reset_at`) whenever the submitted `strategy_capital` differs
+from live equity by more than 1 cent -- a threshold any autopilot trade
+closing between page-load and clicking "Save settings" was enough to
+cross, since the field's value is a snapshot taken at render time. Separately,
+the page's generic loading-indicator script did
+`form.querySelector('button[type=submit]')` to find which button to
+disable/relabel -- for a form with two submit buttons, that always
+returns the FIRST one in DOM order regardless of which was actually
+clicked, so "Reset capital" always visually triggered "Save settings"'s
+own loading state instead of its own.
+
+**Fix**: split Settings into two independent `<form>` elements
+(`templates/dashboard.html`) -- the main settings form (toggles,
+sliders, mode) keeps its "Save settings" button and no longer includes
+`strategy_capital` at all, so it can never trigger a rebase; a second,
+separate form holds just the Strategy capital input and "Reset
+capital" button. Also hardened the loading-indicator script to prefer
+`event.submitter` (the actual clicked button) over the blind
+`querySelector`, as defense-in-depth for any future multi-button form.
+
+**Verification**: `app.py`'s `/settings` route itself was untouched
+(the bug was purely in the shared-form HTML/JS, not the backend logic),
+confirmed by `tests/test_settings_capital_reset.py`'s existing 5 tests
+still passing unchanged. Template re-parses under Jinja2; full suite
+(604 tests at the time) green.
+
+## 2026-09-08 (continued) -- Widened VWAP Scalp's live watch window to 04:00-24:00 UTC, on the hour-of-day backtest's own numbers
+
+**Request**: implement the hour-of-day backtest's finding live -- widen
+the window and exclude whichever pairs weren't clearly established in
+the newly-opened hours, following the exact per-instrument breakdown
+the user ran and pasted back the same day.
+
+**What the real backtest output showed** (180 days, per-(instrument,day)
+significance, Bonferroni-corrected across 6 buckets, split-half
+checked): 20:00-24:00 UTC came back as one of the STRONGEST buckets of
+the entire day (pooled mean_R +0.52, day-win 73.1%, every one of the 17
+pairs individually positive, no weak links) -- a clear, uncomplicated
+widen. 04:00-07:00 UTC came back real but softer at the pooled level
+(mean_R +0.31, day-win 65.0%), and its own per-instrument breakdown
+(diagnostic only, not itself Bonferroni-corrected) showed CAD_JPY
+(day-win 45.8%, day_mean_R +0.06), EUR_JPY (50.0%, +0.13), and CHF_JPY
+(50.0%, +0.12) as marginal-to-not-established specifically in that
+bucket -- while the SAME 3 pairs were solidly positive in the other new
+bucket (20:00-24:00 UTC). 00:00-04:00 UTC was tested and REJECTED
+outright -- genuinely negative (mean_R -0.056, day-win 44.1%), the
+day's one real dead zone, deliberately left dark.
+
+**Shipped** (`src/vwap_scalp_addon.py`): `WATCH_START_HOUR`/
+`WATCH_END_HOUR` widened from 7/20 to 4/24. `VWAP_SCALP_TIME_BUCKETS_UTC`
+extended from 3 to 5 buckets (added "Asian late / pre-London" 04-07 and
+"NY late / early Asian" 20-24), keeping the same UTC boundaries the
+backtest's own `HOUR_BUCKETS_UTC` used so the live buckets stay
+comparable to what was actually validated -- `_pacing_cap_reason` and
+`vwap_scalp_bucket_summary` already iterated the bucket list generically,
+so no gating logic needed to change, only the constant. Each bucket's
+own share of the (unchanged) daily cap shrinks accordingly
+(`ceil(daily_cap/5)` vs the old `ceil(daily_cap/3)`) -- an expected
+side effect of adding buckets, not a bug.
+
+New `WEAK_HOUR_PAIR_EXCLUSIONS = {(4, 7): {"CAD_JPY", "EUR_JPY", "CHF_JPY"}}`,
+checked in the per-pair loop right after the watch-window gate: a
+listed pair is silently skipped (no print, no `record_risk_limit_skip`)
+during its excluded bucket -- deliberately silent, since this is
+equivalent to the pair simply not being in `VWAP_SCALP_PAIRS` for that
+one window, not a dynamic risk event worth a digest entry.
+
+**Verification**: `tests/test_vwap_scalp_addon.py` updated for the
+5-bucket structure (bucket-summary/bucket-label/bucket-cap assertions);
+the "outside watch window" test's frozen hour moved from 22:00 UTC
+(now inside the widened window, so it was silently passing for the
+wrong reason -- an unrelated price-mismatch rejection, not the watch-
+window gate) to 02:00 UTC, the one hour range still genuinely outside
+the window. Three new tests: a `WEAK_HOUR_PAIR_EXCLUSIONS` pair is
+blocked in its excluded bucket (04:00-07:00 UTC) with no risk-skip
+recorded, the same pair trades normally in a different bucket
+(20:00-24:00 UTC), and a pair NOT on the exclusion list trades normally
+in the excluded bucket (04:00-07:00 UTC) -- confirming the exclusion is
+pair-specific, not bucket-wide. Full suite (607 tests) green;
+`py_compile` + real `import app` both clean.

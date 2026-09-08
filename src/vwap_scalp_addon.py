@@ -11,7 +11,9 @@ price, reset at 00:00 UTC) plus a trailing 30-minute rolling standard
 deviation of price's own deviation from that VWAP. A trade fires when
 price is 2.0 standard deviations away from VWAP -- fading BACK toward
 it (buy when unusually far BELOW VWAP, sell when unusually far ABOVE),
-only during 07:00-20:00 UTC (London+NY liquid hours).
+only during 04:00-24:00 UTC (widened 2026-09-08 from the original
+07:00-20:00 "London+NY liquid hours" -- see WATCH_START_HOUR below for
+the backtest that justified it).
 
 WHY THIS ONE NEEDED EXTRA SCRUTINY BEFORE SHIPPING, stated plainly: the
 first real backtest run came back at t=43 -- an order of magnitude
@@ -44,7 +46,9 @@ MECHANICAL RULES:
      window BEFORE being added to it, never against a baseline that
      includes itself (the exact bug found and fixed in the backtest).
   3. Signals only evaluated inside WATCH_START_HOUR-WATCH_END_HOUR UTC
-     (07:00-20:00).
+     (04:00-24:00), and never for a WEAK_HOUR_PAIR_EXCLUSIONS pair
+     during its excluded bucket (currently just CAD_JPY/EUR_JPY/CHF_JPY
+     during 04:00-07:00 UTC).
   4. CONFIRMATION: a raw crossing of Z_ENTRY does NOT fire by itself --
      the deviation must tick back from its own running extreme first
      (real evidence a reversal has started), mirroring
@@ -149,8 +153,20 @@ VWAP_SCALP_PAIRS = [
   # covers all 17 pairs at a recalibrated, evidence-based value instead. See that constant's
   # own comment for the full diagnosis.
 
-WATCH_START_HOUR = 7
-WATCH_END_HOUR = 20            # exclusive -- London + NY liquid hours
+# Widened 2026-09-08 (was 7-20 UTC, "London+NY liquid hours") on the
+# strength of scripts/backtest_vwap_reversion_scalp.py's hour-of-day
+# pass -- 180 days, per-(instrument,day) significance testing,
+# Bonferroni-corrected across 6 candidate hour buckets, split-half
+# stability checked. 20:00-24:00 UTC came back as one of the STRONGEST
+# buckets of the whole day (mean_R +0.52, day-win 73.1%, beats 2 of the
+# 3 previously-live buckets outright) with every single pair positive,
+# no weak links. 04:00-07:00 UTC came back real but softer (mean_R
+# +0.31, day-win 65.0%) -- see WEAK_HOUR_PAIR_EXCLUSIONS below for the
+# 3 pairs excluded specifically from that bucket. 00:00-04:00 UTC was
+# tested and REJECTED -- genuinely negative (mean_R -0.056, day-win
+# 44.1%), the one real dead zone in the day, deliberately left dark.
+WATCH_START_HOUR = 4
+WATCH_END_HOUR = 24            # exclusive -- 24 means through end-of-day, no upper bound
 ROLLING_WINDOW_MINUTES = 30
 MIN_SESSION_SAMPLES = 20
 Z_ENTRY = 2.0                   # the single validated threshold -- not swept live
@@ -206,19 +222,48 @@ VWAP_SCALP_MAX_TRADES_PER_DAY = 6
 # pairs the same way at once) consume the ENTIRE day's allowance in a
 # single tight cluster -- real incident, 2026-09-03: 3 of that day's 6
 # trades fired within a 15-minute stretch. Splits WATCH_START_HOUR-
-# WATCH_END_HOUR into three real trading sessions (not arbitrary equal
+# WATCH_END_HOUR into real trading sessions (not arbitrary equal
 # clock-hour slices) and caps each one's OWN share of the daily total
 # separately, ON TOP OF (never instead of) the existing daily cap -- so
 # the day's total can never exceed what Settings says; this only
 # smooths how it's allowed to land within the day. Each bucket's cap is
-# ceil(daily_cap / 3), so a bucket can occasionally get slightly more
-# than an even third, but three buckets can never together exceed the
-# daily cap since that's still checked independently.
+# ceil(daily_cap / len(VWAP_SCALP_TIME_BUCKETS_UTC)), so a bucket can
+# occasionally get slightly more than an even share, but the buckets
+# can never together exceed the daily cap since that's still checked
+# independently. Extended 2026-09-08 with the 2 new buckets from the
+# widened watch window above -- same UTC boundaries the backtest's own
+# HOUR_BUCKETS_UTC used, so the live buckets stay directly comparable
+# to what was actually validated. Adding buckets automatically shrinks
+# each one's own share of an unchanged daily cap (ceil(daily_cap/5) <
+# ceil(daily_cap/3)) -- a real, expected side effect for any account
+# that had already raised vwap_scalp_max_trades_per_day assuming 3
+# buckets, not a bug; raise the daily cap too if that tighter per-
+# bucket room isn't wanted.
 VWAP_SCALP_TIME_BUCKETS_UTC = [
+    (4, 7, "Asian late / pre-London"),
     (7, 12, "London morning"),
     (12, 16, "London/NY overlap"),
     (16, 20, "NY afternoon"),
+    (20, 24, "NY late / early Asian"),
 ]
+
+# Real backtest finding (2026-09-08, hour-of-day pass): CAD_JPY/EUR_JPY/
+# CHF_JPY showed a marginal-to-negative edge specifically in the
+# 04:00-07:00 UTC bucket (day-win 45.8%-50.0%, i.e. CAD_JPY was a
+# LOSING day more often than not there, only net-positive from a few
+# oversized wins) while every OTHER pair -- including these same 3 --
+# was solidly positive in every other bucket, including the OTHER new
+# one (20:00-24:00 UTC, where all 3 of these pairs cleared +0.30
+# day_mean_R with no concerns). This per-instrument result was NOT
+# itself Bonferroni-corrected (same caveat the backtest script states
+# for every per-instrument breakdown it prints -- only the POOLED
+# bucket-level result is), so these 3 aren't proven losers either, just
+# not established well enough yet to trade in this one specific window.
+# Keyed by the exact (start_hour, end_hour) bucket tuple; empty for any
+# bucket with no exclusions.
+WEAK_HOUR_PAIR_EXCLUSIONS = {
+    (4, 7): {"CAD_JPY", "EUR_JPY", "CHF_JPY"},
+}
 
 # Real live data (2026-09-01/02, 30 closed VWAP Scalp trades, 22 losses):
 # realized losses run noticeably bigger than their own intended
@@ -419,7 +464,7 @@ def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
 
 def _bucket_label_sgt(start_hour_utc: int, end_hour_utc: int) -> str:
     """SGT (UTC+8, no DST) display label for a UTC hour range, e.g.
-    (7, 12) -> "15:00-20:00 SGT". Two of the three buckets cross
+    (7, 12) -> "15:00-20:00 SGT". Two of the five buckets cross
     midnight SGT (VWAP_SCALP_TIME_BUCKETS_UTC's own 12-16/16-20 UTC
     ranges land at 20:00-24:00/00:00-04:00 SGT) -- the %24 wrap handles
     that correctly, it's a real, expected part of the mapping, not a
@@ -773,6 +818,16 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
 
             if not (WATCH_START_HOUR <= now.hour < WATCH_END_HOUR):
                 continue  # outside today's liquid watch window -- no new entries checked
+
+            # Silent skip, deliberately (2026-09-08) -- unlike the pacing
+            # caps above, this isn't a dynamic risk event worth a digest
+            # entry; it's equivalent to this pair simply not being in
+            # VWAP_SCALP_PAIRS during this specific hour bucket. See
+            # WEAK_HOUR_PAIR_EXCLUSIONS for which pairs/buckets and why.
+            bucket = _current_bucket(now)
+            if bucket is not None and instrument in WEAK_HOUR_PAIR_EXCLUSIONS.get(bucket[:2], ()):
+                continue
+
             if _recently_signaled(entries, instrument, now):
                 continue  # a signal fired on this pair within the last COOLDOWN_MINUTES already
 

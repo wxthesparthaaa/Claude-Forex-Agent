@@ -512,9 +512,12 @@
           </p>
           <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
             Runs its own separate daily trade cap (independent of the shared Trades per day limit above),
-            also spread evenly across three sessions -- 15:00-20:00 SGT / 20:00-00:00 SGT / 00:00-04:00 SGT
-            -- so one correlated burst can't use up the whole day's allowance in a single tight cluster.
-            Breakdown by session shown in the periodic scan digest on Telegram.
+            also spread evenly across five sessions -- 12:00-15:00 SGT / 15:00-20:00 SGT / 20:00-00:00 SGT /
+            00:00-04:00 SGT / 04:00-08:00 SGT -- so one correlated burst can't use up the whole day's
+            allowance in a single tight cluster. Breakdown by session shown in the periodic scan digest on
+            Telegram. Widened 2026-09-08 from the original three (07:00-20:00 UTC only) on the strength of a
+            180-day hour-of-day backtest; CAD_JPY/EUR_JPY/CHF_JPY are excluded specifically from the
+            12:00-15:00 SGT session, where their edge wasn't clearly established.
           </p>
         </details>
         <label>VWAP Scalp trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
