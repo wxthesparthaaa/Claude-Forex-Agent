@@ -59,7 +59,8 @@
     "VWAP Scalp: reward:risk 0.10:1 is below the 1:1 floor (risking 0.00081 to make 0.00008)",
     "Base strategy scan: Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
     "VWAP Scalp: reward:risk 0.15:1 is below the 1:1 floor (risking 0.47400 to make 0.07000)",
-    "VWAP Scalp: reward:risk 0.54:1 is below the 1:1 floor (risking 0.39800 to make 0.21600)"
+    "VWAP Scalp: reward:risk 0.54:1 is below the 1:1 floor (risking 0.39800 to make 0.21600)",
+    "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 6.7% > 6.0%"
   ],
   "last_scan_digest_sent_at": "2026-09-08T18:45:10.422798+00:00",
   "paused_instruments": {},
