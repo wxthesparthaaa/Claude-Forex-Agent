@@ -440,6 +440,56 @@ def _current_bucket(now: datetime):
     return None
 
 
+def _pacing_cap_reason(entries: list, now: datetime, today_start: datetime, max_trades_per_day: int,
+                        per_bucket_cap: int, global_cooldown_minutes: int):
+    """None if none of the daily/bucket/cooldown pacing caps are
+    currently tripped, else (category, reason) -- category is one of
+    "daily"/"bucket"/"cooldown", for the caller to de-duplicate
+    notifications by (see check_vwap_scalp_opportunities' own use: GATE
+    every instrument on a fresh call to this, but NOTIFY at most once
+    per tick per category, to avoid flooding the digest with near-
+    identical entries when most of the 17 pairs hit the same cap on the
+    same tick). Pure function of `entries` -- callers control freshness
+    by what they pass in.
+
+    Real incident (2026-09-08): the caller used to compute this ONCE per
+    tick, before looping over every pair, then reuse that single stale
+    `capped` result for all 17 pairs. Two or more pairs confirming a
+    signal within the SAME tick each saw the tick-START state -- not
+    each other's opens moments earlier in that same loop -- so multiple
+    trades still fired together (3 real live trades, same minute,
+    despite the 20-minute global cooldown existing specifically to
+    prevent this exact clustering). Extracting this as its own function
+    lets the caller re-run it fresh, per instrument, against freshly-
+    reloaded entries that DO include anything opened earlier this tick."""
+    trades_today = _vwap_scalp_trades_today(entries, today_start)
+    if trades_today >= max_trades_per_day:
+        return ("daily", f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}")
+
+    bucket = _current_bucket(now)
+    if bucket is not None:
+        bucket_start_h, bucket_end_h, bucket_session = bucket
+        bucket_start = today_start + timedelta(hours=bucket_start_h)
+        bucket_end = today_start + timedelta(hours=bucket_end_h)
+        trades_in_bucket = _vwap_scalp_trades_between(entries, bucket_start, bucket_end)
+        if trades_in_bucket >= per_bucket_cap:
+            return ("bucket", f"VWAP Scalp's {bucket_session} ({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) "
+                               f"time-bucket cap reached: {trades_in_bucket}/{per_bucket_cap}")
+
+    most_recent_open = _most_recent_vwap_scalp_open(entries)
+    if most_recent_open is not None:
+        minutes_since_last = (now - most_recent_open).total_seconds() / 60
+        # A negative minutes_since_last (opened_at in the future relative
+        # to `now`) can't happen with real data -- guarded defensively
+        # anyway so a clock anomaly reads as "not cooling down" rather
+        # than an unbounded block.
+        if 0 <= minutes_since_last < global_cooldown_minutes:
+            return ("cooldown", f"VWAP Scalp's global cooldown active: last entry {minutes_since_last:.0f} min "
+                                 f"ago, needs {global_cooldown_minutes}")
+
+    return None
+
+
 def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     """Today's VWAP Scalp trade count per time bucket, capped value
     included -- feeds the periodic scan digest so the user can see
@@ -665,59 +715,25 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     # from state every tick, not the module constant (which is now only
     # the dataclass default for a brand-new state).
     max_trades_per_day = state.vwap_scalp_max_trades_per_day
-    journal_snapshot = load_journal()
-    trades_today = _vwap_scalp_trades_today(journal_snapshot, today_start)
-    daily_capped = trades_today >= max_trades_per_day
-
-    # Time-bucket cap (2026-09-03) -- an independent, additional gate on
+    # Time-bucket cap (2026-09-03): an independent, additional gate on
     # top of the daily one, so a correlated burst can't consume the
     # whole day's allowance in one tight cluster. See
     # VWAP_SCALP_TIME_BUCKETS_UTC's own comment for the real incident.
     per_bucket_cap = math.ceil(max_trades_per_day / len(VWAP_SCALP_TIME_BUCKETS_UTC))
-    bucket = _current_bucket(now)
-    if bucket is not None:
-        bucket_start_h, bucket_end_h, bucket_session = bucket
-        bucket_start = today_start + timedelta(hours=bucket_start_h)
-        bucket_end = today_start + timedelta(hours=bucket_end_h)
-        trades_in_bucket = _vwap_scalp_trades_between(journal_snapshot, bucket_start, bucket_end)
-        bucket_capped = trades_in_bucket >= per_bucket_cap
-    else:
-        # Outside all three buckets -- only possible outside the watch
-        # window itself, where the per-pair loop below already refuses
-        # new entries regardless, so this can never actually gate anything.
-        trades_in_bucket = 0
-        bucket_capped = False
-
-    # Global cross-instrument cooldown (2026-09-04) -- an independent,
-    # additional pacing gate on top of the daily/bucket caps: real data
-    # showed 5 trades firing in a single scan tick, each on a different
-    # instrument's own COOLDOWN_MINUTES clock, so none of them blocked
-    # each other. User-adjustable 20-120 minutes, in 20-minute steps.
+    # Global cross-instrument cooldown (2026-09-04): an independent,
+    # additional pacing gate on top of the daily/bucket caps -- paces
+    # entries across the WHOLE strategy regardless of instrument.
+    # User-adjustable 20-120 minutes, in 20-minute steps.
     global_cooldown_minutes = state.vwap_scalp_global_cooldown_minutes
-    most_recent_open = _most_recent_vwap_scalp_open(journal_snapshot)
-    minutes_since_last = None
-    if most_recent_open is not None:
-        minutes_since_last = (now - most_recent_open).total_seconds() / 60
-    # A negative minutes_since_last (opened_at in the future relative to
-    # `now`) can't happen with real data -- guarded defensively anyway so
-    # a clock anomaly reads as "not cooling down" rather than an
-    # unbounded block.
-    cooldown_capped = minutes_since_last is not None and 0 <= minutes_since_last < global_cooldown_minutes
 
-    capped = daily_capped or bucket_capped or cooldown_capped
-    if capped:
-        from dashboard_state import record_risk_limit_skip
-        if daily_capped:
-            reason = f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}"
-        elif bucket_capped:
-            reason = (f"VWAP Scalp's {bucket_session} ({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) "
-                      f"time-bucket cap reached: {trades_in_bucket}/{per_bucket_cap}")
-        else:
-            reason = (f"VWAP Scalp's global cooldown active: last entry {minutes_since_last:.0f} min ago, "
-                      f"needs {global_cooldown_minutes}")
-        record_risk_limit_skip("VWAP Scalp", reason)
-        print(f"INFO: VWAP Scalp capped this tick ({reason}) -- no new entries; existing positions "
-              f"still monitored for the hold-cap force-close", flush=True)
+    # Notified at most ONCE per tick per category (2026-09-08) -- GATING
+    # still re-checks fresh every single iteration below (that's the
+    # actual fix), but recording/printing per pair as well would flood
+    # the digest with up to 17 near-identical entries the moment any cap
+    # trips, which real usage had already deliberately guarded against
+    # before this fix (see test_own_daily_cap_records_one_risk_skip_per_
+    # tick_not_per_pair and its two siblings).
+    notified_categories = set()
 
     for instrument in VWAP_SCALP_PAIRS:
         try:
@@ -731,8 +747,29 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
                     _force_close(client, entry)
                 continue  # a position we already hold this tick -- never a candidate for a fresh entry
 
-            if capped:
-                continue  # own daily cap reached -- force-closes above still run, just no new entries
+            # Re-checked fresh EVERY iteration, from `entries` reloaded
+            # THIS iteration -- not a value computed once before the loop
+            # started. Real incident (2026-09-08): 3 live trades (AUD_USD,
+            # EUR_JPY, CHF_JPY) opened in the same minute despite the
+            # 20-minute global cooldown, because the old single pre-loop
+            # `capped` check never saw the EARLIER instruments' own opens
+            # from moments before in that same tick -- exactly the
+            # clustering this cap was built to prevent (2026-09-04
+            # incident). `entries` here already reflects any instrument
+            # opened earlier this tick, since each iteration reloads it
+            # fresh and the loop is sequential (no concurrency within one
+            # tick), so this genuinely can't miss a same-tick open.
+            cap_result = _pacing_cap_reason(entries, now, today_start, max_trades_per_day,
+                                             per_bucket_cap, global_cooldown_minutes)
+            if cap_result is not None:
+                category, cap_reason = cap_result
+                if category not in notified_categories:
+                    notified_categories.add(category)
+                    from dashboard_state import record_risk_limit_skip
+                    record_risk_limit_skip("VWAP Scalp", cap_reason)
+                    print(f"INFO: VWAP Scalp capped ({cap_reason}) -- no new entries; existing positions "
+                          f"still monitored for the hold-cap force-close", flush=True)
+                continue
 
             if not (WATCH_START_HOUR <= now.hour < WATCH_END_HOUR):
                 continue  # outside today's liquid watch window -- no new entries checked

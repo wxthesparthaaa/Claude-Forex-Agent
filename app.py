@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "Fixed VWAP Scalp's cooldown/pacing caps only being checked once per tick, before the "
+                    "loop over all 17 pairs -- 3 real trades opened in the same minute today despite the "
+                    "40-min cooldown. Now re-checked fresh for every pair, using that tick's own earlier opens."),
     ("2026-09-08", "Found and fixed why ticket 3879's \"Market Order Rejected\" left zero trace anywhere: "
                     "a rejected OANDA order isn't an HTTP error, so all 5 order-placing strategies silently "
                     "discarded the real rejection reason. Now printed for every one of them."),

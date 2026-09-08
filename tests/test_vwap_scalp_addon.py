@@ -723,6 +723,45 @@ def test_global_cooldown_blocks_a_different_instrument_within_the_window(mock_se
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_tick(
+        mock_send, tmp_path, monkeypatch):
+    # Regression test for the real live incident (2026-09-08): 3 trades
+    # (AUD_USD, EUR_JPY, CHF_JPY) opened in the same minute despite the
+    # 20-minute global cooldown, because the pacing check used to be
+    # computed ONCE before the per-pair loop started -- later instruments
+    # in the SAME tick never saw an earlier instrument's own fresh open
+    # from moments before in that same loop. Three different instruments
+    # all confirm a signal in the SAME tick here, with NO pre-existing
+    # seeded trade at all -- exactly one may open, not all three.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    # record_open_trade (trade_journal.py) stamps opened_at from its OWN
+    # datetime import -- must be frozen to the SAME instant as `now`
+    # above, or the first instrument's real-wall-clock opened_at would
+    # sit nowhere near FIXED_NOW and the cooldown's own `0 <= minutes_
+    # since_last` guard would (correctly, for a real clock anomaly) treat
+    # it as not-cooling-down, silently defeating this exact test.
+    monkeypatch.setattr(tj, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    three_pairs = ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
+    client = FakeClient(candles_by_instrument={p: candles for p in three_pairs},
+                         price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert len(opened) == 1
+    assert client.orders_placed == opened
+    state = ds.load_state()
+    # De-duplicated notification (2026-09-08): gating is per-instrument
+    # and correct, but recording every one of the (up to 16) blocked
+    # instruments separately would flood the digest -- only the first
+    # blocked instrument's skip is recorded per tick per reason.
+    skips = [s for s in state.risk_limit_skips_since_digest if "global cooldown" in s]
+    assert len(skips) == 1
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_global_cooldown_does_not_block_once_it_elapses(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()

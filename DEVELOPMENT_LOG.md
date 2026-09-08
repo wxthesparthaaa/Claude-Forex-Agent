@@ -6868,3 +6868,61 @@ suite (603 tests) plus `tests/test_orb_fade_addon.py`,
 `tests/test_vwap_scalp_addon.py` all re-run in full (all 5 callers of
 `place_and_record` verified unaffected by the return-shape change) --
 all green.
+
+## 2026-09-08 (continued) -- VWAP Scalp's pacing caps were only checked once per tick, not once per pair
+
+**Problem**: user reported 3 real live trades (AUD_USD, EUR_JPY,
+CHF_JPY) opening within the same minute (07:56:22-07:56:39 UTC),
+despite the global cooldown being configured at 40 minutes. Pulled the
+real journal from `state-sync`: confirmed exactly this -- 3 different
+instruments, 17 seconds apart, all in the "London morning" (15:00-
+20:00 SGT) bucket. The account's own scan digest independently
+corroborated a related symptom: that bucket showed "6/5" -- ONE OVER
+its own cap.
+
+**Root cause**: `daily_capped`/`bucket_capped`/`cooldown_capped` were
+each computed ONCE, from a single `journal_snapshot = load_journal()`
+taken BEFORE the `for instrument in VWAP_SCALP_PAIRS:` loop started,
+then reused unchanged as a single `capped` boolean for all 17 pairs.
+An instrument that opened a real position PARTWAY through that same
+loop never updated `journal_snapshot`, so every LATER instrument in
+that same tick still evaluated the cooldown/bucket/daily state as it
+was at the tick's own start -- not against what had already happened
+moments earlier in that same pass. This is the exact clustering the
+2026-09-04 global cooldown was built to prevent, just recurring one
+layer deeper: the fix closed cross-TICK clustering (different 5-minute
+polls) but never closed within-tick clustering (multiple pairs
+confirming inside the SAME poll), which turns out to be the more
+severe form of the original problem.
+
+**Fix**: extracted `_pacing_cap_reason(entries, now, ...)` -- a pure
+function of whatever `entries` it's given -- and call it FRESH inside
+the per-pair loop, using `entries = load_journal()` already reloaded
+at the top of each iteration (which the loop already did, for the
+open-position check; it just wasn't being reused for the pacing
+check). Since the loop is strictly sequential with no concurrency
+within one tick, an instrument's own fresh journal write is guaranteed
+visible to every later iteration in that same tick. Kept the pre-
+existing, deliberate "one risk-skip recorded per tick per reason, not
+per pair" behavior (already covered by 3 existing tests) by tracking a
+`notified_categories` set and only recording/printing the first pair
+that hits each of daily/bucket/cooldown per tick -- gating is now
+correct for every pair, notification volume is unchanged.
+
+Verified the regression test is real, not just passing by
+construction: reproduced the pre-fix code via `git stash` and
+confirmed the new test fails against it (3 opened instead of 1)
+before restoring the fix. New test:
+`test_global_cooldown_blocks_multiple_instruments_confirming_within_
+the_same_tick` in `tests/test_vwap_scalp_addon.py` -- three different
+instruments all confirming a signal in the same tick (no pre-seeded
+trade at all), asserts exactly one opens and exactly one skip gets
+recorded. Required also freezing `trade_journal.py`'s own `datetime`
+import (not just `vwap_scalp_addon.py`'s) to the same fixed instant as
+the test's frozen `now` -- otherwise the first instrument's real-
+wall-clock `opened_at` sits nowhere near the frozen `now`, and the
+cooldown's own `0 <= minutes_since_last` guard (a deliberate defense
+against a genuinely impossible future-dated timestamp) silently
+defeats the test by treating the mismatch as "not cooling down."
+
+Full suite (604 tests) green.
