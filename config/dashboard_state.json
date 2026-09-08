@@ -28,8 +28,8 @@
   "last_nightly_equity": null,
   "week_start_equity": null,
   "strategy_starting_capital": 2122.81,
-  "strategy_realized_pnl": 0.0,
-  "last_review_timestamp": "2026-09-08T08:55:42.172047+00:00",
+  "strategy_realized_pnl": 38.33019999999999,
+  "last_review_timestamp": "2026-09-08T17:00:10.432572+00:00",
   "week_start_timestamp": "2026-09-08T08:55:42.172047+00:00",
   "capital_reset_at": "2026-09-08T08:55:42.172047+00:00",
   "autopilot_scan_interval_minutes": 15,
@@ -68,8 +68,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-08T15:45:10.422774+00:00",
   "paused_instruments": {},
