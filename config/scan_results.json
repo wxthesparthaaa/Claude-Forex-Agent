@@ -1,12 +1,12 @@
 {
-  "scanned_at": "2026-09-08T18:50:21.718787+00:00",
+  "scanned_at": "2026-09-08T19:10:19.233414+00:00",
   "candidates": [
     {
       "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 93.865,
+      "entry_price": 94.081,
       "stop_loss": 92.24,
-      "take_profit": 97.115,
+      "take_profit": 97.763,
       "confidence_pct": 65.0,
       "confidence_components": {
         "breadth": 57.14285714285714,
@@ -14,19 +14,19 @@
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 21,
+      "units": 18,
       "unit_label": "barrels",
       "risk_amount": 43.222804,
-      "notional_account_currency": 2493.84,
+      "notional_account_currency": 2141.8,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 61 (neutral range).",
+        "RSI is 63 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
-      "rejected_reason": "Per-currency exposure cap exceeded for USD: would reach 6.0% > 4.0%",
+      "rejected_reason": "Portfolio heat cap exceeded: opening this trade would bring open risk to 7.1% > 6.0%",
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
