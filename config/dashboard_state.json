@@ -5,7 +5,7 @@
     "risk_per_trade_pct_max": 2.0,
     "max_portfolio_heat_pct": 6.0,
     "suggested_max_portfolio_heat_pct": 6.0,
-    "daily_loss_limit_enabled": true,
+    "daily_loss_limit_enabled": false,
     "max_daily_loss_pct": 50.0,
     "max_daily_loss_pct_min": 1.0,
     "max_daily_loss_pct_max": 50.0,
