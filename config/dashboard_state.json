@@ -53,7 +53,9 @@
     "GBP_USD",
     "USD_CHF"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5"
+  ],
   "last_scan_digest_sent_at": "2026-09-08T09:36:15.256114+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
