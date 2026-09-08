@@ -5124,5 +5124,31 @@
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null,
     "in_liquidity_window": true
+  },
+  {
+    "trade_id": "3943",
+    "instrument": "USD_JPY",
+    "direction": "SHORT",
+    "units": -72812,
+    "entry_price": 153.983,
+    "stop_loss": 154.038,
+    "take_profit": 153.765,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-08T12:45:17.079322+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 32.91178294573643,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": false
   }
 ]
