@@ -1,30 +1,30 @@
 {
-  "scanned_at": "2026-09-08T12:40:23.009919+00:00",
+  "scanned_at": "2026-09-08T12:45:23.119528+00:00",
   "candidates": [
     {
-      "instrument": "USD_CAD",
-      "direction": "SHORT",
-      "entry_price": 1.37972,
-      "stop_loss": 1.38149,
-      "take_profit": 1.37618,
-      "confidence_pct": 66.9,
+      "instrument": "GBP_USD",
+      "direction": "LONG",
+      "entry_price": 1.35498,
+      "stop_loss": 1.35216,
+      "take_profit": 1.36062,
+      "confidence_pct": 58.6,
       "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 100.0,
+        "breadth": 57.14285714285714,
+        "rsi": 99.35400257208116,
         "candlestick": 50.0,
-        "news": 37.698412698412696
+        "news": 25.0
       },
-      "units": -26151,
+      "units": 11897,
       "unit_label": "units",
       "risk_amount": 42.4562,
-      "notional_account_currency": 33093.73,
+      "notional_account_currency": 20398.98,
       "account_currency": "SGD",
       "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 42 (neutral range).",
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 65 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
+        "News sentiment: works against this direction -- worth a second look."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
