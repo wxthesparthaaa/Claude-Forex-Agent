@@ -19,7 +19,7 @@
     "autopilot_confidence_threshold_pct": 70.0
   },
   "phase_state": {
-    "phase": "autopilot",
+    "phase": "manual_paper",
     "closed_trades_in_phase": 0,
     "kill_switch_engaged": false
   },
@@ -147,11 +147,11 @@
     "news": 0.25
   },
   "peak_tracked_equity": 2122.81,
-  "friday_preclose_cancel_enabled": true,
+  "friday_preclose_cancel_enabled": false,
   "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
-  "vwap_scalp_enabled": true,
+  "vwap_scalp_enabled": false,
   "vwap_scalp_max_trades_per_day": 15,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 25,
@@ -159,5 +159,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "base_strategy_enabled": true
+  "base_strategy_enabled": false
 }
