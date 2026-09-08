@@ -152,7 +152,7 @@
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
   "vwap_scalp_enabled": false,
-  "vwap_scalp_max_trades_per_day": 15,
+  "vwap_scalp_max_trades_per_day": 25,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 25,
   "vwap_scalp_global_cooldown_minutes": 40,
