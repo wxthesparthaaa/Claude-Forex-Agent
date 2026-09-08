@@ -25,6 +25,46 @@ def test_load_state_degrades_to_default_on_a_corrupt_file(tmp_path, monkeypatch)
     assert state.strategy_starting_capital == ds.DEFAULT_STRATEGY_CAPITAL
 
 
+def test_load_state_ignores_a_stale_persisted_slider_bound_and_uses_the_current_code_default(tmp_path, monkeypatch):
+    # Real live bug this fixes (2026-09-08): vwap_scalp_max_trades_per_day_max
+    # was raised 25 -> 50 in code, but a live account's already-persisted
+    # dashboard_state.json still had "vwap_scalp_max_trades_per_day_max": 25
+    # baked in from a previous save -- load_state()'s DashboardState(**data)
+    # replayed that frozen old value forever, so the Settings slider kept
+    # capping at 25 no matter what the code default said. Same bug class
+    # already fixed once for RiskConfig's own bounds (see
+    # risk_config_from_state's test of the same name), just missed here
+    # because these bound fields live directly on DashboardState instead.
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    state = ds.default_state()
+    state.vwap_scalp_max_trades_per_day_max = 25  # simulates a pre-widening snapshot
+    state.vwap_scalp_global_cooldown_minutes_max = 60  # same bug class, different field
+    ds.save_state(state)
+
+    reloaded = ds.load_state()
+    code_default = ds.default_state()
+
+    assert reloaded.vwap_scalp_max_trades_per_day_max == code_default.vwap_scalp_max_trades_per_day_max
+    assert reloaded.vwap_scalp_max_trades_per_day_max != 25
+    assert reloaded.vwap_scalp_global_cooldown_minutes_max == code_default.vwap_scalp_global_cooldown_minutes_max
+    assert reloaded.vwap_scalp_global_cooldown_minutes_max != 60
+
+
+def test_load_state_still_preserves_the_actual_user_set_value_alongside_the_bounds(tmp_path, monkeypatch):
+    # The fix above must not throw out real user settings along with the
+    # bound fields -- only the 5 named bound/step fields are excluded.
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    state = ds.default_state()
+    state.vwap_scalp_max_trades_per_day = 40  # a real user-set value, must survive
+    ds.save_state(state)
+
+    reloaded = ds.load_state()
+
+    assert reloaded.vwap_scalp_max_trades_per_day == 40
+
+
 def test_record_risk_limit_skip_appends_and_persists(tmp_path, monkeypatch):
     monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
     monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))

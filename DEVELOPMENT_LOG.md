@@ -7163,3 +7163,41 @@ in `tests/test_settings_daily_loss_limit.py` reproduces the exact
 disabled+50% combo from the screenshot and asserts only one Daily loss
 limit line appears. Template re-parses under Jinja2. Full suite (608
 tests) green; `py_compile` + real `import app` both clean.
+
+## 2026-09-08 (continued) -- VWAP Scalp's raised trades-per-day ceiling silently had no effect live
+
+**Problem**: user reported the VWAP Scalp "trades per day" slider still
+capped at 25 on the live dashboard after the ceiling was raised to 50
+earlier today.
+
+**Root cause**: exactly the same bug class `risk_config_from_state`'s
+own comment already documents for `RiskConfig` -- `load_state()`
+reconstructs `DashboardState(**data)` directly from whatever's
+persisted in `dashboard_state.json`, with no distinction between real
+user-set values and code-defined bound/step fields
+(`vwap_scalp_max_trades_per_day_min`/`_max`,
+`vwap_scalp_global_cooldown_minutes_min`/`_max`/`_step`). Confirmed live:
+`git show origin/state-sync:config/dashboard_state.json` still had
+`"vwap_scalp_max_trades_per_day_max": 25` baked in from before today's
+code change -- raising the code default to 50 had no effect for this
+already-existing account because the frozen old value in the persisted
+dict always won. `RiskConfig` got this exact fix (`_USER_ADJUSTABLE_
+RISK_FIELDS`) back when the same class of bug first bit
+`max_trades_per_day_max`; these 5 fields live directly on
+`DashboardState` instead, so they were missed.
+
+**Fix**: new `_CODE_DEFINED_BOUND_FIELDS` tuple in `src/dashboard_state.py`,
+excluded from the persisted dict before `DashboardState(**data)`
+reconstructs it in `load_state()` -- mirrors `risk_config_from_state`'s
+existing pattern exactly. These 5 fields now always come from
+`DashboardState`'s own current code defaults; every other field
+(including the actual user-set `vwap_scalp_max_trades_per_day` value
+itself) is untouched.
+
+**Verification**: reproduced the pre-fix behavior via `git stash` and
+confirmed a new test
+(`test_load_state_ignores_a_stale_persisted_slider_bound_and_uses_the_
+current_code_default` in `tests/test_dashboard_state.py`) fails against
+it (25 != 50) before restoring the fix. A second new test confirms the
+fix doesn't throw out a real user-set value along with the bounds. Full
+suite (610 tests) green; `py_compile` + real `import app` both clean.

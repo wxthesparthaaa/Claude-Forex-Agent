@@ -85,6 +85,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-08", "VWAP Scalp's trades-per-day ceiling (raised 25 -> 50) silently had no effect live -- "
+                    "load_state() was replaying the OLD ceiling frozen in an already-persisted state file. "
+                    "Same bug class already fixed once for RiskConfig's own bounds, missed here."),
     ("2026-09-08", "Settings reorganized: Daily loss limit is now the top-level section, Autopilot confidence "
                     "threshold moved under Base strategy (it's the only one of the risk sliders that's really "
                     "Base-only), Range Confluence's toggle removed, and VWAP Scalp's daily-trade ceiling "
@@ -99,9 +102,6 @@ DEVELOPER_NOTES = [
     ("2026-09-08", "Fixed VWAP Scalp's cooldown/pacing caps only being checked once per tick, before the "
                     "loop over all 17 pairs -- 3 real trades opened in the same minute today despite the "
                     "40-min cooldown. Now re-checked fresh for every pair, using that tick's own earlier opens."),
-    ("2026-09-08", "Found and fixed why ticket 3879's \"Market Order Rejected\" left zero trace anywhere: "
-                    "a rejected OANDA order isn't an HTTP error, so all 5 order-placing strategies silently "
-                    "discarded the real rejection reason. Now printed for every one of them."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),

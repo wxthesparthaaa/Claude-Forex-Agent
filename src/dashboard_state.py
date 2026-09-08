@@ -222,7 +222,7 @@ class DashboardState:
     # incident: VWAP Scalp alone burned 18 of the account's 30-trade
     # daily allowance on two separate days, tripping the shared daily-
     # loss gate and locking out every other strategy too). User-
-    # adjustable 5-25 via Settings; default 6 matches the value that
+    # adjustable 5-50 via Settings; default 6 matches the value that
     # incident was fixed with. Read live by vwap_scalp_addon.py on every
     # tick -- not a module constant.
     vwap_scalp_max_trades_per_day: int = 6
@@ -333,6 +333,25 @@ def account_state_from_tracked_capital(state: DashboardState, entries: list | No
     )
 
 
+# Slider bound/step fields -- describe an allowed RANGE, never a value
+# any /settings route writes (confirmed: grepped app.py, these five only
+# ever appear on the read side, as clamp bounds). Same bug class
+# risk_config_from_state's own comment documents for RiskConfig: once
+# asdict(DashboardState()) gets persisted once, DashboardState(**data)
+# would keep replaying that frozen old bound forever, so a later
+# code-level widening (real incident, 2026-09-08: raised
+# vwap_scalp_max_trades_per_day_max 25 -> 50, live account kept showing
+# 25 -- state-sync's dashboard_state.json still had the old value
+# baked in from a previous save) silently has no effect for any account
+# whose state predated the change. Excluded from `data` below so these
+# always come from DashboardState's own current code defaults instead.
+_CODE_DEFINED_BOUND_FIELDS = (
+    "vwap_scalp_max_trades_per_day_min", "vwap_scalp_max_trades_per_day_max",
+    "vwap_scalp_global_cooldown_minutes_min", "vwap_scalp_global_cooldown_minutes_max",
+    "vwap_scalp_global_cooldown_minutes_step",
+)
+
+
 def load_state() -> DashboardState:
     # None (not a real dict) is the "missing or corrupt" sentinel here --
     # a truncated/unreadable file degrades the same way a missing one
@@ -344,8 +363,10 @@ def load_state() -> DashboardState:
     # Drop any persisted key that no longer matches a field -- lets the
     # schema evolve (rename/remove a field) without a crash-on-load the
     # next time this reads a JSON file written by an older version.
+    # Also drop the code-defined bound fields (see their own comment
+    # above) so a code-level tuning always takes effect immediately.
     known_fields = {f.name for f in fields(DashboardState)}
-    data = {k: v for k, v in data.items() if k in known_fields}
+    data = {k: v for k, v in data.items() if k in known_fields and k not in _CODE_DEFINED_BOUND_FIELDS}
     return DashboardState(**data)
 
 
