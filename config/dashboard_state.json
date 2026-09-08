@@ -59,7 +59,8 @@
     "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 6.7% > 6.0%",
     "VWAP Scalp: Portfolio heat cap exceeded: opening this trade would bring open risk to 6.7% > 6.0%",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-08T21:45:10.422807+00:00",
   "paused_instruments": {},
