@@ -70,6 +70,7 @@
     "VWAP Scalp: reward:risk 0.61:1 is below the 1:1 floor (risking 0.00036 to make 0.00022)",
     "VWAP Scalp: reward:risk 0.45:1 is below the 1:1 floor (risking 0.10200 to make 0.04600)",
     "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 6/6",
+    "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 6/6",
     "VWAP Scalp: VWAP Scalp's London/NY overlap (20:00-00:00 SGT) time-bucket cap reached: 6/6"
   ],
   "last_scan_digest_sent_at": "2026-09-08T12:40:10.423782+00:00",
