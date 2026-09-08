@@ -67,6 +67,7 @@
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5",
+    "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5"
   ],
   "last_scan_digest_sent_at": "2026-09-08T06:31:15.255047+00:00",
@@ -148,7 +149,7 @@
     "candlestick": 0.15,
     "news": 0.25
   },
-  "peak_tracked_equity": 2122.81,
+  "peak_tracked_equity": 2090.0896,
   "friday_preclose_cancel_enabled": true,
   "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
   "range_confluence_enabled": false,
