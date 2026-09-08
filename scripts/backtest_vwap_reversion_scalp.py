@@ -283,6 +283,58 @@ OANDA credentials -- run this yourself and paste the output back. The
 heaviest per-instrument bar count of any script this session, now run
 across the full 17-instrument universe (extended 2026-09-01) rather
 than the original 5 majors.
+
+THE HOUR-OF-DAY PASS (2026-09-08, user request): every result above --
+every signal mode, every stop_buf, every entry-delay scenario -- was
+computed ONLY inside WATCH_START_HOUR-WATCH_END_HOUR (07:00-20:00
+UTC), because find_scalp_signals/_confirmed/_confirmed_2bar all gate
+on it directly. That window was chosen as "the London+NY liquid
+stretch" by design-note judgment when this candidate first shipped,
+never itself backtested against the alternative of trading the other
+11 hours. User asked directly: does VWAP Scalp work beyond the current
+hours, which hours/pairs specifically, and does it make sense to add
+more live session buckets to capture it?
+
+Answered with a genuinely new, separate signal finder --
+find_scalp_signals_confirmed_any_hour, byte-for-byte identical to
+find_scalp_signals_confirmed except the hour gate is removed entirely
+-- rather than widening WATCH_START_HOUR/WATCH_END_HOUR in place,
+specifically so this new pass can never accidentally change what every
+already-validated pass above measures. No extra OANDA fetch needed:
+_fetch_and_compute_vwap already pulls the full 24-hour day per
+instrument (the hour restriction has only ever lived in the
+signal-finding step), so this pass reuses per_instrument_vwap as-is.
+
+Six UTC hour buckets (HOUR_BUCKETS_UTC): the three that already match
+vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC exactly (07-12/12-16/
+16-20, "live") plus three new ones covering the currently-dark 20:00-
+07:00 UTC stretch (20-24/00-04/04-07, "dark"), split at real session
+boundaries (Asian open ~00:00 UTC, London pre-open ~07:00 UTC) rather
+than arbitrary equal slices. Scoped to ONE combination -- confirmed
+1-bar signal logic, stop_buf=1.0, realistic 5-minute delay -- all
+three the values actually shipped live, since the question is "does
+ANY dark hour have a real edge at all," not a full re-sweep of every
+already-decided parameter against a new dimension (which would only
+inflate the Bonferroni penalty for no benefit). Same discipline as
+every other report in this script: pooled per-bucket first
+(Bonferroni-corrected for 6 buckets, split-half checked -- the number
+to actually trust), then a per-instrument breakdown, but ONLY for
+whichever dark buckets survive both bars -- diagnostic, matching
+report_per_instrument_breakdown's own "not itself Bonferroni-
+corrected, exists so a masked pair is visible" reasoning. The 3 live
+buckets are NOT re-broken-down here; report_per_instrument_breakdown's
+existing call earlier in main() already covers them on the identical
+underlying signal (self-tested to fire signal-for-signal the same
+inside the watch window as the original).
+
+Genuinely unresolved until this actually runs: whether any of the 3
+dark buckets clears both bars. If none do, the honest conclusion is
+that WATCH_START_HOUR/WATCH_END_HOUR was already a reasonable choice
+and doesn't need widening. If one or more do, the per-instrument
+breakdown decides whether it's worth the added complexity of a 4th
+(or more) live session bucket versus a few pairs' edge concentrated in
+hours already close enough to the existing window to not be worth a
+separate bucket at all.
 """
 import bisect
 import math
@@ -638,6 +690,86 @@ def find_scalp_signals_confirmed_2bar(times: list, z: list):
     return signals
 
 
+# HOUR-OF-DAY PASS (2026-09-08, user request): does VWAP Scalp work
+# beyond WATCH_START_HOUR-WATCH_END_HOUR (07:00-20:00 UTC), and if so,
+# which hours/pairs specifically? The live 3-way pacing split
+# (vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC: 07-12/12-16/16-20) only
+# spreads trades WITHIN the already-watched hours; nothing has ever
+# tested whether the 11 currently-dark hours (20:00-07:00 UTC) contain
+# any real edge at all. These 3 buckets mirror the live ones exactly
+# (so a result here is directly comparable to what's already running);
+# the other 3 cover the dark stretch, split at the same width. Widths
+# are deliberately uneven (some 4h, one 3h) to land on real session
+# boundaries (Asian open ~00:00 UTC, London pre-open ~07:00 UTC) rather
+# than arbitrary equal slices.
+HOUR_BUCKETS_UTC = [
+    (0, 4, "Asian early", False),
+    (4, 7, "Asian late / pre-London", False),
+    (7, 12, "London morning", True),    # == live bucket 1 (already watched)
+    (12, 16, "London/NY overlap", True),  # == live bucket 2 (already watched)
+    (16, 20, "NY afternoon", True),     # == live bucket 3 (already watched)
+    (20, 24, "NY late / early Asian", False),
+]
+
+
+def _bucket_for_hour(hour_utc: int):
+    """(start, end, label, currently_watched) for the HOUR_BUCKETS_UTC
+    entry `hour_utc` falls into. Every hour 0-23 falls into exactly one
+    bucket -- unlike _current_bucket in the live module, there is no
+    "outside all buckets" case here, since this analysis deliberately
+    covers the full 24 hours."""
+    for start_h, end_h, label, watched in HOUR_BUCKETS_UTC:
+        if start_h <= hour_utc < end_h:
+            return (start_h, end_h, label, watched)
+    raise ValueError(f"hour {hour_utc} not covered by any HOUR_BUCKETS_UTC entry")  # unreachable for 0-23
+
+
+def find_scalp_signals_confirmed_any_hour(times: list, z: list):
+    """Identical to find_scalp_signals_confirmed in every respect EXCEPT
+    the WATCH_START_HOUR/WATCH_END_HOUR gate -- scans the full 24-hour
+    day. A separate function rather than a parameter on the original:
+    the original's own signature is reused verbatim by SIGNAL_MODES and
+    every existing report already validated against it, and this is a
+    genuinely different, not-yet-validated question ("does the same
+    confirmed-reversal signal have any edge at hours nobody has ever
+    checked"), not a variant of an already-shipped one -- keeping it
+    fully separate means this new pass can never accidentally change
+    what the existing, already-trusted passes measure."""
+    n = len(times)
+    signals = []
+    i = 0
+    while i < n - 1:
+        t = times[i]
+        if z[i] is None:
+            i += 1
+            continue
+        if z[i] <= -Z_ENTRY or z[i] >= Z_ENTRY:
+            direction = "LONG" if z[i] <= -Z_ENTRY else "SHORT"
+            extreme_z = z[i]
+            wait_cutoff = t + timedelta(minutes=CONFIRMATION_MAX_WAIT_MINUTES)
+            j = i + 1
+            confirmed_at = None
+            while j < n and times[j] <= wait_cutoff:
+                if z[j] is None:
+                    j += 1
+                    continue
+                still_extending = (z[j] <= extreme_z) if direction == "LONG" else (z[j] >= extreme_z)
+                if still_extending:
+                    extreme_z = z[j]
+                    j += 1
+                    continue
+                confirmed_at = j
+                break
+            if confirmed_at is not None:
+                signals.append((confirmed_at, direction))
+                i = confirmed_at + 1 + MAX_HOLD_BARS
+                continue
+            i = j if j > i else i + 1
+        else:
+            i += 1
+    return signals
+
+
 PLACEBO_TARGET_COUNT = 6000   # oversampled -- spacing enforcement below thins this down;
                                # picked so the final count lands in the same ballpark as the
                                # real signal modes for a fair, not density-inflated, comparison
@@ -740,6 +872,36 @@ def _selftest():
     never_reverses_times = [watch_base + timedelta(minutes=i) for i in range(len(never_reverses_z))]
     assert find_scalp_signals_confirmed(never_reverses_times, never_reverses_z) == [], \
         "a deviation that never ticks back within the wait window should never fire"
+
+    # find_scalp_signals_confirmed_any_hour must fire on the EXACT same
+    # confirmed-reversal pattern outside WATCH_START_HOUR/WATCH_END_HOUR,
+    # where find_scalp_signals_confirmed itself must NOT.
+    dark_hour_base = datetime(2026, 1, 5, 22, 0, tzinfo=timezone.utc)  # 22:00 UTC -- outside 07:00-20:00
+    dark_hour_times = [dark_hour_base + timedelta(minutes=i) for i in range(35)]
+    assert find_scalp_signals_confirmed(dark_hour_times, confirmed_z) == [], \
+        "find_scalp_signals_confirmed must never fire outside the watch window"
+    dark_hour_signals = find_scalp_signals_confirmed_any_hour(dark_hour_times, confirmed_z)
+    assert dark_hour_signals == [(32, "LONG")], \
+        f"find_scalp_signals_confirmed_any_hour must fire on the same pattern outside the watch " \
+        f"window, expected [(32, 'LONG')], got {dark_hour_signals}"
+    # And it must ALSO still fire inside the watch window, on the exact
+    # same bar as the original -- widening coverage, not shifting it.
+    assert find_scalp_signals_confirmed_any_hour(times[:35], confirmed_z) == confirmed_signals, \
+        "find_scalp_signals_confirmed_any_hour must match the original signal-for-signal inside the watch window"
+
+    # _bucket_for_hour: every boundary hour lands in the bucket that
+    # STARTS there (half-open [start, end)), and the three live-matching
+    # buckets are flagged watched=True, the three new ones watched=False.
+    assert _bucket_for_hour(0) == (0, 4, "Asian early", False)
+    assert _bucket_for_hour(3) == (0, 4, "Asian early", False)
+    assert _bucket_for_hour(4) == (4, 7, "Asian late / pre-London", False)
+    assert _bucket_for_hour(7) == (7, 12, "London morning", True)
+    assert _bucket_for_hour(11) == (7, 12, "London morning", True)
+    assert _bucket_for_hour(12) == (12, 16, "London/NY overlap", True)
+    assert _bucket_for_hour(16) == (16, 20, "NY afternoon", True)
+    assert _bucket_for_hour(19) == (16, 20, "NY afternoon", True)
+    assert _bucket_for_hour(20) == (20, 24, "NY late / early Asian", False)
+    assert _bucket_for_hour(23) == (20, 24, "NY late / early Asian", False)
 
     # find_scalp_signals_confirmed_2bar must fire at the SECOND
     # consecutive bounce-back bar, not the first.
@@ -1348,6 +1510,129 @@ def report_per_instrument_breakdown(label: str, all_returns: dict, instruments: 
             print(f"  {instrument:10s} {n_obs:6d} {100*win_rate:8.1f}% {mean_r:+9.4f}   {day_str}{flag}")
 
 
+def report_hour_of_day_breakdown(all_returns: list, instruments: list) -> None:
+    """all_returns: [(entry_time, instrument, r_multiple), ...] resolved
+    from find_scalp_signals_confirmed_any_hour, scoped to stop_buf=1.0
+    (the value actually shipped live -- src/vwap_scalp_addon.py's own
+    STOP_Z_BUFFER) and the realistic 5-minute-delay scenario (matches
+    this app's current infra). Deliberately one stop_buf/delay
+    combination, not the full 3x2 sweep every other report_scenario
+    call already runs for the currently-watched hours -- the question
+    here is narrower ("does ANY currently-dark hour show a real edge at
+    all"), and re-sweeping every already-decided parameter on top of a
+    brand-new dimension would multiply the number of comparisons
+    (and therefore the Bonferroni penalty) for no real benefit.
+
+    Two levels, same discipline as report_scenario/report_per_
+    instrument_breakdown elsewhere in this script: POOLED per hour-
+    bucket first (the number to actually trust, Bonferroni-corrected
+    for the 6 buckets, split-half checked) -- then, ONLY for whichever
+    of the 3 currently-dark buckets survive that pooled bar, a PER-
+    INSTRUMENT breakdown (diagnostic, matching report_per_instrument_
+    breakdown's own "not Bonferroni-corrected, exists so a masked
+    negative pair is visible" reasoning). The 3 buckets that already
+    match live pacing (07-12/12-16/16-20 UTC) are NOT re-broken-down
+    here -- that's already covered by report_per_instrument_breakdown's
+    own call earlier in main(), on the SAME underlying signal (this
+    function's any-hour signal finder fires identically inside the
+    watch window -- see _selftest's own assertion of that -- so
+    duplicating it here would just be the same numbers twice)."""
+    bonferroni_alpha = 0.05 / len(HOUR_BUCKETS_UTC)
+    by_bucket = {(b[0], b[1]): [] for b in HOUR_BUCKETS_UTC}
+    for entry_time, instrument, r in all_returns:
+        start_h, end_h, _, _ = _bucket_for_hour(entry_time.hour)
+        by_bucket[(start_h, end_h)].append((entry_time, instrument, r))
+
+    print(f"\n{'='*76}\nHOUR-OF-DAY BREAKDOWN -- confirmed 1-bar, stop_buf=1.0, realistic 5-min "
+          f"delay\n{'='*76}")
+    print("Does VWAP Scalp show a real edge outside the currently-watched 07:00-20:00 UTC hours? "
+          "Pooled across all instruments per bucket, per-(instrument,day) averaged -- the same unit "
+          "every other significance test in this script uses, directly comparable to the numbers "
+          "already reported above for the currently-watched hours.")
+    print(f"Bonferroni-adjusted threshold for {len(HOUR_BUCKETS_UTC)} hour-buckets: p < {bonferroni_alpha:.4f}\n")
+    print(f"{'UTC range':10s} {'label':26s} {'live?':>5s} {'n_days':>7s} {'day_win%':>9s} "
+          f"{'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
+
+    survivors = []
+    for start_h, end_h, label, watched in HOUR_BUCKETS_UTC:
+        entries = by_bucket[(start_h, end_h)]
+        daily = daily_aggregate(entries)
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        watched_str = "live" if watched else "dark"
+        range_str = f"{start_h:02d}-{end_h:02d}"
+        if n_days < 30:
+            print(f"{range_str:10s} {label:26s} {watched_str:>5s}  (fewer than 30 instrument-days -- "
+                  f"got {n_days}, skipped)")
+            continue
+        day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+        mean, std, t, p = two_sided_test(day_means)
+        sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        if sig_bonf and not watched:
+            survivors.append((start_h, end_h, label, entries, daily))
+        print(f"{range_str:10s} {label:26s} {watched_str:>5s} {n_days:7d} {100*day_win_rate:8.1f}% "
+              f"{mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
+
+    if not survivors:
+        print("\nNo currently-dark hour bucket survived Bonferroni at the pooled level -- no split-half "
+              "check or per-instrument breakdown to run.\nVERDICT: the data does not currently support "
+              "widening WATCH_START_HOUR/WATCH_END_HOUR or adding a new live session bucket outside "
+              "07:00-20:00 UTC. A weaker, sub-Bonferroni result in one dark bucket is not, on its own, "
+              "reason to trade real capital there.")
+        return
+
+    print(f"\nSPLIT-HALF CHECK for dark buckets that survived Bonferroni above (chronological "
+          f"instrument-days, first half vs second half):")
+    real_candidates = []
+    for start_h, end_h, label, entries, daily in survivors:
+        half = len(daily) // 2
+        first = [r for _, r in daily[:half]]
+        second = [r for _, r in daily[half:]]
+        m1, _, t1, p1 = two_sided_test(first)
+        m2, _, t2, p2 = two_sided_test(second)
+        same_sign = (m1 > 0) == (m2 > 0)
+        if same_sign:
+            real_candidates.append((start_h, end_h, label, entries))
+        verdict = "same sign both halves -- a real candidate to add" if same_sign else "SIGN FLIPS -- discard, likely noise"
+        print(f"  {start_h:02d}-{end_h:02d} UTC ({label}):  first_half mean_R={m1:+.4f} (p={p1:.4f})   "
+              f"second_half mean_R={m2:+.4f} (p={p2:.4f})   {verdict}")
+
+    if not real_candidates:
+        print("\nVERDICT: every Bonferroni-surviving dark bucket flipped sign between the two halves -- "
+              "not a stable effect. Does not support widening the watch window.")
+        return
+
+    print(f"\nVERDICT: {len(real_candidates)} dark bucket(s) survive Bonferroni AND hold the same sign "
+          f"across both halves of the data -- a genuine candidate to widen WATCH_START_HOUR/"
+          f"WATCH_END_HOUR or add as a new live session bucket. Per-instrument breakdown below, to see "
+          f"which specific pairs are actually carrying that edge before deciding.")
+    for start_h, end_h, label, entries in real_candidates:
+        print(f"\n  Per-instrument breakdown, {start_h:02d}-{end_h:02d} UTC ({label}):")
+        print(f"  {'instrument':10s} {'n':>6s} {'win_rate':>9s} {'mean_R':>9s}   {'n_days':>7s} "
+              f"{'day_win%':>9s} {'day_mean_R':>10s}")
+        for instrument in instruments:
+            inst_entries = [e for e in entries if e[1] == instrument]
+            r_multiples = [r for _, _, r in inst_entries]
+            n_obs = len(r_multiples)
+            if n_obs == 0:
+                print(f"  {instrument:10s}  (no resolved trades)")
+                continue
+            win_rate = sum(1 for r in r_multiples if r > 0) / n_obs
+            mean_r = sum(r_multiples) / n_obs
+            inst_daily = daily_aggregate(inst_entries)
+            inst_day_means = [r for _, r in inst_daily]
+            n_days_i = len(inst_day_means)
+            if n_days_i > 0:
+                day_win_rate_i = sum(1 for r in inst_day_means if r > 0) / n_days_i
+                day_mean_r_i = sum(inst_day_means) / n_days_i
+                day_str = f"{n_days_i:7d} {100*day_win_rate_i:8.1f}% {day_mean_r_i:+10.4f}"
+            else:
+                day_str = f"{'--':>7s} {'--':>9s} {'--':>10s}"
+            flag = "  <-- negative" if mean_r < 0 else ""
+            print(f"  {instrument:10s} {n_obs:6d} {100*win_rate:8.1f}% {mean_r:+9.4f}   {day_str}{flag}")
+
+
 def main():
     _selftest()
     client = OandaClient()
@@ -1416,6 +1701,45 @@ def main():
                 # report_per_instrument_breakdown's own docstring for why.
                 report_per_instrument_breakdown(f"{signal_label} | {label}", all_returns,
                                                  list(per_instrument_signals.keys()))
+
+    # HOUR-OF-DAY PASS (2026-09-08, user request): does VWAP Scalp have
+    # any real edge outside WATCH_START_HOUR-WATCH_END_HOUR? Reuses
+    # per_instrument_vwap directly -- no extra OANDA fetch needed, since
+    # _fetch_and_compute_vwap already pulls the full 24-hour day per
+    # instrument; only the SIGNAL-FINDING step has ever restricted to
+    # 07:00-20:00 UTC. Scoped to "confirmed 1-bar" signal logic (the one
+    # actually shipped live) at stop_buf=1.0 (also the live value) and
+    # the realistic 5-minute delay (matches live infra) -- see report_
+    # hour_of_day_breakdown's own docstring for why this doesn't re-run
+    # the full signal-mode/stop-buf/delay sweep on top of the new
+    # hour dimension.
+    print(f"\n{'@'*76}\nHOUR-OF-DAY PASS: confirmed 1-bar signal, ALL 24 hours (not just "
+          f"{WATCH_START_HOUR:02d}:00-{WATCH_END_HOUR:02d}:00 UTC)\n{'@'*76}")
+    any_hour_returns = []
+    total_any_hour_signals = 0
+    total_any_hour_entries = 0
+    total_any_hour_already_past_target = 0
+    realistic_delay = dict(ENTRY_DELAY_SCENARIOS)["realistic 5-minute poll (matches this app's current infra)"]
+    for instrument, (candles, times, vwap, dev_stdev, z) in per_instrument_vwap.items():
+        signals = find_scalp_signals_confirmed_any_hour(times, z)
+        total_any_hour_signals += len(signals)
+        print(f"  {instrument:10s}  {len(signals)} signals across all 24 hours")
+        results_by_buffer, _, already_past_target, entries = resolve_trades(
+            candles, times, vwap, dev_stdev, signals, instrument, meta[instrument], realistic_delay)
+        total_any_hour_entries += entries
+        total_any_hour_already_past_target += already_past_target
+        any_hour_returns.extend(results_by_buffer[1.0])
+    print(f"\n{total_any_hour_signals} total candidate signals across all 24 hours ({len(per_instrument_vwap)} "
+          f"instruments); {total_any_hour_entries} resolved entries at stop_buf=1.0.")
+    if total_any_hour_entries > 0:
+        pct = 100 * total_any_hour_already_past_target / total_any_hour_entries
+        print(f"{total_any_hour_already_past_target}/{total_any_hour_entries} entries ({pct:.1f}%) had "
+              f"ALREADY reached or passed their own frozen target before the order could even be placed -- "
+              f"same caveat as every other entry-delay scenario in this script.")
+    if any_hour_returns:
+        report_hour_of_day_breakdown(any_hour_returns, list(per_instrument_vwap.keys()))
+    else:
+        print("No signals found across any hour -- nothing to break down.")
 
     # TREND-FILTERED PASS (2026-09-01, user-prompted): a real live loss
     # cluster (4 consecutive GBP_USD LONG fades over ~4 hours as GBP_USD

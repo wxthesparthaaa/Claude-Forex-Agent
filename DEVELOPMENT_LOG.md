@@ -6926,3 +6926,69 @@ against a genuinely impossible future-dated timestamp) silently
 defeats the test by treating the mismatch as "not cooling down."
 
 Full suite (604 tests) green.
+
+## 2026-09-08 (continued) -- Added an hour-of-day pass to the VWAP Scalp backtest, awaiting a real run
+
+**Request**: does VWAP Scalp have any real edge outside its current
+WATCH_START_HOUR-WATCH_END_HOUR (07:00-20:00 UTC), which specific
+hours/pairs would do well, and does it make sense to add more live
+session buckets to capture it? A directly related question was already
+queued back on 2026-09-02 ("does trading-session timing affect
+backtested signal quality") and never actually completed -- this
+finally answers it.
+
+**Built, not run** (this environment has no OANDA credentials --
+`scripts/backtest_vwap_reversion_scalp.py` has said "run this yourself
+and paste the output back" since it was first written): added
+`find_scalp_signals_confirmed_any_hour` -- byte-for-byte identical to
+the live `find_scalp_signals_confirmed` signal logic except the
+07:00-20:00 UTC gate is removed entirely -- as a genuinely SEPARATE
+function rather than widening the existing one in place, so this new
+pass can never accidentally change what every already-validated
+signal mode/report in this script measures. No extra data fetch
+needed: `_fetch_and_compute_vwap` already pulls the full 24-hour day
+per instrument; the hour restriction has only ever lived in the
+signal-finding step, never the fetch.
+
+Six UTC hour buckets (`HOUR_BUCKETS_UTC`): the three that already
+match `vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC` exactly (07-12/
+12-16/16-20, marked "live") plus three new ones covering the
+currently-dark 20:00-07:00 UTC stretch (20-24/00-04/04-07, marked
+"dark"), split at real session boundaries rather than equal slices.
+Scoped to ONE combination -- confirmed-1-bar signal, stop_buf=1.0,
+realistic 5-minute delay, all three the values actually shipped live
+-- rather than the full 3-stop_buf x 2-delay sweep every other report
+in this script runs for the already-decided hours; re-sweeping every
+already-settled parameter against a brand-new dimension would only
+inflate the Bonferroni penalty for no benefit.
+
+Same statistical discipline as every other pass in this file: pooled
+per-bucket first (Bonferroni-corrected for 6 buckets, split-half
+checked -- the number to trust), then a per-instrument breakdown, but
+ONLY for whichever dark buckets survive BOTH the Bonferroni and
+split-half-same-sign bars (matching `report_per_instrument_
+breakdown`'s own "diagnostic, not itself corrected" reasoning). The 3
+live buckets are deliberately NOT re-broken-down in this new pass --
+`report_per_instrument_breakdown`'s existing call earlier in `main()`
+already covers them on the identical underlying signal (self-tested to
+fire signal-for-signal the same as the original inside the watch
+window).
+
+12 new self-test assertions in `_selftest()`: the any-hour finder
+fires on the exact same confirmed-reversal pattern at 22:00 UTC (where
+the original must NOT fire at all), and matches the original
+signal-for-signal inside the watch window (widening coverage, not
+shifting it); `_bucket_for_hour` correctly assigns every one of the 6
+buckets' start/end boundary hours (0, 3, 4, 7, 11, 12, 16, 19, 20, 23).
+Purely additive (324 lines, 0 deletions) -- every existing signal
+mode, report, and self-test assertion is untouched. Full project
+pytest suite (604 tests) confirmed unaffected, since this file isn't
+pytest-collected (matches this script's existing status as a
+run-it-yourself research tool, not part of CI).
+
+**Genuinely unresolved until the user runs it**: whether any of the 3
+dark buckets clears both bars. If none do, WATCH_START_HOUR/
+WATCH_END_HOUR was already a reasonable choice. If one or more do, the
+per-instrument breakdown decides whether it's worth a new live
+session bucket versus a few pairs' edge sitting close enough to the
+existing window to not need a separate one.
