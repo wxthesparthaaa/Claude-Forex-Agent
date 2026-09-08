@@ -571,26 +571,37 @@
           </select>
         </div>
 
+        {% for warning in out_of_range_warnings %}
+          <p class="out-of-range">&#9888; {{ warning }}</p>
+        {% endfor %}
+        <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
+      </form>
+
+      <!-- Deliberately a separate form from Settings above (real bug,
+           2026-09-08): with one shared form, "Save settings" submitted
+           this same strategy_capital field too, and /settings re-baselines
+           capital whenever the submitted value differs from live equity by
+           more than 1 cent -- which any autopilot trade closing between
+           page-load and clicking Save was enough to trigger, silently
+           wiping P&L tracking on what looked like an unrelated settings
+           change. Splitting the form means Save settings no longer sends
+           strategy_capital at all, so it can never trigger a rebase; only
+           this form's own Reset capital button can. -->
+      <form method="post" action="/settings" style="margin-top:1rem;">
         <label>Strategy capital
           <input type="number" step="0.01" min="0" name="strategy_capital"
                  value="{{ '%.2f'|format(strategy_capital) }}">
         </label>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Updates live as Autopilot's trades close. Saving a different amount here
-          re-baselines it -- that becomes the new starting capital, P&amp;L tracking
-          restarts from zero.
+          Updates live as Autopilot's trades close. Type a different amount and click
+          Reset capital to re-baseline it -- that becomes the new starting capital,
+          P&amp;L tracking restarts from zero. Saving the settings above never touches
+          this number.
         </p>
-
-        {% for warning in out_of_range_warnings %}
-          <p class="out-of-range">&#9888; {{ warning }}</p>
-        {% endfor %}
-        <div class="toggle-row" style="gap:0.5rem;">
-          <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
-          <button class="scan-btn" type="submit" name="reset_capital" value="1"
-                  style="margin-top:0.75rem;" data-loading-text="Resetting...">
-            Reset capital
-          </button>
-        </div>
+        <button class="scan-btn" type="submit" name="reset_capital" value="1"
+                style="margin-top:0.75rem;" data-loading-text="Resetting...">
+          Reset capital
+        </button>
       </form>
     </details>
   </div>
@@ -797,8 +808,15 @@
     // acknowledges the press instead of looking like nothing happened
     // while the request is in flight.
     document.querySelectorAll('form').forEach(function (form) {
-      form.addEventListener('submit', function () {
-        var btn = form.querySelector('button[type=submit]');
+      form.addEventListener('submit', function (e) {
+        // e.submitter is the button that was actually clicked -- a bare
+        // form.querySelector('button[type=submit]') always returns the
+        // FIRST submit button in the form regardless of which one fired
+        // the event, which used to make Settings' Reset capital button
+        // visually show Save settings' "Saving..." label instead of its
+        // own (real bug, 2026-09-08). Falls back to the old lookup for
+        // any browser without SubmitEvent.submitter (Safari <15.4).
+        var btn = e.submitter || form.querySelector('button[type=submit]');
         if (!btn) return;
         btn.disabled = true;
         if (btn.dataset.loadingText) btn.textContent = btn.dataset.loadingText;
