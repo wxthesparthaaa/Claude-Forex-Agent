@@ -61,6 +61,7 @@
     "VWAP Scalp: reward:risk 0.58:1 is below the 1:1 floor (risking 0.09900 to make 0.05700)",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20",
+    "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5",
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 5/5"
   ],
   "last_scan_digest_sent_at": "2026-09-08T06:31:15.255047+00:00",
