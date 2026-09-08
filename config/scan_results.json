@@ -1,37 +1,37 @@
 {
-  "scanned_at": "2026-09-07T23:45:07.482589+00:00",
+  "scanned_at": "2026-09-08T00:05:08.304833+00:00",
   "candidates": [
     {
-      "instrument": "AUD_USD",
-      "direction": "LONG",
-      "entry_price": 0.7223,
-      "stop_loss": 0.72179,
-      "take_profit": 0.72332,
-      "confidence_pct": 79.1,
+      "instrument": "USD_JPY",
+      "direction": "SHORT",
+      "entry_price": 153.776,
+      "stop_loss": 154.383,
+      "take_profit": 152.562,
+      "confidence_pct": 54.0,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 96.48465046242791,
+        "rsi": 29.48121649371629,
         "candlestick": 50.0,
-        "news": 50.0
+        "news": 16.66666666666667
       },
-      "units": 60421,
+      "units": -7808,
       "unit_label": "units",
       "risk_amount": 38.994648,
-      "notional_account_currency": 55226.66,
+      "notional_account_currency": 9878.02,
       "account_currency": "SGD",
       "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 66 (neutral range).",
+        "RSI is 21 (oversold -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: no AUD-relevant headlines in the latest fetch (neutral)."
+        "News sentiment: supportive of this direction."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
         "candlestick": false,
-        "news": false
+        "news": true
       }
     }
   ]
