@@ -20,7 +20,7 @@
     "autopilot_confidence_threshold_pct": 70.0
   },
   "phase_state": {
-    "phase": "autopilot",
+    "phase": "manual_paper",
     "closed_trades_in_phase": 0,
     "kill_switch_engaged": false
   },
@@ -28,11 +28,11 @@
   "trades_per_day_override": 5,
   "last_nightly_equity": null,
   "week_start_equity": null,
-  "strategy_starting_capital": 2122.81,
-  "strategy_realized_pnl": -397.9005,
-  "last_review_timestamp": "2026-09-09T17:04:59.860021+00:00",
-  "week_start_timestamp": "2026-09-08T08:55:42.172047+00:00",
-  "capital_reset_at": "2026-09-08T08:55:42.172047+00:00",
+  "strategy_starting_capital": 2000.0,
+  "strategy_realized_pnl": 0.0,
+  "last_review_timestamp": "2026-09-09T23:43:01.897063+00:00",
+  "week_start_timestamp": "2026-09-09T23:43:01.897063+00:00",
+  "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
   "autopilot_scan_interval_minutes": 15,
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-10T07:41:04.684920+08:00",
@@ -160,12 +160,12 @@
     "candlestick": 0.15,
     "news": 0.25
   },
-  "peak_tracked_equity": 2161.1402,
+  "peak_tracked_equity": 2000.0,
   "friday_preclose_cancel_enabled": false,
   "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
-  "vwap_scalp_enabled": true,
+  "vwap_scalp_enabled": false,
   "vwap_scalp_max_trades_per_day": 50,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
@@ -173,5 +173,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "base_strategy_enabled": true
+  "base_strategy_enabled": false
 }
