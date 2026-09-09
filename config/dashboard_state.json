@@ -104,6 +104,7 @@
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard.",
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard.",
     "VWAP Scalp: reward:risk 0.91:1 is below the 1:1 floor (risking 0.04700 to make 0.04300)",
+    "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard.",
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard."
   ],
   "last_scan_digest_sent_at": "2026-09-09T16:11:48.902337+00:00",
