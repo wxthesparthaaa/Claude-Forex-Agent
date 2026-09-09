@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-09-09T03:38:05.894328+00:00",
-  "candidates": []
+  "scanned_at": "2026-09-09T03:58:06.528690+00:00",
+  "candidates": [
+    {
+      "instrument": "USD_JPY",
+      "direction": "SHORT",
+      "entry_price": 153.452,
+      "stop_loss": 153.601,
+      "take_profit": 153.154,
+      "confidence_pct": 76.4,
+      "confidence_components": {
+        "breadth": 85.71428571428571,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 55.55555555555556
+      },
+      "units": -35200,
+      "unit_label": "units",
+      "risk_amount": 43.222804,
+      "notional_account_currency": 44514.03,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 42 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: neutral."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    }
+  ]
 }
