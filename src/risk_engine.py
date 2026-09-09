@@ -81,9 +81,24 @@ class RiskConfig:
     max_daily_loss_pct_max: float = 50.0
     suggested_max_daily_loss_pct: float = 6.0
 
-    # Circuit breaker: halts ALL new trading (any mode) until a human
-    # manually resets it from the dashboard.
+    # Circuit breaker: halts ALL new trading (any mode, every strategy)
+    # until Reset capital is used in Settings -- unlike max_daily_loss_pct,
+    # measured against a high-water mark that never resets on its own, so
+    # it catches a slow multi-day bleed the daily check's nightly memory
+    # wipe structurally can't see (each individual day can stay under the
+    # daily limit while still compounding into a real cumulative
+    # drawdown). Real live incident (2026-09-10): this had NO Settings
+    # visibility at all before that day -- no toggle, no slider, nothing
+    # -- unlike max_daily_loss_pct's own toggle+slider; a user only ever
+    # discovered the 20% threshold existed once it had already halted
+    # them. max_drawdown_enabled/min/max added then, mirroring
+    # daily_loss_limit_enabled's own pattern exactly, so this breaker
+    # gets the same "temporarily loosen for data collection" escape
+    # hatch the daily one already had.
+    max_drawdown_enabled: bool = True
     max_drawdown_pct: float = 20.0
+    max_drawdown_pct_min: float = 1.0
+    max_drawdown_pct_max: float = 50.0
     suggested_max_drawdown_pct: float = 20.0
 
     # Max net risk-equivalent exposure to any single currency at once,
@@ -160,13 +175,14 @@ def validate_trade(trade: ProposedTrade, account: AccountState, config: RiskConf
     if account.equity <= 0:
         raise RiskViolation("Account equity is zero or negative")
 
-    drawdown_pct = 100 * (account.peak_equity - account.equity) / account.peak_equity if account.peak_equity > 0 else 0
-    if drawdown_pct >= config.max_drawdown_pct:
-        raise RiskViolation(
-            f"Max drawdown breaker tripped: {drawdown_pct:.1f}% >= {config.max_drawdown_pct}%. "
-            f"Halted until Reset capital is used in Settings (this clears the tracked high-water mark, "
-            f"not just the P&L baseline)."
-        )
+    if config.max_drawdown_enabled:
+        drawdown_pct = 100 * (account.peak_equity - account.equity) / account.peak_equity if account.peak_equity > 0 else 0
+        if drawdown_pct >= config.max_drawdown_pct:
+            raise RiskViolation(
+                f"Max drawdown breaker tripped: {drawdown_pct:.1f}% >= {config.max_drawdown_pct}%. "
+                f"Halted until Reset capital is used in Settings (this clears the tracked high-water mark, "
+                f"not just the P&L baseline)."
+            )
 
     # daily_loss_limit_enabled is the sole on/off control (2026-09-08
     # redesign) -- max_daily_loss_pct is never itself a magic disable

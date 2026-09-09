@@ -392,6 +392,26 @@
           when you're done collecting data.
         </p>
 
+        <div class="toggle-row">
+          <span>Max drawdown breaker{{ ' -- DISABLED' if not risk_config.max_drawdown_enabled else '' }}</span>
+          <label class="switch">
+            <input type="checkbox" name="max_drawdown_enabled" {{ 'checked' if risk_config.max_drawdown_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <label>Max drawdown threshold: <span id="drawdownVal">{{ risk_config.max_drawdown_pct }}</span>%</label>
+        <input type="range" name="max_drawdown_pct"
+               min="{{ risk_config.max_drawdown_pct_min }}" max="{{ risk_config.max_drawdown_pct_max }}" step="1"
+               value="{{ risk_config.max_drawdown_pct }}" oninput="drawdownVal.textContent = this.value">
+        <details style="margin:-0.4rem 0 0.75rem;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
+          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
+            Daily loss limit resets every night and only ever sees one day at a time; Max drawdown breaker
+            never resets on its own (only Reset capital clears it) and catches a slow bleed across many
+            days that each individually stayed under the daily limit.
+          </p>
+        </details>
+
         <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
         <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
                value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">

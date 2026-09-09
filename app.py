@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "Max drawdown breaker now has real Settings visibility -- an on/off toggle plus an "
+                    "adjustable percentage, right under Daily loss limit, with a collapsed one-liner "
+                    "explaining the difference (daily resets nightly; drawdown never resets on its own). "
+                    "It used to be a pure code constant with no Settings presence at all."),
     ("2026-09-10", "VWAP Scalp's pair-check order now puts commodities (XAU/XAG/WTICO/BCO) first -- the "
                     "full-year backtest showed them strongest in every session, but they sat LAST in the "
                     "list, so they structurally lost every same-tick tie to a major or JPY cross regardless "
@@ -514,9 +518,18 @@ def _out_of_range_warnings(risk_config, vwap_scalp_max_trades_per_day) -> list:
     elif is_out_of_recommended_range(risk_config.max_daily_loss_pct, risk_config.suggested_max_daily_loss_pct):
         warnings.append(f"Daily loss limit ({risk_config.max_daily_loss_pct}%) is more permissive than "
                          f"the suggested {risk_config.suggested_max_daily_loss_pct}%")
+    # Same either/or treatment as daily_loss_limit_enabled just above,
+    # now that max_drawdown_enabled exists (2026-09-10) -- without this,
+    # a disabled breaker would show BOTH "DISABLED" and "more permissive
+    # than suggested" at once, the exact bug already fixed once for
+    # daily loss limit.
+    if not risk_config.max_drawdown_enabled:
+        warnings.append("Max drawdown breaker is DISABLED -- no automatic stop on cumulative drawdown")
+    elif is_out_of_recommended_range(risk_config.max_drawdown_pct, risk_config.suggested_max_drawdown_pct):
+        warnings.append(f"Max drawdown ({risk_config.max_drawdown_pct}%) is more permissive than "
+                         f"the suggested {risk_config.suggested_max_drawdown_pct}%")
     checks = [
         ("Portfolio heat", risk_config.max_portfolio_heat_pct, risk_config.suggested_max_portfolio_heat_pct),
-        ("Max drawdown", risk_config.max_drawdown_pct, risk_config.suggested_max_drawdown_pct),
     ]
     for label, value, suggested in checks:
         if value != 0 and is_out_of_recommended_range(value, suggested):
@@ -940,6 +953,14 @@ def settings():
         risk_config.max_daily_loss_pct = _clamp(
             float(request.form.get("max_daily_loss_pct", risk_config.max_daily_loss_pct)),
             risk_config.max_daily_loss_pct_min, risk_config.max_daily_loss_pct_max)
+        # Same on/off + adjustable-percentage pattern as daily loss limit
+        # just above (2026-09-10) -- previously max_drawdown_pct had NO
+        # Settings control at all, not even a toggle to temporarily
+        # loosen it the way daily loss limit already could.
+        risk_config.max_drawdown_enabled = request.form.get("max_drawdown_enabled") == "on"
+        risk_config.max_drawdown_pct = _clamp(
+            float(request.form.get("max_drawdown_pct", risk_config.max_drawdown_pct)),
+            risk_config.max_drawdown_pct_min, risk_config.max_drawdown_pct_max)
         risk_config.autopilot_confidence_threshold_pct = _clamp(
             float(request.form.get("autopilot_confidence_threshold_pct",
                                     risk_config.autopilot_confidence_threshold_pct)),

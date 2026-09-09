@@ -7696,3 +7696,70 @@ full app suite unaffected (script still isn't pytest-collected).
 really does beat REJECTED (real evidence the selection isn't
 arbitrary) or not (the earlier gap better explained by the delay
 difference alone).
+
+## 2026-09-10 (continued) -- The real cooldown-selection follow-up run landed, plus a real drawdown investigated and a Settings gap closed
+
+**Cooldown sweep + selection-effect results (real run)**: 40 minutes
+(the live value) came back as the standout among every Settings-
+selectable cooldown (20/40/60/80/100/120) -- the only one combining the
+highest mean_R (+0.94) with Bonferroni significance; 20 minutes showed
+a much larger raw mean_R (+3.12) but was NOT significant (p=0.17, too
+noisy to trust), and 60-120 min all traded far less often for a lower
+mean_R (+0.63-0.76). Separately, `report_cooldown_selection_effect`
+confirmed ACCEPTED beats REJECTED on mean_R (+0.94 vs +0.72 day-level)
+-- real evidence the cooldown's "confirms first" selection isn't
+arbitrary -- with a genuine nuance: REJECTED actually has the HIGHER
+win rate (91.6% vs 78.3% day-win). The effect is in win SIZE, not win
+probability -- whichever candidate confirms first tends to ride a
+stronger move, producing bigger wins on a similar hit rate, not a
+higher one.
+
+**User question: "why do I need to reset the capital? I thought the
+loss was never hit"** -- verified with real data rather than assumed
+either way. Pulled the live `dashboard_state.json`/`trade_journal.json`
+from `state-sync` and computed `account_state_from_tracked_capital`'s
+real output directly: drawdown_pct = 20.19%, matching the log's 20.2%
+exactly. Independently cross-checked by summing every real closed
+trade since the last capital reset (2026-09-08 08:55 UTC) from the raw
+journal: 36 trades, -$397.90 (33 VWAP Scalp = -$383.47, 3 Base =
+-$14.43) -- matches `strategy_realized_pnl` to the cent. The drawdown
+is real, not a stale/buggy peak value.
+
+**Follow-up question: "what's the point of daily loss limit if both
+[it and max drawdown] do the same thing? remove either one"** --
+verified in code before agreeing to remove anything (this is NOT the
+weekly-vs-daily case, where the two really were near-duplicates).
+`daily_realized_pnl` (`dashboard_state.py:330`) is computed as P&L
+since `last_review_timestamp`, which the nightly review job rolls
+forward every day -- daily loss limit forgets everything by tomorrow.
+`peak_tracked_equity` never resets on its own. Concrete case only the
+drawdown breaker catches: a strategy losing a steady 3%/day for 10
+days never trips the 6% daily limit once, but that's a real ~26%
+cumulative drawdown. Kept both; explained the distinction instead of
+removing anything.
+
+**Shipped**: gave `max_drawdown_pct` the exact same Settings treatment
+`max_daily_loss_pct` already has -- previously a pure code constant
+with NO Settings visibility at all (the real gap the user's original
+"where is this in Settings" question exposed). New `RiskConfig.
+max_drawdown_enabled` (default `True`) + `max_drawdown_pct_min`/`_max`
+(1-50, mirroring daily loss limit's own bounds); `validate_trade`'s
+drawdown check now wrapped in `if config.max_drawdown_enabled:`, same
+pattern as `daily_loss_limit_enabled`. Added to
+`_USER_ADJUSTABLE_RISK_FIELDS` and `/settings` parsing.
+`_out_of_range_warnings` moved "Max drawdown" out of the generic
+permissive-value `checks` list into its own either/or block (disabled
+XOR permissive, never both) -- the exact bug already fixed once for
+daily loss limit, which would have been silently reintroduced here if
+the toggle had been added without this. Placed directly under Daily
+loss limit in Settings (user request), with a collapsed-by-default
+`<details>`/"More" one-liner explaining the distinction between the
+two, so it doesn't add a wall of text for someone who already knows.
+
+**Verification**: `git stash`-confirmed 9 of 10 new tests
+(`tests/test_settings_max_drawdown.py`, mirroring `test_settings_
+daily_loss_limit.py`'s own coverage exactly) fail against the pre-fix
+code with `TypeError: unexpected keyword argument 'max_drawdown_
+enabled'` -- proving the feature is genuinely new, not a no-op. Full
+suite (640 tests) green; `py_compile` + real `import app` both clean;
+template re-parses under Jinja2.
