@@ -73,7 +73,8 @@
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until Reset capital is used in Settings (this clears the tracked high-water mark, not just the P&L baseline).",
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until Reset capital is used in Settings (this clears the tracked high-water mark, not just the P&L baseline).",
     "VWAP Scalp: reward:risk 0.30:1 is below the 1:1 floor (risking 0.00010 to make 0.00003)",
-    "VWAP Scalp: reward:risk 0.14:1 is below the 1:1 floor (risking 3.51100 to make 0.50400)"
+    "VWAP Scalp: reward:risk 0.14:1 is below the 1:1 floor (risking 3.51100 to make 0.50400)",
+    "VWAP Scalp: reward:risk 0.14:1 is below the 1:1 floor (risking 3.52600 to make 0.48900)"
   ],
   "last_scan_digest_sent_at": "2026-09-09T22:19:58.610386+00:00",
   "paused_instruments": {},
