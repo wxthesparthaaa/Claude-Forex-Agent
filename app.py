@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "Fixed the max-drawdown breaker's own \"reset from the dashboard\" having no dashboard "
+                    "control that actually did it -- Reset capital never touched the tracked high-water mark "
+                    "the breaker measures against, so it could only ever get WORSE after a reset, never "
+                    "clear. Reset capital now clears it too; the breaker's message now says exactly where."),
     ("2026-09-09", "Added Half size mode -- a top-level Settings toggle that halves every strategy's dollar "
                     "risk per trade, on top of Risk per trade itself. Meant to pair with raising trade "
                     "frequency for data collection: more observations, same downside budget."),
@@ -99,9 +103,6 @@ DEVELOPER_NOTES = [
     ("2026-09-09", "Base strategy's interval scanner was silently producing no log output whenever nothing was "
                     "due yet (which can span hours) -- looked identical to 'not running' in Render's logs. "
                     "Confirmed it was actually scanning fine the whole time; added the missing log line."),
-    ("2026-09-08", "Settings now warns if VWAP Scalp's own trades-per-day is set higher than the shared "
-                    "Trades per day cap -- the shared cap counts every strategy combined and always binds "
-                    "first, so anything above it was silently unreachable."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
@@ -1057,6 +1058,20 @@ def settings():
             state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
             state.week_start_timestamp = state.last_review_timestamp
             state.capital_reset_at = state.last_review_timestamp
+            # Real bug (found live 2026-09-10): peak_tracked_equity -- the
+            # high-water mark risk_engine's max-drawdown circuit breaker
+            # measures against -- was never touched by a capital reset.
+            # It only ever ratchets UP (see account_state_from_tracked_
+            # capital), so after a reset it kept sitting at the OLD,
+            # pre-reset peak while current equity dropped to the fresh
+            # baseline -- computing an even LARGER drawdown than before,
+            # not a cleared one. The scan digest tells the user the
+            # breaker is "halted until manually reset from the
+            # dashboard," but no control anywhere actually did that reset
+            # -- this is that control. A genuine "start fresh" action
+            # means the new baseline IS the new peak (0% drawdown), same
+            # as a real account would show right after a deposit.
+            state.peak_tracked_equity = target_capital
             flash(f"Strategy capital reset to {target_capital:.2f}.", "success")
         else:
             new_capital = request.form.get("strategy_capital")
@@ -1068,6 +1083,7 @@ def settings():
                     state.last_review_timestamp = datetime.now(timezone.utc).isoformat()
                     state.week_start_timestamp = state.last_review_timestamp
                     state.capital_reset_at = state.last_review_timestamp
+                    state.peak_tracked_equity = new_capital  # same reasoning as the reset_capital branch above
                     flash(f"Strategy capital set to {new_capital:.2f}.", "success")
 
         state.risk_config = asdict(risk_config)

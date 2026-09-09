@@ -20,6 +20,8 @@ import sys
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
 
@@ -27,6 +29,12 @@ import dashboard_state as ds
 import trade_journal as tj
 from autopilot import PhaseState
 from dashboard_state import DEFAULT_STRATEGY_CAPITAL, tracked_equity_live
+
+
+def _dummy_trade():
+    from risk_engine import ProposedTrade
+    return ProposedTrade(instrument="EUR_USD", direction="LONG", risk_amount=40.0,
+                          currency_deltas={"EUR": 1, "USD": -1})
 
 
 def _isolate(tmp_path, monkeypatch):
@@ -127,6 +135,53 @@ def test_reset_capital_also_clears_the_gain_this_week_tile(tmp_path, monkeypatch
     weekly_pnl = realized_pnl_since(post_entries, post_state.week_start_timestamp)
     assert weekly_pnl == 0.0, \
         f"expected the GAIN (THIS WEEK) tile's input to be genuinely cleared by the reset, got {weekly_pnl}"
+
+
+def test_reset_capital_also_clears_the_drawdown_breaker(tmp_path, monkeypatch):
+    # Real live incident (2026-09-10): risk_engine.validate_trade's max-
+    # drawdown circuit breaker tripped and halted ALL trading (base +
+    # every add-on), with its own message telling the user to reset it
+    # "from the dashboard" -- but peak_tracked_equity (what the breaker
+    # actually measures current equity against) was never touched by
+    # Reset capital, so there was no control anywhere that actually did
+    # this. It only ratchets UP, so it kept sitting at the OLD peak after
+    # a reset, computing an even LARGER drawdown against the fresh
+    # baseline -- the exact opposite of "resolved."
+    from dashboard_state import account_state_from_tracked_capital
+    from risk_engine import RiskConfig, RiskViolation, validate_trade
+
+    client = _client(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    state = _seed_pre_reset_history(now)
+    state.peak_tracked_equity = 3000.0  # a real prior high-water mark, well above current equity
+    ds.save_state(state)
+
+    pre_state = ds.load_state()
+    pre_account = account_state_from_tracked_capital(pre_state, tj.load_journal())
+    with pytest.raises(RiskViolation, match="drawdown"):
+        validate_trade(_dummy_trade(), pre_account, RiskConfig(max_drawdown_pct=20.0))
+
+    client.post("/settings", data={"reset_capital": "on"}, follow_redirects=False)
+
+    post_state = ds.load_state()
+    assert post_state.peak_tracked_equity == DEFAULT_STRATEGY_CAPITAL, \
+        f"expected the high-water mark to reset to the new baseline, got {post_state.peak_tracked_equity}"
+    post_account = account_state_from_tracked_capital(post_state, tj.load_journal())
+    validate_trade(_dummy_trade(), post_account, RiskConfig(max_drawdown_pct=20.0))  # must not raise
+
+
+def test_explicit_capital_override_also_clears_the_drawdown_breaker(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    state = _seed_pre_reset_history(now)
+    state.peak_tracked_equity = 5000.0  # deliberately NOT the target below, so a stale-peak bug can't hide
+    ds.save_state(state)
+
+    client.post("/settings", data={"strategy_capital": "3000"}, follow_redirects=False)
+
+    post_state = ds.load_state()
+    assert post_state.peak_tracked_equity == 3000.0, \
+        f"expected an explicit capital override to also reset the high-water mark, got {post_state.peak_tracked_equity}"
 
 
 def test_explicit_capital_override_gets_the_same_fix(tmp_path, monkeypatch):

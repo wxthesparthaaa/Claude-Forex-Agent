@@ -164,7 +164,8 @@ def validate_trade(trade: ProposedTrade, account: AccountState, config: RiskConf
     if drawdown_pct >= config.max_drawdown_pct:
         raise RiskViolation(
             f"Max drawdown breaker tripped: {drawdown_pct:.1f}% >= {config.max_drawdown_pct}%. "
-            f"Halted until manually reset from the dashboard."
+            f"Halted until Reset capital is used in Settings (this clears the tracked high-water mark, "
+            f"not just the P&L baseline)."
         )
 
     # daily_loss_limit_enabled is the sole on/off control (2026-09-08

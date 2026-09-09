@@ -7526,3 +7526,71 @@ happy path), `test_atomic_write_json_indent_none_produces_compact_
 output` fails with `TypeError` (the parameter didn't exist yet). Full
 suite (628 tests) green; `py_compile` clean; the backtest script's own
 `_selftest()` still passes standalone.
+
+## 2026-09-10 (continued) -- The drawdown breaker's own "reset from the dashboard" had no dashboard control that did it
+
+**Problem**: user's live account tripped `risk_engine.validate_trade`'s
+max-drawdown circuit breaker (20.2% >= 20.0%), halting ALL new trades
+across every strategy. The scan digest's own message said "Halted
+until manually reset from the dashboard" -- user asked where in
+Settings that actually is.
+
+**Root cause**: there wasn't one. The breaker checks current equity
+against `state.peak_tracked_equity`, a high-water mark that only ever
+ratchets UPWARD (`account_state_from_tracked_capital`). Grepped every
+route and template for `peak_tracked_equity`/`drawdown`: it's read in
+exactly the 3 lines that maintain it and nowhere else -- `/settings`'
+`reset_capital` branch (and its "type a new value" sibling) reset
+`strategy_starting_capital`/`strategy_realized_pnl`/the review
+timestamps, but never touched the high-water mark. Worse than merely
+not helping: since the mark can't go down and current equity drops to
+a fresh, lower baseline right after a reset, a capital reset done
+*specifically* to escape a tripped breaker would have computed an even
+LARGER drawdown against the still-stale peak, not a cleared one.
+
+**Fix**: both `/settings` capital-reset code paths (`app.py`) now also
+set `state.peak_tracked_equity` to the new baseline -- the same
+reasoning as a real brokerage account showing 0% drawdown right after
+a deposit: the new starting point IS the new peak. Reworded the
+breaker's own message from vague ("reset from the dashboard") to
+specific ("Reset capital is used in Settings -- this clears the
+tracked high-water mark, not just the P&L baseline"), since the old
+wording was part of what left no way to find the actual control.
+
+**Verification**: `git stash`-confirmed both new tests
+(`test_reset_capital_also_clears_the_drawdown_breaker`,
+`test_explicit_capital_override_also_clears_the_drawdown_breaker` in
+`tests/test_settings_capital_reset.py`) fail against the pre-fix code
+first -- the second one required a real fix mid-writing: it initially
+passed even pre-fix because the seeded stale peak and the reset target
+happened to share the same value (3000.0), silently proving nothing;
+corrected to a genuinely different seed (5000.0) so a real bug can't
+hide behind a coincidental match. Full suite (630 tests) green;
+`py_compile` + real `import app` both clean.
+
+## 2026-09-10 (continued) -- Fixed a backwards-reading result in the new backtest pass's own report
+
+**Problem**: the user's first full real run of the current-vs-perfect-
+fill backtest pass came back with CURRENT's mean_R (+0.9095) HIGHER
+than PERFECT FILL's (+0.6945) -- a genuinely interesting, unexpected
+result (the 40-minute global cooldown, far from costing edge, may be
+implicitly selecting a higher-quality subset of signals -- worth a
+follow-up look, not yet confirmed). But `report_current_vs_perfect_
+fill`'s own wording unconditionally framed the gap as a cost, printing
+the nonsensical "real execution ... costs -31.0% of the theoretical
+per-trade edge" for this exact case -- a cost cannot be negative; that
+IS a gain.
+
+**Fix** (`scripts/backtest_vwap_reversion_scalp.py`): the gap
+calculation now branches on sign and reads correctly either way --
+when CURRENT beats PERFECT FILL, the message says so plainly and
+flags the leading hypothesis (the cooldown's "whichever candidate
+confirms first" selection may not be purely arbitrary) as worth a
+closer look, not yet a confirmed effect; the original "costs X%"
+wording is kept for the case it was originally written for. Purely a
+report-formatting fix -- no change to any computed statistic.
+
+**Verification**: `py_compile` clean; the script's own `_selftest()`
+still passes standalone (this section isn't self-tested directly,
+since it only formats already-computed numbers with no independent
+logic of its own to verify).

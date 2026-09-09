@@ -1724,13 +1724,35 @@ def report_current_vs_perfect_fill(current_returns: list, perfect_returns: list,
     if "current" in scenario_means and "perfect" in scenario_means:
         perfect_mean = scenario_means["perfect"]
         current_mean = scenario_means["current"]
-        gap_pct = 100 * (perfect_mean - current_mean) / abs(perfect_mean) if perfect_mean else float("nan")
+        # Real incident (2026-09-10): the first live run came back with
+        # CURRENT's mean_R HIGHER than PERFECT FILL's -- the old wording
+        # here unconditionally said execution "costs X%", so a negative
+        # gap printed as an incoherent "costs -31.0%" (a cost cannot be
+        # negative; that's a GAIN). Both directions are real possible
+        # outcomes and must each read sensibly: CURRENT beating PERFECT
+        # FILL is a genuinely interesting result worth flagging plainly,
+        # not a formatting artifact to paper over. Leading hypothesis if
+        # it happens (NOT confirmed by this print alone): the 40-minute
+        # cooldown's "whichever candidate confirms first in a cluster"
+        # selection may not be a purely arbitrary race -- worth checking
+        # separately (e.g. z-score-at-entry or confirmation speed,
+        # survivors vs. the full population) before trusting it as a
+        # real effect rather than an artifact of this specific run.
+        delta = current_mean - perfect_mean
+        delta_pct = 100 * delta / abs(perfect_mean) if perfect_mean else float("nan")
+        if delta >= 0:
+            finding = (f"CURRENT actually EXCEEDS the perfect-fill benchmark by {delta_pct:.1f}% -- real "
+                       f"execution here is not costing edge. If this holds up, the likely explanation is "
+                       f"that the {CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-minute cooldown's 'whichever "
+                       f"candidate confirms first' selection isn't purely arbitrary -- worth a closer look "
+                       f"before trusting it as a real effect.")
+        else:
+            finding = (f"real execution (delay + the {CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-min cooldown) "
+                       f"costs {abs(delta_pct):.1f}% of the theoretical per-trade edge.")
         print(f"\nGap: perfect-fill mean_R ({perfect_mean:+.4f}) vs. current mean_R ({current_mean:+.4f}) -- "
-              f"real execution (delay + the {CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-min cooldown) costs "
-              f"{gap_pct:+.1f}% of the theoretical per-trade edge. Descriptive, not a formal paired "
-              f"significance test -- the two scenarios trade a different NUMBER of times by construction "
-              f"(pacing removes trades from CURRENT, not PERFECT), so they aren't the same set of "
-              f"observations to pair up.")
+              f"{finding} Descriptive, not a formal paired significance test -- the two scenarios trade a "
+              f"different NUMBER of times by construction (pacing removes trades from CURRENT, not "
+              f"PERFECT), so they aren't the same set of observations to pair up.")
 
 
 def report_timing_breakdown(perfect_returns: list) -> None:
