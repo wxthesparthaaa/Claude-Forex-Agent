@@ -41,10 +41,10 @@
     "EUR_USD": "2026-09-09T23:57:11.658270+08:00",
     "GBP_USD": "2026-09-09T23:57:11.658270+08:00",
     "USD_CHF": "2026-09-09T23:57:11.658270+08:00",
-    "USD_CAD": "2026-09-10T02:15:14.264576+08:00",
+    "USD_CAD": "2026-09-10T02:35:08.782895+08:00",
     "XAU_USD": "2026-09-09T23:57:11.658270+08:00",
     "XAG_USD": "2026-09-09T23:57:11.658270+08:00",
-    "WTICO_USD": "2026-09-10T02:15:14.264576+08:00",
+    "WTICO_USD": "2026-09-10T02:35:08.782895+08:00",
     "BCO_USD": "2026-09-09T23:57:11.658270+08:00"
   },
   "scan_digest_interval_minutes": 180,
@@ -87,7 +87,8 @@
     "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard.",
     "VWAP Scalp: reward:risk 0.76:1 is below the 1:1 floor (risking 0.00017 to make 0.00013)",
     "VWAP Scalp: reward:risk 0.46:1 is below the 1:1 floor (risking 0.03500 to make 0.01600)",
-    "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard."
+    "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard.",
+    "VWAP Scalp: reward:risk 0.86:1 is below the 1:1 floor (risking 0.00028 to make 0.00024)"
   ],
   "last_scan_digest_sent_at": "2026-09-09T16:11:48.902337+00:00",
   "paused_instruments": {},
