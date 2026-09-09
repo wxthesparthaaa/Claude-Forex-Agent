@@ -137,10 +137,32 @@ from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_e
 
 VWAP_SCALP_TAG = "VWAP_SCALP"
 
+# Order matters: the per-pair loop below (_check_vwap_scalp_opportunities_unsafe)
+# checks pairs in THIS order every tick, and the global cooldown means at
+# most one pair can open per tick -- so when two-plus pairs have a fresh
+# confirmed signal in the SAME tick, whichever is earlier in this list
+# always wins the race, regardless of either signal's own quality. This
+# was an unexamined accident of insertion order until the 2026-09-10
+# full-year backtest's timing breakdown showed the commodities (XAU/XAG/
+# WTICO/BCO) ranking at or near the top of EVERY UTC session bucket,
+# pooled-and-Bonferroni-significant at the bucket level -- yet they sat
+# LAST in this list, so they structurally lost every tie to a major or
+# JPY cross that also happened to signal that tick, regardless of which
+# one actually had the better setup. Moved the commodities block to the
+# front so ties now favor the pairs the data says are actually
+# strongest. Deliberately NOT re-ranked within either block (e.g. XAG
+# over XAU specifically) -- which commodity/major is strongest varies by
+# UTC bucket in the same breakdown, and picking one fixed sub-order would
+# mean leaning on the per-(bucket,instrument) numbers, which are
+# explicitly diagnostic-only there (not Bonferroni-corrected, unlike the
+# bucket-level result this reorder IS backed by) -- a live-priority
+# ranking that fine-grained needs its own dedicated validation first
+# (see the 2026-09-10 DEVELOPMENT_LOG entry on the cooldown-selection
+# follow-up check), not a guess baked into insertion order.
 VWAP_SCALP_PAIRS = [
+    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
     "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
     "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
-    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
 ]  # JPY-quoted pairs briefly pulled 2026-09-02 on a suspicion they were a JPY-specific
   # problem, then RESTORED the same day once a deeper check disproved that: isolating the
   # realized-vs-sizing conversion-rate mismatch specifically (not conflated with the one

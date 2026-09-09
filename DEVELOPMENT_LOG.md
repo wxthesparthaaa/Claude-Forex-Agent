@@ -7631,3 +7631,68 @@ apart) and every value in the 20-120 sweep produced the same result
 fixture's own max gap; caught and fixed before shipping. `py_compile`
 clean; `_selftest()` passes standalone; full app suite (630 tests)
 unaffected, confirming this script still isn't pytest-collected.
+
+## 2026-09-10 (continued) -- VWAP_SCALP_PAIRS reordered: commodities now win ties, not lose them
+
+**Problem**: the full-year timing breakdown showed commodities (XAU_USD/
+XAG_USD/WTICO_USD/BCO_USD) ranking at or near the top of every UTC
+session bucket, pooled-and-Bonferroni-significant. But
+`_check_vwap_scalp_opportunities_unsafe`'s per-pair loop checks
+`VWAP_SCALP_PAIRS` in list order every tick, and the global cooldown
+means at most one pair opens per tick -- so when two-plus pairs
+confirm a signal in the SAME tick, whichever is EARLIER in the list
+always wins, regardless of either signal's own quality. The
+commodities sat LAST in the list (an unexamined accident of insertion
+order, never a deliberate choice), so they structurally lost every tie
+to a major or JPY cross -- the exact opposite of what the data says
+should win.
+
+**Fix** (`src/vwap_scalp_addon.py`): moved the 4-commodity block to
+the FRONT of `VWAP_SCALP_PAIRS`. Deliberately did NOT fine-rank within
+either block (e.g. XAG over XAU specifically) -- which commodity/major
+ranks highest varies by UTC bucket in the same breakdown, and the
+per-(bucket,instrument) numbers backing any finer ranking are
+explicitly diagnostic-only (not Bonferroni-corrected, unlike the
+bucket-level pooled result this coarser reorder IS backed by). A
+live-priority ranking that fine-grained needs its own dedicated
+validation first (see the cooldown-selection-effect entry below) --
+not a guess baked into insertion order, the exact mistake this fix
+corrects at the coarse level.
+
+**Verification**: confirmed no test or other code asserts on
+`VWAP_SCALP_PAIRS`' specific order (only as a set/for iteration).
+`py_compile` clean; full `test_vwap_scalp_addon.py` suite (45 tests)
+green; full app suite (630 tests) unaffected.
+
+## 2026-09-10 (continued) -- Added a cooldown-selection-effect check, isolating what the earlier surprising result was actually measuring
+
+**Request**: does "whichever candidate confirms first" (the 40-minute
+global cooldown's own selection mechanism) actually predict trade
+quality, or was the earlier CURRENT-beats-PERFECT-FILL result driven
+by something else?
+
+**Real gap in the earlier comparison, caught while designing this
+check**: CURRENT (5-min delay + 40-min cooldown) vs. PERFECT FILL
+(0-min delay, no cooldown) differs in TWO things at once -- delay AND
+cooldown -- so that comparison alone can't say which one is actually
+responsible for the gap.
+
+**Built, not run**: `report_cooldown_selection_effect` isolates the
+cooldown's effect specifically by holding delay constant -- ACCEPTED
+(survived the cooldown) vs. REJECTED (crowded out), both drawn from
+the SAME 5-min-delay candidate pool already built for the earlier
+pass. `main()` computes the REJECTED set via `id()`-based identity
+difference against `current_accepted` (not value equality `==`, which
+would be both slow -- O(n^2) on 100k+ candidates -- and wrong if two
+candidates ever shared identical field values), then simulates and
+reports both groups with the same day-level significance test used
+throughout this script. Single pre-registered comparison, plain
+alpha=0.05, no Bonferroni correction (not a multi-way sweep).
+
+**Verification**: `py_compile` clean; `_selftest()` passes standalone;
+full app suite unaffected (script still isn't pytest-collected).
+
+**Genuinely unresolved until the user runs it**: whether ACCEPTED
+really does beat REJECTED (real evidence the selection isn't
+arbitrary) or not (the earlier gap better explained by the delay
+difference alone).

@@ -1847,6 +1847,69 @@ def report_cooldown_sweep(all_current_candidates: list, per_instrument_vwap: dic
           "than the single highest mean_R value in isolation.")
 
 
+def report_cooldown_selection_effect(accepted_returns: list, rejected_returns: list) -> None:
+    """Follow-up check (2026-09-10 user request) to the current-vs-
+    perfect-fill pass's own surprising result: CURRENT (5-min delay +
+    the 40-min cooldown) beat the UNCENSORED PERFECT-FILL set (0-min
+    delay, no cooldown) on mean_R. That comparison confounds two things
+    at once, though -- delay (5 min vs 0) AND cooldown (40 min vs none)
+    both differ simultaneously, so it can't say WHICH one is doing the
+    work. This isolates the cooldown's own effect specifically: same
+    candidate pool, same 5-minute delay throughout -- just ACCEPTED
+    (survived the cooldown) vs REJECTED (crowded out by another
+    instrument's more recent trade) from that ONE pool. If ACCEPTED's
+    mean_R is genuinely higher, that's real evidence the cooldown's
+    "whichever candidate confirms first" selection isn't a purely
+    arbitrary race -- if not, the earlier current-vs-perfect-fill gap
+    is better explained by the delay difference (or something else)
+    instead. Single pre-registered comparison, not a multi-way sweep --
+    plain alpha=0.05, no Bonferroni correction needed."""
+    print(f"\n{'=' * 76}\nCOOLDOWN SELECTION EFFECT: does 'confirms first' predict quality?\n{'=' * 76}")
+    print("Same candidate pool, same 5-min delay throughout -- isolates the cooldown's own effect from "
+          "the delay difference the current-vs-perfect-fill comparison above conflates it with.")
+
+    group_means = {}
+    for label, key, returns in [("ACCEPTED (survived the cooldown)", "accepted", accepted_returns),
+                                 ("REJECTED (crowded out)", "rejected", rejected_returns)]:
+        print(f"\n{'-' * 76}\n{label}\n{'-' * 76}")
+        r_multiples = [r for _, _, r in returns]
+        n_obs = len(r_multiples)
+        if n_obs < 30:
+            print(f"  (fewer than 30 resolved trades -- {n_obs} found, skipped)")
+            continue
+        win_rate = sum(1 for r in r_multiples if r > 0) / n_obs
+        mean, std, t, p = two_sided_test(r_multiples)
+        group_means[key] = mean
+        print(f"  Raw per-trade: n={n_obs}  win_rate={100 * win_rate:.1f}%  mean_R={mean:+.4f}  "
+              f"t={t:+.2f}  p={p:.4f}")
+
+        daily = daily_aggregate(returns)
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        if n_days >= 30:
+            day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+            dmean, dstd, dt, dp = two_sided_test(day_means)
+            sig = "significant (p<0.05)" if dp < 0.05 else "no"
+            print(f"  Per-instrument-day: n_days={n_days}  day_win%={100 * day_win_rate:.1f}%  "
+                  f"mean_R={dmean:+.4f}  t={dt:+.2f}  p={dp:.4f}  {sig}")
+        else:
+            print(f"  Per-instrument-day: fewer than 30 instrument-days ({n_days}), skipped")
+
+    if "accepted" in group_means and "rejected" in group_means:
+        accepted_mean = group_means["accepted"]
+        rejected_mean = group_means["rejected"]
+        if accepted_mean > rejected_mean:
+            verdict = ("ACCEPTED beats REJECTED -- real evidence the cooldown's selection isn't purely "
+                       "arbitrary. Still just ONE run's evidence, not independently replicated -- worth "
+                       "treating as a real, useful finding, not yet a fully proven mechanism.")
+        else:
+            verdict = ("REJECTED is not worse than ACCEPTED -- the earlier current-vs-perfect-fill gap is "
+                       "better explained by the delay difference (or something else) than by the "
+                       "cooldown's own selection doing anything beyond arbitrary pacing.")
+        print(f"\nVerdict: ACCEPTED mean_R ({accepted_mean:+.4f}) vs. REJECTED mean_R "
+              f"({rejected_mean:+.4f}) -- {verdict}")
+
+
 def report_timing_breakdown(perfect_returns: list) -> None:
     """Per-UTC-bucket (CURRENT_LIVE_TIME_BUCKETS_UTC, matching live
     VWAP_SCALP_TIME_BUCKETS_UTC exactly) and per-(bucket, instrument)
@@ -2415,6 +2478,16 @@ def main():
     report_current_vs_perfect_fill(current_returns, perfect_returns,
                                     len(all_current_candidates), len(current_accepted))
     report_cooldown_sweep(all_current_candidates, per_instrument_vwap)
+
+    # Identity-based (id()), not value-based (==) -- _apply_global_cooldown
+    # returns some of the SAME dict objects from all_current_candidates,
+    # not copies, and value-equality would be both slow (O(n^2) on 100k+
+    # candidates) and wrong if two ever shared identical field values.
+    accepted_ids = {id(c) for c in current_accepted}
+    current_rejected = [c for c in all_current_candidates if id(c) not in accepted_ids]
+    rejected_returns = _simulate_candidates(current_rejected, per_instrument_vwap)
+    report_cooldown_selection_effect(current_returns, rejected_returns)
+
     report_timing_breakdown(perfect_returns)
 
 

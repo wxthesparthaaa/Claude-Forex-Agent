@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "VWAP Scalp's pair-check order now puts commodities (XAU/XAG/WTICO/BCO) first -- the "
+                    "full-year backtest showed them strongest in every session, but they sat LAST in the "
+                    "list, so they structurally lost every same-tick tie to a major or JPY cross regardless "
+                    "of either signal's own quality. Ties now favor the pairs the data says are strongest."),
     ("2026-09-10", "Fixed the max-drawdown breaker's own \"reset from the dashboard\" having no dashboard "
                     "control that actually did it -- Reset capital never touched the tracked high-water mark "
                     "the breaker measures against, so it could only ever get WORSE after a reset, never "
@@ -103,11 +107,13 @@ DEVELOPER_NOTES = [
     ("2026-09-09", "Base strategy's interval scanner was silently producing no log output whenever nothing was "
                     "due yet (which can span hours) -- looked identical to 'not running' in Render's logs. "
                     "Confirmed it was actually scanning fine the whole time; added the missing log line."),
+    ("2026-09-08", "Settings now warns if VWAP Scalp's own trades-per-day is set higher than the shared "
+                    "Trades per day cap -- the shared cap counts every strategy combined and always binds "
+                    "first, so anything above it was silently unreachable."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
     ("2026-09-04", "Daily loss limit is now Settings-adjustable (0-100%, 0 disables it) alongside weekly, "
-                    "after real equity erosion made the hardcoded 6% trip almost every day. VWAP Scalp got "
                     "a global cross-instrument cooldown (20-120 min, Settings) after 5 trades fired in one "
                     "scan tick since each was only on its own pair's separate cooldown clock. Also "
                     "shortened Developer Notes and the strategy descriptions above -- full detail is now "
