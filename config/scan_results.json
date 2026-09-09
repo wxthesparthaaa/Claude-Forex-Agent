@@ -1,61 +1,28 @@
 {
-  "scanned_at": "2026-09-09T04:58:08.892249+00:00",
+  "scanned_at": "2026-09-09T05:18:06.537525+00:00",
   "candidates": [
     {
       "instrument": "AUD_USD",
       "direction": "LONG",
-      "entry_price": 0.72294,
+      "entry_price": 0.72296,
       "stop_loss": 0.72211,
-      "take_profit": 0.7246,
-      "confidence_pct": 76.2,
+      "take_profit": 0.72466,
+      "confidence_pct": 71.4,
       "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 99.02997634679977,
+        "breadth": 71.42857142857143,
+        "rsi": 100.0,
         "candlestick": 50.0,
         "news": 55.76923076923077
       },
-      "units": 41191,
+      "units": 40222,
       "unit_label": "units",
       "risk_amount": 43.222804,
-      "notional_account_currency": 37647.18,
+      "notional_account_currency": 36762.7,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 65 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    },
-    {
-      "instrument": "USD_JPY",
-      "direction": "SHORT",
-      "entry_price": 153.441,
-      "stop_loss": 153.601,
-      "take_profit": 153.121,
-      "confidence_pct": 75.8,
-      "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 100.0,
-        "candlestick": 50.0,
-        "news": 53.11355311355312
-      },
-      "units": -32788,
-      "unit_label": "units",
-      "risk_amount": 43.222804,
-      "notional_account_currency": 41450.93,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 43 (neutral range).",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 63 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
