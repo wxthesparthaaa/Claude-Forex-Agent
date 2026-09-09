@@ -3,7 +3,7 @@
     "risk_per_trade_pct": 1.5,
     "risk_per_trade_pct_min": 1.0,
     "risk_per_trade_pct_max": 2.0,
-    "half_size_mode_enabled": false,
+    "half_size_mode_enabled": true,
     "max_portfolio_heat_pct": 6.0,
     "suggested_max_portfolio_heat_pct": 6.0,
     "daily_loss_limit_enabled": false,
@@ -20,7 +20,7 @@
     "autopilot_confidence_threshold_pct": 70.0
   },
   "phase_state": {
-    "phase": "manual_paper",
+    "phase": "autopilot",
     "closed_trades_in_phase": 0,
     "kill_switch_engaged": false
   },
@@ -161,7 +161,7 @@
     "news": 0.25
   },
   "peak_tracked_equity": 2000.0,
-  "friday_preclose_cancel_enabled": false,
+  "friday_preclose_cancel_enabled": true,
   "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
