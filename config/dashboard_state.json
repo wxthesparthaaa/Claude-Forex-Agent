@@ -63,7 +63,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
+    "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until manually reset from the dashboard."
   ],
   "last_scan_digest_sent_at": "2026-09-09T16:11:48.902337+00:00",
   "paused_instruments": {},
