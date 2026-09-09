@@ -1,8 +1,9 @@
 {
   "risk_config": {
-    "risk_per_trade_pct": 2.0,
+    "risk_per_trade_pct": 1.5,
     "risk_per_trade_pct_min": 1.0,
     "risk_per_trade_pct_max": 2.0,
+    "half_size_mode_enabled": false,
     "max_portfolio_heat_pct": 6.0,
     "suggested_max_portfolio_heat_pct": 6.0,
     "daily_loss_limit_enabled": false,
@@ -143,12 +144,12 @@
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
   "vwap_scalp_enabled": true,
-  "vwap_scalp_max_trades_per_day": 30,
+  "vwap_scalp_max_trades_per_day": 50,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
   "vwap_scalp_global_cooldown_minutes": 40,
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "base_strategy_enabled": false
+  "base_strategy_enabled": true
 }
