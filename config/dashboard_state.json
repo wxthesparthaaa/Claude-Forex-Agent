@@ -70,7 +70,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
+    "VWAP Scalp: reward:risk 0.95:1 is below the 1:1 floor (risking 0.15200 to make 0.14500)"
   ],
   "last_scan_digest_sent_at": "2026-09-09T06:57:57.368900+00:00",
   "paused_instruments": {},
