@@ -7329,3 +7329,67 @@ nothing due yet` print to the `due`-empty branch in
 **Verification**: `tests/test_scheduled_jobs.py`'s existing 90 tests
 (none assert on stdout emptiness) all still pass unchanged.
 `py_compile` clean.
+
+## 2026-09-09 (continued) -- Added VWAP Scalp per-session win rate to the Telegram digest
+
+**Request**: the "trades today by session" digest breakdown showed
+counts vs. cap but not whether a session was actually paying off.
+
+**Shipped**: `vwap_scalp_bucket_summary` (`src/vwap_scalp_addon.py`)
+now also returns `wins`/`losses`/`win_rate_pct` per bucket, computed
+via `trade_journal.win_loss_counts` -- the same win/loss classification
+the dashboard's own win-rate carousel already uses, not a new one.
+Extracted `_vwap_scalp_entries_between` (returns the matching entries,
+not just a count) so the existing `_vwap_scalp_trades_between` and this
+new win-rate computation share one filtering pass instead of two.
+`win_rate_pct` is `None` (not `0.0`) for a bucket with no closed trades
+yet today -- an all-open or untraded session must not misreport as
+"all losses." `format_scan_digest_message` appends
+`-- NN% win (WW/LL)` per bucket only when that data exists.
+
+**Verification**: 2 new tests in `tests/test_vwap_scalp_addon.py`
+(default-loss seeding produces the right `None`/`0.0%` split; a mixed
+3W/1L seed computes 75.0% correctly), 2 new tests in
+`tests/test_notifications.py` for the message-formatting side. Full
+suite green.
+
+## 2026-09-09 (continued) -- Half size mode: an account-wide risk throttle for data-collection periods
+
+**Context**: user intends to raise trade FREQUENCY next (VWAP Scalp's
+own daily cap and/or the shared Trades per day cap) specifically to
+collect more data on timing/pair edges, and wants a way to contain the
+downside while doing so -- more observations, same dollar-risk budget.
+
+**Discussed first, per user request**: is this the same thing as
+lowering Risk per trade? Traced every risk_amount computation
+(`scan_workflow.py`, `orb_fade_addon.py`, `range_confluence_addon.py`,
+`vwap_scalp_addon.py`) -- all four compute `equity * risk_per_trade_pct
+/ 100`, so yes, mathematically identical to halving that slider.
+User's actual want, clarified: a separate quick toggle, not tied to
+the slider's own saved value, scoped as a top-level Settings control
+(not nested under any one strategy) since it should apply everywhere
+at once.
+
+**Shipped**: `RiskConfig.half_size_mode_enabled` (`src/risk_engine.py`,
+default `False`) plus a new `risk_amount_for_trade(equity, config)` --
+the single choke point every strategy's sizing now calls instead of
+computing `equity * risk_per_trade_pct / 100` inline, halving the
+result when the toggle is on. All 4 strategy files updated to call it;
+VWAP Scalp's own `REALIZED_LOSS_INFLATION` divisor stays layered on
+top, unchanged. Added to `_USER_ADJUSTABLE_RISK_FIELDS`
+(`dashboard_state.py`), `/settings` parsing (`app.py`), and a new
+top-level toggle in Settings, directly under Trades per day (grouped
+with the other account-wide controls, per explicit user request --
+NOT nested under Base strategy/VWAP Scalp/any single strategy).
+
+**Verification**: new tests confirm `risk_amount_for_trade` matches
+the plain calculation when off and exactly halves it when on
+(`tests/test_risk_engine.py`); `risk_config_from_state` round-trips the
+new field (`tests/test_dashboard_state.py`); a new
+`tests/test_settings_half_size_mode.py` covers enabling/disabling via
+`/settings` and confirms it never touches the saved
+`risk_per_trade_pct` value. Every existing strategy test still passes
+unchanged, since the toggle defaults off and reproduces the exact
+prior formula in that state. Full suite (624 tests) green;
+`py_compile` + real `import app` both clean; template re-parses under
+Jinja2.

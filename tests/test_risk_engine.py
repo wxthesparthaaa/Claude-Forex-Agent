@@ -5,7 +5,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
 
-from risk_engine import RiskConfig, AccountState, ProposedTrade, validate_trade, RiskViolation, is_out_of_recommended_range
+from risk_engine import (RiskConfig, AccountState, ProposedTrade, validate_trade, RiskViolation,
+                          is_out_of_recommended_range, risk_amount_for_trade)
 from currency_exposure import currency_deltas_for_trade, compute_net_currency_exposure_pct
 
 
@@ -99,3 +100,18 @@ def test_out_of_range_disclaimer_flags_more_permissive_values():
     assert is_out_of_recommended_range(8.0, suggested=6.0) is True
     assert is_out_of_recommended_range(5.0, suggested=6.0) is False
     assert is_out_of_recommended_range(6.0, suggested=6.0) is False
+
+
+def test_half_size_mode_disabled_by_default_matches_the_plain_calculation():
+    config = RiskConfig(risk_per_trade_pct=2.0)
+    assert risk_amount_for_trade(2000.0, config) == 2000.0 * 2.0 / 100.0
+
+
+def test_half_size_mode_enabled_halves_the_risk_amount():
+    # User request (2026-09-09): a quick account-wide throttle for
+    # periods where trade frequency is being raised deliberately, without
+    # proportionally raising total dollar risk.
+    config = RiskConfig(risk_per_trade_pct=2.0, half_size_mode_enabled=True)
+    normal = risk_amount_for_trade(2000.0, RiskConfig(risk_per_trade_pct=2.0))
+    halved = risk_amount_for_trade(2000.0, config)
+    assert halved == normal / 2.0

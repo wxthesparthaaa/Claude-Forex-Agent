@@ -83,7 +83,7 @@ from instrument_metadata import fetch_instrument_metadata, round_price
 from live_scan import fetch_mid_price
 from oanda_client import OandaClient
 from position_sizing import calculate_units, resolve_conversion_rate
-from risk_engine import AccountState, ProposedTrade, RiskConfig, RiskViolation, validate_trade
+from risk_engine import AccountState, ProposedTrade, RiskConfig, RiskViolation, validate_trade, risk_amount_for_trade
 from telegram_notifier import send_message
 from trade_execution import place_and_record
 from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_entries, save_journal
@@ -313,7 +313,7 @@ def _open_position(client, instrument: str, signal: dict, risk_config: RiskConfi
         print(f"WARNING: Range Confluence conversion rate failed for {instrument}: {e}", flush=True)
         return False
 
-    risk_amount = account.equity * risk_config.risk_per_trade_pct / 100.0
+    risk_amount = risk_amount_for_trade(account.equity, risk_config)
     units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return False

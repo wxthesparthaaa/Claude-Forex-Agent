@@ -406,6 +406,20 @@
         </p>
 
         <div class="toggle-row">
+          <span>Half size mode{{ ' -- ACTIVE' if risk_config.half_size_mode_enabled else '' }}</span>
+          <label class="switch">
+            <input type="checkbox" name="half_size_mode_enabled" {{ 'checked' if risk_config.half_size_mode_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default. Halves every strategy's dollar risk per trade, on top of Risk per trade above --
+          not a replacement for it. Meant for periods where you're raising trade FREQUENCY (e.g. the daily
+          caps below) to collect more timing/pair data: same downside budget, more observations. Applies
+          account-wide the moment it's switched on, same as Risk per trade itself.
+        </p>
+
+        <div class="toggle-row">
           <span>Autopilot</span>
           <label class="switch">
             <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>

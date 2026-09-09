@@ -19,7 +19,7 @@ from trade_levels import derive_trade_levels
 from confidence_score import SignalInputs, ConfidenceWeights, compute_confidence
 from position_sizing import calculate_units, resolve_conversion_rate, InstrumentMeta
 from instrument_metadata import round_price
-from risk_engine import ProposedTrade, RiskConfig, AccountState, validate_trade, RiskViolation
+from risk_engine import ProposedTrade, RiskConfig, AccountState, validate_trade, RiskViolation, risk_amount_for_trade
 from currency_exposure import currency_deltas_for_trade
 from rationale import build_rationale
 
@@ -127,7 +127,7 @@ def generate_candidate(
     quote_currency = meta.quote_currency
     conversion_rate = resolve_conversion_rate(quote_currency, account_currency, get_price)
 
-    risk_amount = account.equity * (risk_config.risk_per_trade_pct / 100)
+    risk_amount = risk_amount_for_trade(account.equity, risk_config)
     units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return None

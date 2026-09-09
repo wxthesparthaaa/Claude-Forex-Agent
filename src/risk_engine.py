@@ -25,6 +25,20 @@ class RiskConfig:
     risk_per_trade_pct_min: float = 1.0
     risk_per_trade_pct_max: float = 2.0
 
+    # Half size mode (2026-09-09, user request): a quick, account-wide
+    # throttle for data-collection periods where the user wants to raise
+    # trade FREQUENCY (e.g. VWAP Scalp's own daily cap, or the shared
+    # Trades per day cap) without proportionally raising total dollar
+    # risk -- more observations on timing/pair edges, same downside
+    # budget. Deliberately a separate toggle from risk_per_trade_pct
+    # itself rather than asking the user to halve that slider and
+    # remember to put it back: the slider is what gets SAVED as the
+    # real per-trade risk setting; this is a temporary multiplier on top
+    # of it. See risk_amount_for_trade() below -- the single choke point
+    # every strategy's position sizing goes through, so this toggle
+    # can't be missed in one strategy and left active in another.
+    half_size_mode_enabled: bool = False
+
     # Total risk allowed open across ALL simultaneous trades at once.
     max_portfolio_heat_pct: float = 6.0
     suggested_max_portfolio_heat_pct: float = 6.0
@@ -110,6 +124,22 @@ def is_out_of_recommended_range(value: float, suggested: float, tolerance_pct: f
     chosen limit is MORE permissive (larger) than the suggested default,
     since these are all "how much can go wrong before we stop" limits."""
     return value > suggested * (1 + tolerance_pct / 100)
+
+
+def risk_amount_for_trade(equity: float, config: RiskConfig) -> float:
+    """The dollar amount a single new trade should risk: equity *
+    risk_per_trade_pct/100, halved when Half size mode is on. Every
+    strategy (base, ORB Fade, Range Confluence, VWAP Scalp) computes its
+    risk_amount through this one function rather than the raw
+    multiplication inline, so Half size mode applies identically
+    everywhere the moment it's toggled -- no risk of it being wired into
+    3 of 4 strategies and forgotten in the 4th. VWAP Scalp's own
+    additional REALIZED_LOSS_INFLATION divisor (a separate, unrelated
+    calibration for realized losses running larger than intended -- see
+    that constant's own comment) is layered ON TOP of this, same as
+    before this function existed."""
+    base = equity * config.risk_per_trade_pct / 100.0
+    return base / 2.0 if config.half_size_mode_enabled else base
 
 
 @dataclass

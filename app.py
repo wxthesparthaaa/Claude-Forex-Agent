@@ -85,6 +85,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-09", "Added Half size mode -- a top-level Settings toggle that halves every strategy's dollar "
+                    "risk per trade, on top of Risk per trade itself. Meant to pair with raising trade "
+                    "frequency for data collection: more observations, same downside budget."),
+    ("2026-09-09", "VWAP Scalp's Telegram digest now shows each session's win rate, not just trade count vs. "
+                    "cap -- e.g. \"15:00-20:00 SGT: 2/2 -- 75% win (3W/1L)\", so it's clear which time-of-day "
+                    "windows are actually paying off."),
     ("2026-09-09", "Found the REAL cause of VWAP Scalp's same-tick trade clustering (yesterday's fix wasn't "
                     "enough): the per-pair loop reused one stale `now` for its cooldown check, so a pair that "
                     "just opened moments earlier could look like it opened 'in the future,' silently defeating "
@@ -96,14 +102,6 @@ DEVELOPER_NOTES = [
     ("2026-09-08", "Settings now warns if VWAP Scalp's own trades-per-day is set higher than the shared "
                     "Trades per day cap -- the shared cap counts every strategy combined and always binds "
                     "first, so anything above it was silently unreachable."),
-    ("2026-09-08", "VWAP Scalp's trades-per-day ceiling (raised 25 -> 50) silently had no effect live -- "
-                    "load_state() was replaying the OLD ceiling frozen in an already-persisted state file. "
-                    "Same bug class already fixed once for RiskConfig's own bounds, missed here."),
-    ("2026-09-08", "Settings reorganized: Daily loss limit is now the top-level section, Autopilot confidence "
-                    "threshold moved under Base strategy (it's the only one of the risk sliders that's really "
-                    "Base-only), Range Confluence's toggle removed, and VWAP Scalp's daily-trade ceiling "
-                    "raised 25 -> 50. Also fixed a disabled Daily loss limit showing a second, meaningless "
-                    "\"more permissive than suggested\" warning alongside it."),
     ("2026-09-05", "Retired the weekly loss limit -- redundant with daily since both drew from the same "
                     "account-wide P&L. Win-rate pie chart is now a carousel: Overall plus a dedicated slide "
                     "per strategy (Base, VWAP Scalp, ORB Fade, Range Confluence)."),
@@ -917,6 +915,13 @@ def settings():
         risk_config.max_trades_per_day = int(_clamp(
             float(request.form.get("max_trades_per_day", risk_config.max_trades_per_day)),
             risk_config.max_trades_per_day_min, risk_config.max_trades_per_day_max))
+        # User request (2026-09-09): a quick account-wide throttle for
+        # periods where trade FREQUENCY is being raised deliberately (to
+        # collect more timing/pair data) without proportionally raising
+        # total dollar risk -- halves every strategy's risk_amount via
+        # risk_engine.risk_amount_for_trade, on top of whatever Risk per
+        # trade is saved at, not instead of it.
+        risk_config.half_size_mode_enabled = request.form.get("half_size_mode_enabled") == "on"
         # Redesigned 2026-09-08: a real on/off switch, separate from the
         # percentage -- see RiskConfig's own comment for why (0%/100% both
         # quietly meaning "no limit" on one slider was confusing). Raising
