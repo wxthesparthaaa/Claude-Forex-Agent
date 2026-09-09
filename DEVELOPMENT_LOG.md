@@ -7594,3 +7594,40 @@ report-formatting fix -- no change to any computed statistic.
 still passes standalone (this section isn't self-tested directly,
 since it only formats already-computed numbers with no independent
 logic of its own to verify).
+
+## 2026-09-10 (continued) -- Added a global-cooldown sweep, prompted by the surprising current-vs-perfect-fill result
+
+**Request**: given CURRENT (the live 40-minute cooldown) beat the
+uncensored PERFECT-FILL mean_R in the real run, is 40 minutes actually
+the best value, or would a different cooldown work better? Also: what
+does raising trade frequency (a shorter cooldown) cost in edge
+quality, ahead of the user's own stated plan to raise it for live data
+collection.
+
+**Built, not run**: `report_cooldown_sweep` (`scripts/
+backtest_vwap_reversion_scalp.py`) re-runs ONLY the pacing +
+simulation steps -- `_apply_global_cooldown`/`_simulate_candidates` --
+at every value Settings' own slider actually allows
+(`COOLDOWN_SWEEP_MINUTES = [20, 40, 60, 80, 100, 120]`, matching
+`vwap_scalp_global_cooldown_minutes_min/_max/_step` exactly, not an
+arbitrary range) against the SAME 5-min-delay candidate pool already
+built for the current-vs-perfect-fill pass -- no new OANDA fetch or
+candidate generation needed. Reports n_trades/day_win%/mean_R per
+value, Bonferroni-corrected across the 6 comparisons, with the live
+40-min value marked in the table for easy reference. Deliberately
+prints a note that n_trades falls as cooldown rises -- the point is to
+read mean_R alongside trade count, not pick the single highest mean_R
+in isolation, since a shorter cooldown trading more often at similar
+quality may be the more useful answer for data-collection purposes.
+
+**Verification**: new self-test assertion in `_selftest()` confirms
+the sweep's core assumption (accepted-candidate count is non-
+increasing as cooldown rises) using a fresh 6-candidates-25-min-apart
+fixture spread wide enough to produce a genuinely different
+accept/reject pattern at every one of the 6 swept values -- the first
+draft reused the existing close-clustered fixture (candidates 5-10 min
+apart) and every value in the 20-120 sweep produced the same result
+(1 accepted), since even the shortest swept value already exceeded the
+fixture's own max gap; caught and fixed before shipping. `py_compile`
+clean; `_selftest()` passes standalone; full app suite (630 tests)
+unaffected, confirming this script still isn't pytest-collected.

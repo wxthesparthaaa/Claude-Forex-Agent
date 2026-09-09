@@ -385,6 +385,22 @@ full year, as requested) -- since this is a shared module constant,
 every OTHER pass in this run also now covers the full year, not just
 this one; a real, welcome side effect (more data for every existing
 significance test too), not an unintended scope change.
+
+COOLDOWN SWEEP (2026-09-10, user request): the first real run of the
+pass above came back with a genuinely surprising result -- CURRENT
+(the live 40-minute cooldown) beat the uncensored PERFECT-FILL mean_R,
+not the other way around. Two follow-up questions, both answered by
+report_cooldown_sweep: is 40 minutes actually the best of the values
+Settings' own slider allows (20/40/60/80/100/120), and what does
+raising trade FREQUENCY (a shorter cooldown) cost in edge quality, if
+anything -- directly relevant before dialing frequency up for live
+data collection, which is the user's own stated next step. Re-runs
+ONLY the pacing + simulation steps at each value against the SAME
+candidate pool already built for the pass above (5-min delay, every
+signal-validity filter already applied) -- no new OANDA fetch or
+candidate generation needed, since _apply_global_cooldown/
+_simulate_candidates are cheap relative to the fetch that dominates
+this script's real runtime.
 """
 import bisect
 import math
@@ -451,6 +467,12 @@ CURRENT_LIVE_MIN_REWARD_RISK_RATIO = 1.0
 # 20-120) -- this pass answers "what if it's fixed at 40," matching what
 # the user actually asked to test.
 CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES = 40
+# COOLDOWN SWEEP (2026-09-10, user request): does a DIFFERENT global
+# cooldown work better than 40? Every value Settings' own slider
+# actually allows (vwap_scalp_global_cooldown_minutes_min/_max/_step =
+# 20/120/20) -- not an arbitrary range, so every result here is a real,
+# selectable live setting, not a hypothetical.
+COOLDOWN_SWEEP_MINUTES = [20, 40, 60, 80, 100, 120]
 # Mirrors vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC exactly (5
 # buckets, widened 2026-09-08) -- deliberately NOT the older 6-bucket
 # HOUR_BUCKETS_UTC below, which is that OTHER pass's own frozen
@@ -1293,6 +1315,24 @@ def _selftest():
     all_accepted = _apply_global_cooldown(spaced_candidates, cooldown_minutes=40)
     assert len(all_accepted) == 3, f"expected all 3 candidates 45 min apart to survive, got {len(all_accepted)}"
 
+    # report_cooldown_sweep's own core assumption: shorter cooldowns
+    # never accept FEWER candidates than longer ones on the same pool
+    # (monotonic, since a looser pacing constraint can only relax, never
+    # tighten, which candidates survive). 6 candidates 25 min apart --
+    # spread widely enough that every COOLDOWN_SWEEP_MINUTES value
+    # (20-120) produces a genuinely different accept/reject pattern,
+    # not just a tie at every step.
+    sweep_candidates = [{"instrument": f"PAIR{i}", "entry_time": cooldown_base + timedelta(minutes=25 * i)}
+                        for i in range(6)]
+    sweep_counts = [len(_apply_global_cooldown(sweep_candidates, cooldown_minutes=m))
+                    for m in COOLDOWN_SWEEP_MINUTES]
+    assert sweep_counts == sorted(sweep_counts, reverse=True), \
+        f"expected accepted-candidate count to be non-increasing as cooldown_minutes rises, got " \
+        f"{list(zip(COOLDOWN_SWEEP_MINUTES, sweep_counts))}"
+    assert sweep_counts[0] > sweep_counts[-1], \
+        f"expected the shortest cooldown (20 min) to accept strictly more than the longest (120 min), " \
+        f"got {list(zip(COOLDOWN_SWEEP_MINUTES, sweep_counts))}"
+
     print("Self-test passed: VWAP/deviation/z-score reset cleanly at each session boundary, a flat market "
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
 
@@ -1753,6 +1793,58 @@ def report_current_vs_perfect_fill(current_returns: list, perfect_returns: list,
               f"{finding} Descriptive, not a formal paired significance test -- the two scenarios trade a "
               f"different NUMBER of times by construction (pacing removes trades from CURRENT, not "
               f"PERFECT), so they aren't the same set of observations to pair up.")
+
+
+def report_cooldown_sweep(all_current_candidates: list, per_instrument_vwap: dict) -> None:
+    """Re-runs the SAME candidate pool (5-min delay, every signal-
+    validity filter already applied -- window/exclusion/R:R-floor) at
+    every cooldown value Settings' own slider actually allows
+    (COOLDOWN_SWEEP_MINUTES), so the answer is "which live-selectable
+    setting works best," not a hypothetical. Only the pacing step
+    changes per value -- _apply_global_cooldown/_simulate_candidates
+    are cheap relative to the OANDA fetch, so no new data or candidate
+    generation is needed for any of the 6 values.
+
+    2026-09-10 user request, prompted directly by the surprising
+    current-vs-perfect-fill result above: if CURRENT (40-min cooldown)
+    can beat the uncensored PERFECT-FILL set, is 40 minutes actually
+    the best value, or would a different cooldown concentrate even
+    more (or less) of whatever selection effect is driving that? Also
+    directly answers the practical question of what raising trade
+    FREQUENCY (a shorter cooldown, more trades) costs in edge quality,
+    if anything -- relevant before dialing frequency up for live data
+    collection."""
+    bonferroni_alpha = 0.05 / len(COOLDOWN_SWEEP_MINUTES)
+    print(f"\n{'=' * 76}\nCOOLDOWN SWEEP: every Settings-selectable value "
+          f"({'/'.join(str(m) for m in COOLDOWN_SWEEP_MINUTES)} min)\n{'=' * 76}")
+    print(f"{'cooldown':>10s} {'n_trades':>9s} {'n_days':>7s} {'day_win%':>9s} {'mean_R':>9s} "
+          f"{'t':>7s} {'p':>8s}  significant?")
+
+    for cooldown_minutes in COOLDOWN_SWEEP_MINUTES:
+        accepted = _apply_global_cooldown(all_current_candidates, cooldown_minutes)
+        returns = _simulate_candidates(accepted, per_instrument_vwap)
+        r_multiples = [r for _, _, r in returns]
+        n_obs = len(r_multiples)
+        daily = daily_aggregate(returns)
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        label = f"{cooldown_minutes} min"
+        if n_days < 30:
+            print(f"{label:>10s} {n_obs:9d}  (fewer than 30 instrument-days -- {n_days} found, skipped)")
+            continue
+        day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+        mean, std, t, p = two_sided_test(day_means)
+        sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        marker = " <-- current live value" if cooldown_minutes == CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES else ""
+        print(f"{label:>10s} {n_obs:9d} {n_days:7d} {100 * day_win_rate:8.1f}% {mean:+9.4f} "
+              f"{t:+7.2f} {p:8.4f}  {sig}{marker}")
+    print(f"Bonferroni-adjusted threshold for {len(COOLDOWN_SWEEP_MINUTES)} cooldown values: "
+          f"p < {bonferroni_alpha:.4f}")
+    print("n_trades falls as cooldown rises (more pacing = fewer survivors) -- read mean_R/day_win% "
+          "alongside n_trades, not instead of it: a shorter cooldown trading more often at a similar "
+          "mean_R is a genuinely different, and for data-collection purposes possibly more useful, answer "
+          "than the single highest mean_R value in isolation.")
 
 
 def report_timing_breakdown(perfect_returns: list) -> None:
@@ -2322,6 +2414,7 @@ def main():
 
     report_current_vs_perfect_fill(current_returns, perfect_returns,
                                     len(all_current_candidates), len(current_accepted))
+    report_cooldown_sweep(all_current_candidates, per_instrument_vwap)
     report_timing_breakdown(perfect_returns)
 
 
