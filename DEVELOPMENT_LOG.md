@@ -7477,3 +7477,52 @@ matching its existing status as a run-it-yourself research tool.
 **Genuinely unresolved until the user runs it**: how much of the
 theoretical edge real execution actually costs, and which specific
 time zones/pairs the data says to focus on or avoid.
+
+## 2026-09-10 -- The user's first real run crashed on a corrupt candle cache file
+
+**Problem**: user ran the new full-year backtest pass; it fetched 8 of
+17 instruments successfully, then crashed with `json.decoder.
+JSONDecodeError: Expecting property name enclosed in double quotes` at
+byte 32,357,339 while loading `NZD_JPY_M1_MBA.json` from cache.
+
+**Root cause**: `candle_history.save_to_cache` wrote with a plain
+`open(path, "w")` + `json.dump` -- non-atomic. The user's run (a
+multi-hour, multi-hundred-MB-per-instrument fetch) was interrupted
+mid-write for NZD_JPY specifically, leaving a truncated file on disk --
+confirmed directly: the corrupt file's real size (32,357,339 bytes)
+matches the crash's byte offset exactly. `load_from_cache` then did a
+plain `json.load` with no error handling, so the one corrupt file
+crashed the ENTIRE run, discarding the 8 instruments' already-good
+cached progress along with it. This is the exact bug class
+`state_paths.atomic_write_json`/`load_json_resilient` already exist to
+prevent for `dashboard_state.json`/`trade_journal.json` -- just never
+applied to `candle_history.py`, since it predates those helpers and
+nobody had hit this specific failure mode on a fetch this large before.
+
+**Fix**: `candle_history.save_to_cache`/`load_from_cache` now go
+through `atomic_write_json`/`load_json_resilient` (`state_paths.py`),
+reusing the existing pattern rather than inventing a second one. A
+corrupt cache file now degrades to "cache miss" (with a printed
+warning) instead of crashing -- `fetch_history_cached`'s own `if
+cached:` check already re-fetches on a miss, so this is fully
+self-healing on the next run with no manual cleanup needed. One real
+wrinkle caught before shipping: `atomic_write_json` defaults to
+`indent=2` (right for the small, human-inspectable state files it was
+built for), which would have meaningfully bloated these 100+MB
+candle-cache files for zero benefit -- added an optional `indent`
+parameter (default 2, every existing caller unaffected) and pass
+`indent=None` from `candle_history.py` specifically.
+
+Also deleted just the one corrupt `NZD_JPY_M1_MBA.json` from this
+session's own `data/candle_cache/` (gitignored, not tracked) so the
+user's next run picks up where it left off -- the other 8 already-
+cached instruments don't need re-fetching.
+
+**Verification**: `git stash`-confirmed both new regression tests fail
+against the pre-fix code first -- `test_load_from_cache_degrades_
+gracefully_on_a_truncated_file` reproduces the user's exact
+`JSONDecodeError` (proving the crash, not just asserting the fix's
+happy path), `test_atomic_write_json_indent_none_produces_compact_
+output` fails with `TypeError` (the parameter didn't exist yet). Full
+suite (628 tests) green; `py_compile` clean; the backtest script's own
+`_selftest()` still passes standalone.

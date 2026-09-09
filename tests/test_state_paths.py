@@ -55,3 +55,23 @@ def test_load_json_resilient_returns_real_data_on_valid_file(tmp_path):
     path = str(tmp_path / "data.json")
     sp.atomic_write_json(path, [{"trade_id": "1"}, {"trade_id": "2"}])
     assert sp.load_json_resilient(path, []) == [{"trade_id": "1"}, {"trade_id": "2"}]
+
+
+def test_atomic_write_json_defaults_to_indented_output(tmp_path):
+    path = str(tmp_path / "data.json")
+    sp.atomic_write_json(path, {"a": 1})
+    with open(path) as f:
+        raw = f.read()
+    assert "\n" in raw  # indent=2 by default -- every existing caller relies on this for readability
+
+
+def test_atomic_write_json_indent_none_produces_compact_output(tmp_path):
+    # candle_history.py's cache files are 100+MB of nested candle data --
+    # pretty-printing would meaningfully bloat file size for zero benefit,
+    # since nobody reads them by eye. Must still round-trip correctly.
+    path = str(tmp_path / "data.json")
+    sp.atomic_write_json(path, {"a": 1, "b": [1, 2, 3]}, indent=None)
+    with open(path) as f:
+        raw = f.read()
+    assert "\n" not in raw
+    assert sp.load_json_resilient(path, None) == {"a": 1, "b": [1, 2, 3]}

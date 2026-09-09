@@ -20,7 +20,7 @@ STATE_FILES = {
 }
 
 
-def atomic_write_json(path: str, data) -> None:
+def atomic_write_json(path: str, data, indent: int | None = 2) -> None:
     """Writes `data` as JSON to `path` without ever leaving a
     truncated/corrupt file behind if the process is killed mid-write.
     Render has genuinely killed this process mid-run before (a real,
@@ -31,13 +31,20 @@ def atomic_write_json(path: str, data) -> None:
     temp file in the SAME directory first, then os.replace()s it into
     place -- os.replace is atomic on both POSIX and Windows as long as
     source and destination are on the same filesystem, which same-
-    directory guarantees."""
+    directory guarantees.
+
+    `indent` defaults to 2 (human-inspectable, matching every existing
+    caller -- dashboard_state.json/trade_journal.json/scan_results.json
+    are all meant to be readable). Pass `indent=None` for compact output
+    -- candle_history.py's cache files are 100+MB of nested candle data;
+    pretty-printing that would meaningfully bloat both file size and
+    write/read time for zero benefit, since nobody reads them by eye."""
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
     try:
         with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=indent)
         os.replace(tmp_path, path)
     except Exception:
         try:

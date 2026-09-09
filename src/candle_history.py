@@ -9,12 +9,13 @@ so multi-year intraday history needs walking the range in chunks.
 """
 from __future__ import annotations
 
-import json
 import os
 import time
 from datetime import datetime, timedelta, timezone
 
 import requests
+
+from state_paths import atomic_write_json, load_json_resilient
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "candle_cache")
 
@@ -111,18 +112,29 @@ def _fetch_chunk_with_retry(client, instrument: str, granularity: str, from_dt: 
 
 
 def save_to_cache(instrument: str, granularity: str, candles: list, price: str = "M") -> str:
+    # Real incident (2026-09-10): a full-year, 17-pair M1 bid/ask/mid
+    # fetch runs long enough that an interruption mid-write (the process
+    # killed, the terminal closed, a laptop sleeping) is a real
+    # possibility, not a theoretical one -- confirmed live: a killed run
+    # left NZD_JPY_M1_MBA.json truncated at exactly the byte the write
+    # stopped, and the next run's plain json.load crashed the entire
+    # multi-hour fetch on that one corrupt file instead of just
+    # re-fetching it. atomic_write_json (state_paths.py) already solves
+    # this exact class of bug for dashboard_state.json/trade_journal.json
+    # -- reused here rather than inventing a second implementation.
     path = _cache_path(instrument, granularity, price)
-    with open(path, "w") as f:
-        json.dump(candles, f)
+    atomic_write_json(path, candles, indent=None)  # compact -- see atomic_write_json's own comment on why
     return path
 
 
 def load_from_cache(instrument: str, granularity: str, price: str = "M") -> list | None:
+    # load_json_resilient (state_paths.py) degrades a corrupt/truncated
+    # file to None (same contract as "cache miss") instead of raising --
+    # fetch_history_cached's own `if cached:` check already treats None
+    # as "fetch fresh," so a corrupt cache file self-heals on the very
+    # next run instead of needing someone to find and delete it by hand.
     path = _cache_path(instrument, granularity, price)
-    if not os.path.exists(path):
-        return None
-    with open(path) as f:
-        return json.load(f)
+    return load_json_resilient(path, None)
 
 
 def fetch_history_cached(client, instrument: str, granularity: str, from_date: datetime,

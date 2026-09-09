@@ -78,6 +78,35 @@ def test_load_from_cache_returns_none_when_missing(tmp_path, monkeypatch):
     assert ch.load_from_cache("GBP_USD", "H1") is None
 
 
+def test_load_from_cache_degrades_gracefully_on_a_truncated_file(tmp_path, monkeypatch):
+    # Real incident (2026-09-10): a full-year, 17-pair M1 bid/ask/mid
+    # fetch runs long enough that an interrupted process (killed,
+    # terminal closed, laptop sleeping) is a real possibility -- a
+    # killed run left NZD_JPY_M1_MBA.json truncated at exactly the byte
+    # the write stopped, and the next run's plain json.load crashed the
+    # ENTIRE multi-hour, multi-instrument fetch on that one corrupt
+    # file. Must degrade to "cache miss" (None) instead, so
+    # fetch_history_cached's own `if cached:` check re-fetches just
+    # that one instrument fresh rather than losing the whole run.
+    monkeypatch.setattr(ch, "CACHE_DIR", str(tmp_path))
+    path = os.path.join(str(tmp_path), "NZD_JPY_M1_MBA.json")
+    with open(path, "w") as f:
+        f.write('[{"time": "2026-01-01T00:00:00Z", "mid": {"c": "1.1"')  # truncated mid-write
+
+    assert ch.load_from_cache("NZD_JPY", "M1", price="MBA") is None
+
+
+def test_save_to_cache_writes_compact_json_not_indented(tmp_path, monkeypatch):
+    # Cache files are 100+MB of nested candle data -- pretty-printing
+    # would meaningfully bloat file size and write/read time for zero
+    # benefit, since nobody reads them by eye.
+    monkeypatch.setattr(ch, "CACHE_DIR", str(tmp_path))
+    path = ch.save_to_cache("EUR_USD", "M1", [{"time": "t1", "mid": {"c": "1.1"}}], price="MBA")
+    with open(path) as f:
+        raw = f.read()
+    assert "\n" not in raw
+
+
 def test_fetch_history_cached_uses_cache_when_present(tmp_path, monkeypatch):
     monkeypatch.setattr(ch, "CACHE_DIR", str(tmp_path))
     client = FakeClient()
