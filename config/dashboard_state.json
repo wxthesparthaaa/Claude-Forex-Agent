@@ -51,7 +51,8 @@
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: reward:risk 0.43:1 is below the 1:1 floor (risking 0.05100 to make 0.02200)"
+    "VWAP Scalp: reward:risk 0.43:1 is below the 1:1 floor (risking 0.05100 to make 0.02200)",
+    "VWAP Scalp: reward:risk 0.14:1 is below the 1:1 floor (risking 0.06400 to make 0.00900)"
   ],
   "last_scan_digest_sent_at": "2026-09-09T22:19:58.610386+00:00",
   "paused_instruments": {},
