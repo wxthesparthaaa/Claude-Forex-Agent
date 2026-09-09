@@ -335,12 +335,63 @@ breakdown decides whether it's worth the added complexity of a 4th
 (or more) live session bucket versus a few pairs' edge concentrated in
 hours already close enough to the existing window to not be worth a
 separate bucket at all.
+
+CURRENT-LIVE-CONDITIONS vs PERFECT-FILL PASS (2026-09-09, user
+request): the hour-of-day pass above (and every earlier one) measures
+signal quality in isolation -- what if EVERY confirmed signal became a
+trade? Live, it doesn't: vwap_scalp_addon's own gating -- the widened
+04:00-24:00 UTC window, the 3-pair weak-hour exclusion, the 1:1
+reward:risk floor, a real 5-minute poll delay, AND (2026-09-08's
+clustering fix) a 40-minute account-wide global cooldown across every
+instrument -- means only some fraction of what looks tradeable in the
+signal-only passes ever actually gets traded. Two questions, asked
+together: (1) how much does that real-world execution cost, against a
+theoretical PERFECT-FILL ceiling (same signal-validity filters, but
+0-delay entry and no cooldown pacing at all)? (2) independent of that,
+which time zones and currency pairs are actually worth focusing on, or
+avoiding, given the SIGNAL's own quality?
+
+Implemented as 3 new functions rather than reusing resolve_trades/
+report_scenario: _current_live_candidates builds trade candidates
+(entry/stop/target) already filtered by window/exclusion/R:R-floor but
+NOT yet by pacing; _apply_global_cooldown then greedily accepts
+candidates in chronological order across ALL instruments pooled
+together, mirroring vwap_scalp_addon._most_recent_vwap_scalp_open's own
+cross-instrument cooldown exactly; _simulate_candidates resolves
+whichever candidates survive. This two-step split (filter, THEN pace,
+THEN simulate) exists specifically so pacing can be applied ONCE across
+every instrument's candidates together -- doing it per-instrument
+inside resolve_trades' existing loop, the way every earlier pass in
+this script works, cannot express an account-wide constraint at all.
+
+CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES is fixed at 40 for this pass (the
+user's own specified condition to test), not read from any live state
+-- the real vwap_scalp_global_cooldown_minutes is Settings-adjustable,
+20-120.
+
+The timing/pair breakdown (report_timing_breakdown) deliberately runs
+on the PERFECT-FILL return set, not the cooldown-censored CURRENT one:
+which candidate survives a 40-minute global cooldown depends on which
+instrument's signal happened to fire first in a given window -- an
+essentially arbitrary race with nothing to do with any one pair's or
+bucket's real quality. Breaking the CENSORED set down by pair would
+make a genuinely strong pair look weak purely because it kept losing
+that race. The uncensored perfect-fill set reflects the signal's own
+quality per bucket/pair, which is what "which pairs/timings to focus
+on or avoid" is actually asking.
+
+TEST_DAYS was widened from 180 to 365 for this pass specifically (a
+full year, as requested) -- since this is a shared module constant,
+every OTHER pass in this run also now covers the full year, not just
+this one; a real, welcome side effect (more data for every existing
+significance test too), not an unintended scope change.
 """
 import bisect
 import math
 import os
 import random
 import sys
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -365,14 +416,14 @@ SCALP_PAIRS = [
   # that only exists live). Kept in lockstep with vwap_scalp_addon.VWAP_SCALP_PAIRS -- see
   # that module's own comment for the full incident writeup.
 
-TEST_DAYS = 180  # doubled from the original 90 (2026-08-31, user request) -- more independent
-                 # calendar days for every significance test, and more regime diversity to
-                 # generalize across, directly addressing "only 90 days" as a real caveat.
-                 # candle_history's local cache is keyed by instrument/granularity/price only,
-                 # NOT by date range -- changing this value alone would silently keep serving
-                 # the old 90-day cache, so the 5 stale AUD_USD/EUR_USD/GBP_USD/USD_CAD/USD_JPY
-                 # _M1_MBA.json files under data/candle_cache/ were deleted alongside this edit
-                 # to force a real re-fetch at the new window on the next run.
+TEST_DAYS = 365  # widened from 180 (2026-09-09, user request) -- a full year, to compare the
+                 # current live setup against a perfect-fill benchmark over as much regime
+                 # diversity as this account's OANDA history actually offers. candle_history's
+                 # local cache is keyed by instrument/granularity/price only, NOT by date
+                 # range -- changing this value alone would silently keep serving the old
+                 # 180-day cache, so every *.json file under data/candle_cache/ (M1_MBA, M15,
+                 # H1 -- all of them depend on TEST_DAYS, see _fetch_htf_context) was deleted
+                 # alongside this edit to force a real re-fetch at the new window.
 WATCH_START_HOUR = 7
 WATCH_END_HOUR = 20
 ROLLING_WINDOW_MINUTES = 30
@@ -381,6 +432,36 @@ Z_ENTRY = 2.0
 STOP_Z_BUFFER_SWEEP = [1.0, 1.5, 2.0]
 MAX_HOLD_BARS = 30
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
+
+# CURRENT-LIVE-CONDITIONS vs PERFECT-FILL PASS (2026-09-09, user
+# request): these 4 mirror src/vwap_scalp_addon.py's own live constants
+# as of 2026-09-09, kept as this script's OWN separate copy (same
+# convention as HOUR_BUCKETS_UTC below vs. VWAP_SCALP_TIME_BUCKETS_UTC
+# live -- this script never imports live modules, so these must be
+# hand-kept in sync, not auto-derived). WATCH_START_HOUR/WATCH_END_HOUR
+# above are deliberately NOT touched -- they stay the historical 07-20
+# UTC baseline every earlier pass in this script was validated against;
+# these new names are this one pass's own inputs.
+CURRENT_LIVE_WATCH_START_HOUR = 4
+CURRENT_LIVE_WATCH_END_HOUR = 24
+CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS = {(4, 7): {"CAD_JPY", "EUR_JPY", "CHF_JPY"}}
+CURRENT_LIVE_MIN_REWARD_RISK_RATIO = 1.0
+# User-specified condition for this pass, not read from live state (the
+# real vwap_scalp_global_cooldown_minutes is Settings-adjustable,
+# 20-120) -- this pass answers "what if it's fixed at 40," matching what
+# the user actually asked to test.
+CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES = 40
+# Mirrors vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC exactly (5
+# buckets, widened 2026-09-08) -- deliberately NOT the older 6-bucket
+# HOUR_BUCKETS_UTC below, which is that OTHER pass's own frozen
+# baseline apparatus.
+CURRENT_LIVE_TIME_BUCKETS_UTC = [
+    (4, 7, "Asian late / pre-London"),
+    (7, 12, "London morning"),
+    (12, 16, "London/NY overlap"),
+    (16, 20, "NY afternoon"),
+    (20, 24, "NY late / early Asian"),
+]
 
 
 def _parse_time(c):
@@ -1131,6 +1212,87 @@ def _selftest():
     from spread_aware_trade_simulator import _selftest as _sim_selftest
     _sim_selftest()
 
+    # _current_live_candidates: 3 hand-built bars (signal at index 0,
+    # entry at index 1 with entry_delay_minutes=0, a 3rd bar just so
+    # max_bars > 0) -- direct control over entry_price/target/stop lets
+    # each filter be tested in isolation without depending on the full
+    # price-driven signal-detection pipeline above.
+    cl_target = 100.0
+    cl_std = 1.0  # LONG stop_loss = target - (Z_ENTRY + 1.0) * std = 100 - 3*1 = 97.0
+    cl_vwap = [cl_target, None, None]
+    cl_dev_stdev = [cl_std, None, None]
+
+    def _cl_candles(entry_ask):
+        return [
+            {"ask": {"o": "0"}, "bid": {"o": "0"}},
+            {"ask": {"o": str(entry_ask)}, "bid": {"o": str(entry_ask - 0.0002)}},
+            {"ask": {"o": "0"}, "bid": {"o": "0"}},
+        ]
+
+    # Good R:R (entry 98.0: sl_distance=1.0, tp_distance=2.0, 2:1) at
+    # 10:00 UTC (inside the widened window, not in any exclusion) must
+    # produce exactly one candidate.
+    ok_hour_times = [datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc) + timedelta(minutes=i) for i in range(3)]
+    good_candidates = _current_live_candidates(_cl_candles(98.0), ok_hour_times, cl_vwap, cl_dev_stdev,
+                                                [(0, "LONG")], "EUR_USD", entry_delay_minutes=0)
+    assert len(good_candidates) == 1, f"expected 1 candidate for a valid 2:1 signal, got {len(good_candidates)}"
+
+    # Bad R:R (entry 99.5: sl_distance=2.5, tp_distance=0.5, 0.2:1 --
+    # below the 1:1 floor) must be rejected even though nothing else
+    # about the signal changed.
+    bad_rr_candidates = _current_live_candidates(_cl_candles(99.5), ok_hour_times, cl_vwap, cl_dev_stdev,
+                                                  [(0, "LONG")], "EUR_USD", entry_delay_minutes=0)
+    assert bad_rr_candidates == [], \
+        f"expected the reward:risk floor to reject a 0.2:1 signal, got {bad_rr_candidates}"
+
+    # Outside CURRENT_LIVE_WATCH_START_HOUR-CURRENT_LIVE_WATCH_END_HOUR
+    # (02:00 UTC, before the 04:00 open) must be rejected regardless of
+    # R:R quality.
+    dark_cl_times = [datetime(2026, 1, 5, 2, 0, tzinfo=timezone.utc) + timedelta(minutes=i) for i in range(3)]
+    dark_candidates = _current_live_candidates(_cl_candles(98.0), dark_cl_times, cl_vwap, cl_dev_stdev,
+                                                [(0, "LONG")], "EUR_USD", entry_delay_minutes=0)
+    assert dark_candidates == [], f"expected nothing before the watch window opens, got {dark_candidates}"
+
+    # Weak-hour pair exclusion (04:00-07:00 UTC): CAD_JPY must be
+    # rejected, but the SAME hour/signal for a non-excluded pair
+    # (EUR_USD) must still produce a candidate -- the exclusion is
+    # pair-specific, not bucket-wide.
+    weak_hour_times = [datetime(2026, 1, 5, 5, 0, tzinfo=timezone.utc) + timedelta(minutes=i) for i in range(3)]
+    excluded_candidates = _current_live_candidates(_cl_candles(98.0), weak_hour_times, cl_vwap, cl_dev_stdev,
+                                                     [(0, "LONG")], "CAD_JPY", entry_delay_minutes=0)
+    assert excluded_candidates == [], f"expected CAD_JPY excluded at 05:00 UTC, got {excluded_candidates}"
+    not_excluded_candidates = _current_live_candidates(_cl_candles(98.0), weak_hour_times, cl_vwap, cl_dev_stdev,
+                                                         [(0, "LONG")], "EUR_USD", entry_delay_minutes=0)
+    assert len(not_excluded_candidates) == 1, \
+        f"expected EUR_USD NOT excluded at 05:00 UTC (only CAD_JPY/EUR_JPY/CHF_JPY are), " \
+        f"got {not_excluded_candidates}"
+
+    # _apply_global_cooldown: 3 candidates on 3 different instruments,
+    # entry times 5 min apart -- with a 40-minute cooldown, only the
+    # FIRST must survive (the other two are each too soon after the
+    # most recently ACCEPTED one, not just their own immediate
+    # predecessor).
+    cooldown_base = datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc)
+    close_candidates = [
+        {"instrument": "EUR_USD", "entry_time": cooldown_base},
+        {"instrument": "GBP_USD", "entry_time": cooldown_base + timedelta(minutes=5)},
+        {"instrument": "AUD_USD", "entry_time": cooldown_base + timedelta(minutes=10)},
+    ]
+    accepted = _apply_global_cooldown(close_candidates, cooldown_minutes=40)
+    assert [c["instrument"] for c in accepted] == ["EUR_USD"], \
+        f"expected only the first candidate to survive a 40-min cooldown when all 3 are within 10 min " \
+        f"of each other, got {[c['instrument'] for c in accepted]}"
+
+    # The same 3 candidates spaced 45 min apart (comfortably over the
+    # cooldown) must ALL survive.
+    spaced_candidates = [
+        {"instrument": "EUR_USD", "entry_time": cooldown_base},
+        {"instrument": "GBP_USD", "entry_time": cooldown_base + timedelta(minutes=45)},
+        {"instrument": "AUD_USD", "entry_time": cooldown_base + timedelta(minutes=90)},
+    ]
+    all_accepted = _apply_global_cooldown(spaced_candidates, cooldown_minutes=40)
+    assert len(all_accepted) == 3, f"expected all 3 candidates 45 min apart to survive, got {len(all_accepted)}"
+
     print("Self-test passed: VWAP/deviation/z-score reset cleanly at each session boundary, a flat market "
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
 
@@ -1388,6 +1550,285 @@ def resolve_trades_with_loss_streak_breaker(candles, times, vwap, dev_stdev, sig
                 loss_counts[key] = loss_counts.get(key, 0) + 1
 
     return returns, already_past_target, total_entries, blocked_by_streak
+
+
+def _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrument, entry_delay_minutes):
+    """Every confirmed-1-bar signal for `instrument` that would actually
+    be a valid trade OPPORTUNITY under current live signal-validity
+    rules -- the watch window (CURRENT_LIVE_WATCH_START_HOUR-
+    CURRENT_LIVE_WATCH_END_HOUR), the weak-hour pair exclusions, and the
+    reward:risk floor (mirrors vwap_scalp_addon._open_position's own
+    check byte-for-byte, including the math.isclose boundary tolerance)
+    -- gated at the SIGNAL bar's own hour, same point live code checks
+    the watch window and current bucket. Computed at `entry_delay_minutes`
+    delay, but does NOT apply the cross-instrument cooldown -- that's a
+    separate, later step over ALL instruments' candidates pooled
+    together (see _apply_global_cooldown), since pacing is account-wide,
+    not per-instrument. Returns dicts, not yet simulated -- only
+    whichever candidates actually survive pacing need simulating.
+    Mirrors resolve_trades' own per-signal loop at stop_buf=1.0 (the
+    live value) with the 2 additional filters resolve_trades doesn't
+    model (window/exclusion is already inside find_scalp_signals_
+    confirmed for the ORIGINAL 07-20 window, but find_scalp_signals_
+    confirmed_any_hour -- what this pass uses to reach the widened
+    04-24 window -- has no hour gate at all, so it's applied here
+    instead)."""
+    candidates = []
+    for signal_index, direction in signals:
+        signal_time = times[signal_index]
+        if not (CURRENT_LIVE_WATCH_START_HOUR <= signal_time.hour < CURRENT_LIVE_WATCH_END_HOUR):
+            continue
+        excluded = False
+        for (start_h, end_h), pairs in CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS.items():
+            if start_h <= signal_time.hour < end_h and instrument in pairs:
+                excluded = True
+                break
+        if excluded:
+            continue
+
+        entry_index = _delayed_entry_index(times, signal_index, entry_delay_minutes)
+        if entry_index is None:
+            continue
+        if direction == "LONG":
+            entry_price = float(candles[entry_index]["ask"]["o"])
+        else:
+            entry_price = float(candles[entry_index]["bid"]["o"])
+
+        target = vwap[signal_index]
+        std_at_signal = dev_stdev[signal_index]
+        if direction == "LONG":
+            stop_loss = target - (Z_ENTRY + 1.0) * std_at_signal  # stop_buf=1.0, the live value
+        else:
+            stop_loss = target + (Z_ENTRY + 1.0) * std_at_signal
+
+        sl_distance = abs(entry_price - stop_loss)
+        tp_distance = abs(target - entry_price)
+        if sl_distance <= 0:
+            continue
+        floor_distance = CURRENT_LIVE_MIN_REWARD_RISK_RATIO * sl_distance
+        if tp_distance < floor_distance and not math.isclose(tp_distance, floor_distance, rel_tol=1e-9):
+            continue  # reward:risk floor -- mirrors _open_position's own check exactly
+
+        entry_time = times[entry_index]
+        max_bars = _minutes_bar_count(times, entry_index, MAX_HOLD_BARS)
+        if max_bars <= 0:
+            continue
+
+        candidates.append({
+            "instrument": instrument, "direction": direction, "entry_index": entry_index,
+            "entry_time": entry_time, "entry_price": entry_price, "stop_loss": stop_loss, "target": target,
+            "max_bars": max_bars,
+        })
+    return candidates
+
+
+def _apply_global_cooldown(candidates: list, cooldown_minutes: float) -> list:
+    """Greedily accepts candidates in chronological entry-time order,
+    keeping one only if at least `cooldown_minutes` real minutes have
+    passed since the last ACCEPTED candidate's own entry_time, across
+    ANY instrument -- mirrors vwap_scalp_addon._most_recent_vwap_scalp_
+    open's global cross-instrument cooldown exactly (the latest
+    opened_at across EVERY VWAP Scalp trade, any instrument, gates the
+    next one). A 30-minute max hold (MAX_HOLD_BARS) is always shorter
+    than any cooldown this pass tests (>=20 min live minimum, 40 here
+    specifically) -- an accepted trade is always closed before the next
+    one could possibly open, so no separate "instrument already has an
+    open position" check is needed on top of this."""
+    ordered = sorted(candidates, key=lambda c: c["entry_time"])
+    accepted = []
+    last_accepted_time = None
+    for c in ordered:
+        if last_accepted_time is not None:
+            minutes_since = (c["entry_time"] - last_accepted_time).total_seconds() / 60
+            if minutes_since < cooldown_minutes:
+                continue
+        accepted.append(c)
+        last_accepted_time = c["entry_time"]
+    return accepted
+
+
+def _simulate_candidates(candidates: list, per_instrument_vwap: dict) -> list:
+    """Runs simulate_scalp_trade for each candidate against its own
+    instrument's candles, returning [(entry_time, instrument,
+    r_multiple), ...] for whichever resolve WIN/LOSS -- OPEN_AT_END
+    (ran off the end of the fetched window) is dropped, same as every
+    other resolve_* function in this script."""
+    returns = []
+    for c in candidates:
+        candles = per_instrument_vwap[c["instrument"]][0]
+        result = simulate_scalp_trade(candles, c["entry_index"], c["direction"], c["entry_price"],
+                                       c["stop_loss"], c["target"], max_bars=c["max_bars"])
+        if result.outcome in ("WIN", "LOSS"):
+            returns.append((c["entry_time"], c["instrument"], result.r_multiple))
+    return returns
+
+
+def report_current_vs_perfect_fill(current_returns: list, perfect_returns: list,
+                                    total_candidates: int, cooldown_survivors: int) -> None:
+    """Compares CURRENT LIVE CONDITIONS (confirmed 1-bar signal,
+    04:00-24:00 UTC watch window with the 3-pair weak-hour exclusion,
+    the 1:1 reward:risk floor, a realistic 5-minute entry delay, AND a
+    40-minute account-wide cross-instrument cooldown -- every filter
+    the live app actually applies as of 2026-09-09) against a
+    PERFECT-FILL benchmark: the IDENTICAL signal-validity filters
+    (window/exclusion/R:R-floor -- these define what counts as a valid
+    opportunity, not an execution detail) but entered at the fastest
+    representable bar (0-minute requested delay -- _delayed_entry_index
+    still lands one real bar later, since a 1-minute-candle feed can't
+    represent a literal instant) with NO cooldown pacing at all, so
+    every valid signal gets its own trade. Isolates what real-world
+    EXECUTION (delay + pacing) costs against the theoretical ceiling of
+    what the signal itself is worth. Deliberately keeps the same
+    bid/ask-spread-aware fill simulation every other pass in this
+    script uses -- spread cost is a real market friction independent of
+    delay/pacing, not something this specific comparison is about."""
+    bonferroni_alpha = 0.05 / 2  # 2 scenarios compared here
+    print(f"\n{'#'*76}\nCURRENT LIVE CONDITIONS vs. PERFECT-FILL BENCHMARK\n{'#'*76}")
+    if total_candidates > 0:
+        pct = 100 * cooldown_survivors / total_candidates
+        print(f"\n{cooldown_survivors}/{total_candidates} signal-valid candidates ({pct:.1f}%) survived the "
+              f"{CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-minute global cooldown -- the rest were crowded out by "
+              f"another instrument's more recent trade, exactly as vwap_scalp_addon._pacing_cap_reason would "
+              f"block them live.")
+
+    scenario_means = {}
+    for key, label, returns in [
+        ("current", f"CURRENT (5-min delay, {CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-min global cooldown)",
+         current_returns),
+        ("perfect", "PERFECT FILL (next-bar delay, no cooldown)", perfect_returns),
+    ]:
+        print(f"\n{'='*76}\n{label}\n{'='*76}")
+        r_multiples = [r for _, _, r in returns]
+        n_obs = len(r_multiples)
+        if n_obs < 30:
+            print(f"  (fewer than 30 resolved trades -- {n_obs} found, skipped)")
+            continue
+        win_rate = sum(1 for r in r_multiples if r > 0) / n_obs
+        mean, std, t, p = two_sided_test(r_multiples)
+        scenario_means[key] = mean
+        print(f"  Raw per-trade: n={n_obs}  win_rate={100 * win_rate:.1f}%  mean_R={mean:+.4f}  "
+              f"t={t:+.2f}  p={p:.4f}")
+
+        daily = daily_aggregate(returns)
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        if n_days >= 30:
+            day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+            dmean, dstd, dt, dp = two_sided_test(day_means)
+            sig = "SURVIVES Bonferroni" if dp < bonferroni_alpha else ("raw p<0.05" if dp < 0.05 else "no")
+            print(f"  Per-instrument-day: n_days={n_days}  day_win%={100 * day_win_rate:.1f}%  "
+                  f"mean_R={dmean:+.4f}  t={dt:+.2f}  p={dp:.4f}  {sig}")
+        else:
+            print(f"  Per-instrument-day: fewer than 30 instrument-days ({n_days}), skipped")
+
+    if "current" in scenario_means and "perfect" in scenario_means:
+        perfect_mean = scenario_means["perfect"]
+        current_mean = scenario_means["current"]
+        gap_pct = 100 * (perfect_mean - current_mean) / abs(perfect_mean) if perfect_mean else float("nan")
+        print(f"\nGap: perfect-fill mean_R ({perfect_mean:+.4f}) vs. current mean_R ({current_mean:+.4f}) -- "
+              f"real execution (delay + the {CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-min cooldown) costs "
+              f"{gap_pct:+.1f}% of the theoretical per-trade edge. Descriptive, not a formal paired "
+              f"significance test -- the two scenarios trade a different NUMBER of times by construction "
+              f"(pacing removes trades from CURRENT, not PERFECT), so they aren't the same set of "
+              f"observations to pair up.")
+
+
+def report_timing_breakdown(perfect_returns: list) -> None:
+    """Per-UTC-bucket (CURRENT_LIVE_TIME_BUCKETS_UTC, matching live
+    VWAP_SCALP_TIME_BUCKETS_UTC exactly) and per-(bucket, instrument)
+    breakdown of WHICH time zones and pairs are actually most
+    profitable, or which to avoid -- the actual question this whole
+    pass was built to answer (2026-09-09 user request). Deliberately
+    uses the PERFECT-FILL return set, not the cooldown-censored CURRENT
+    one: which candidate happens to survive the 40-minute global
+    cooldown depends on which instrument's signal fired first in a
+    given window, a essentially arbitrary race that has nothing to do
+    with any one pair's or bucket's real quality -- breaking that
+    censored set down by pair would make a genuinely strong pair look
+    weak purely because it kept losing that race, not because its
+    signal is bad. The perfect-fill set is uncensored: every valid
+    signal gets counted, so this reflects the SIGNAL's own quality per
+    bucket/pair, independent of the pacing question already answered
+    by report_current_vs_perfect_fill above.
+
+    Bucket-level test is Bonferroni-corrected across the 5 buckets and
+    split-half checked, same discipline as report_hour_of_day_breakdown.
+    The per-(bucket,instrument) cells are diagnostic only, same caveat
+    report_per_instrument_breakdown already states -- not themselves
+    corrected (up to 5 x 17 = 85 cells, far too many to treat as
+    independent formal tests); read them as a starting point for where
+    to look closer, not a final verdict on any one pair/bucket."""
+    bonferroni_alpha = 0.05 / len(CURRENT_LIVE_TIME_BUCKETS_UTC)
+    print(f"\n{'='*76}\nTIMING BREAKDOWN: which time zones/pairs are worth focusing on or avoiding\n"
+          f"(perfect-fill signal set -- uncensored by the global cooldown, see this section's own "
+          f"docstring for why)\n{'='*76}")
+    print(f"{'bucket':>34s} {'n_days':>7s} {'day_win%':>9s} {'mean_R':>9s} {'t':>7s} {'p':>8s}  significant?")
+
+    by_bucket = defaultdict(list)
+    for entry_time, instrument, r in perfect_returns:
+        for start_h, end_h, label in CURRENT_LIVE_TIME_BUCKETS_UTC:
+            if start_h <= entry_time.hour < end_h:
+                by_bucket[(start_h, end_h, label)].append((entry_time, instrument, r))
+                break
+
+    surviving_buckets = []
+    for start_h, end_h, label in CURRENT_LIVE_TIME_BUCKETS_UTC:
+        entries = by_bucket.get((start_h, end_h, label), [])
+        bucket_str = f"{start_h:02d}:00-{end_h:02d}:00 UTC ({label})"
+        daily = daily_aggregate(entries)
+        day_means = [r for _, r in daily]
+        n_days = len(day_means)
+        if n_days < 30:
+            print(f"{bucket_str:>34s}  (fewer than 30 instrument-days -- {n_days} found, skipped)")
+            continue
+        day_win_rate = sum(1 for r in day_means if r > 0) / n_days
+        mean, std, t, p = two_sided_test(day_means)
+        sig_bonf = "SURVIVES Bonferroni" if p < bonferroni_alpha else ""
+        sig = sig_bonf or ("raw p<0.05" if p < 0.05 else "no")
+        if sig_bonf:
+            surviving_buckets.append((start_h, end_h, label))
+        print(f"{bucket_str:>34s} {n_days:7d} {100 * day_win_rate:8.1f}% {mean:+9.4f} {t:+7.2f} {p:8.4f}  {sig}")
+    print(f"Bonferroni-adjusted threshold for {len(CURRENT_LIVE_TIME_BUCKETS_UTC)} buckets: "
+          f"p < {bonferroni_alpha:.4f}")
+
+    if surviving_buckets:
+        print(f"\nSPLIT-HALF CHECK (surviving buckets, chronological instrument-days, first vs second half):")
+        for start_h, end_h, label in surviving_buckets:
+            entries = by_bucket[(start_h, end_h, label)]
+            daily = daily_aggregate(entries)
+            half = len(daily) // 2
+            first = [r for _, r in daily[:half]]
+            second = [r for _, r in daily[half:]]
+            m1, _, t1, p1 = two_sided_test(first)
+            m2, _, t2, p2 = two_sided_test(second)
+            same_sign = (m1 > 0) == (m2 > 0)
+            print(f"  {start_h:02d}:00-{end_h:02d}:00 UTC ({label}):  first_half mean_R={m1:+.4f} (p={p1:.4f})   "
+                  f"second_half mean_R={m2:+.4f} (p={p2:.4f})   "
+                  f"{'same sign both halves' if same_sign else 'SIGN FLIPS -- discarded'}")
+    else:
+        print("\nNo bucket survived Bonferroni on the per-instrument-day re-test -- no split-half check to run.")
+
+    print(f"\n{'-'*76}\nPER-(BUCKET, INSTRUMENT) DIAGNOSTIC BREAKDOWN (not independently corrected -- see "
+          f"this section's own docstring)\n{'-'*76}")
+    for start_h, end_h, label in CURRENT_LIVE_TIME_BUCKETS_UTC:
+        entries = by_bucket.get((start_h, end_h, label), [])
+        if not entries:
+            print(f"\n  {start_h:02d}:00-{end_h:02d}:00 UTC ({label}): no signals")
+            continue
+        by_instrument = defaultdict(list)
+        for entry_time, instrument, r in entries:
+            by_instrument[instrument].append(r)
+        ranked = sorted(by_instrument, key=lambda i: -(sum(by_instrument[i]) / len(by_instrument[i])))
+        print(f"\n  {start_h:02d}:00-{end_h:02d}:00 UTC ({label}):")
+        for instrument in ranked:
+            rs = by_instrument[instrument]
+            n = len(rs)
+            if n < 5:
+                print(f"    {instrument:10s}  n={n:3d}  (too few trades to read anything into)")
+                continue
+            win_rate = sum(1 for r in rs if r > 0) / n
+            mean_r = sum(rs) / n
+            print(f"    {instrument:10s}  n={n:3d}  win_rate={100 * win_rate:5.1f}%  mean_R={mean_r:+.4f}")
 
 
 def report_scenario(label: str, all_returns: dict) -> None:
@@ -1830,6 +2271,36 @@ def main():
             print(f"  ({total_already_past_target}/{total_entries} = {pct:.1f}% already past target at entry, "
                   f"summed across all 3 stop-buffer levels)")
         report_scenario(f"confirmed 1-bar + loss-streak breaker ({threshold}/day)", all_returns)
+
+    # CURRENT-LIVE-CONDITIONS vs PERFECT-FILL PASS (2026-09-09, user
+    # request): does real execution -- the 5-minute poll delay, plus the
+    # 40-minute account-wide global cooldown -- leave meaningful edge on
+    # the table versus the signal's own theoretical ceiling? And,
+    # separately, which time zones/pairs are actually worth focusing on
+    # or avoiding? Reuses per_instrument_vwap directly, same as the
+    # hour-of-day pass -- no extra fetch needed.
+    print(f"\n{'@' * 76}\nCURRENT-LIVE-CONDITIONS vs PERFECT-FILL PASS "
+          f"({TEST_DAYS}-day window)\n{'@' * 76}")
+    all_current_candidates = []
+    all_perfect_candidates = []
+    for instrument, (candles, times, vwap, dev_stdev, z) in per_instrument_vwap.items():
+        signals = find_scalp_signals_confirmed_any_hour(times, z)
+        all_current_candidates.extend(
+            _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrument, entry_delay_minutes=5))
+        all_perfect_candidates.extend(
+            _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrument, entry_delay_minutes=0))
+
+    print(f"{len(all_current_candidates)} signal-valid candidates at realistic 5-min delay (before the "
+          f"{CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES}-min global cooldown); {len(all_perfect_candidates)} at "
+          f"next-bar delay (the perfect-fill signal set).")
+
+    current_accepted = _apply_global_cooldown(all_current_candidates, CURRENT_LIVE_GLOBAL_COOLDOWN_MINUTES)
+    current_returns = _simulate_candidates(current_accepted, per_instrument_vwap)
+    perfect_returns = _simulate_candidates(all_perfect_candidates, per_instrument_vwap)
+
+    report_current_vs_perfect_fill(current_returns, perfect_returns,
+                                    len(all_current_candidates), len(current_accepted))
+    report_timing_breakdown(perfect_returns)
 
 
 if __name__ == "__main__":

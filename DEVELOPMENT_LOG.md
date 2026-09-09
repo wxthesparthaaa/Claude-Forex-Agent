@@ -7393,3 +7393,87 @@ unchanged, since the toggle defaults off and reproduces the exact
 prior formula in that state. Full suite (624 tests) green;
 `py_compile` + real `import app` both clean; template re-parses under
 Jinja2.
+
+## 2026-09-09 (continued) -- Added a current-live-conditions vs. perfect-fill backtest pass, awaiting a real run
+
+**Request**: a full-year backtest of the strategy exactly as it runs
+live today (every fix included), compared against a theoretical
+zero-slippage/zero-delay/perfect-fill upper bound -- plus one added
+condition to model explicitly: an account-wide 40-minute cooldown, one
+trade at a time. Separately: which time zones and currency pairs are
+actually most profitable, or which to avoid.
+
+**Built, not run** (this environment has no OANDA credentials --
+`scripts/backtest_vwap_reversion_scalp.py` has said "run this yourself
+and paste the output back" since it was first written). Every earlier
+pass in this script measures signal quality in isolation, as if every
+confirmed signal became a trade -- live, it doesn't, because of the
+widened 04:00-24:00 UTC window, the 3-pair weak-hour exclusion, the
+1:1 reward:risk floor, a real 5-minute poll delay, and (2026-09-08's
+clustering fix) a 40-minute account-wide global cooldown across every
+instrument. This pass asks how much that real execution costs, and
+separately, where the underlying edge actually concentrates.
+
+Three new functions, deliberately NOT folded into the existing
+resolve_trades/report_scenario machinery: `_current_live_candidates`
+builds trade candidates already filtered by window/exclusion/R:R-floor
+(byte-for-byte matching `vwap_scalp_addon._open_position`'s own R:R
+check, including the `math.isclose` boundary tolerance) but not yet by
+pacing; `_apply_global_cooldown` then greedily accepts candidates in
+chronological order pooled across ALL instruments together, mirroring
+`vwap_scalp_addon._most_recent_vwap_scalp_open`'s cross-instrument
+cooldown exactly; `_simulate_candidates` resolves whichever survive.
+This filter-then-pace-then-simulate split exists specifically because
+an account-wide pacing constraint can't be expressed inside
+`resolve_trades`' existing per-instrument loop the way every earlier
+pass in this script works.
+
+`report_current_vs_perfect_fill` compares CURRENT (5-min delay + the
+40-min cooldown) against PERFECT FILL (next-bar delay, no cooldown --
+same signal-validity filters, since window/exclusion/R:R-floor define
+what counts as a valid opportunity, not an execution detail), each
+with its own per-instrument-day significance test, plus a plain "what
+% of candidates survived the cooldown" figure and a descriptive
+mean_R gap (not a formal paired test -- the two scenarios trade a
+different number of times by construction).
+
+`report_timing_breakdown` answers the timing/pair question --
+deliberately runs on the PERFECT-FILL (uncensored) return set, not the
+cooldown-censored CURRENT one: which candidate survives a 40-minute
+global cooldown depends on which instrument's signal fired first in a
+given window, an essentially arbitrary race that would make a
+genuinely strong pair look weak purely for losing it. Per-UTC-bucket
+(matching `vwap_scalp_addon.VWAP_SCALP_TIME_BUCKETS_UTC`'s 5 buckets
+exactly) results are Bonferroni-corrected and split-half checked, same
+discipline as every other bucket-level report in this script; the
+per-(bucket, instrument) breakdown underneath is explicitly diagnostic
+only (up to 5×17 = 85 cells, far too many to treat as independent
+tests) -- a starting point for where to look closer, not a verdict.
+
+`TEST_DAYS` widened 180 -> 365 (a full year, as requested) -- a shared
+module constant, so every OTHER pass in this run now also covers the
+full year, a welcome side effect. Every `data/candle_cache/*.json`
+file (51 of them -- M1_MBA/M15/H1 for all 17 pairs) was deleted
+alongside this change: `candle_history.fetch_history_cached`'s cache
+key is instrument/granularity/price only, NOT date range (confirmed by
+reading it directly), so leaving the old 180-day cache in place would
+have silently kept serving stale data at the new window.
+
+**Verification**: 6 new self-test assertions in `_selftest()` --
+`_current_live_candidates` tested in isolation via hand-built 3-bar
+fixtures (bypassing full signal detection for direct control over
+entry/target/stop): a valid 2:1 signal produces a candidate, a 0.2:1
+signal is rejected by the R:R floor, a signal before 04:00 UTC is
+rejected by the watch window, and CAD_JPY specifically (not EUR_USD)
+is rejected at 05:00 UTC by the weak-hour exclusion.
+`_apply_global_cooldown` tested with 3 candidates 5 minutes apart
+(only the first survives a 40-min cooldown) and the same 3 spaced 45
+minutes apart (all 3 survive). `_selftest()` runs standalone with no
+OANDA credentials (confirmed: importing the module and calling it
+directly succeeds) and passes. `py_compile` clean. Full app pytest
+suite (624 tests) unaffected -- this script isn't pytest-collected,
+matching its existing status as a run-it-yourself research tool.
+
+**Genuinely unresolved until the user runs it**: how much of the
+theoretical edge real execution actually costs, and which specific
+time zones/pairs the data says to focus on or avoid.
