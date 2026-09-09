@@ -241,3 +241,26 @@ def test_format_scan_digest_message_shows_real_vwap_bucket_counts():
     assert "15:00-20:00 SGT: 2/2" in msg
     assert "20:00-00:00 SGT: 1/2" in msg
     assert "00:00-04:00 SGT: 0/2" in msg
+
+
+def test_format_scan_digest_message_shows_win_rate_when_a_bucket_has_closed_trades():
+    # User request (2026-09-09): surface which time-of-day sessions are
+    # actually paying off, not just how many trades landed there.
+    buckets = [
+        {"label_sgt": "15:00-20:00 SGT", "session": "London morning", "count": 2, "cap": 2,
+         "wins": 3, "losses": 1, "win_rate_pct": 75.0},
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=buckets)
+    assert "15:00-20:00 SGT: 2/2 -- 75% win (3W/1L)" in msg
+
+
+def test_format_scan_digest_message_omits_win_rate_for_a_bucket_with_no_closed_trades():
+    # win_rate_pct=None must NOT render as "0% win" -- that would falsely
+    # claim every trade in a still-all-open (or untraded) bucket lost.
+    buckets = [
+        {"label_sgt": "00:00-04:00 SGT", "session": "NY afternoon", "count": 1, "cap": 2,
+         "wins": 0, "losses": 0, "win_rate_pct": None},
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=buckets)
+    assert "00:00-04:00 SGT: 1/2" in msg
+    assert "win" not in msg.split("00:00-04:00 SGT: 1/2")[1].split("\n")[0]

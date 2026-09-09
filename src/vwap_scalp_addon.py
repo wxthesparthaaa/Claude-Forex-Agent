@@ -133,7 +133,7 @@ from position_sizing import calculate_units, resolve_conversion_rate
 from risk_engine import AccountState, ProposedTrade, RiskConfig, RiskViolation, validate_trade
 from telegram_notifier import send_message
 from trade_execution import place_and_record
-from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_entries, save_journal
+from trade_journal import FAILED, JOURNAL_LOCK, SUCCESSFUL, load_journal, open_entries, save_journal, win_loss_counts
 
 VWAP_SCALP_TAG = "VWAP_SCALP"
 
@@ -437,11 +437,11 @@ def _most_recent_vwap_scalp_open(entries: list):
     return latest
 
 
-def _vwap_scalp_trades_between(entries: list, start: datetime, end: datetime) -> int:
-    """Real count of VWAP_SCALP entries opened in [start, end) -- the
-    shared building block for both the whole-day cap and the per-
-    time-bucket cap below."""
-    count = 0
+def _vwap_scalp_entries_between(entries: list, start: datetime, end: datetime) -> list:
+    """VWAP_SCALP entries opened in [start, end) -- the shared building
+    block for the whole-day cap, the per-time-bucket cap, and the
+    per-bucket win-rate breakdown below."""
+    matched = []
     for e in entries:
         if e.get("experiment_tag") != VWAP_SCALP_TAG:
             continue
@@ -450,8 +450,13 @@ def _vwap_scalp_trades_between(entries: list, start: datetime, end: datetime) ->
         except (KeyError, ValueError, TypeError):
             continue
         if start <= opened_at < end:
-            count += 1
-    return count
+            matched.append(e)
+    return matched
+
+
+def _vwap_scalp_trades_between(entries: list, start: datetime, end: datetime) -> int:
+    """Real count of VWAP_SCALP entries opened in [start, end)."""
+    return len(_vwap_scalp_entries_between(entries, start, end))
 
 
 def _vwap_scalp_trades_today(entries: list, today_start: datetime) -> int:
@@ -553,7 +558,18 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     included -- feeds the periodic scan digest so the user can see
     WHERE (not just how many) trades landed today, in their own local
     (SGT) terms. Read-only, no lock needed; safe to call from anywhere
-    (e.g. scheduled_jobs.py), independent of whether a tick is running."""
+    (e.g. scheduled_jobs.py), independent of whether a tick is running.
+
+    Also includes each bucket's own win/loss/win_rate_pct among today's
+    CLOSED trades in that bucket (user request, 2026-09-09: surface
+    which time-of-day windows are actually paying off, not just how
+    many trades landed there). win_rate_pct is None when a bucket has
+    no closed trades yet today -- distinct from 0.0%, which would
+    misreport "all losses" for a bucket that's simply still all-open or
+    hasn't traded yet. Deliberately today-only, not a running average
+    since VWAP Scalp went live -- a multi-week backfill would need
+    real historical data pulled and reconciled first; today's own
+    figures are already fully available from the existing journal."""
     from dashboard_state import load_state
 
     now = now or datetime.now(timezone.utc)
@@ -566,12 +582,16 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     for start_h, end_h, session_label in VWAP_SCALP_TIME_BUCKETS_UTC:
         bucket_start = today_start + timedelta(hours=start_h)
         bucket_end = today_start + timedelta(hours=end_h)
-        count = _vwap_scalp_trades_between(entries, bucket_start, bucket_end)
+        bucket_entries = _vwap_scalp_entries_between(entries, bucket_start, bucket_end)
+        wins, losses = win_loss_counts(bucket_entries)
         summary.append({
             "label_sgt": _bucket_label_sgt(start_h, end_h),
             "session": session_label,
-            "count": count,
+            "count": len(bucket_entries),
             "cap": per_bucket_cap,
+            "wins": wins,
+            "losses": losses,
+            "win_rate_pct": round(100 * wins / (wins + losses), 1) if (wins + losses) > 0 else None,
         })
     return summary
 

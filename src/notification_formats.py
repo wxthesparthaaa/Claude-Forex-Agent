@@ -99,13 +99,17 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
     up the message length.
 
     vwap_buckets: vwap_scalp_addon.vwap_scalp_bucket_summary()'s own
-    per-time-bucket rows (label_sgt/session/count/cap), or None to omit
-    this section entirely (VWAP Scalp disabled, or the lookup failed --
-    distinct from "computed and genuinely zero everywhere", which still
-    shows). User request: the daily/per-bucket caps this restricts
-    trades to are otherwise invisible outside Render's own logs -- shown
-    even when every count is 0 so the user can confirm this is actually
-    being tracked, not just when something happened to trip a cap."""
+    per-time-bucket rows (label_sgt/session/count/cap/wins/losses/
+    win_rate_pct), or None to omit this section entirely (VWAP Scalp
+    disabled, or the lookup failed -- distinct from "computed and
+    genuinely zero everywhere", which still shows). User request: the
+    daily/per-bucket caps this restricts trades to are otherwise
+    invisible outside Render's own logs -- shown even when every count
+    is 0 so the user can confirm this is actually being tracked, not
+    just when something happened to trip a cap. win_rate_pct (2026-09-09
+    user request) shows which time-of-day sessions are actually paying
+    off today, not just how many trades landed there -- omitted per-
+    bucket (not shown as 0%) when that bucket has no closed trades yet."""
     since = f" since {window_start_sgt.strftime('%H:%M')} SGT" if window_start_sgt else ""
     if scan_count == 0:
         base = f"✅ <b>Periodic scan complete</b>\nNo pairs were in their trading window{since}. No new trades."
@@ -142,7 +146,12 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
         )
 
     if vwap_buckets:
-        lines = [f"  {b['label_sgt']}: {b['count']}/{b['cap']}" for b in vwap_buckets]
+        lines = [
+            f"  {b['label_sgt']}: {b['count']}/{b['cap']}"
+            + (f" -- {b['win_rate_pct']:.0f}% win ({b['wins']}W/{b['losses']}L)"
+               if b.get("win_rate_pct") is not None else "")
+            for b in vwap_buckets
+        ]
         base += "\n\n📊 <b>VWAP Scalp trades today by session (SGT)</b>\n" + "\n".join(lines)
 
     return base

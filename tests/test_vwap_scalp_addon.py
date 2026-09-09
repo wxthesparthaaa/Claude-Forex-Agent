@@ -513,14 +513,17 @@ def test_force_closes_after_hold_cap_without_reopening_same_tick(mock_send, tmp_
 _seed_counter = itertools.count()
 
 
-def _seed_closed_vwap_trades(n, opened_at):
+def _seed_closed_vwap_trades(n, opened_at, pnl=-10.0):
     """N already-closed VWAP_SCALP journal entries opened at `opened_at`
     -- used to simulate "already traded N times today" without any of
     them looking like a currently-open position. trade_ids are drawn
     from a shared counter (never reused across calls) and only THOSE
     entries get their opened_at/status set -- a test seeding multiple
     batches at different times must not have a later call silently
-    overwrite an earlier batch's timestamps too."""
+    overwrite an earlier batch's timestamps too. `pnl` defaults to a
+    loss (-10.0, the original hardcoded behavior every existing caller
+    relies on) -- pass a positive value to seed a win instead, e.g. for
+    win-rate-breakdown tests."""
     new_ids = {f"seed-{next(_seed_counter)}" for _ in range(n)}
     for trade_id in new_ids:
         tj.record_open_trade(trade_id, {
@@ -533,7 +536,7 @@ def _seed_closed_vwap_trades(n, opened_at):
         if e.get("trade_id") in new_ids:
             e["opened_at"] = opened_at.isoformat()
             e["status"] = tj.SUCCESSFUL
-            e["realized_pnl"] = -10.0
+            e["realized_pnl"] = pnl
             e["closed_at"] = opened_at.isoformat()
     tj.save_journal(entries)
 
@@ -786,6 +789,30 @@ def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, m
     ]
     assert [b["count"] for b in summary] == [0, 2, 1, 0, 0]
     assert all(b["cap"] == 2 for b in summary)  # ceil(6/5)
+    # All 3 seeded trades default to a loss (_seed_closed_vwap_trades'
+    # own default pnl) -- the 2 buckets with trades must show 0% win,
+    # the 3 empty buckets must show None (no closed trades yet), not 0%.
+    assert [b["win_rate_pct"] for b in summary] == [None, 0.0, 0.0, None, None]
+    assert [b["wins"] for b in summary] == [0, 0, 0, 0, 0]
+    assert [b["losses"] for b in summary] == [0, 2, 1, 0, 0]
+
+
+def test_vwap_scalp_bucket_summary_computes_win_rate_pct_from_real_pnl_sign(tmp_path, monkeypatch):
+    # User request (2026-09-09): surface which time-of-day sessions are
+    # actually paying off, not just how many trades landed there.
+    _isolate(tmp_path, monkeypatch)
+    state = ds.default_state()
+    state.vwap_scalp_max_trades_per_day = 6
+    ds.save_state(state)
+    _seed_closed_vwap_trades(3, FIXED_NOW.replace(hour=8), pnl=15.0)  # 3 wins, London morning
+    _seed_closed_vwap_trades(1, FIXED_NOW.replace(hour=8), pnl=-10.0)  # 1 loss, same bucket
+
+    summary = vs.vwap_scalp_bucket_summary(FIXED_NOW)
+
+    london_morning = next(b for b in summary if b["session"] == "London morning")
+    assert london_morning["wins"] == 3
+    assert london_morning["losses"] == 1
+    assert london_morning["win_rate_pct"] == 75.0
 
 
 @patch("vwap_scalp_addon.send_message")
