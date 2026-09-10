@@ -51,7 +51,7 @@
     "BCO_USD": "2026-09-09T23:57:11.658270+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 9,
+  "interval_scan_count_since_digest": 10,
   "interval_scanned_instruments_since_digest": [
     "USD_JPY",
     "EUR_USD",
@@ -72,8 +72,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-10T07:29:37.509070+00:00",
   "paused_instruments": {},
@@ -168,5 +167,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-10T09:39:37.511138+00:00"
+  "last_process_heartbeat_at": "2026-09-10T09:34:37.509935+00:00"
 }
