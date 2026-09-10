@@ -57,8 +57,7 @@
     "WTICO_USD"
   ],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-10T16:34:37.509265+00:00",
   "paused_instruments": {},
