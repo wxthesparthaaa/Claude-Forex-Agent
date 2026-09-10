@@ -82,7 +82,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40",
     "VWAP Scalp: reward:risk 0.65:1 is below the 1:1 floor (risking 0.00043 to make 0.00028)",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-10T13:34:37.508540+00:00",
   "paused_instruments": {},
@@ -177,5 +178,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-10T16:29:37.510299+00:00"
+  "last_process_heartbeat_at": "2026-09-10T16:24:37.509638+00:00"
 }
