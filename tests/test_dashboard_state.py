@@ -1,5 +1,7 @@
 import os
 import sys
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -222,3 +224,88 @@ def test_account_state_builds_currency_exposure_from_real_open_positions(tmp_pat
     assert account.currency_net_exposure_pct["EUR"] == 2.0
     assert account.currency_net_exposure_pct["GBP"] == 2.0
     assert account.open_risk_amount == 80.0
+
+
+def test_record_heartbeat_sets_and_persists_a_fresh_timestamp(tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+
+    before = datetime.now(timezone.utc)
+    ds.record_heartbeat()
+    after = datetime.now(timezone.utc)
+
+    state = ds.load_state()
+    recorded = datetime.fromisoformat(state.last_process_heartbeat_at)
+    assert before <= recorded <= after
+
+
+def test_record_heartbeat_never_raises_even_if_state_io_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+
+    def _broken_save(state):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ds, "save_state", _broken_save)
+
+    ds.record_heartbeat()  # must not raise
+
+
+@patch("dashboard_state.send_message")
+def test_check_cold_boot_gap_alerts_when_the_gap_exceeds_the_threshold(mock_send, tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    state = ds.default_state()
+    stale = datetime.now(timezone.utc) - timedelta(hours=4)
+    state.last_process_heartbeat_at = stale.isoformat()
+    ds.save_state(state)
+
+    ds.check_cold_boot_gap()
+
+    assert mock_send.call_count == 1
+    (message,), _ = mock_send.call_args
+    assert "down" in message.lower()
+    reloaded = ds.load_state()
+    recorded = datetime.fromisoformat(reloaded.last_process_heartbeat_at)
+    assert recorded > stale  # heartbeat refreshed regardless of the alert
+
+
+@patch("dashboard_state.send_message")
+def test_check_cold_boot_gap_does_not_alert_on_an_ordinary_short_gap(mock_send, tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    state = ds.default_state()
+    recent = datetime.now(timezone.utc) - timedelta(minutes=2)
+    state.last_process_heartbeat_at = recent.isoformat()
+    ds.save_state(state)
+
+    ds.check_cold_boot_gap()
+
+    mock_send.assert_not_called()
+
+
+@patch("dashboard_state.send_message")
+def test_check_cold_boot_gap_does_not_alert_on_a_genuinely_first_ever_boot(mock_send, tmp_path, monkeypatch):
+    # last_process_heartbeat_at is None on a brand-new state -- that's
+    # not a gap, just no prior heartbeat to compare against.
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+
+    ds.check_cold_boot_gap()
+
+    mock_send.assert_not_called()
+    state = ds.load_state()
+    assert state.last_process_heartbeat_at is not None  # still records one for next time
+
+
+@patch("dashboard_state.send_message")
+def test_check_cold_boot_gap_never_raises_even_if_everything_fails(mock_send, tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    mock_send.side_effect = RuntimeError("network down")
+    state = ds.default_state()
+    stale = datetime.now(timezone.utc) - timedelta(hours=4)
+    state.last_process_heartbeat_at = stale.isoformat()
+    ds.save_state(state)
+
+    ds.check_cold_boot_gap()  # must not raise

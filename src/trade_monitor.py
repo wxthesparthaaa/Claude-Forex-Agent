@@ -109,6 +109,13 @@ def check_open_trades(client: OandaClient = None) -> list:
 
 
 def _check_open_trades_unsafe(client: OandaClient = None) -> list:
+    # Refreshes last_process_heartbeat_at -- this job runs unconditionally
+    # every 5 minutes regardless of which strategies are enabled, so it's
+    # the natural "the process is definitely alive right now" pulse. See
+    # dashboard_state.check_cold_boot_gap for the boot-time side of this.
+    from dashboard_state import record_heartbeat
+    record_heartbeat()
+
     entries = load_journal()
     pending = open_entries(entries)
     # Unconditional, same "prove this job is actually alive" reasoning

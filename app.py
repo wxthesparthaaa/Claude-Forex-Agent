@@ -46,7 +46,7 @@ load_dotenv(encoding="utf-8-sig", override=True)
 from dashboard_state import (
     load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
     DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
-    record_risk_limit_skip,
+    record_risk_limit_skip, check_cold_boot_gap,
 )
 from autopilot import PHASE_LABELS
 from market_hours import (is_forex_market_open, time_until_forex_reopen, format_duration,
@@ -85,6 +85,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "Added cold-boot gap detection: if the process comes back after 10+ minutes of nothing "
+                    "(a Render free-tier sleep, usually from a missed UptimeRobot ping), you now get an "
+                    "immediate Telegram alert naming the gap length instead of silently losing hours of "
+                    "trading with no explanation. Diagnosed a real 11-hour gap today this way -- the fix was "
+                    "prompted by that, not the other way around."),
     ("2026-09-10", "VWAP Scalp's CAD_JPY/EUR_JPY/CHF_JPY weak-hour exclusion (04:00-07:00 UTC) removed -- "
                     "re-tested against a full year of data and the original 180-day weakness didn't replicate; "
                     "all 3 now land in the same range as every other pair in that bucket. They trade normally "
@@ -1221,6 +1226,15 @@ except Exception as e:
 # the system is verified, so real Telegram notifications don't start
 # firing before that's deliberately turned on.
 if os.environ.get("RUN_SCHEDULER", "false") == "true":
+    # Detects and alerts on a Render free-tier sleep/cold-boot gap --
+    # every wake re-runs this whole module from scratch (see
+    # start_scheduler's own comment), so this is the one place that can
+    # tell "just booted after a long gap" apart from "just booted
+    # normally." See dashboard_state.check_cold_boot_gap.
+    try:
+        check_cold_boot_gap()
+    except Exception as e:
+        print(f"WARNING: check_cold_boot_gap failed at startup, continuing: {e}", flush=True)
     start_scheduler()
 
 

@@ -7868,3 +7868,68 @@ trades normally in the 04:00-07:00 bucket by default. `git
 stash`-confirmed that new test fails against the pre-fix code first.
 Template re-parses under Jinja2. Full suite (645 tests) green;
 `py_compile` + real `import` both clean.
+
+## 2026-09-10 (continued) -- Diagnosed an 11-hour no-trades gap; added cold-boot detection so this alerts instead of going silent
+
+**User report**: no trades since the morning. Last journal entry
+(anywhere, any strategy) closed at 2026-09-09T16:46:54 UTC (00:46 SGT)
+-- ~11 hours of total silence by the time this was investigated.
+
+**Ruled out as the cause**: nothing in this session's own commits --
+first push today was 07:05 SGT, over 6 hours after trading had already
+stopped. Live state pulled from `state-sync` showed `kill_switch_
+engaged: false`, `phase: autopilot`, `vwap_scalp_enabled: true`, and
+(re-checked directly, not assumed) `peak_tracked_equity` exactly equal
+to `strategy_starting_capital` with zero open positions -- the
+drawdown/daily-loss breakers were nowhere near tripped, and none of
+`risk_engine.validate_trade`'s gates were active. `risk_limit_skips_
+since_digest` was empty too, ruling out a repeatedly-hit pacing cap.
+
+**Real cause, confirmed by the user's UptimeRobot log**: a 4-hour
+UptimeRobot outage, 06:59-10:58 SGT. Render's free tier sleeps the
+whole process after ~15 min idle (`app.py`'s own `start_scheduler`
+comment already documented this) -- with the monitor down, nothing
+woke it, so every 5-minute job (including VWAP Scalp) simply stopped
+existing for that window. This exact gap was flagged as a real,
+unaddressed risk back on 2026-08-31 (see that date's entry) but never
+built.
+
+**A likely misconception corrected**: the user observed trades only
+resuming after they clicked "Reset capital." Checked directly rather
+than assumed -- `peak_tracked_equity`/`strategy_realized_pnl` were
+already clean (no breaker tripped) at the time trades were stalled, so
+capital reset isn't clearing a risk gate. The real mechanism is almost
+certainly that clicking ANY dashboard control sends an HTTP request,
+and any HTTP request wakes a sleeping Render free-tier dyno -- Reset
+capital just happens to be the action taken when checking in on a
+stalled bot, not a special unstick lever. Loading the dashboard alone
+should do the same thing.
+
+**Fix**: `dashboard_state.py` gets a new `last_process_heartbeat_at`
+field plus two functions. `record_heartbeat()` is called from
+`trade_monitor.check_open_trades` (`trade_monitor.py`) -- chosen
+because that job runs unconditionally every 5 minutes regardless of
+which strategies are enabled, making it the one reliable "the process
+is definitely alive right now" pulse. `check_cold_boot_gap()` runs
+once at process boot (`app.py`, right after `pull_state_from_github`,
+before `start_scheduler`, only when `RUN_SCHEDULER=true`) -- compares
+"now" against the last recorded heartbeat, and if the gap is >=10
+minutes (comfortably above the 5-minute job cadence so an ordinary
+deploy never false-positives), sends an immediate Telegram alert
+naming the gap length, then refreshes the heartbeat regardless. No
+alert on a state with no prior heartbeat (a genuinely first-ever boot,
+not a gap). Moved `telegram_notifier.send_message` to a module-level
+import in `dashboard_state.py` (it was the only module in this
+codebase importing it locally inside a function) for consistency and
+so it's patchable in tests the same way every other module already
+does it.
+
+**Verification**: 7 new tests across `tests/test_dashboard_state.py`
+(heartbeat set/persist, best-effort no-raise-on-IO-failure, alert
+fires on a >=10-min gap, no alert on a 2-min gap, no alert on a
+first-ever boot with no prior heartbeat, never raises even if the
+Telegram send itself fails) and `tests/test_trade_monitor.py`
+(`check_open_trades` refreshes the heartbeat even on its empty/no-op
+path). `git stash`-confirmed all 7 fail against the pre-fix code
+first. Full suite (652 tests) green; `py_compile` + real `import`
+both clean.

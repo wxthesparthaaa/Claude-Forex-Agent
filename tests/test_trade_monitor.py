@@ -70,6 +70,21 @@ def test_check_open_trades_noop_when_journal_empty(tmp_path, monkeypatch):
     assert result == []
 
 
+def test_check_open_trades_refreshes_the_process_heartbeat_even_with_nothing_pending(tmp_path, monkeypatch):
+    # This job runs unconditionally every 5 minutes regardless of which
+    # strategies are enabled, so it's the "the process is definitely
+    # alive" pulse dashboard_state.check_cold_boot_gap compares against
+    # at the next boot -- must refresh even on the empty/no-op path.
+    _isolate(tmp_path, monkeypatch)
+    before = datetime.now(timezone.utc)
+
+    trade_monitor.check_open_trades(FakeClient())
+
+    state = ds.load_state()
+    recorded = datetime.fromisoformat(state.last_process_heartbeat_at)
+    assert recorded >= before
+
+
 @patch("trade_monitor.send_message")
 def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)

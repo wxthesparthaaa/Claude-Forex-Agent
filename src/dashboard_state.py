@@ -9,11 +9,13 @@ from __future__ import annotations
 import os
 import threading
 from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime, timedelta, timezone
 
 from autopilot import PhaseState
 from confidence_score import ConfidenceWeights
 from risk_engine import RiskConfig
 from state_paths import atomic_write_json, load_json_resilient
+from telegram_notifier import send_message
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
 STATE_PATH = os.path.join(STATE_DIR, "dashboard_state.json")
@@ -261,6 +263,19 @@ class DashboardState:
     # phase_state.phase=="autopilot" check -- addons are unaffected,
     # since none of them read this field.
     base_strategy_enabled: bool = True
+    # Precise UTC ISO timestamp of the last confirmed "the process is
+    # alive" moment -- refreshed by check_open_trades (trade_monitor.py)
+    # on every tick, since that job runs unconditionally every 5 minutes
+    # regardless of which strategies are enabled. Compared against "now"
+    # at every process boot (see check_cold_boot_gap, called from app.py
+    # right after pull_state_from_github) to detect and alert on a
+    # Render free-tier sleep/cold-boot -- previously flagged but never
+    # built: the 5-minute scalping-cadence jobs (VWAP Scalp etc.) had no
+    # detection for a missed UptimeRobot ping leaving the process asleep
+    # for hours with nothing to show for it but silence (no error, no
+    # risk skip -- a sleeping process can't record either). See
+    # DEVELOPMENT_LOG.md 2026-08-31 and 2026-09-10.
+    last_process_heartbeat_at: str | None = None
 
 
 def default_state() -> DashboardState:
@@ -426,6 +441,70 @@ def record_risk_limit_skip(source: str, message: str) -> None:
             save_state(state)
     except Exception as e:
         print(f"WARNING: could not record risk-limit skip for the scan digest: {e}", flush=True)
+
+
+HEARTBEAT_LOCK = threading.Lock()
+
+# How stale last_process_heartbeat_at must be, at boot, before it's
+# treated as a real cold-boot gap rather than ordinary restart jitter or
+# build time -- comfortably above the 5-minute job cadence so a normal
+# deploy never false-positives.
+COLD_BOOT_GAP_ALERT_THRESHOLD_MINUTES = 10.0
+
+
+def record_heartbeat() -> None:
+    """Call on every confirmed-alive tick -- currently just
+    check_open_trades (trade_monitor.py), which runs unconditionally
+    every 5 minutes regardless of which strategies are enabled, so it's
+    the one job guaranteed to fire whenever the process is actually up.
+    Refreshes last_process_heartbeat_at so the NEXT boot's gap check
+    (see check_cold_boot_gap) measures real elapsed downtime, not time
+    since this process's own original boot. Best-effort, same reasoning
+    as record_risk_limit_skip -- must never block or fail the caller."""
+    try:
+        with HEARTBEAT_LOCK:
+            state = load_state()
+            state.last_process_heartbeat_at = datetime.now(timezone.utc).isoformat()
+            save_state(state)
+    except Exception as e:
+        print(f"WARNING: could not record process heartbeat: {e}", flush=True)
+
+
+def check_cold_boot_gap(threshold_minutes: float = COLD_BOOT_GAP_ALERT_THRESHOLD_MINUTES) -> None:
+    """Call once at process boot (app.py, right after
+    pull_state_from_github, before start_scheduler). Compares "now"
+    against the last recorded heartbeat -- a gap this large can only
+    mean the process was asleep or down, since Render's free tier has no
+    other way to stop the in-process scheduler from ticking. Alerts on
+    Telegram immediately instead of leaving this to be discovered hours
+    later from a missing trade. Real gap this closes: the 5-minute
+    scalping jobs (VWAP Scalp etc.) had zero detection for a missed
+    UptimeRobot ping leaving the process asleep for hours, unlike
+    run_daily_dispatcher's own catch-up design for fixed daily
+    touchpoints (see DEVELOPMENT_LOG.md 2026-08-31, 2026-09-10). No
+    alert on a state with no prior heartbeat (a genuinely first-ever
+    boot, not a gap). Best-effort -- must never block startup."""
+    try:
+        state = load_state()
+        now = datetime.now(timezone.utc)
+        last = state.last_process_heartbeat_at
+        if last is not None:
+            gap = now - datetime.fromisoformat(last)
+            if gap >= timedelta(minutes=threshold_minutes):
+                gap_minutes = gap.total_seconds() / 60
+                try:
+                    send_message(
+                        f"⚠️ Process was down for ~{gap_minutes:.0f} min (since {last}) "
+                        f"-- likely a Render free-tier sleep/cold-boot (check UptimeRobot's own "
+                        f"uptime log for the same window). Every scheduled job, including VWAP "
+                        f"Scalp, was not running during this gap."
+                    )
+                except Exception as e:
+                    print(f"WARNING: could not send cold-boot gap alert: {e}", flush=True)
+        state.last_process_heartbeat_at = now.isoformat()
+        save_state(state)
+    except Exception as e:
+        print(f"WARNING: cold-boot gap check failed: {e}", flush=True)
 
 
 # The only fields /settings actually lets a user change (see app.py's
