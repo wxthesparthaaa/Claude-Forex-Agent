@@ -93,10 +93,32 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
     None/empty to omit this section. User request: the digest already
     says "no new trades" every ~3 hours but gave no indication a risk/
     tolerance limit was WHY -- that was only ever visible in Render's
-    own logs. Grouped and counted (a busy window can trip the exact same
-    limit many times over) rather than listed one line per occurrence,
-    capped at the 5 most common so one especially noisy limit can't blow
-    up the message length.
+    own logs.
+
+    Two refinements (2026-09-10, user feedback -- the digest had
+    "started to get too overwhelmed with irrelevant info"):
+
+    1. Reward:risk-floor skips (VWAP Scalp's own MIN_REWARD_RISK_RATIO
+       filter) are dropped from this section entirely -- they fire very
+       often and aren't actionable the way an account-wide breaker is;
+       still recorded in state and still printed at the call site in
+       vwap_scalp_addon.py, just not worth a Telegram line every time.
+
+    2. Grouped by REASON CATEGORY (source + the message's fixed prefix
+       up to its second colon, numbers stripped), not exact string
+       match. A plain count-by-exact-string here was close to useless
+       for the messages that actually matter: "Max drawdown breaker
+       tripped: 20.1% >= 20.0%..." and "...20.2%..." are the SAME
+       underlying event repeating, but differ in their embedded live
+       percentage every single time (same for daily-loss-limit and
+       trades-per-day messages) -- an exact-match Counter almost never
+       actually grouped a repeated trip, producing a wall of
+       near-identical single-occurrence lines instead of one grouped,
+       counted one. Still shows one full representative example (the
+       most recent occurrence) per category, so the real numbers stay
+       visible -- just counted correctly. Capped at the 5 most common
+       categories so one especially noisy limit can't blow up the
+       message length.
 
     vwap_buckets: vwap_scalp_addon.vwap_scalp_bucket_summary()'s own
     per-time-bucket rows (label_sgt/session/count/cap/wins/losses/
@@ -136,12 +158,27 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
         header = "Open trade" if len(open_trades) == 1 else "Open trades"
         base += f"\n\n📈 <b>{header}</b>\n" + "\n".join(lines)
 
-    if risk_skips:
+    actionable_skips = [s for s in (risk_skips or []) if "reward:risk" not in s]
+    if actionable_skips:
         from collections import Counter
-        counts = Counter(risk_skips)
-        lines = [f"  {msg}" + (f" (×{n})" if n > 1 else "") for msg, n in counts.most_common(5)]
+        category_counts = Counter()
+        category_example = {}
+        for s in actionable_skips:
+            # Split on the first 2 colons: "{source}: {fixed message
+            # prefix}: {live numbers}". Messages with only 1 colon total
+            # (e.g. "Base strategy scan: Account equity is zero or
+            # negative", no embedded number) fall through cleanly --
+            # split(..., 2) just returns fewer parts, and joining
+            # whatever's there reproduces the whole string, which is
+            # already stable with nothing to strip.
+            parts = s.split(":", 2)
+            category = ":".join(parts[:2]).strip()
+            category_counts[category] += 1
+            category_example[category] = s  # most recent full message wins -- keeps the real numbers visible
+        lines = [f"  {category_example[cat]}" + (f" (×{n})" if n > 1 else "")
+                 for cat, n in category_counts.most_common(5)]
         base += (
-            f"\n\n⚠️ <b>Risk limit reached, trades restricted</b> ({len(risk_skips)} total this window)\n"
+            f"\n\n⚠️ <b>Risk limit reached, trades restricted</b> ({len(actionable_skips)} total this window)\n"
             + "\n".join(lines)
         )
 

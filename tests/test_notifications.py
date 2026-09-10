@@ -211,6 +211,49 @@ def test_format_scan_digest_message_caps_risk_skip_lines_at_five_distinct():
     assert shown == 5
 
 
+def test_format_scan_digest_message_excludes_reward_risk_floor_skips():
+    # User feedback (2026-09-10): R:R-floor skips fire very often and
+    # aren't actionable the way an account-wide breaker is -- dropped
+    # from the digest entirely, though still recorded/printed elsewhere.
+    skips = [
+        "VWAP Scalp: reward:risk 0.43:1 is below the 1:1 floor (risking 0.05100 to make 0.02200)",
+        "VWAP Scalp: reward:risk 0.14:1 is below the 1:1 floor (risking 0.06400 to make 0.00900)",
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=skips)
+    assert "Risk limit reached" not in msg
+    assert "reward:risk" not in msg
+
+
+def test_format_scan_digest_message_excludes_reward_risk_floor_while_keeping_others():
+    skips = [
+        "VWAP Scalp: reward:risk 0.43:1 is below the 1:1 floor (risking 0.05100 to make 0.02200)",
+        "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until Reset capital is used.",
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=skips)
+    assert "1 total this window" in msg  # only the drawdown one counts as actionable
+    assert "reward:risk" not in msg
+    assert "Max drawdown breaker tripped" in msg
+
+
+def test_format_scan_digest_message_groups_by_category_despite_a_drifting_live_percentage():
+    # Real live incident this fixes (2026-09-10): the drawdown breaker's
+    # own message embeds the CURRENT drawdown percentage, which drifts
+    # slightly on every tick even while the breaker stays tripped -- a
+    # plain exact-string Counter treated every slightly different
+    # percentage as an unrelated reason, so a repeatedly-tripped breaker
+    # never actually grouped into one "(x N)" line.
+    skips = [
+        "VWAP Scalp: Max drawdown breaker tripped: 20.1% >= 20.0%. Halted until Reset capital is used.",
+        "VWAP Scalp: Max drawdown breaker tripped: 20.2% >= 20.0%. Halted until Reset capital is used.",
+        "VWAP Scalp: Max drawdown breaker tripped: 20.3% >= 20.0%. Halted until Reset capital is used.",
+    ]
+    msg = format_scan_digest_message(3, ["EUR_USD"], risk_skips=skips)
+    assert "3 total this window" in msg
+    assert "(×3)" in msg
+    # only ONE line for the category, not three near-identical ones
+    assert msg.count("Max drawdown breaker tripped") == 1
+
+
 def test_format_scan_digest_message_omits_vwap_bucket_section_when_none():
     msg = format_scan_digest_message(3, ["EUR_USD"], vwap_buckets=None)
     assert "VWAP Scalp trades today" not in msg

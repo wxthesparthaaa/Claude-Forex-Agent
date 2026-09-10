@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "Telegram digest decluttered: reward:risk floor skips no longer shown (routine, not "
+                    "actionable), and breaker messages with a live drifting percentage (drawdown/daily-loss) "
+                    "now group by category instead of exact string, so repeats collapse to one line with a "
+                    "count instead of a wall of near-identical single-occurrence lines."),
     ("2026-09-10", "Max drawdown breaker now has real Settings visibility -- an on/off toggle plus an "
                     "adjustable percentage, right under Daily loss limit, with a collapsed one-liner "
                     "explaining the difference (daily resets nightly; drawdown never resets on its own). "

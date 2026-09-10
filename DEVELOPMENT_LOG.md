@@ -7763,3 +7763,41 @@ code with `TypeError: unexpected keyword argument 'max_drawdown_
 enabled'` -- proving the feature is genuinely new, not a no-op. Full
 suite (640 tests) green; `py_compile` + real `import app` both clean;
 template re-parses under Jinja2.
+
+## 2026-09-10 (continued) -- Telegram digest decluttered: R:R floor skips dropped, drifting-number breaker messages now group correctly
+
+**User report**: "the tele message is started to get overwhelmed with
+irrelevant info." Asked which specifically; user picked two: (1)
+reward:risk floor skips, and (2) breaker messages that look like
+duplicates but aren't deduped.
+
+**Root cause, #1**: `format_scan_digest_message` was including every
+`risk_skips` entry, including `MIN_REWARD_RISK_RATIO` floor rejections
+-- an expected, routine filter outcome on nearly every scan tick, not
+something worth a line in a digest meant to surface things that need
+attention.
+
+**Root cause, #2**: the remaining skip messages (daily loss limit,
+max drawdown, portfolio heat) were grouped by exact string via
+`Counter`. Every one of these messages embeds a live, drifting
+percentage (e.g. "drawdown at 18.3%" vs "18.4%" ten minutes later) --
+so near-identical repeats of the SAME underlying limit almost never
+matched exactly, and instead of one deduped line with a count, the
+digest showed a wall of single-occurrence "duplicate-looking" lines.
+
+**Fix**: `actionable_skips` now filters out any skip whose message
+contains "reward:risk" before anything else runs. Remaining messages
+are grouped by a stable category key (`s.split(":", 2)` rejoined on
+the first two segments -- source + fixed prefix, dropping the numeric
+tail) instead of the raw string, via `Counter`/`category_example`
+keyed on that category; each category shows its most recent full
+example message plus a `(xN)` count when it repeated. Same underlying
+limit tripping repeatedly with a slightly different live percentage
+each time now correctly collapses to one line with a count, instead
+of N near-identical lines.
+
+**Verification**: 3 new tests in `tests/test_notifications.py`
+(`test_format_scan_digest_message_excludes_reward_risk_floor_skips`,
+`..._while_keeping_others`, `..._groups_by_category_despite_a_
+drifting_live_percentage`) -- `git stash`-confirmed all 3 fail against
+the pre-fix code. Full suite (643 tests) green; `py_compile` clean.
