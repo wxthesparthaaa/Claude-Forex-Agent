@@ -1,23 +1,23 @@
 {
-  "scanned_at": "2026-09-10T19:14:47.254474+00:00",
+  "scanned_at": "2026-09-10T19:34:46.955176+00:00",
   "candidates": [
     {
       "instrument": "USD_CAD",
       "direction": "LONG",
-      "entry_price": 1.3833,
+      "entry_price": 1.38334,
       "stop_loss": 1.38134,
-      "take_profit": 1.38722,
-      "confidence_pct": 80.0,
+      "take_profit": 1.38734,
+      "confidence_pct": 82.3,
       "confidence_components": {
         "breadth": 100.0,
         "rsi": 100.0,
         "candlestick": 50.0,
-        "news": 50.0
+        "news": 59.25925925925926
       },
-      "units": 7861,
+      "units": 7704,
       "unit_label": "units",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 9969.12,
+      "notional_account_currency": 9769.98,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
