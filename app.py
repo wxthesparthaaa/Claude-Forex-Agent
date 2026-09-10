@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "Removed the unconditional stack-trace dump from every Telegram send -- it was added to "
+                    "chase a since-unrepeated 'duplicate send' incident, was never gated behind a flag, and "
+                    "was working against the digest-declutter fix above by spamming a full traceback to "
+                    "stdout on every single message. No change to the actual send behavior."),
     ("2026-09-10", "Telegram digest decluttered: reward:risk floor skips no longer shown (routine, not "
                     "actionable), and breaker messages with a live drifting percentage (drawdown/daily-loss) "
                     "now group by category instead of exact string, so repeats collapse to one line with a "

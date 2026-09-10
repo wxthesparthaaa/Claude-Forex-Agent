@@ -7801,3 +7801,26 @@ of N near-identical lines.
 `..._while_keeping_others`, `..._groups_by_category_despite_a_
 drifting_live_percentage`) -- `git stash`-confirmed all 3 fail against
 the pre-fix code. Full suite (643 tests) green; `py_compile` clean.
+
+## 2026-09-10 (continued) -- Removed the unconditional stack-trace dump from send_message()
+
+**Context**: `telegram_notifier.send_message()` had an unconditional
+`print(...traceback.format_stack()...)` on every single call, added
+earlier to chase a then-unexplained "duplicate send" incident -- it
+was the one place every Telegram send in this codebase funnels
+through, so logging there was the last diagnostic option before
+concluding the extra send wasn't coming from this process at all.
+
+**Why remove it now**: no further instances of that incident have
+surfaced since, the diagnostic was never gated behind a flag or log
+level, and it was dumping a full stack trace to stdout on every single
+message -- directly working against the same "reduce message/log
+clutter" goal the digest-declutter fix above was just shipped for.
+
+**Fix**: deleted the `print(...)` block and its now-unused `traceback`
+and `datetime`/`timezone` imports from `src/telegram_notifier.py`.
+No behavior change to the actual send path.
+
+**Verification**: `py_compile` + real `import` of the module both
+clean; no test referenced the diagnostic output. Full suite (644
+tests) green.
