@@ -57,7 +57,9 @@
     "AUD_USD",
     "NZD_USD"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: reward:risk 0.72:1 is below the 1:1 floor (risking 2.95500 to make 2.12100)"
+  ],
   "last_scan_digest_sent_at": "2026-09-10T01:20:53.557009+00:00",
   "paused_instruments": {},
   "weekly_pnl_by_instrument": {
