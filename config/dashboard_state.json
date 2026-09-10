@@ -59,7 +59,8 @@
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: reward:risk 0.72:1 is below the 1:1 floor (risking 2.95500 to make 2.12100)",
-    "VWAP Scalp: reward:risk 0.68:1 is below the 1:1 floor (risking 0.07073 to make 0.04836)"
+    "VWAP Scalp: reward:risk 0.68:1 is below the 1:1 floor (risking 0.07073 to make 0.04836)",
+    "VWAP Scalp: reward:risk 0.38:1 is below the 1:1 floor (risking 0.00008 to make 0.00003)"
   ],
   "last_scan_digest_sent_at": "2026-09-10T01:20:53.557009+00:00",
   "paused_instruments": {},
