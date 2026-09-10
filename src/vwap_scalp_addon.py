@@ -47,8 +47,8 @@ MECHANICAL RULES:
      includes itself (the exact bug found and fixed in the backtest).
   3. Signals only evaluated inside WATCH_START_HOUR-WATCH_END_HOUR UTC
      (04:00-24:00), and never for a WEAK_HOUR_PAIR_EXCLUSIONS pair
-     during its excluded bucket (currently just CAD_JPY/EUR_JPY/CHF_JPY
-     during 04:00-07:00 UTC).
+     during its excluded bucket (currently empty -- see the constant's
+     own comment).
   4. CONFIRMATION: a raw crossing of Z_ENTRY does NOT fire by itself --
      the deviation must tick back from its own running extreme first
      (real evidence a reversal has started), mirroring
@@ -269,23 +269,23 @@ VWAP_SCALP_TIME_BUCKETS_UTC = [
     (20, 24, "NY late / early Asian"),
 ]
 
-# Real backtest finding (2026-09-08, hour-of-day pass): CAD_JPY/EUR_JPY/
-# CHF_JPY showed a marginal-to-negative edge specifically in the
-# 04:00-07:00 UTC bucket (day-win 45.8%-50.0%, i.e. CAD_JPY was a
-# LOSING day more often than not there, only net-positive from a few
-# oversized wins) while every OTHER pair -- including these same 3 --
-# was solidly positive in every other bucket, including the OTHER new
-# one (20:00-24:00 UTC, where all 3 of these pairs cleared +0.30
-# day_mean_R with no concerns). This per-instrument result was NOT
-# itself Bonferroni-corrected (same caveat the backtest script states
-# for every per-instrument breakdown it prints -- only the POOLED
-# bucket-level result is), so these 3 aren't proven losers either, just
-# not established well enough yet to trade in this one specific window.
+# Originally seeded (2026-09-08) from a 180-day hour-of-day pass showing
+# CAD_JPY/EUR_JPY/CHF_JPY at a marginal-to-negative day-win (45.8%-50.0%)
+# specifically in the 04:00-07:00 UTC bucket -- a per-instrument reading
+# that was NOT itself Bonferroni-corrected (same caveat the backtest
+# script states for every per-instrument breakdown it prints), so never
+# a proven loser, just not established well enough yet at the time.
+# Re-checked 2026-09-10 against a full year of data (the 180-day sample's
+# own successor): recomputing these 3 pairs' 04:00-07:00 candidates with
+# this exclusion temporarily lifted gave CAD_JPY 72.3% win/+0.4553 mean_R,
+# EUR_JPY 72.0%/+0.4692, CHF_JPY 71.4%/+0.4373 -- indistinguishable from
+# the bucket's other 14 pairs (pooled 72.0%/+0.4777, individually ranging
+# 70.3%-74.2%, all Bonferroni-significant at the bucket level). The
+# original reading doesn't replicate on a full year of data; emptied.
 # Keyed by the exact (start_hour, end_hour) bucket tuple; empty for any
-# bucket with no exclusions.
-WEAK_HOUR_PAIR_EXCLUSIONS = {
-    (4, 7): {"CAD_JPY", "EUR_JPY", "CHF_JPY"},
-}
+# bucket with no exclusions -- this dict is intentionally still live
+# infrastructure for any future backtest finding of the same shape.
+WEAK_HOUR_PAIR_EXCLUSIONS = {}
 
 # Real live data (2026-09-01/02, 30 closed VWAP Scalp trades, 22 losses):
 # realized losses run noticeably bigger than their own intended

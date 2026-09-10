@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-10", "VWAP Scalp's CAD_JPY/EUR_JPY/CHF_JPY weak-hour exclusion (04:00-07:00 UTC) removed -- "
+                    "re-tested against a full year of data and the original 180-day weakness didn't replicate; "
+                    "all 3 now land in the same range as every other pair in that bucket. They trade normally "
+                    "there again."),
     ("2026-09-10", "Removed the unconditional stack-trace dump from every Telegram send -- it was added to "
                     "chase a since-unrepeated 'duplicate send' incident, was never gated behind a flag, and "
                     "was working against the digest-declutter fix above by spamming a full traceback to "

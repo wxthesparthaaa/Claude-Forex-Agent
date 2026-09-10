@@ -514,8 +514,9 @@
             00:00-04:00 SGT / 04:00-08:00 SGT -- so one correlated burst can't use up the whole day's
             allowance in a single tight cluster. Breakdown by session shown in the periodic scan digest on
             Telegram. Widened 2026-09-08 from the original three (07:00-20:00 UTC only) on the strength of a
-            180-day hour-of-day backtest; CAD_JPY/EUR_JPY/CHF_JPY are excluded specifically from the
-            12:00-15:00 SGT session, where their edge wasn't clearly established.
+            180-day hour-of-day backtest. That pass also flagged CAD_JPY/EUR_JPY/CHF_JPY as unclear
+            specifically in the 12:00-15:00 SGT session; a 2026-09-10 re-check against a full year of data
+            found no such weakness, so no pairs are currently excluded from any session.
           </p>
         </details>
         <label>VWAP Scalp trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>

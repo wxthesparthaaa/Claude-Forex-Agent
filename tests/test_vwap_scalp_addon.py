@@ -698,14 +698,17 @@ def test_time_bucket_cap_does_not_block_a_fresh_session(mock_send, tmp_path, mon
 
 @patch("vwap_scalp_addon.send_message")
 def test_weak_hour_pair_exclusion_blocks_a_listed_pair_in_its_excluded_bucket(mock_send, tmp_path, monkeypatch):
-    # 2026-09-08 window widening: CAD_JPY/EUR_JPY/CHF_JPY's edge wasn't
-    # clearly established specifically in the 04:00-07:00 UTC bucket (see
-    # WEAK_HOUR_PAIR_EXCLUSIONS), even though the same 3 pairs are fine in
-    # every other bucket the widened window opened up. Must be a SILENT
-    # skip -- no risk-limit skip recorded, since this isn't a dynamic risk
-    # event, just a pair not being tradeable in this one specific window.
+    # WEAK_HOUR_PAIR_EXCLUSIONS ships empty by default (2026-09-10: the
+    # CAD_JPY/EUR_JPY/CHF_JPY finding that used to populate this didn't
+    # replicate on a full year of data -- see the constant's own comment).
+    # The mechanism itself is still live infrastructure for any future
+    # finding of the same shape, so it's tested here directly rather than
+    # through the (now empty) real default. Must be a SILENT skip -- no
+    # risk-limit skip recorded, since this isn't a dynamic risk event,
+    # just a pair not being tradeable in this one specific window.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
 
     class _WeakBucket(_FrozenDatetime):
         _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
@@ -725,10 +728,11 @@ def test_weak_hour_pair_exclusion_blocks_a_listed_pair_in_its_excluded_bucket(mo
 
 @patch("vwap_scalp_addon.send_message")
 def test_weak_hour_pair_exclusion_does_not_block_the_same_pair_in_a_different_bucket(mock_send, tmp_path, monkeypatch):
-    # The exact same 3 pairs backtested fine in 20:00-24:00 UTC -- the
-    # exclusion is scoped to the one weak bucket, not the pair globally.
+    # A listed pair's exclusion is scoped to its one weak bucket, not the
+    # pair globally.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
 
     class _StrongBucket(_FrozenDatetime):
         _frozen = FIXED_NOW.replace(hour=21)  # inside 20:00-24:00 UTC
@@ -744,11 +748,35 @@ def test_weak_hour_pair_exclusion_does_not_block_the_same_pair_in_a_different_bu
 
 
 @patch("vwap_scalp_addon.send_message")
-def test_weak_hour_pair_exclusion_does_not_block_an_unlisted_pair_in_the_same_bucket(mock_send, tmp_path, monkeypatch):
-    # The exclusion is pair-specific, not bucket-wide -- a pair not in
-    # WEAK_HOUR_PAIR_EXCLUSIONS must still trade normally in 04:00-07:00 UTC.
+def test_weak_hour_pair_exclusions_empty_by_default_so_cad_jpy_trades_normally(mock_send, tmp_path, monkeypatch):
+    # 2026-09-10: re-checked the original 180-day CAD_JPY/EUR_JPY/CHF_JPY
+    # 04:00-07:00 UTC finding against a full year of data -- it didn't
+    # replicate (all 3 landed within the bucket's normal range, not as
+    # laggards), so the exclusion was emptied. CAD_JPY, previously the
+    # canonical excluded pair, must now trade normally in that bucket.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
+
+    class _WeakBucket(_FrozenDatetime):
+        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+
+    monkeypatch.setattr(vs, "datetime", _WeakBucket)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_WeakBucket._frozen)
+    client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["CAD_JPY"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_weak_hour_pair_exclusion_does_not_block_an_unlisted_pair_in_the_same_bucket(mock_send, tmp_path, monkeypatch):
+    # The exclusion is pair-specific, not bucket-wide -- a pair not listed
+    # must still trade normally in an excluded bucket.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
 
     class _WeakBucket(_FrozenDatetime):
         _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC

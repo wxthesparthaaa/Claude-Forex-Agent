@@ -7824,3 +7824,47 @@ No behavior change to the actual send path.
 **Verification**: `py_compile` + real `import` of the module both
 clean; no test referenced the diagnostic output. Full suite (644
 tests) green.
+
+## 2026-09-10 (continued) -- Re-checked the CAD_JPY/EUR_JPY/CHF_JPY weak-hour exclusion against a full year of data; didn't replicate, exclusion emptied
+
+**Context**: `WEAK_HOUR_PAIR_EXCLUSIONS = {(4, 7): {"CAD_JPY", "EUR_JPY",
+"CHF_JPY"}}` (added 2026-09-08) silently skipped these 3 pairs during
+the 04:00-07:00 UTC bucket, based on a 180-day hour-of-day backtest
+showing them at a marginal-to-negative 45.8%-50.0% day-win there --
+always caveated as a per-instrument reading, NOT itself
+Bonferroni-corrected, so never a proven loser, just not established
+well enough yet at the time.
+
+**Re-check**: the full-year (365-day) backtest built right after
+(`scripts/backtest_vwap_reversion_scalp.py`) can't re-test this
+directly -- its own candidate-building step (`_current_live_
+candidates`) already applies this same exclusion before the report
+runs, so these 3 pairs never appear in that bucket's output at all;
+the exclusion is assumed, not verified, by that report as it stands.
+Recomputed the 3 pairs' 04:00-07:00 candidates with the exclusion
+temporarily lifted (same signal/candidate/simulation pipeline, reusing
+the already-cached full-year candle data): CAD_JPY 72.3% win/+0.4553
+mean_R, EUR_JPY 72.0%/+0.4692, CHF_JPY 71.4%/+0.4373 -- indistinguishable
+from the bucket's other 14 pairs (pooled 72.0%/+0.4777, SURVIVES
+Bonferroni; individually ranging 70.3%-74.2%, all solidly positive).
+The original 45.8%-50.0% reading does not replicate on a full year of
+data -- reads as a small-sample artifact of the 180-day window it came
+from, not a real, persistent weakness.
+
+**Fix**: `WEAK_HOUR_PAIR_EXCLUSIONS` emptied to `{}` in
+`src/vwap_scalp_addon.py` -- the dict/check mechanism itself stays as
+live infrastructure for any future finding of the same shape, only
+this specific (now-unsupported) entry was removed. Updated the stale
+module docstring and Settings copy (`templates/dashboard.html`) that
+both still named the 3 pairs as excluded.
+
+**Verification**: `tests/test_vwap_scalp_addon.py`'s 3 existing
+weak-hour tests rewritten to monkeypatch `WEAK_HOUR_PAIR_EXCLUSIONS`
+directly (testing the mechanism, since the real default is now empty)
+instead of relying on the old real-world entry; one new test
+(`test_weak_hour_pair_exclusions_empty_by_default_so_cad_jpy_trades_
+normally`) asserts CAD_JPY -- the pair that used to be blocked -- now
+trades normally in the 04:00-07:00 bucket by default. `git
+stash`-confirmed that new test fails against the pre-fix code first.
+Template re-parses under Jinja2. Full suite (645 tests) green;
+`py_compile` + real `import` both clean.
