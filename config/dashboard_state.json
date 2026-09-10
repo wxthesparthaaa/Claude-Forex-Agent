@@ -51,7 +51,7 @@
     "BCO_USD": "2026-09-10T21:04:54.164558+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 6,
+  "interval_scan_count_since_digest": 7,
   "interval_scanned_instruments_since_digest": [
     "EUR_USD",
     "GBP_USD",
@@ -171,5 +171,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-10T13:24:37.509470+00:00"
+  "last_process_heartbeat_at": "2026-09-10T13:14:37.513133+00:00"
 }
