@@ -1,69 +1,36 @@
 {
-  "scanned_at": "2026-09-10T15:54:54.056008+00:00",
+  "scanned_at": "2026-09-10T16:14:44.581224+00:00",
   "candidates": [
     {
-      "instrument": "BCO_USD",
+      "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 108.545,
-      "stop_loss": 105.501,
-      "take_profit": 114.633,
-      "confidence_pct": 54.3,
+      "entry_price": 102.271,
+      "stop_loss": 98.965,
+      "take_profit": 108.883,
+      "confidence_pct": 61.3,
       "confidence_components": {
-        "breadth": 66.66666666666666,
-        "rsi": 43.772251890481684,
-        "candlestick": 50.0,
+        "breadth": 71.42857142857143,
+        "rsi": 44.34942412497506,
+        "candlestick": 85.0,
         "news": 50.0
       },
       "units": 3,
       "unit_label": "barrels",
       "risk_amount": 15.0,
-      "notional_account_currency": 412.49,
+      "notional_account_currency": 388.71,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 67% of major currencies moving the same way (mixed signal).",
+        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
         "RSI is 76 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
-        "news": false
-      }
-    },
-    {
-      "instrument": "WTICO_USD",
-      "direction": "LONG",
-      "entry_price": 101.79,
-      "stop_loss": 98.965,
-      "take_profit": 107.44,
-      "confidence_pct": 57.2,
-      "confidence_components": {
-        "breadth": 66.66666666666666,
-        "rsi": 55.65603275425616,
-        "candlestick": 50.0,
-        "news": 50.0
-      },
-      "units": 4,
-      "unit_label": "barrels",
-      "risk_amount": 15.0,
-      "notional_account_currency": 515.76,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 67% of major currencies moving the same way (mixed signal).",
-        "RSI is 74 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": false
       }
     }
