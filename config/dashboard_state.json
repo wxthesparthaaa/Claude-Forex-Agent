@@ -95,7 +95,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
     "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it",
-    "VWAP Scalp: reward:risk 0.17:1 is below the 1:1 floor (risking 0.00040 to make 0.00007)"
+    "VWAP Scalp: reward:risk 0.17:1 is below the 1:1 floor (risking 0.00040 to make 0.00007)",
+    "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it"
   ],
   "last_scan_digest_sent_at": "2026-09-11T10:59:21.354330+00:00",
   "paused_instruments": {},
