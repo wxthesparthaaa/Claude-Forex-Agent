@@ -64,7 +64,6 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 40",
-    "VWAP Scalp: event day: US CPI (Aug) -- no new entries today",
     "VWAP Scalp: event day: US CPI (Aug) -- no new entries today"
   ],
   "last_scan_digest_sent_at": "2026-09-11T17:09:21.352825+00:00",
@@ -160,5 +159,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-11T18:23:22.741149+00:00"
+  "last_process_heartbeat_at": "2026-09-11T18:23:26.075126+00:00"
 }
