@@ -143,7 +143,7 @@
   },
   "peak_tracked_equity": 2000.0,
   "friday_preclose_cancel_enabled": true,
-  "last_friday_preclose_cancel_at": "2026-09-04T17:00:00-04:00",
+  "last_friday_preclose_cancel_at": "2026-09-11T17:00:00-04:00",
   "range_confluence_enabled": false,
   "orb_fade_enabled": false,
   "vwap_scalp_enabled": true,
