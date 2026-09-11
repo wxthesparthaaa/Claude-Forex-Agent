@@ -1,29 +1,29 @@
 {
-  "scanned_at": "2026-09-11T14:54:36.834949+00:00",
+  "scanned_at": "2026-09-11T15:14:35.877104+00:00",
   "candidates": [
     {
       "instrument": "USD_CAD",
       "direction": "LONG",
-      "entry_price": 1.38768,
+      "entry_price": 1.38822,
       "stop_loss": 1.38598,
-      "take_profit": 1.39108,
-      "confidence_pct": 57.3,
+      "take_profit": 1.3927,
+      "confidence_pct": 62.0,
       "confidence_components": {
         "breadth": 57.14285714285714,
-        "rsi": 62.9898084861047,
-        "candlestick": 50.0,
+        "rsi": 60.76865018491333,
+        "candlestick": 85.0,
         "news": 56.25
       },
-      "units": 9103,
+      "units": 6909,
       "unit_label": "units",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 11530.66,
+      "notional_account_currency": 8754.52,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 72 (overbought -- some chase risk).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "RSI is 73 (overbought -- some chase risk).",
+        "Candlestick pattern at this level: bullish engulfing -- adds confidence, but the trade doesn't depend on it.",
         "News sentiment: neutral."
       ],
       "rejected_reason": null,
@@ -31,6 +31,39 @@
         "breadth": true,
         "rsi": true,
         "candlestick": true,
+        "news": true
+      }
+    },
+    {
+      "instrument": "USD_CHF",
+      "direction": "LONG",
+      "entry_price": 0.81604,
+      "stop_loss": 0.81376,
+      "take_profit": 0.8206,
+      "confidence_pct": 66.6,
+      "confidence_components": {
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 56.25
+      },
+      "units": 3990,
+      "unit_label": "units",
+      "risk_amount": 14.127037500000002,
+      "notional_account_currency": 5055.19,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 64 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: neutral."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
         "news": true
       }
     }
