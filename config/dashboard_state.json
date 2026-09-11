@@ -54,7 +54,8 @@
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it"
+    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it",
+    "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it"
   ],
   "last_scan_digest_sent_at": "2026-09-11T01:49:21.353375+00:00",
   "paused_instruments": {},
