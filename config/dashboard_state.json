@@ -68,6 +68,7 @@
     "VWAP Scalp: event day: US CPI (Aug) -- no new entries today",
     "VWAP Scalp: event day: US CPI (Aug) -- no new entries today",
     "VWAP Scalp: event day: US CPI (Aug) -- no new entries today",
+    "VWAP Scalp: event day: US CPI (Aug) -- no new entries today",
     "VWAP Scalp: event day: US CPI (Aug) -- no new entries today"
   ],
   "last_scan_digest_sent_at": "2026-09-11T20:13:26.008837+00:00",
@@ -185,5 +186,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-11T23:03:26.017954+00:00"
+  "last_process_heartbeat_at": "2026-09-11T22:38:26.011776+00:00"
 }
