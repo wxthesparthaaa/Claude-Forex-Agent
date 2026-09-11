@@ -68,7 +68,8 @@
     "VWAP Scalp: reward:risk 0.20:1 is below the 1:1 floor (risking 0.00020 to make 0.00004)",
     "VWAP Scalp: reward:risk 0.64:1 is below the 1:1 floor (risking 0.05000 to make 0.03200)",
     "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it",
-    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it"
+    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it",
+    "VWAP Scalp: reward:risk 0.60:1 is below the 1:1 floor (risking 0.00025 to make 0.00015)"
   ],
   "last_scan_digest_sent_at": "2026-09-11T10:59:21.354330+00:00",
   "paused_instruments": {},
