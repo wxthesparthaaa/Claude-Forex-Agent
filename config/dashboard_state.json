@@ -51,9 +51,12 @@
     "BCO_USD": "2026-09-10T23:54:55.074685+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 1,
+  "interval_scan_count_since_digest": 2,
   "interval_scanned_instruments_since_digest": [
-    "USD_JPY"
+    "USD_JPY",
+    "EUR_USD",
+    "GBP_USD",
+    "USD_CHF"
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
