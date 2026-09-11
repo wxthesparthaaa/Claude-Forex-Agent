@@ -85,6 +85,15 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-11", "VWAP Scalp now skips a fade that bets against an already-established 5-day price trend "
+                    "(>=2% move) -- the full-week review found real news-driven trends (BOJ/ECB) behind a big "
+                    "share of last week's losses, all counter-trend fades. You'll see a one-liner in the "
+                    "periodic digest when this fires: 'trend filter: skipped ...'."),
+    ("2026-09-11", "Fixed a real bug: local test runs were leaking fake data into the OTHER (options-agent) "
+                    "project's live GitHub repo via a leftover GITHUB_TOKEN/GITHUB_REPO in this machine's shell "
+                    "environment. Tests can no longer reach real GitHub credentials at all now. That other "
+                    "project's trade_journal.xlsx currently has fake test rows in it -- flagged separately, "
+                    "not fixed here since it needs your input to recover correctly."),
     ("2026-09-11", "VWAP Scalp now logs same-tick 'ties' -- when two+ pairs signal at once and the priority "
                     "order picks a winner, the loser is now recorded (config/vwap_scalp_tie_log.json), not just "
                     "silently dropped. Previously there was no way to tell 'lost a tie' apart from 'never had a "

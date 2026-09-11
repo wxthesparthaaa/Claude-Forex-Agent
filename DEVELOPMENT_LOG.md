@@ -8028,3 +8028,106 @@ working on its own already-saved settings -- if a change could
 plausibly leave one silently stuck, that's a bug to fix in the same
 change, not an acceptable side effect. Saved to memory
 (`feedback_forex_agent_no_reset_required`).
+
+## 2026-09-11 (continued) -- Real incident: local tests were leaking fake data into the sibling project's live GitHub repo
+
+**Discovered by accident**, not by design: while wiring up the new
+trend filter below, `tests/test_vwap_scalp_addon.py` got dramatically
+slower (a few seconds -> 147s for one file). Profiling the slowest
+single test showed the real time was spent in `trade_journal.
+save_journal` -> `push_journal_xlsx_to_github` -> real, retried
+`urllib.request.urlopen` calls -- genuine network round-trips, not
+local test I/O.
+
+**Root cause**: this dev machine's shell environment has
+`GITHUB_TOKEN`/`GITHUB_REPO` set to the SIBLING options-agent project
+(`wxthesparthaaa/Claude-Trade-Agent`), and `github_state_sync.
+get_github_config()` reads those raw env vars with zero test-isolation
+awareness. `tests/test_github_state_sync.py` already worked around
+this for itself (each of its own tests explicitly `delenv`s these
+vars), but that fix was never generalized -- every OTHER test file
+that touches `trade_journal.save_journal` (which unconditionally calls
+`push_journal_xlsx_to_github` on every save, with no per-test mock the
+way `send_message` already has one) was still exposed. Checking the
+actual GitHub API confirmed the damage: `trade_journal.xlsx` on
+`wxthesparthaaa/Claude-Trade-Agent` -- a live, real project, NOT this
+one -- currently contains fake seeded test rows (`seed-0`, `seed-1`,
+...), with 100+ "Update trade_journal.xlsx" commits landing there from
+local test runs. Flagged directly to the user; recovery is their call,
+not something fixed unilaterally here, since real and fake commits
+share the same generic commit message and can't be told apart from
+history alone.
+
+**Fix** (`tests/conftest.py`): a new autouse fixture,
+`_block_real_github_pushes`, `monkeypatch.delenv`s `GITHUB_TOKEN`/
+`GITHUB_REPO`/`GITHUB_BRANCH` before every single test -- the exact
+same pattern this file already established for Telegram
+(`_block_real_telegram_sends`, added after an identical real incident
+with `send_message`). Fixed at the actual root (the environment
+variables `get_github_config()` reads) rather than patching every
+individual push function at every call site (state_paths.py,
+dashboard_state.py, trade_journal.py, github_state_sync.py each have
+one) -- `get_github_config()` already treats missing credentials as a
+documented, safe no-op, so this is the same "local dev without
+GITHUB_TOKEN" path every affected module's own docstring already
+describes, just actually reached now.
+
+**Verification**: `tests/test_github_state_sync.py`'s own 25 tests
+(which intentionally `setenv` fake credentials to test the
+credentialed path) still pass unaffected -- monkeypatch layers
+correctly regardless of fixture vs. test-body ordering. `test_vwap_
+scalp_addon.py` back to 6.67s (from 147s). Confirmed via the GitHub
+API directly, before and after: zero new commits landed on the other
+repo during the post-fix test runs. Full suite (666 tests) green.
+
+## 2026-09-11 (continued) -- Added a price-only multi-day trend filter to VWAP Scalp
+
+**Context**: the full-week review's news-correlation check (see
+2026-09-10/11 entries above) found real, well-documented market events
+-- a sustained yen-strengthening trend (BOJ rate-hike speculation) and
+a surprise ECB hike -- behind a large share of the week's losses, all
+LONG JPY-cross fades betting against an established trend. A full
+historical-news-correlated backtest would need economic-calendar data
+this pipeline doesn't have. This is the cheaper, price-only proxy for
+the same idea: skip a fade that bets against an already-established
+multi-day directional move, using only price data already on hand.
+
+**Fix** (`src/vwap_scalp_addon.py`): new `_multi_day_trend_direction(client,
+instrument)` -- "UP"/"DOWN" if the latest COMPLETE daily close differs
+from the close `TREND_FILTER_LOOKBACK_DAYS` (5) complete trading days
+earlier by at least `TREND_FILTER_THRESHOLD_PCT` (2.0%), else `None`.
+Both reference points are strictly PRIOR, already-closed days -- deliberately
+never touches today's price (what the gated intraday signal is
+actually trading), the exact separation retired `trend_addon.py`'s own
+look-ahead bug (2026-08-30) didn't have. Wired into the main per-pair
+loop right after signal detection: a LONG fade (bets price reverts UP)
+is skipped against a DOWN trend, a SHORT fade (bets price reverts
+DOWN) is skipped against an UP trend. Skip reason recorded via the
+existing `record_risk_limit_skip` (digest-visible, one-liner, e.g.
+"trend filter: skipped LONG CHF_JPY -- 5-day trend is DOWN, fading
+against it") -- the message's category prefix ("VWAP Scalp: trend
+filter") is stable across instruments so repeats correctly group in
+the digest instead of flooding it, same discipline as the 2026-09-10
+digest-declutter fix. `TREND_FILTER_LOOKBACK_DAYS`/`_THRESHOLD_PCT`
+are a reasoned starting heuristic, explicitly NOT independently
+backtested the way the core VWAP signal was -- flagged for
+recalibration once real data (or a proper price-only backtest) exists
+to check them against. Ships active by default (not a new Settings
+toggle) -- same precedent as the R:R floor, weak-hour exclusions, and
+cooldown, none of which have individual toggles either.
+
+**Verification**: `tests/test_vwap_scalp_addon.py`'s `FakeClient`
+extended with a separate `daily_candles_by_instrument` store (default
+empty) so its `get_candles` correctly distinguishes granularity --
+without this, the trend filter's own "D" requests were silently served
+the same M1 fixture data used for signal detection, which is what
+actually caused the earlier slowdown investigation's false lead before
+the real GitHub-push cause was found. 6 new tests: blocks a LONG fade
+against a DOWN trend, blocks a SHORT fade against an UP trend, allows
+a LONG fade WITH an UP trend, allows an ordinary sub-threshold move,
+allows when no daily data is configured (matches every pre-existing
+test's default, unchanged), and an incomplete latest daily candle is
+correctly excluded (degrades to "insufficient history" rather than
+leaking today's still-forming price in). `git stash`-confirmed all 6
+fail against the pre-fix code first. Full suite (666 tests) green;
+`py_compile` + real `import` both clean.

@@ -48,6 +48,20 @@ def _m1_candle(dt, close, volume=10):
             "mid": {"c": str(close)}, "volume": volume}
 
 
+def _daily_candles_with_change(change_pct, reference_close=100.0, complete=True):
+    """A minimal run of complete Daily candles spanning exactly
+    TREND_FILTER_LOOKBACK_DAYS -- the reference close (index
+    -1-LOOKBACK_DAYS) and the latest close (index -1) are the only two
+    _multi_day_trend_direction actually reads; the ones between are
+    filler. `complete=False` simulates today's still-forming candle
+    leaking in, to confirm it's correctly excluded."""
+    latest_close = reference_close * (1 + change_pct / 100)
+    candles = [{"time": f"2026-08-{20+i:02d}T00:00:00Z", "complete": True, "mid": {"c": str(reference_close)}}
+               for i in range(vs.TREND_FILTER_LOOKBACK_DAYS)]
+    candles.append({"time": "2026-08-31T00:00:00Z", "complete": complete, "mid": {"c": str(latest_close)}})
+    return candles
+
+
 def _extended_session_candles(n_flat=30, extension_price=105.0, confirmation_price=104.0, end_time=None):
     """Oscillating baseline (a real, nonzero stdev -- a perfectly flat
     baseline has zero variance, which the detection deliberately treats
@@ -118,8 +132,17 @@ def _bad_reward_risk_entry_price(candles, direction):
 
 class FakeClient:
     def __init__(self, candles_by_instrument=None, price=1.1000, fill_trade_id="999",
-                 close_result=None, account_currency="USD"):
+                 close_result=None, account_currency="USD", daily_candles_by_instrument=None):
         self._candles_by_instrument = candles_by_instrument or {}
+        # Separate from the M1 store above -- real OANDA returns different
+        # data per granularity, so the trend filter's own "D" requests
+        # (_multi_day_trend_direction) must not silently be served M1
+        # candles. Empty by default: no test needs to configure daily
+        # data unless it's specifically exercising the trend filter, and
+        # an empty response correctly resolves to "no trend detected" (see
+        # _multi_day_trend_direction's own len() guard), preserving every
+        # existing test's pre-trend-filter behavior unchanged.
+        self._daily_candles_by_instrument = daily_candles_by_instrument or {}
         self._price = price
         self._fill_trade_id = fill_trade_id
         self._close_result = close_result or {"orderFillTransaction": {"pl": "5.0", "price": "1.1050"}}
@@ -128,6 +151,8 @@ class FakeClient:
         self.closed_ids = []
 
     def get_candles(self, instrument, granularity, count=None, from_time=None, to_time=None, price="M"):
+        if granularity == "D":
+            return self._daily_candles_by_instrument.get(instrument, [])
         return self._candles_by_instrument.get(instrument, [])
 
     def get_instruments(self, instruments):
@@ -318,6 +343,118 @@ def test_a_favorable_reward_risk_ratio_still_opens_normally(mock_send, tmp_path,
 
     assert opened == ["EUR_USD"]
     assert client.orders_placed == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_blocks_a_long_fade_against_an_established_down_trend(mock_send, tmp_path, monkeypatch):
+    # 2026-09-11 full-week review: a sustained multi-day yen-strengthening
+    # trend (real BOJ rate-hike speculation) explained 10 of 41 losses,
+    # all LONG JPY-cross fades betting against that same trend. This LONG
+    # signal (fading a downward extension, betting price reverts UP) must
+    # be skipped when the pair's own 5-day trend is DOWN -- fading against
+    # an established trend, not genuine reversion.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    daily = _daily_candles_with_change(-vs.TREND_FILTER_THRESHOLD_PCT - 1.0)  # a real DOWN trend
+    client = FakeClient(candles_by_instrument={"CHF_JPY": candles}, price=_valid_entry_price(candles, "LONG"),
+                         daily_candles_by_instrument={"CHF_JPY": daily})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "trend filter" in s]
+    assert len(skips) == 1
+    assert "CHF_JPY" in skips[0]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_blocks_a_short_fade_against_an_established_up_trend(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 1.0)  # a real UP trend
+    client = FakeClient(candles_by_instrument={"EUR_JPY": candles}, price=_valid_entry_price(candles, "SHORT"),
+                         daily_candles_by_instrument={"EUR_JPY": daily})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_allows_a_long_fade_with_the_trend(mock_send, tmp_path, monkeypatch):
+    # The mirror image -- a LONG fade (betting price reverts UP) WITH an
+    # established UP trend must open normally; the filter only blocks
+    # fading AGAINST a trend, never trading with one.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 1.0)  # UP trend, same direction as the fade
+    client = FakeClient(candles_by_instrument={"CHF_JPY": candles}, price=_valid_entry_price(candles, "LONG"),
+                         daily_candles_by_instrument={"CHF_JPY": daily})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["CHF_JPY"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_allows_a_fade_when_the_multi_day_move_is_below_threshold(mock_send, tmp_path, monkeypatch):
+    # Ordinary chop (a move smaller than TREND_FILTER_THRESHOLD_PCT) is
+    # not a "trend" -- must not block anything.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT - 0.5)  # below the threshold
+    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"),
+                         daily_candles_by_instrument={"GBP_USD": daily})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["GBP_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_allows_a_fade_when_no_daily_candle_data_is_available(mock_send, tmp_path, monkeypatch):
+    # Matches every existing test's FakeClient default (no daily candles
+    # configured at all) -- must degrade to "no trend detected", not
+    # block trading. This is what keeps every pre-trend-filter test's
+    # behavior unchanged.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["GBP_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_trend_filter_ignores_an_incomplete_latest_daily_candle(mock_send, tmp_path, monkeypatch):
+    # Today's still-forming daily candle must never factor into the
+    # trend read -- same look-ahead-safety discipline as every other
+    # Daily-candle consumer in this codebase (complete=True only).
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 5.0, complete=False)
+    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"),
+                         daily_candles_by_instrument={"GBP_USD": daily})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["GBP_USD"]  # insufficient COMPLETE history -> no trend asserted -> trade proceeds
 
 
 @patch("vwap_scalp_addon.send_message")

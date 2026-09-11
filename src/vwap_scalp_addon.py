@@ -318,6 +318,24 @@ REALIZED_LOSS_INFLATION = 1.29  # divides risk_amount so REAL realized losses la
                                  # user's intended risk_per_trade_pct; recalibrate as more live
                                  # data accumulates, and revisit if the root cause is ever found.
 
+# Real live finding (2026-09-11, full-week review): the week's weak
+# realized performance (20W/41L since the R:R floor fix) traced heavily
+# to fading GENUINE multi-day trends, not ordinary intraday chop -- a
+# sustained yen-strengthening move (BOJ rate-hike speculation, ~Sept
+# 3-8) explained 10 of 41 losses, all LONG JPY-cross fades betting
+# against that same trend; a surprise ECB hike on 09-10 explained
+# another. A real news/economic-calendar filter would need historical
+# calendar data this pipeline doesn't have -- this is the cheaper,
+# price-only proxy for the same idea, testable with data already on
+# hand: skip a fade that bets AGAINST an already-established multi-day
+# directional move, since that's a real repricing continuing, not a
+# reversion candidate. TREND_FILTER_LOOKBACK_DAYS/THRESHOLD_PCT are a
+# reasoned starting heuristic, NOT independently backtested the way the
+# core VWAP signal was -- recalibrate once enough live data (or a
+# proper price-only backtest) exists to check it against.
+TREND_FILTER_LOOKBACK_DAYS = 5
+TREND_FILTER_THRESHOLD_PCT = 2.0
+
 _vwap_scalp_lock = threading.Lock()
 
 
@@ -902,6 +920,27 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             if direction is None:
                 continue
 
+            # Trend filter (2026-09-11) -- see TREND_FILTER_LOOKBACK_DAYS'
+            # own comment. A LONG fade bets price reverts UP; skip it
+            # against an established DOWN trend. A SHORT fade bets price
+            # reverts DOWN; skip it against an established UP trend.
+            # Silent-skip mechanics deliberately mirror the R:R floor
+            # (record_risk_limit_skip -- digest-visible, not a separate
+            # immediate Telegram ping per occurrence) rather than the
+            # weak-hour exclusion's fully silent one, since WHICH filter
+            # blocked a trade is exactly the kind of thing worth being
+            # able to see later, unlike a pair simply not being scheduled
+            # for this hour at all.
+            trend = _multi_day_trend_direction(client, instrument)
+            if (direction == "LONG" and trend == "DOWN") or (direction == "SHORT" and trend == "UP"):
+                from dashboard_state import record_risk_limit_skip
+                reason = (f"trend filter: skipped {direction} {instrument} -- {TREND_FILTER_LOOKBACK_DAYS}-day "
+                          f"trend is {trend}, fading against it")
+                record_risk_limit_skip("VWAP Scalp", reason)
+                print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- fading against a {trend} "
+                      f"{TREND_FILTER_LOOKBACK_DAYS}-day trend", flush=True)
+                continue
+
             account = account_state_from_tracked_capital(state, entries)
             if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
                                risk_config, account):
@@ -929,6 +968,37 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     times, vwap, dev_stdev, z = _compute_vwap_series(candles)
     signal_index, direction = _find_confirmed_signal(times, z, now)
     return signal_index, direction, vwap, dev_stdev
+
+
+def _multi_day_trend_direction(client, instrument: str) -> str | None:
+    """"UP" if the latest COMPLETE daily close is at least
+    TREND_FILTER_THRESHOLD_PCT higher than the close
+    TREND_FILTER_LOOKBACK_DAYS complete trading days before it, "DOWN"
+    if that much lower, None otherwise (ordinary chop, or not enough
+    history yet). Only complete=True daily candles are used, and BOTH
+    reference points are strictly prior, already-closed days -- nothing
+    from today (which is what the VWAP Scalp signal this gates is
+    actually trading) ever enters this calculation. That clean
+    separation is deliberate: the retired trend_addon.py's look-ahead
+    bug (DEVELOPMENT_LOG.md 2026-08-30) came from a signal computed
+    from data that overlapped the very outcome it was later scored
+    against -- this function never touches today's price at all, so it
+    can't leak into the intraday decision it's gating."""
+    candles = client.get_candles(instrument, "D", count=TREND_FILTER_LOOKBACK_DAYS + 5)
+    candles = [c for c in candles if c.get("complete", True)]
+    if len(candles) <= TREND_FILTER_LOOKBACK_DAYS:
+        return None
+    closes = [float(c["mid"]["c"]) for c in candles]
+    latest = closes[-1]
+    reference = closes[-1 - TREND_FILTER_LOOKBACK_DAYS]
+    if reference == 0:
+        return None
+    change_pct = 100 * (latest - reference) / reference
+    if change_pct >= TREND_FILTER_THRESHOLD_PCT:
+        return "UP"
+    if change_pct <= -TREND_FILTER_THRESHOLD_PCT:
+        return "DOWN"
+    return None
 
 
 def _record_ties_if_any(client, winner: str, today_start) -> None:
