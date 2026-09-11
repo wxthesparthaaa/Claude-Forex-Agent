@@ -40,7 +40,7 @@
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-11T13:59:31.636854+08:00",
     "NZD_USD": "2026-09-11T13:59:31.636854+08:00",
-    "USD_JPY": "2026-09-11T15:39:30.400027+08:00",
+    "USD_JPY": "2026-09-11T15:59:29.933995+08:00",
     "EUR_USD": "2026-09-11T15:44:30.800315+08:00",
     "GBP_USD": "2026-09-11T15:44:30.800315+08:00",
     "USD_CHF": "2026-09-11T15:44:30.800315+08:00",
@@ -149,5 +149,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-11T07:59:21.356145+00:00"
+  "last_process_heartbeat_at": "2026-09-11T07:49:21.355780+00:00"
 }
