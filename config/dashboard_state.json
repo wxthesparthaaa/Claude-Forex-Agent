@@ -58,8 +58,7 @@
     "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it",
     "VWAP Scalp: trend filter: skipped SHORT WTICO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: trend filter: skipped SHORT BCO_USD -- 5-day trend is UP, fading against it",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-11T01:49:21.353375+00:00",
   "paused_instruments": {},
@@ -154,5 +153,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-11T04:04:21.355576+00:00"
+  "last_process_heartbeat_at": "2026-09-11T04:14:21.353645+00:00"
 }
