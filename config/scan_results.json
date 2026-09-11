@@ -1,36 +1,36 @@
 {
-  "scanned_at": "2026-09-11T13:34:37.234439+00:00",
+  "scanned_at": "2026-09-11T13:54:35.641877+00:00",
   "candidates": [
     {
       "instrument": "XAU_USD",
       "direction": "LONG",
-      "entry_price": 4393.035,
+      "entry_price": 4391.13,
       "stop_loss": 4292.11,
-      "take_profit": 4594.885,
-      "confidence_pct": 55.1,
+      "take_profit": 4589.17,
+      "confidence_pct": 53.9,
       "confidence_components": {
         "breadth": 57.14285714285714,
-        "rsi": 39.42369116279927,
-        "candlestick": 85.0,
+        "rsi": 55.402320189883554,
+        "candlestick": 50.0,
         "news": 50.0
       },
       "units": 1,
       "unit_label": "oz",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 5564.44,
+      "notional_account_currency": 5562.02,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 77 (overbought -- some chase risk).",
-        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
+        "RSI is 74 (overbought -- some chase risk).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": false
       }
     }
