@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-11", "VWAP Scalp now pauses ALL new entries for the whole day on known high-impact news days "
+                    "(US CPI, US NFP, FOMC, ECB) -- today's US CPI day lost -$157 broadly across pairs, and a "
+                    "narrow pause window around the exact release barely helped (checked first). The calendar "
+                    "is hardcoded through Dec 2026 and needs periodic refreshing as new dates are published."),
     ("2026-09-11", "VWAP Scalp now skips a fade that bets against an already-established 5-day price trend "
                     "(>=2% move) -- the full-week review found real news-driven trends (BOJ/ECB) behind a big "
                     "share of last week's losses, all counter-trend fades. You'll see a one-liner in the "

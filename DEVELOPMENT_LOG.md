@@ -8131,3 +8131,73 @@ correctly excluded (degrades to "insufficient history" rather than
 leaking today's still-forming price in). `git stash`-confirmed all 6
 fail against the pre-fix code first. Full suite (666 tests) green;
 `py_compile` + real `import` both clean.
+
+## 2026-09-11 (continued) -- Diagnosed a -$157 CPI day; added a full-day pause for known high-impact events
+
+**Trigger**: user pasted the day's Telegram digest -- 19 closed trades,
+3W/16L, -$165.88 (-8.81%) for the night, with the trend filter firing
+only once (a NZD_JPY LONG skip) despite the broad damage. Also asked to
+look at 09-07 (Monday), the week's one standout +$311 day, for anything
+replicable.
+
+**Today's losses (18 in the journal, -$157.26)**: root cause is
+2026-09-11 being US August CPI day -- the last inflation report before
+the Fed's Sept 15-16 meeting, with Thursday's hot PPI already pushing
+hawkish rate-hike bets. Confirmed via real news: gold whipsawed
+$4,300-4,350 all day, still down ~2% on the week despite the bounce --
+choppy, not a clean trend. XAU_USD SHORT lost 4-for-4 today, two with
+absurd planned R:R (64.86:1, 24.01:1 -- price so extended from VWAP the
+"reversion target" was nonsensical). LONG win rate 1/8 (12.5%), SHORT
+2/10 (20%) -- both bad, matching last week's exact LONG-worse-than-
+SHORT asymmetry (broad EUR/GBP/JPY-cross LONG losses = USD strength/
+risk-off, not a pair-specific issue). Mechanics checked and clean: no
+same-tick clustering (min gap 44.8min), zero R:R-floor violations --
+not a bug, a real blind spot.
+
+**Tested a narrow pause window first, before building anything**: a
++/-2 hour window around the exact 12:30 UTC release only caught 4 of
+today's 18 trades, and those 4 netted +6.65 -- barely touches the
+actual damage, which was spread across the whole session (pre-
+positioning into a well-anticipated release, plus hours of post-release
+volatility), not clustered around the print itself. A full-day pause
+would have avoided the entire -$157.26 (15 losses, -$250.54) at the
+cost of foregoing 3 wins that also happened that day (+$93.28) -- net
++$157.26 better.
+
+**Monday 09-07 (+$311.45, 9W/6L, 60% win rate)**: confirmed via news it
+was a genuinely quiet day (thin Monday liquidity, only light Japan GDP
+data, nothing major until Thursday). BCO_USD alone won all 3 of its
+trades (+184/+74/+43, ~$300 of the day by itself), plus XAU_USD/XAG_USD
+wins on top -- commodities reverting cleanly with nothing forcing a
+trend, exactly the regime the backtest was built for. Not mechanically
+replicable -- it won *because* nothing news-worthy was happening, the
+mirror image of today's problem.
+
+**Fix** (`src/vwap_scalp_addon.py`): new `HIGH_IMPACT_EVENT_DAYS`, a
+hardcoded, forward-looking calendar (source: federalreserve.gov, ecb.
+europa.eu, bls.gov) of the "big four" recurring USD/EUR-moving events --
+US CPI, US NFP, FOMC decisions, ECB decisions -- the same four
+implicated across the project's last several weekly reviews (BOJ/ECB
+the week of 09-10, CPI today). `_high_impact_event_today(now)` is a
+plain UTC-date lookup. Wired into the main per-pair loop right after
+the already-open/force-close check: on a flagged day, skips straight to
+`continue` for every pair (no signal check, no trend-filter check --
+cheaper and simpler than layering on top), while still allowing the
+force-close of any already-open position. Skip recorded once per tick
+(shares `notified_categories` with the pacing-cap dedup, same
+established pattern) via `record_risk_limit_skip`, digest-visible:
+"event day: US CPI (Aug) -- no new entries today". Deliberately blunt:
+pauses EVERY pair, not scoped to the "obviously relevant" currency --
+today's damage was broad across USD pairs, JPY crosses, and commodities
+alike. This calendar is NOT algorithmically derivable (FOMC/ECB/CPI
+dates don't follow a fixed rule, unlike NFP's "first Friday") and MUST
+be refreshed periodically as new dates are published a few months out
+at a time -- currently populated through 2026-12-17.
+
+**Verification**: 4 new tests -- blocks all new entries on a flagged
+day with a correct digest message, records exactly one skip per tick
+across all 17 pairs (not per pair), still force-closes an existing
+position past its hold cap despite the pause, and does not block an
+ordinary (unflagged) day. `git stash`-confirmed the two entry-blocking
+tests fail against the pre-fix code first. Full suite (670 tests)
+green; `py_compile` + real `import` both clean.

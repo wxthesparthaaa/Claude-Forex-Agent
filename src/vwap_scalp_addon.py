@@ -336,6 +336,59 @@ REALIZED_LOSS_INFLATION = 1.29  # divides risk_amount so REAL realized losses la
 TREND_FILTER_LOOKBACK_DAYS = 5
 TREND_FILTER_THRESHOLD_PCT = 2.0
 
+# Real live finding (2026-09-11): US CPI day. Tested a narrow pause
+# window around the exact 12:30 UTC release first -- it barely helped (a
+# +/-2 hour window caught only 4 of that day's 18 trades, and those 4
+# netted +6.65, not negative). The damage was spread across the WHOLE
+# session instead -- pre-positioning ahead of a widely-anticipated
+# release plus elevated volatility persisting for hours after, not a
+# narrow print-instant effect. A full-day pause would have avoided the
+# entire day's -$157.26 (15 losses, -$250.54) at the cost of foregoing 3
+# wins that also happened that day (+$93.28) -- a clear net improvement.
+# This complements TREND_FILTER_LOOKBACK_DAYS' multi-day price-trend
+# detection with something it structurally can't see: a single KNOWN,
+# scheduled news day needs no historical price data at all, only a
+# forward-looking calendar.
+#
+# The "big four" recurring USD/EUR-moving events -- US CPI, US NFP, FOMC
+# rate decisions, ECB rate decisions -- are the same four implicated
+# across this project's last several weekly reviews (BOJ speculation and
+# a surprise ECB hike the week of 09-10, US CPI on 09-11). Deliberately
+# blunt: pauses EVERY pair for the WHOLE UTC calendar day, not scoped to
+# just the "obviously relevant" currency -- 09-11's losses were broad
+# across USD pairs, JPY crosses, AND commodities alike, since a real
+# risk-off/repricing day moves the whole universe, not just the one
+# currency in the headline. Hardcoded and NOT algorithmically derived
+# (FOMC/ECB/CPI dates don't follow a fixed rule the way NFP's "first
+# Friday of the month" does) -- MUST be refreshed periodically as new
+# release dates are published, since these are only ever known a few
+# months out. Source dates: federalreserve.gov (FOMC), ecb.europa.eu
+# (ECB), bls.gov (CPI).
+HIGH_IMPACT_EVENT_DAYS = {
+    "2026-09-11": "US CPI (Aug)",
+    "2026-09-16": "FOMC rate decision",
+    "2026-10-02": "US NFP (Sep)",
+    "2026-10-14": "US CPI (Sep)",
+    "2026-10-28": "FOMC rate decision",
+    "2026-10-29": "ECB rate decision",
+    "2026-11-06": "US NFP (Oct)",
+    "2026-11-10": "US CPI (Oct)",
+    "2026-12-04": "US NFP (Nov)",
+    "2026-12-09": "FOMC rate decision",
+    "2026-12-10": "US CPI (Nov)",
+    "2026-12-17": "ECB rate decision",
+}
+
+
+def _high_impact_event_today(now: datetime) -> str | None:
+    """The event name if `now`'s UTC calendar date is in
+    HIGH_IMPACT_EVENT_DAYS, else None. A plain date-string lookup --
+    deliberately not timezone- or release-time-aware (see that dict's
+    own comment for why this is a full-day pause, not a narrow window
+    around the actual release time)."""
+    return HIGH_IMPACT_EVENT_DAYS.get(now.strftime("%Y-%m-%d"))
+
+
 _vwap_scalp_lock = threading.Lock()
 
 
@@ -875,6 +928,25 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
                 if (now - opened_at) >= timedelta(minutes=MAX_HOLD_MINUTES):
                     _force_close(client, entry)
                 continue  # a position we already hold this tick -- never a candidate for a fresh entry
+
+            # High-impact event day (2026-09-11) -- see HIGH_IMPACT_EVENT_DAYS'
+            # own comment for why this is a FULL-DAY pause, not a narrow
+            # window: tested a +/-2 hour window around that day's exact CPI
+            # release first and it barely helped (caught only 4 of 18 trades,
+            # netting +6.65 -- not the problem). The damage was spread across
+            # the whole session, so the whole session is what's paused. Still
+            # allows the force-close above -- an existing position isn't
+            # abandoned, just no fresh ones on a known high-impact day.
+            event_reason = _high_impact_event_today(now)
+            if event_reason is not None:
+                category = "event_day"
+                if category not in notified_categories:
+                    notified_categories.add(category)
+                    from dashboard_state import record_risk_limit_skip
+                    record_risk_limit_skip("VWAP Scalp", f"event day: {event_reason} -- no new entries today")
+                    print(f"INFO: VWAP Scalp paused for the day ({event_reason}) -- no new entries; existing "
+                          f"positions still monitored for the hold-cap force-close", flush=True)
+                continue
 
             # Re-checked fresh EVERY iteration, from `entries` reloaded
             # THIS iteration -- not a value computed once before the loop

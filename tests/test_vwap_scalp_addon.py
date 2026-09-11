@@ -457,6 +457,90 @@ def test_trend_filter_ignores_an_incomplete_latest_daily_candle(mock_send, tmp_p
     assert opened == ["GBP_USD"]  # insufficient COMPLETE history -> no trend asserted -> trade proceeds
 
 
+class _EventDayDatetime(_FrozenDatetime):
+    _frozen = datetime(2026, 9, 11, 10, 0, tzinfo=timezone.utc)  # US CPI day, inside the watch window
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_event_day_filter_blocks_all_new_entries(mock_send, tmp_path, monkeypatch):
+    # 2026-09-11 real incident: US CPI day, -$157.26 across 18 trades,
+    # broad-based across pairs/directions -- a narrow window around the
+    # exact release barely helped (see HIGH_IMPACT_EVENT_DAYS' own
+    # comment), so this is a full UTC-calendar-day pause instead.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_EventDayDatetime._frozen)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "event day" in s]
+    assert len(skips) == 1
+    assert "US CPI" in skips[0]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_event_day_filter_records_one_risk_skip_per_tick_not_per_pair(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+                                         end_time=_EventDayDatetime._frozen)
+    client = FakeClient(candles_by_instrument={p: candles for p in vs.VWAP_SCALP_PAIRS},
+                         price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    state = ds.load_state()
+    skips = [s for s in state.risk_limit_skips_since_digest if "event day" in s]
+    assert len(skips) == 1
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_event_day_filter_still_force_closes_an_existing_position(mock_send, tmp_path, monkeypatch):
+    # A pause on new entries must never suppress the 30-min hold-cap
+    # safeguard on a position already held -- same discipline already
+    # established for the daily/bucket/cooldown caps.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    tj.record_open_trade("601", {
+        "instrument": "EUR_USD", "direction": "SHORT", "units": 1000, "entry_price": 1.1050,
+        "stop_loss": 1.1080, "take_profit": 1.1020, "confidence_pct": 89.2,
+        "account_currency": "USD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
+    })
+    entries = tj.load_journal()
+    for e in entries:
+        if e["trade_id"] == "601":
+            e["opened_at"] = (_EventDayDatetime._frozen - timedelta(minutes=31)).isoformat()
+    tj.save_journal(entries)
+    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
+    client = FakeClient()
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.closed_ids == ["601"]  # force-close still fires despite the event-day pause
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_event_day_filter_does_not_block_an_ordinary_day(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)  # FIXED_NOW, not in HIGH_IMPACT_EVENT_DAYS
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
 @patch("vwap_scalp_addon.send_message")
 def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send, tmp_path, monkeypatch):
     # Real live data showed losses landing ~1.18x bigger than their own
