@@ -897,12 +897,8 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             if _recently_signaled(entries, instrument, now):
                 continue  # a signal fired on this pair within the last COOLDOWN_MINUTES already
 
-            candles = client.get_candles(instrument, "M1",
-                                          from_time=today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                          to_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
-            candles = [c for c in candles if c.get("complete", True)]
-            times, vwap, dev_stdev, z = _compute_vwap_series(candles)
-            signal_index, direction = _find_confirmed_signal(times, z, now)
+            signal_index, direction, vwap, dev_stdev = _detect_confirmed_signal(client, instrument,
+                                                                                  today_start, now)
             if direction is None:
                 continue
 
@@ -915,4 +911,65 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             continue
 
     print(f"INFO: VWAP Scalp tick finished -- {len(opened)} opened", flush=True)
+    if opened:
+        _record_ties_if_any(client, opened[-1], today_start)
     return opened
+
+
+def _detect_confirmed_signal(client, instrument, today_start, now):
+    """Fetches this tick's M1 candles for `instrument` and returns
+    (signal_index, direction, vwap, dev_stdev) if a confirmed signal is
+    present, else (None, None, None, None). Factored out of the main
+    per-pair loop above so _record_ties_if_any's follow-up pass can
+    reuse the identical signal-detection step without duplicating it."""
+    candles = client.get_candles(instrument, "M1",
+                                  from_time=today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                  to_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    candles = [c for c in candles if c.get("complete", True)]
+    times, vwap, dev_stdev, z = _compute_vwap_series(candles)
+    signal_index, direction = _find_confirmed_signal(times, z, now)
+    return signal_index, direction, vwap, dev_stdev
+
+
+def _record_ties_if_any(client, winner: str, today_start) -> None:
+    """Called once, only on a tick that opened a position -- checks
+    whether any pair listed AFTER `winner` in VWAP_SCALP_PAIRS also had
+    a confirmed signal this same tick. Those pairs never get their own
+    signal checked in the main loop above: the pacing-cap check
+    short-circuits them (`continue`, before signal detection) the
+    instant the winner's own open makes `_pacing_cap_reason` see an
+    active cooldown. Without this follow-up pass there was no way to
+    tell "lost the tie to a higher-priority pair" apart from "never had
+    a signal at all" -- both looked identical (silently skipped) in
+    trade_journal.json, which only records pairs that actually open.
+    Records a tie (vwap_scalp_tie_log.record_tie) only when at least
+    one such pair is found -- makes VWAP_SCALP_PAIRS' priority order
+    (see its own comment) measurable after the fact: which pair
+    actually wins these same-tick races, and whether the 2026-09-10
+    commodities-first reorder changed that.
+
+    Bounded, rare extra cost: only runs on ticks that already opened a
+    position (a handful of times a day at VWAP Scalp's real observed
+    frequency, not every 5-minute tick), and only re-checks pairs after
+    the winner, not the whole universe. Best-effort -- a failure here
+    must never affect the trade that already opened."""
+    try:
+        winner_idx = VWAP_SCALP_PAIRS.index(winner)
+    except ValueError:
+        return
+    also_signaled = []
+    for instrument in VWAP_SCALP_PAIRS[winner_idx + 1:]:
+        try:
+            now = datetime.now(timezone.utc)
+            _, direction, _, _ = _detect_confirmed_signal(client, instrument, today_start, now)
+            if direction is not None:
+                also_signaled.append(instrument)
+        except Exception as e:
+            print(f"WARNING: VWAP Scalp tie-check failed for {instrument}: {e}", flush=True)
+            continue
+    if also_signaled:
+        try:
+            from vwap_scalp_tie_log import record_tie
+            record_tie(datetime.now(timezone.utc).isoformat(), winner, also_signaled)
+        except Exception as e:
+            print(f"WARNING: could not record VWAP Scalp tie: {e}", flush=True)

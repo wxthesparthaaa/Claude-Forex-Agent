@@ -17,6 +17,7 @@ STATE_FILES = {
     "config/dashboard_state.json": os.path.join(STATE_DIR, "dashboard_state.json"),
     "config/scan_results.json": os.path.join(STATE_DIR, "scan_results.json"),
     "config/trade_journal.json": os.path.join(STATE_DIR, "trade_journal.json"),
+    "config/vwap_scalp_tie_log.json": os.path.join(STATE_DIR, "vwap_scalp_tie_log.json"),
 }
 
 

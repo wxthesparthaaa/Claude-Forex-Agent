@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import dashboard_state as ds
 import trade_journal as tj
 import vwap_scalp_addon as vs
+import vwap_scalp_tie_log as tie_log
 from autopilot import PhaseState
 
 FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 04:00-24:00 UTC watch window
@@ -30,6 +31,8 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(tj, "JOURNAL_PATH", str(tmp_path / "trade_journal.json"))
     monkeypatch.setattr(ds, "STATE_DIR", str(tmp_path))
     monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
+    monkeypatch.setattr(tie_log, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(tie_log, "TIE_LOG_PATH", str(tmp_path / "vwap_scalp_tie_log.json"))
 
 
 def _autopilot_state(vwap_scalp_enabled=True, kill_switch_engaged=False):
@@ -902,6 +905,61 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
     # blocked instrument's skip is recorded per tick per reason.
     skips = [s for s in state.risk_limit_skips_since_digest if "global cooldown" in s]
     assert len(skips) == 1
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_records_a_tie_when_multiple_instruments_confirm_within_the_same_tick(
+        mock_send, tmp_path, monkeypatch):
+    # Same real incident/fixture as the cooldown-clustering test above,
+    # but checking the OTHER side of the fix (2026-09-11): trade_journal
+    # only ever records the winner, so there was previously no way to
+    # measure which pair actually won these races -- exactly the data
+    # needed to verify VWAP_SCALP_PAIRS' 2026-09-10 commodities-first
+    # reorder is doing anything. AUD_JPY is checked before EUR_JPY and
+    # CHF_JPY in VWAP_SCALP_PAIRS, so it should win and the other two
+    # should be recorded as having also signaled.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(tj, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    three_pairs = ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
+    client = FakeClient(candles_by_instrument={p: candles for p in three_pairs},
+                         price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["AUD_JPY"]
+    entries = tie_log.load_tie_log()
+    assert len(entries) == 1
+    assert entries[0]["opened"] == "AUD_JPY"
+    assert entries[0]["also_signaled"] == ["EUR_JPY", "CHF_JPY"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_no_tie_recorded_when_only_one_instrument_confirms(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+    assert tie_log.load_tie_log() == []
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_no_tie_recorded_when_nothing_opens(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    client = FakeClient(candles_by_instrument={"EUR_USD": _flat_session_candles()})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert tie_log.load_tie_log() == []
 
 
 @patch("vwap_scalp_addon.send_message")

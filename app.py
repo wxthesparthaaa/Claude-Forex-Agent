@@ -85,6 +85,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-11", "VWAP Scalp now logs same-tick 'ties' -- when two+ pairs signal at once and the priority "
+                    "order picks a winner, the loser is now recorded (config/vwap_scalp_tie_log.json), not just "
+                    "silently dropped. Previously there was no way to tell 'lost a tie' apart from 'never had a "
+                    "signal' from the trade journal alone -- this makes the commodities-first reorder actually "
+                    "measurable going forward."),
     ("2026-09-10", "Added cold-boot gap detection: if the process comes back after 10+ minutes of nothing "
                     "(a Render free-tier sleep, usually from a missed UptimeRobot ping), you now get an "
                     "immediate Telegram alert naming the gap length instead of silently losing hours of "

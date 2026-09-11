@@ -7933,3 +7933,98 @@ Telegram send itself fails) and `tests/test_trade_monitor.py`
 path). `git stash`-confirmed all 7 fail against the pre-fix code
 first. Full suite (652 tests) green; `py_compile` + real `import`
 both clean.
+
+## 2026-09-11 -- Full-week trade review; added same-tick tie logging so the priority-pairs fix is actually measurable
+
+**Request**: review the whole week's trades for script health, whether
+SL/TP were set as planned, and whether the 2026-09-10 commodities-first
+priority reorder was actually taking effect -- then dig further into
+why realized performance looked weak, and do something about the
+journal not being able to show which pair wins a same-tick tie.
+
+**Script health**: two real issues found, BOTH already fixed and
+confirmed clean in the data since. Same-tick clustering (multiple
+trades opening seconds apart despite the 40-minute global cooldown)
+happened repeatedly through 09-04/09-07/09-08, root-caused to a
+negative-time-gap edge case and fixed 2026-09-08 22:30 UTC -- zero
+recurrences in the 37 trades since (min gap between any two opens:
+42.8 minutes). The reward:risk floor (meant to reject anything below
+1:1) shows violations as low as 0.21:1, but all of them predate the
+floor's own introduction (2026-09-07 15:58 UTC) -- zero violations in
+the 61 trades since (min 1.02:1).
+
+**SL/TP set as planned**: yes. One known, already-compensated caveat:
+realized losses run ~29-37% larger in dollar terms than the nominal
+risk_amount (`REALIZED_LOSS_INFLATION = 1.29`, a documented OANDA
+demo-account conversion-rate drift, not a new bug) -- this week's
+actual ratio (mean 1.365x) runs a little above that calibration,
+worth a future recalibration, not urgent.
+
+**Priority pairs**: confirmed live in code (`VWAP_SCALP_PAIRS` has
+XAU/XAG/WTICO/BCO first). Could NOT be verified from trade_journal.json
+alone -- a pair that loses a tie never opens a position, so it's
+indistinguishable from a pair that never had a signal at all. This is
+the gap the tie-logging fix below closes.
+
+**Win-rate investigation**: since the R:R floor fix, VWAP Scalp is
+20W/41L (32.8%), mean -0.38R/trade, -$497.65 over 61 trades -- 1
+winning day out of 4 on the backtest's own day-level metric, well
+below the ~70-90% day-win rate it was validated on. Checked for a
+mechanical cause and found none: no single pair, time bucket, or
+planned-R:R tier is a smoking gun (underperformance is broad-based
+across nearly every cut); loss hold-times are healthy (median 3.8min,
+only 2/41 hit the 30-min force-close, meaning stops are firing
+cleanly, not bleeding out slowly); `confidence_pct` is a hardcoded
+constant (89.2, not a live signal, so it can't itself be "regressing").
+The one real pattern -- LONG (24.2% win, -0.602R) noticeably worse
+than SHORT (42.9% win, -0.117R) -- doesn't hold up as a clear bug
+either: LONG's own planned R:R is naturally a bit lower (2.11 vs 3.00
+mean), and per-instrument LONG/SHORT cells are mostly n=1-5, too thin
+to separate a real regime effect (a broad-dollar/risk-off week
+fighting counter-trend LONG fades more than SHORT ones) from ordinary
+variance. Conclusion: no code bug found; this reads as a real, if
+uncomfortable, short stretch against a strategy validated on a full
+year of data, not a live execution defect. Recommended continued
+monitoring rather than a code change, since 4 days is too short a
+window to distinguish bad luck from decay.
+
+**Fix -- tie logging** (new `src/vwap_scalp_tie_log.py`): trade_journal
+only ever records the pair that actually opens, so there was
+previously no way to tell "lost a same-tick tie to a higher-priority
+pair" apart from "never had a signal at all" -- both looked identical
+(silently skipped). `_check_vwap_scalp_opportunities_unsafe`
+(`vwap_scalp_addon.py`) now calls a new `_record_ties_if_any` once,
+only on a tick that opened a position: it re-checks (cheaply, signal
+detection only, not the full open pipeline) every pair listed AFTER
+the winner in `VWAP_SCALP_PAIRS` -- the ones the main loop's pacing-cap
+check short-circuits before their own signal ever gets computed. Any
+pair that ALSO had a confirmed signal this same tick gets recorded via
+`record_tie` as `{tick_time, opened, also_signaled}` into a new,
+GitHub-synced `config/vwap_scalp_tie_log.json` (registered in
+`state_paths.STATE_FILES`, trimmed to the most recent 500 entries).
+Deliberately separate from `trade_journal.json` (not real trades) and
+from `risk_limit_skips_since_digest` (digest-facing, already
+deduped/terse, and doesn't say WHICH pair lost). Bounded, rare extra
+cost: only runs on ticks that already opened something (a handful of
+times a day at VWAP Scalp's real frequency), and only re-checks pairs
+after the winner, not the whole 17-pair universe. Factored the
+existing candle-fetch + `_find_confirmed_signal` step out of the main
+loop into `_detect_confirmed_signal` so both places share the exact
+same signal-detection logic rather than duplicating it.
+
+**Verification**: 8 new tests -- `tests/test_vwap_scalp_tie_log.py`
+(load/record/persist, no-op when nothing lost a tie, trims to
+`MAX_TIE_LOG_ENTRIES`, best-effort no-raise-on-IO-failure) and 3 new
+integration tests in `tests/test_vwap_scalp_addon.py` (a real 3-pair
+same-tick scenario records AUD_JPY as winner with EUR_JPY/CHF_JPY as
+`also_signaled`, a single-pair open records no tie, a no-signal tick
+records no tie). `git stash`-confirmed the integration test fails
+against the pre-fix code first (0 entries logged instead of 1). Full
+suite (660 tests) green; `py_compile` + real `import` both clean.
+
+**Standing rule going forward** (user request): no future fix may
+leave a strategy requiring a manual "Reset capital" click to resume
+working on its own already-saved settings -- if a change could
+plausibly leave one silently stuck, that's a bug to fix in the same
+change, not an acceptable side effect. Saved to memory
+(`feedback_forex_agent_no_reset_required`).
