@@ -1,30 +1,63 @@
 {
-  "scanned_at": "2026-09-11T09:04:30.460642+00:00",
+  "scanned_at": "2026-09-11T09:24:30.174570+00:00",
   "candidates": [
     {
       "instrument": "EUR_USD",
       "direction": "SHORT",
-      "entry_price": 1.15983,
+      "entry_price": 1.16006,
       "stop_loss": 1.16082,
-      "take_profit": 1.15785,
-      "confidence_pct": 73.8,
+      "take_profit": 1.15854,
+      "confidence_pct": 65.0,
       "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 94.12568215067964,
-        "candlestick": 85.0,
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
+        "candlestick": 50.0,
         "news": 50.0
       },
-      "units": -11254,
+      "units": -14662,
       "unit_label": "units",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 16549.62,
+      "notional_account_currency": 21562.14,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 34 (neutral range).",
-        "Candlestick pattern at this level: shooting star -- adds confidence, but the trade doesn't depend on it.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 40 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": true
+      }
+    },
+    {
+      "instrument": "GBP_USD",
+      "direction": "LONG",
+      "entry_price": 1.35098,
+      "stop_loss": 1.3502,
+      "take_profit": 1.35254,
+      "confidence_pct": 74.4,
+      "confidence_components": {
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
+        "candlestick": 85.0,
+        "news": 66.66666666666666
+      },
+      "units": 14286,
+      "unit_label": "units",
+      "risk_amount": 14.127037500000002,
+      "notional_account_currency": 24466.83,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 47 (neutral range).",
+        "Candlestick pattern at this level: bullish engulfing -- adds confidence, but the trade doesn't depend on it.",
+        "News sentiment: supportive of this direction."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
@@ -37,25 +70,25 @@
     {
       "instrument": "USD_CHF",
       "direction": "LONG",
-      "entry_price": 0.81446,
+      "entry_price": 0.81421,
       "stop_loss": 0.81324,
-      "take_profit": 0.8169,
-      "confidence_pct": 67.4,
+      "take_profit": 0.81615,
+      "confidence_pct": 66.6,
       "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 82.26668088595339,
+        "breadth": 57.14285714285714,
+        "rsi": 100.0,
         "candlestick": 50.0,
-        "news": 57.14285714285714
+        "news": 56.25
       },
-      "units": 7438,
+      "units": 9353,
       "unit_label": "units",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 9430.85,
+      "notional_account_currency": 11857.51,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 69 (neutral range).",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 61 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
