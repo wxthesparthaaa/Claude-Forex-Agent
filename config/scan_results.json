@@ -1,28 +1,28 @@
 {
-  "scanned_at": "2026-09-11T14:14:35.237704+00:00",
+  "scanned_at": "2026-09-11T14:34:34.441377+00:00",
   "candidates": [
     {
       "instrument": "BCO_USD",
       "direction": "LONG",
-      "entry_price": 106.595,
+      "entry_price": 106.767,
       "stop_loss": 105.374,
-      "take_profit": 109.037,
-      "confidence_pct": 75.0,
+      "take_profit": 109.553,
+      "confidence_pct": 65.0,
       "confidence_components": {
-        "breadth": 85.71428571428571,
+        "breadth": 57.14285714285714,
         "rsi": 100.0,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 9,
+      "units": 8,
       "unit_label": "barrels",
       "risk_amount": 14.127037500000002,
-      "notional_account_currency": 1214.94,
+      "notional_account_currency": 1082.06,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 52 (neutral range).",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 54 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
@@ -31,39 +31,6 @@
         "breadth": true,
         "rsi": true,
         "candlestick": false,
-        "news": false
-      }
-    },
-    {
-      "instrument": "XAU_USD",
-      "direction": "LONG",
-      "entry_price": 4385.01,
-      "stop_loss": 4292.11,
-      "take_profit": 4570.81,
-      "confidence_pct": 70.2,
-      "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 98.91850336826082,
-        "candlestick": 20.0,
-        "news": 50.0
-      },
-      "units": 1,
-      "unit_label": "oz",
-      "risk_amount": 14.127037500000002,
-      "notional_account_currency": 5553.22,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 65 (neutral range).",
-        "Candlestick pattern at this level: bearish engulfing -- adds confidence, but the trade doesn't depend on it.",
-        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": true,
         "news": false
       }
     }
