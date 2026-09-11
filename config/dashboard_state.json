@@ -51,10 +51,8 @@
     "BCO_USD": "2026-09-10T23:54:55.074685+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 1,
-  "interval_scanned_instruments_since_digest": [
-    "USD_JPY"
-  ],
+  "interval_scan_count_since_digest": 0,
+  "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
   ],
@@ -151,5 +149,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-11T07:49:21.355780+00:00"
+  "last_process_heartbeat_at": "2026-09-11T07:59:21.356145+00:00"
 }
