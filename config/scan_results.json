@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-09-11T09:44:29.873164+00:00",
-  "candidates": [
-    {
-      "instrument": "GBP_USD",
-      "direction": "LONG",
-      "entry_price": 1.35078,
-      "stop_loss": 1.34978,
-      "take_profit": 1.35278,
-      "confidence_pct": 74.3,
-      "confidence_components": {
-        "breadth": 57.14285714285714,
-        "rsi": 99.54576279769452,
-        "candlestick": 85.0,
-        "news": 66.66666666666666
-      },
-      "units": 11143,
-      "unit_label": "units",
-      "risk_amount": 14.127037500000002,
-      "notional_account_currency": 19082.07,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 45 (neutral range).",
-        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": true,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-09-11T10:04:29.644571+00:00",
+  "candidates": []
 }
