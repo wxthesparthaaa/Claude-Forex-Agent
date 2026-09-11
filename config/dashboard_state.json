@@ -64,7 +64,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40",
-    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it"
+    "VWAP Scalp: trend filter: skipped LONG XAU_USD -- 5-day trend is DOWN, fading against it",
+    "VWAP Scalp: reward:risk 0.20:1 is below the 1:1 floor (risking 0.00020 to make 0.00004)"
   ],
   "last_scan_digest_sent_at": "2026-09-11T10:59:21.354330+00:00",
   "paused_instruments": {},
