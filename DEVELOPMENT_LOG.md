@@ -8318,3 +8318,68 @@ that would need its own historical Daily-candle plumbing to backtest
 correctly) -- live baseline numbers would differ slightly, but the
 RELATIVE comparison (does adding M15/H1 help) is unaffected by that
 omission.
+
+## 2026-09-12 (continued) -- Backtested the event-day filter for the first time; found a large, unexplained live-vs-backtest gap
+
+**User pushback**: (1) was the event-day pause (shipped 2026-09-11)
+ever actually backtested, or only reasoned from one day's retrospective
+numbers? (2) more fundamentally, insisted on checking whether the
+original VWAP Scalp backtest is simply not as good as it looked, or
+whether live execution is overlooking something that prevents reaching
+its backtested potential.
+
+**Methodology bug caught before trusting the first result**: the
+regime-filter backtest above used `entry_delay_minutes=0` (near-instant
+"perfect fill"), not the realistic 5-minute delay live actually
+experiences -- its 80.9% baseline win rate was flagged as implausible
+against every real live result this project has seen (20-35%
+per-trade). Reran at `entry_delay_minutes=5`. The gap did NOT close --
+it got slightly worse (83.6% win, mean_R +0.7696), ruling out entry
+timing as the explanation. Also directly verified `spread_aware_trade_
+simulator.simulate_scalp_trade` checks the correct bid/ask side on both
+entry and exit -- genuinely spread-aware, not the bug either.
+
+**Event-day filter's own backtested effect, answering the actual
+question asked**: RAW (no event-day filter) vs BASELINE (+ the same 13
+real historical CPI/NFP/FOMC/ECB dates already used for the regime-
+filter comparison, 2026-06-01 to 2026-09-11) -- 83.8% win/mean_R
++0.7665 vs 83.6% win/mean_R +0.7696. Excluding 5,106 candidates on
+known high-impact days barely moves the pooled numbers either way in
+this backtest. Doesn't contradict shipping it (it was justified by a
+specific, identified live incident, not a backtested edge claim), but
+it's now honestly on record that the filter's OWN backtested effect
+over 102 days is negligible -- the value observed live on 09-11 was a
+single-day, not a systematically recurring one in this window.
+
+**The real finding -- a large, still-unexplained live-vs-backtest gap,
+NOT explained by an unusual week**: ran this same backtest's own
+simulation for the EXACT 5 days live actually traded (2026-09-07 to
+2026-09-11, same 17 pairs, same real OANDA prices) to separate two very
+different explanations. Result: the backtest predicts 83.6% win rate,
+mean_R +0.8964 for THAT SPECIFIC WEEK -- matching (if anything slightly
+beating) its own 102-day average. Real live result for the identical
+window: 79 trades, 29.1% win rate, mean_R -0.4789. This rules out "an
+unusually bad week for the market" as the explanation -- the same
+signal logic, run against the real prices from those real days, says
+the edge was there. Live captured essentially none of it.
+
+**What's ruled out**: entry-delay timing (checked, made it worse not
+better), spread modeling (checked, genuinely present), market regime
+for this specific week (checked, backtest says this week should have
+been good). **What's NOT yet identified**: the actual mechanism. Two
+live candidates, not yet distinguished: (1) `vwap_scalp_addon.py`'s own
+signal-detection code has quietly diverged from `backtest_vwap_
+reversion_scalp.py`'s independently-maintained reimplementation of the
+same design -- they share no code, only intent; (2) a real-execution
+factor (OANDA fill behavior, live data latency/quality, something in
+the actual order-placement path) that no offline simulation, however
+careful, can fully capture.
+
+**Not shipped**: this is a research/diagnostic finding, not a
+conclusion with a fix attached. Explicitly NOT acting on it without the
+user's go-ahead -- the proposed next step (run vwap_scalp_addon.py's
+OWN real signal-detection function against this same historical price
+data, to see whether IT reproduces the backtest's numbers or not) would
+cleanly separate the two remaining hypotheses, but is a large enough
+escalation in scope, and consequential enough either way, that it needs
+an explicit decision to proceed rather than being run unprompted.

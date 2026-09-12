@@ -103,8 +103,24 @@ def main():
     client = OandaClient()
     bt.fetch_instrument_metadata(client, bt.SCALP_PAIRS)
 
-    baseline_returns = []
-    filtered_returns = []
+    # ENTRY_DELAY_MINUTES=5 matches live's actual realistic-5-minute-poll
+    # execution (app.py's own scheduler cadence). The 2026-09-12 run of
+    # this script used entry_delay_minutes=0 (near-instant "perfect
+    # fill") by mistake -- that's a SIGNAL-QUALITY methodology borrowed
+    # from report_current_vs_perfect_fill, appropriate for isolating
+    # "is this signal any good" but NOT a fair stand-in for what live
+    # actually experiences, and it produced an 80.9% per-trade win rate
+    # wildly inconsistent with every real live result this project has
+    # seen (20-35% per-trade win rate). Rerun at the realistic delay so
+    # this script's own predictions are actually comparable to real
+    # journal data, and to confirm the regime-filter rejection verdict
+    # still holds once execution is modeled realistically, not just
+    # under best-case signal timing.
+    ENTRY_DELAY_MINUTES = 5
+
+    raw_returns = []       # R:R floor + watch window only -- NO event-day filter at all
+    baseline_returns = []  # + historical event-day exclusion (the filter actually shipped live)
+    filtered_returns = []  # + M15/H1 trend filter on top of baseline
     event_day_blocked = 0
     trend_blocked = 0
 
@@ -122,7 +138,12 @@ def main():
         windowed_signals = [(i, d) for i, d in signals if _in_window(times[i])]
 
         candidates = bt._current_live_candidates(candles, times, vwap, dev_stdev, windowed_signals,
-                                                   instrument, entry_delay_minutes=0)
+                                                   instrument, entry_delay_minutes=ENTRY_DELAY_MINUTES)
+
+        # RAW: no event-day filter at all -- answers "was the event-day
+        # filter itself ever backtested" (it wasn't, until now; it shipped
+        # live 2026-09-11 on a single day's retrospective analysis only).
+        raw_candidates = candidates
 
         # BASELINE: current live candidate pipeline (R:R floor, weak-hour
         # exclusion, watch window already applied by _current_live_candidates)
@@ -146,18 +167,42 @@ def main():
                 trend_blocked += 1
 
         per_instrument_vwap = {instrument: result}
+        raw_returns.extend(bt._simulate_candidates(raw_candidates, per_instrument_vwap))
         baseline_returns.extend(bt._simulate_candidates(baseline_candidates, per_instrument_vwap))
         filtered_returns.extend(bt._simulate_candidates(filtered_candidates, per_instrument_vwap))
 
-        print(f"  {instrument:10s}  {len(candidates)} candidates -> {len(baseline_candidates)} after event-day "
+        print(f"  {instrument:10s}  {len(raw_candidates)} raw -> {len(baseline_candidates)} after event-day "
               f"exclusion -> {len(filtered_candidates)} after M15/H1 trend filter")
 
     print(f"\n{'='*88}")
-    print(f"Window: {WINDOW_START.date()} to {WINDOW_END.date()} ({(WINDOW_END-WINDOW_START).days} days)")
+    print(f"Window: {WINDOW_START.date()} to {WINDOW_END.date()} ({(WINDOW_END-WINDOW_START).days} days), "
+          f"entry_delay_minutes={ENTRY_DELAY_MINUTES} (realistic, matches live)")
     print(f"Total event-day-blocked: {event_day_blocked}  |  Total M15/H1-trend-blocked: {trend_blocked}")
     print(f"{'='*88}")
-    _summarize("BASELINE (current live, no M15/H1 filter)", baseline_returns)
+    _summarize("RAW (no event-day filter at all)", raw_returns)
+    _summarize("BASELINE (+ historical event-day exclusion)", baseline_returns)
     _summarize("+ M15/H1 trend filter", filtered_returns)
+
+    # LIVE-VS-BACKTEST GAP CHECK (2026-09-12, user question): the whole-
+    # window baseline (83.6% win, mean_R +0.77) is wildly higher than
+    # the REAL live result since the R:R floor shipped (2026-09-07 to
+    # 2026-09-11: 79 trades, 29.1% win, mean_R -0.4789). Isolating what
+    # THIS backtest itself predicts for the EXACT SAME 5 days live
+    # actually traded separates two very different explanations: if the
+    # backtest ALSO shows a bad result for those specific days, the gap
+    # is about which days got traded (a real, unusual regime this week),
+    # not a flaw in the simulation methodology. If the backtest still
+    # shows a good result for those days, that's real evidence something
+    # about live EXECUTION (not the signal itself) is losing the edge
+    # the backtest says was there.
+    live_window_start = datetime(2026, 9, 7, tzinfo=timezone.utc)
+    live_window_end = datetime(2026, 9, 11, 23, 59, 59, tzinfo=timezone.utc)
+    live_week_returns = [(t, i, r) for t, i, r in baseline_returns if live_window_start <= t <= live_window_end]
+    print(f"\n{'='*88}\nLIVE-VS-BACKTEST GAP CHECK: this backtest's OWN prediction for "
+          f"2026-09-07 to 2026-09-11 specifically\n{'='*88}")
+    _summarize("BACKTEST prediction for 09-07..09-11", live_week_returns)
+    print("REAL LIVE RESULT for the same window   n_trades=   79  win_rate= 29.1%  mean_R=-0.4789  "
+          "(from the actual trade_journal, VWAP_SCALP, since the R:R floor shipped)")
 
     # Per-instrument breakdown of what the trend filter actually removed --
     # the real question isn't just "does the pooled number look better,"
