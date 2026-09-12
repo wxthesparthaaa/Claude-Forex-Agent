@@ -8238,3 +8238,83 @@ behavior affected.
 assertion (`"Confidence weight reassessment" in sent_text`) still
 matches; no test asserted the full old string. Full suite (670 tests)
 green; `py_compile` + real `import` both clean.
+
+## 2026-09-12 (continued) -- Backtested the already-built M15/H1 regime filter; rejected, it makes things worse
+
+**Request**: user asked whether VWAP Scalp's design is fundamentally
+sound, given it fades extensions with no check for whether a sustained
+move is actually underway. Scoped and backtested a dedicated
+intraday regime filter as an alternative to the bolt-on 5-day trend
+filter and event-day pause, explicitly asked to "consider news
+headlines" in the backtest.
+
+**Check-overlap-first find**: `scripts/backtest_vwap_reversion_scalp.py`
+already had exactly this -- `_compute_htf_trend`/`_passes_trend_filter`/
+`apply_trend_filter`/`_fetch_htf_context`, built 2026-09-01 "from a real
+live loss cluster" (4 consecutive GBP_USD LONG fades against a real
+downtrend), wired into `main()`'s own "TREND-FILTERED PASS." It blocks
+a fade only when BOTH an M15 and an H1 close-vs-20-bar-SMA gauge agree
+against the fade direction. It had never actually been run and reported
+on -- built, then apparently never circled back to. Ran it for the
+first time via a new `scripts/backtest_vwap_regime_filter.py`, reusing
+the cached M1/M15/H1 candle data from the 2026-09-10 full-year run (no
+fresh OANDA fetch needed) and `_current_live_candidates` (the same R:R
+-floor-aware, watch-window-aware candidate builder `report_current_vs_
+perfect_fill` already uses) as the fair "current live" baseline --
+also fixed that script's own `CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS`,
+stale since 2026-09-10 (still had the 3-pair exclusion that was emptied
+live; this backtest script's copy was never updated).
+
+**News, honestly scoped**: true headline-level backtesting needs a
+historical news-archive API this pipeline doesn't have (Finnhub free
+tier is current-headlines-only). The feasible proxy:
+`HISTORICAL_EVENT_DAYS`, real published CPI/NFP/FOMC/ECB dates for
+2026-06-01 through 2026-09-11 (13 dates, hand-researched from
+federalreserve.gov/ecb.europa.eu/bls.gov, NFP computed as each month's
+first Friday) -- the same HIGH_IMPACT_EVENT_DAYS mechanism already
+shipped live, run backward over history instead of forward. Window
+deliberately narrowed to this ~102-day span (not the full cached year)
+so the calendar is COMPLETE for every day compared -- a longer window
+with gaps in the calendar would have contaminated the comparison, not
+just made it noisier.
+
+**Result -- the regime filter is a clear net negative**:
+```
+BASELINE (current live, no M15/H1 filter)   n=30091  win=80.9%  mean_R=+0.6465  day_mean_R=+0.5190  t=+39.78
++ M15/H1 trend filter                       n= 7738  win=69.4%  mean_R=+0.4761  day_mean_R=+0.3946  t=+20.17
+```
+The filter discards 75% of all candidates (22,517 of 29,695 that
+survived the event-day exclusion) and the surviving 25% perform WORSE
+on every measure -- win rate down 11.5 points, mean_R down nearly a
+third. Per-instrument: EVERY pair's win rate drops, and 16 of 17 pairs'
+mean_R drops too (XAU_USD is the lone exception, +0.771 -> +0.796,
+still a much smaller surviving sample). This isn't noise -- both
+day-level t-stats clear significance easily; the filtered set is
+robustly worse, not just smaller.
+
+**Why, most likely**: a plain "price above/below its own 20-bar SMA on
+two timeframes" gauge is too blunt for THIS strategy specifically --
+mean-reversion setups are, by construction, created by some recent
+directional push (that's what produces the 2-stdev extension in the
+first place). A filter that blocks "any recent short-term directional
+bias" ends up removing a huge share of the strategy's ordinary, healthy
+setups along with genuinely dangerous ones, with no way to tell them
+apart. This is a real, useful negative result: it validates that the
+current, more surgical approach (a 5-DAY price trend -- much longer
+timeframe than M15/H1 -- and a small set of KNOWN scheduled events)
+targets specific, identifiable risk conditions instead of blanket
+short-term direction, which is exactly why it doesn't fight the
+strategy's own normal operation the way this filter does.
+
+**Verdict**: rejected. Not shipped, no live code changed. Script kept
+in `scripts/` as a research artifact (matching this project's existing
+convention for tested-and-rejected ideas -- backtest_carry_trade.py,
+backtest_orb_session_breakout.py, etc.), so this specific idea isn't
+re-tried later without cause.
+
+**Scope caveat**: this baseline does not model the already-shipped
+5-day/2% multi-day trend filter (a much longer, orthogonal timeframe
+that would need its own historical Daily-candle plumbing to backtest
+correctly) -- live baseline numbers would differ slightly, but the
+RELATIVE comparison (does adding M15/H1 help) is unaffected by that
+omission.
