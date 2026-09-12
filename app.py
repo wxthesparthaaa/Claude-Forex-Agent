@@ -85,6 +85,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-12", "Friday reflection's 'Confidence weight reassessment' section now says '(base strategy "
+                    "only, all-time data)' -- it was never about VWAP Scalp (the only strategy actually "
+                    "trading), so it'll keep saying 'not enough data' until the base strategy trades again. "
+                    "Label-only change, no behavior affected."),
     ("2026-09-11", "VWAP Scalp now pauses ALL new entries for the whole day on known high-impact news days "
                     "(US CPI, US NFP, FOMC, ECB) -- today's US CPI day lost -$157 broadly across pairs, and a "
                     "narrow pause window around the exact release barely helped (checked first). The calendar "

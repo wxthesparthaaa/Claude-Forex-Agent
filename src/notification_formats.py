@@ -260,7 +260,16 @@ def format_friday_reflection_message(week_stats: dict, self_improvement_changes:
         # All-time journal data, not just this week -- a single week
         # rarely clears MIN_SAMPLES_PER_BUCKET, so this reflects the
         # full accumulated history each time (see confidence_reweighting.py).
-        lines.append("\n<b>Confidence weight reassessment (all-time data)</b>")
+        # "(base strategy only)" (2026-09-12, user question): compute_confidence's
+        # breadth/RSI/candlestick/news blend only ever gets computed and
+        # journaled for the base strategy's own signal -- VWAP Scalp
+        # hardcodes a flat confidence_pct and never populates confidence_
+        # components at all, so this section has nothing to do with
+        # whichever strategy is actually trading live right now unless
+        # that happens to be the base strategy. Without this label the
+        # section read as if it applied to the account's current live
+        # trading in general.
+        lines.append("\n<b>Confidence weight reassessment (base strategy only, all-time data)</b>")
         for line in confidence_reweight_lines:
             lines.append(f"  {line}")
 

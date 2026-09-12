@@ -8201,3 +8201,40 @@ position past its hold cap despite the pause, and does not block an
 ordinary (unflagged) day. `git stash`-confirmed the two entry-blocking
 tests fail against the pre-fix code first. Full suite (670 tests)
 green; `py_compile` + real `import` both clean.
+
+## 2026-09-12 -- Labeled the Friday reflection's confidence-weight section as base-strategy-only
+
+**User question**: what's the point of the Friday message's "Confidence
+weight reassessment (all-time data)" section, and is the journal
+actually recording breadth/RSI/candlestick/news at all?
+
+**Answer, confirmed against the real journal** (241 entries): yes, it's
+real -- `confidence_reweighting.py` compares win rate on trades where a
+component scored >=70 vs <70, nudging that component's blend weight
+toward whichever has actually predicted wins, capped at a slow +/-0.03/
+week (this project's own 413-day backtest found short samples routinely
+look like real edges when they aren't). But this ONLY ever gets
+computed and journaled for the base strategy's own signal --
+`compute_confidence()`'s breadth/RSI/candlestick/news blend. VWAP
+Scalp, the only strategy actually trading right now, hardcodes a flat
+confidence_pct and never touches `confidence_components` at all. Of the
+83 base-strategy (untagged) journal entries, only 68 have any component
+data (the rest predate the feature), and per-component closed-and-
+available counts (breadth/rsi=33, candlestick=6, news=10) are all well
+under the 15-per-bucket minimum `MIN_SAMPLES_PER_BUCKET` requires --
+and the latest entry with any component data is from 2026-09-09, since
+`base_strategy_enabled` is currently off and nothing new is
+accumulating. This section will likely say "not enough data" 
+indefinitely until the base strategy trades again.
+
+**Fix** (`src/notification_formats.py`): relabeled the header from
+"Confidence weight reassessment (all-time data)" to "... (base strategy
+only, all-time data)" -- without it, the section read as if it applied
+to whichever strategy is actually trading live, when it's specific to
+a signal path that isn't currently in use at all. Copy-only change, no
+behavior affected.
+
+**Verification**: `tests/test_scheduled_jobs.py`'s existing substring
+assertion (`"Confidence weight reassessment" in sent_text`) still
+matches; no test asserted the full old string. Full suite (670 tests)
+green; `py_compile` + real `import` both clean.
