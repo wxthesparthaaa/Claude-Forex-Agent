@@ -8512,3 +8512,47 @@ management at all) -- proposed to the user as the concrete next step,
 not yet approved or attempted. Would not retroactively explain this
 week, but would make real slippage directly measurable going forward
 instead of argued from first principles.
+
+## 2026-09-12 (continued) -- Shipped real-fill-price capture; user asked what else could explain the gap
+
+**User approved** capturing the real fill price. Also asked directly:
+if the fill-price gap probably isn't the whole story, what else might
+be? Answered with ranked, honest speculation before shipping anything:
+(1) real spread widening at the exact volatile moments VWAP Scalp
+trades -- unlike the mid-vs-fill gap (which the mechanics suggest would
+help win rate slightly, not hurt it), wider real spread during a
+volatility spike plausibly shrinks the effective distance to both a
+small target AND a tight stop simultaneously, which could flip real
+winners into losers; untestable from here without real spread data;
+(2) whether Render was actually running the code being tested against
+that week, not a stale/failed deploy -- cheap to check but needs the
+user's own dashboard access; (3) the fill-price gap itself, likely a
+contributor to loss magnitude, not the win-rate collapse; (4)
+correlated losses concentrated on a few genuinely bad macro-news days
+rather than a uniformly broken week. None confirmed -- offered as
+ranked candidates, not a claimed answer.
+
+**Fix** (`src/trade_journal.py`, `src/trade_execution.py`): new
+`JournalEntry.decision_entry_price` field preserves the original
+pre-order `fetch_mid_price()` estimate. `record_open_trade` gains an
+optional `real_entry_price` parameter -- when supplied, `entry_price`
+becomes the real fill; when not (e.g. every pre-existing caller, or a
+degraded response missing the field), falls back to the estimate
+exactly as before. `place_and_record` now reads `orderFillTransaction.
+get("price")` (the same field `trade_monitor.py` already reads for
+`exit_price` on the close side) and passes it through. No change to
+risk management -- SL/TP sent to OANDA were already computed from the
+signal alone, independent of entry_price.
+
+**Verification**: 4 new tests -- `record_open_trade` uses the real
+price when given one and preserves the estimate as `decision_entry_
+price`; falls back cleanly when no real price is supplied; `place_and_
+record` journals the real fill (not the pre-order estimate) end-to-end,
+and falls back gracefully when the response has no price field at all
+(extended `FakeClient` with a `fill_price` param, defaulting to the
+same shape every pre-existing test already used, which is exactly why
+all 670 of those needed no changes -- they never included a `price` in
+their mocked `orderFillTransaction`, so the new code path was already
+degrading correctly through every one of them). `git stash`-confirmed
+all 4 new tests fail against the pre-fix code first. Full suite (674
+tests) green; `py_compile` + real `import` both clean.

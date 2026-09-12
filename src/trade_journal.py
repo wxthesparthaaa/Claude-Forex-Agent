@@ -136,6 +136,20 @@ class JournalEntry:
     # before this field existed" -- absence means unknown/not applicable,
     # never treated the same as False.
     in_liquidity_window: bool | None = None
+    # The pre-order fetch_mid_price() estimate used to size the position
+    # and check the R:R floor (2026-09-12: found while investigating a
+    # large live-vs-backtest gap that `entry_price` had ALWAYS been this
+    # estimate, never the real OANDA fill -- trade_execution.py's own
+    # orderFillTransaction response already carries the real fill price,
+    # already read for exit_price on the close side, just never on open).
+    # entry_price now holds the real fill when available; this field
+    # preserves the original decision-time estimate so real slippage
+    # (entry_price - decision_entry_price) is finally directly
+    # measurable instead of argued from first principles. None on every
+    # trade journaled before this field existed, and on the rare case a
+    # real fill price wasn't available (falls back to the estimate for
+    # entry_price too in that case -- see record_open_trade).
+    decision_entry_price: float | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -237,13 +251,22 @@ def _in_liquidity_window_now(instrument: str, now_utc: datetime) -> bool | None:
     return instrument_window_active(instrument, now_utc.astimezone(SGT))
 
 
-def record_open_trade(trade_id: str, candidate: dict) -> None:
+def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | None = None) -> None:
+    """`real_entry_price`: the actual OANDA fill price
+    (orderFillTransaction["price"]) if the caller has it -- see
+    JournalEntry.decision_entry_price's own comment for why this
+    matters. Falls back to candidate["entry_price"] (the pre-order
+    estimate) when not supplied, matching every caller from before this
+    parameter existed and any future caller that genuinely has no real
+    fill price to report (e.g. a defensive/degraded path)."""
     with JOURNAL_LOCK:
         now_utc = datetime.now(timezone.utc)
         entries = load_journal()
         entry = JournalEntry(
             trade_id=trade_id, instrument=candidate["instrument"], direction=candidate["direction"],
-            units=candidate["units"], entry_price=candidate["entry_price"], stop_loss=candidate["stop_loss"],
+            units=candidate["units"],
+            entry_price=real_entry_price if real_entry_price is not None else candidate["entry_price"],
+            stop_loss=candidate["stop_loss"],
             take_profit=candidate["take_profit"], confidence_pct=candidate["confidence_pct"],
             rationale=candidate.get("rationale", []), opened_at=now_utc.isoformat(),
             account_currency=candidate.get("account_currency", ""), risk_amount=candidate.get("risk_amount", 0.0),
@@ -251,6 +274,7 @@ def record_open_trade(trade_id: str, candidate: dict) -> None:
             confidence_components_available=candidate.get("confidence_components_available", {}),
             experiment_tag=candidate.get("experiment_tag"), parent_trade_id=candidate.get("parent_trade_id"),
             in_liquidity_window=_in_liquidity_window_now(candidate["instrument"], now_utc),
+            decision_entry_price=candidate["entry_price"],
         )
         entries.append(asdict(entry))
         save_journal(entries)

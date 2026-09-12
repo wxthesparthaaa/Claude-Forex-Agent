@@ -19,7 +19,7 @@ def _isolate(tmp_path, monkeypatch):
 
 class FakeClient:
     def __init__(self, open_trades=None, fill_trade_id="999", trade_detail=None,
-                 get_trade_side_effect=None, close_trade_result=None):
+                 get_trade_side_effect=None, close_trade_result=None, fill_price=None):
         self._open = open_trades or []
         self._fill_trade_id = fill_trade_id
         self.orders_placed = []
@@ -33,13 +33,21 @@ class FakeClient:
         }
         self._get_trade_side_effect = get_trade_side_effect
         self._close_trade_result = close_trade_result or {"orderFillTransaction": {"pl": "0.0", "price": "1.10"}}
+        # None by default, matching every real OANDA response shape these
+        # tests exercised before the real-fill-price field existed --
+        # deliberately omitting "price" here (not just leaving it None)
+        # so those tests keep proving the graceful fallback still works.
+        self._fill_price = fill_price
 
     def get_open_trades(self):
         return self._open
 
     def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
         self.orders_placed.append(instrument)
-        return {"orderFillTransaction": {"tradeOpened": {"tradeID": self._fill_trade_id}}}
+        fill = {"tradeOpened": {"tradeID": self._fill_trade_id}}
+        if self._fill_price is not None:
+            fill["price"] = self._fill_price
+        return {"orderFillTransaction": fill}
 
     def get_trade(self, trade_id):
         if self._get_trade_side_effect is not None:
@@ -176,6 +184,44 @@ def test_place_and_record_places_order_and_records_journal(tmp_path, monkeypatch
     assert len(entries) == 1
     assert entries[0]["trade_id"] == "999"
     assert entries[0]["confidence_components"] == cd["confidence_components"]
+
+
+def test_place_and_record_journals_the_real_oanda_fill_price_not_the_pre_order_estimate(tmp_path, monkeypatch):
+    # Real incident (2026-09-12): entry_price had ALWAYS been the
+    # pre-order fetch_mid_price() estimate baked into `candidate`, never
+    # the real fill -- orderFillTransaction's own "price" field was
+    # simply never read on the open side (already read for exit_price on
+    # the close side). The real fill (1.1006) differs from the decision-
+    # time estimate (1.10) here specifically so a bug that silently kept
+    # using the estimate couldn't hide behind a coincidental match.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(fill_price="1.1006")
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    trade_execution.place_and_record(client, cd)
+
+    entries = tj.load_journal()
+    assert entries[0]["entry_price"] == 1.1006  # the REAL fill, not the 1.10 estimate
+    assert entries[0]["decision_entry_price"] == 1.10  # the original estimate, preserved for slippage analysis
+
+
+def test_place_and_record_falls_back_to_the_estimate_when_no_real_fill_price_is_reported(tmp_path, monkeypatch):
+    # Defensive path: OANDA's real response should always carry a fill
+    # price, but if it somehow doesn't, entry_price must still be a
+    # usable number (the pre-order estimate) rather than None/missing.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(fill_price=None)  # no "price" key in orderFillTransaction at all
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    trade_execution.place_and_record(client, cd)
+
+    entries = tj.load_journal()
+    assert entries[0]["entry_price"] == 1.10
+    assert entries[0]["decision_entry_price"] == 1.10
 
 
 def test_place_and_record_does_not_hold_journal_lock_during_the_oanda_call(tmp_path, monkeypatch):

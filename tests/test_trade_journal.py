@@ -104,6 +104,22 @@ def test_record_open_trade_appends_entry(tmp_path, monkeypatch):
     assert entries[0]["instrument"] == "EUR_USD"
 
 
+def test_record_open_trade_uses_real_entry_price_when_given(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(entry_price=1.10), real_entry_price=1.1006)
+    entries = tj.load_journal()
+    assert entries[0]["entry_price"] == 1.1006
+    assert entries[0]["decision_entry_price"] == 1.10
+
+
+def test_record_open_trade_falls_back_to_candidate_price_without_a_real_fill(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(entry_price=1.10))  # real_entry_price omitted
+    entries = tj.load_journal()
+    assert entries[0]["entry_price"] == 1.10
+    assert entries[0]["decision_entry_price"] == 1.10
+
+
 def test_open_entries_filters_by_status(tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())

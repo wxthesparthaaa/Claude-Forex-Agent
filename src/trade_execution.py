@@ -165,7 +165,15 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
     )
     trade_id = result.get("orderFillTransaction", {}).get("tradeOpened", {}).get("tradeID")
     if trade_id:
-        record_open_trade(trade_id, candidate)
+        # Real incident (2026-09-12): entry_price had ALWAYS been the
+        # pre-order fetch_mid_price() estimate baked into `candidate`,
+        # never the real fill -- orderFillTransaction's own "price" field
+        # (already read elsewhere for exit_price on the close side) was
+        # simply never read here. See JournalEntry.decision_entry_price's
+        # own comment.
+        real_price = result.get("orderFillTransaction", {}).get("price")
+        record_open_trade(trade_id, candidate,
+                           real_entry_price=float(real_price) if real_price is not None else None)
         _verify_protective_orders_attached(client, trade_id, candidate)
         return {"success": True, "trade_id": trade_id, "reason": None}
 
