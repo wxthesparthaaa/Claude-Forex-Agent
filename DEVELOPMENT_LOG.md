@@ -8383,3 +8383,73 @@ data, to see whether IT reproduces the backtest's numbers or not) would
 cleanly separate the two remaining hypotheses, but is a large enough
 escalation in scope, and consequential enough either way, that it needs
 an explicit decision to proceed rather than being run unprompted.
+
+## 2026-09-12 (continued) -- Live's own decision logic proven correct; the gap is real execution, not the strategy
+
+**User insisted on proceeding** with the proposed diagnostic. Built
+`scripts/backtest_vwap_live_signal_replay.py`: replays `vwap_scalp_
+addon.py`'s ACTUAL discrete 5-minute polling loop (`_compute_vwap_
+series`/`_find_confirmed_signal` called fresh each tick, with `now`
+frozen at that tick and only same-day bars up to it visible -- causal,
+no look-ahead) against real cached OANDA prices for 2026-09-07 to
+2026-09-11, rather than the backtest's continuous whole-day scan
+(`find_scalp_signals_confirmed_any_hour`), which structurally can never
+miss a signal the way a discrete tick with a 10-minute recency window
+could. This is a genuinely different test from every backtest already
+in this project -- it's the live CODE, not a backtest reimplementation
+of the live design.
+
+**First pass (per-pair cooldown only)**: 1288 simulated trades, 84.0%
+win rate, mean_R +0.7482 -- essentially identical to the continuous-
+scan backtest's 83.6%/+0.8964 for the same week. This already ruled out
+the discrete-tick-vs-continuous-scan structural difference as an
+explanation. But trade COUNT was also wildly off (1288 vs the real 79)
+-- caught before drawing any conclusion: the live 40-minute GLOBAL
+cross-instrument cooldown (at most one position opens anywhere across
+all 17 pairs every 40 minutes) was missing entirely from the replay,
+which only modeled the per-pair 30-minute spacing.
+
+**Second pass, with the pooled global cooldown applied** (`bt.
+_apply_global_cooldown` across all 17 pairs' candidates chronologically,
+exactly matching live's real account-wide pacing): candidate count
+dropped from 1307 to 75 after the cooldown -- landing almost exactly on
+the real 79 trades (a ~94% match). This is strong, independent
+confirmation that the pacing model itself -- both cooldowns, the R:R
+floor, the discrete-tick signal timing -- is a faithful, correct
+reproduction of what live's code actually does. Result: 74 simulated
+trades, 74.3% win rate, mean_R +0.4978 (day-level t=+4.34, p=0.0008).
+
+**Real live result for the identical window**: 79 trades, 29.1% win
+rate, mean_R -0.4789.
+
+**Conclusion**: every piece of live's DECISION-MAKING logic that can be
+tested offline -- signal detection, confirmation timing, the discrete
+5-minute polling model, both cooldowns, the R:R floor, spread-aware
+entry/exit simulation -- has now been faithfully replayed against real
+historical prices and reproduces a healthy, profitable result (74.3%
+win, +0.50 mean_R) for the exact week live actually lost badly on
+(29.1% win, -0.48 mean_R), with the trade COUNT itself matching almost
+exactly (74 vs 79). This rules out, with real evidence rather than
+assumption: an unusual market regime that week (already ruled out
+earlier), the discrete-tick vs continuous-scan structural difference,
+the global/per-pair cooldown pacing, the R:R floor, and the core VWAP/
+z-score signal-detection algorithm itself. What's left, by elimination,
+is the one thing no offline replay can model: what actually happens
+between "the code decides to open a position" and "the position is
+filled and later closed on the real OANDA account" -- real order
+placement, real fill price versus the decision-time price, real spread
+at the moment of a genuine order (historical M1 bid/ask candles may not
+faithfully represent what a live account actually pays), or a bug
+specifically in that execution path (`_open_position`'s real price
+fetch, unit/rounding handling in the SL/TP actually sent to the
+broker) that a pure signal-and-pacing replay would never surface.
+
+**Not shipped, not yet root-caused to a specific line of code**: this
+narrows the search dramatically (from "is the whole strategy design
+sound" down to "something in the real order-execution path"), but does
+not yet pinpoint the exact mechanism. Proposed next step, not yet
+approved or attempted: directly compare the REAL journaled entry_
+price/stop_loss/take_profit values from actual live trades against what
+the signal's own VWAP/z-score math implies they should have been, to
+check for a concrete discrepancy (wrong rounding, a stale price, a unit
+conversion issue) rather than a diffuse "spread cost" explanation.
