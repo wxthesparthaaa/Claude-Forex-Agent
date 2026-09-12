@@ -8453,3 +8453,62 @@ price/stop_loss/take_profit values from actual live trades against what
 the signal's own VWAP/z-score math implies they should have been, to
 check for a concrete discrepancy (wrong rounding, a stale price, a unit
 conversion issue) rather than a diffuse "spread cost" explanation.
+
+## 2026-09-12 (continued) -- Found a real, previously-unknown gap: the journal never captures the real OANDA fill price
+
+**User approved the proposed next step.** Built a one-off verification
+comparing all 79 real live trades' journaled `stop_loss`/`take_profit`
+against what `vwap_scalp_addon._find_confirmed_signal`'s own formula,
+recomputed independently at the exact real `opened_at` timestamp
+against real cached prices, implies those values should be. Result: 1
+of 79 had no confirmed signal found at that instant (negligible), 0
+direction mismatches, `target_diff_pct` mean 0.28%/max 0.99%,
+`stop_diff_pct` mean 2.77%/max 27.73% (the larger stop outliers are
+tiny in absolute price terms -- ordinary price-tick rounding becomes a
+bigger % of an inherently tight scalp stop distance, not a bug).
+
+**Self-caught methodological flaw, corrected before it stood as a
+real finding**: this comparison is a tautology, not a validation
+against ground truth -- both sides of the comparison (the journaled
+value and the "expected" value) are computed via the IDENTICAL VWAP/
+z-score formula, so a close match was mathematically guaranteed by
+construction, not evidence that live's real execution matches its
+own decision logic. Flagged and corrected in the same turn rather than
+letting an overclaimed conclusion stand.
+
+**The real, concrete finding**, from reading `trade_execution.
+place_and_record` directly: the journal has NEVER recorded a real
+OANDA fill price for an entry, only the pre-order `fetch_mid_price()`
+estimate baked into `candidate["entry_price"]` before the order was
+even placed. `record_open_trade(trade_id, candidate)` uses that
+estimate unconditionally. Confirmed the real fill price IS available
+in OANDA's own response and already used elsewhere in this exact
+codebase -- `trade_monitor.py`'s close-handling path already reads
+`result["orderFillTransaction"].get("price")` for `exit_price` -- the
+same field simply has never been read on the OPEN side. This means
+every entry_price, every R-multiple, every win-rate figure computed
+anywhere in this project's live analysis (including everything in this
+whole investigation thread) has been built on an estimate, never on
+what the account actually paid.
+
+**Honest limits of this finding**: worked through the mechanics of a
+systematic mid-vs-real-fill (ask for LONG, bid for SHORT) gap by hand.
+It plausibly contributes to the already-documented `REALIZED_LOSS_
+INFLATION` finding (realized losses ~29% bigger than intended), but the
+same reasoning suggests it should, if anything, push win rate UP
+slightly (a real fill closer to the stop-side mechanically shortens the
+distance to target too), not crash it from ~75% to 29% the way the live
+result shows. So this is very unlikely to be the WHOLE explanation on
+its own -- but it can't currently be checked at all, because the data
+needed to check it was never captured. That is the real, actionable
+takeaway: this whole investigation has had a blind spot since before it
+started, not something introduced by any analysis done this session.
+
+**Not implemented**: capturing `orderFillTransaction["price"]` into the
+journal on the open side is a small, purely additive change (the real
+SL/TP sent to OANDA are already computed from the VWAP/z-score signal
+alone, independent of entry_price, so this wouldn't touch risk
+management at all) -- proposed to the user as the concrete next step,
+not yet approved or attempted. Would not retroactively explain this
+week, but would make real slippage directly measurable going forward
+instead of argued from first principles.
