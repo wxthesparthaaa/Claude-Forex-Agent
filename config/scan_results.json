@@ -1,38 +1,4 @@
 {
-  "scanned_at": "2026-09-13T21:24:51.110004+00:00",
-  "candidates": [
-    {
-      "instrument": "AUD_USD",
-      "direction": "SHORT",
-      "entry_price": 0.71636,
-      "stop_loss": 0.71748,
-      "take_profit": 0.71412,
-      "confidence_pct": 63.9,
-      "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 84.53597123475518,
-        "candlestick": 50.0,
-        "news": 41.17647058823529
-      },
-      "units": -9077,
-      "unit_label": "units",
-      "risk_amount": 12.882938250000002,
-      "notional_account_currency": 8239.71,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 32 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: neutral."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    }
-  ]
+  "scanned_at": "2026-09-13T21:44:50.186954+00:00",
+  "candidates": []
 }
