@@ -67,7 +67,8 @@
     "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it",
     "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it",
     "VWAP Scalp: reward:risk 0.91:1 is below the 1:1 floor (risking 0.00011 to make 0.00010)",
-    "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it"
+    "VWAP Scalp: trend filter: skipped LONG NZD_JPY -- 5-day trend is DOWN, fading against it",
+    "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it"
   ],
   "last_scan_digest_sent_at": "2026-09-14T03:09:40.216624+00:00",
   "paused_instruments": {
@@ -184,5 +185,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-14T04:19:40.217912+00:00"
+  "last_process_heartbeat_at": "2026-09-14T03:54:40.216725+00:00"
 }
