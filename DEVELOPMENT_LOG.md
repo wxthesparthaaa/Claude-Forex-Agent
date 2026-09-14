@@ -8556,3 +8556,108 @@ their mocked `orderFillTransaction`, so the new code path was already
 degrading correctly through every one of them). `git stash`-confirmed
 all 4 new tests fail against the pre-fix code first. Full suite (674
 tests) green; `py_compile` + real `import` both clean.
+
+## 2026-09-12 (continued) -- Day-level breakdown of live results: concentrated bad days ruled out
+
+Confirmed Render is running the deployed fix (`96adf5e`/`96adf5eb`,
+"Live" on the dashboard, auto-deployed within about a minute of the
+push) -- ruling out hypothesis (2) from the prior entry (stale deploy).
+
+Pulled all 152 real `VWAP_SCALP`-tagged trades from `config/trade_
+journal.json` (state-sync) opened 2026-08-31 through 2026-09-11 and
+grouped by calendar day, to test hypothesis (4) (correlated losses on a
+few bad days):
+
+```
+Day            N  Wins  WinRate       PnL
+2026-08-31    19     6    31.6%   -332.38
+2026-09-01    11     2    18.2%   -410.07
+2026-09-02    12     5    41.7%   -171.93
+2026-09-03    10     4    40.0%   -139.28
+2026-09-04    10     4    40.0%    -92.66
+2026-09-07    15     9    60.0%    311.45
+2026-09-08    21     4    19.0%   -481.28
+2026-09-09    17     7    41.2%   -100.33
+2026-09-10    19     5    26.3%   -162.69
+2026-09-11    18     3    16.7%   -157.26
+
+TOTAL: 152 trades, 49 wins (32.2%), net PnL -1736.43
+```
+
+**9 of 10 trading days lost money.** Only 2026-09-07 (the Monday
+already traced to unusually quiet, clean mean-reverting conditions) was
+profitable; every other day's win rate sits in a 16.7%-41.7% band, well
+below backtest's ~74% expectation, with no single catastrophic outlier
+day accounting for most of the damage.
+
+**This rules out hypothesis (4).** A few disaster days would show up as
+large negative outliers against an otherwise-flat-or-positive baseline;
+instead the shortfall is broad-based and persistent across nearly every
+single day. That shifts weight back toward something structural and
+continuous rather than episodic -- most plausibly real execution cost
+(adverse fill timing / effective spread), which is the one hypothesis
+not yet confirmed and is now directly measurable via today's fill-price
+fields.
+
+**Mechanism hypothesis** (not yet confirmed, offered as reasoning, not
+a claimed finding): SL/TP are computed from the decision-time estimate,
+not the real fill. For a mean-reversion scalp, entries happen exactly
+when price is most volatile (fading an extension) -- if the real fill
+is systematically worse than the decision price in the adverse
+direction, the stop sits effectively closer and the target effectively
+farther from where the trade *actually* opened, on every trade. That
+would depress win rate directly (more stops hit before target), not
+just inflate loss size the way `REALIZED_LOSS_INFLATION` already
+compensates for on the exit side -- and would explain why both the
+original backtest and the faithful live-code replay (which both derive
+SL/TP the same way, off the same estimate) agree with each other while
+neither matches live.
+
+**Follow-up**: created a one-time cloud routine, "VWAP Scalp - post-fix
+slippage check-in" (`trig_0111ni676L74gkrwWTca7xZq`), firing 2026-09-18
+09:00 UTC once ~4 trading days of post-fix data exist, to compare real
+`entry_price` against `decision_entry_price` on trades opened after the
+fix and report whether slippage looks systematic or negligible. Also
+reviewed the full routines list for stale entries -- found two already-
+fired one-time routines and one active-but-unrelated recurring routine
+from a different project; none touched (no functional risk either way,
+and the API has no delete -- only the user can remove routines via the
+web UI).
+
+## 2026-09-14 -- "Scan Now" never covered VWAP Scalp at all -- it now does
+
+**User report**: "ad-hoc scanning" (the dashboard's "Scan Now" button)
+"did not work as planned."
+
+**Root cause**: `/scan` (`app.py`) has only ever run `run_live_scan` --
+the BASE strategy's own scan -- regardless of which strategy is
+actually live. With `base_strategy_enabled` off (the normal state
+whenever VWAP Scalp, not the base strategy, is the one actually
+trading), pressing Scan Now always reports on a disabled strategy
+("candidate(s) found, but the base strategy is disabled...") and says
+nothing about VWAP Scalp, which runs on its own fully separate
+5-minute tick loop untouched by this route. Same story for the
+existing periodic "3-hour scan digest" (`scan_digest_interval_minutes`)
+-- also base-strategy-only. Neither of the two things the user was
+calling "ad-hoc scanning" and "the 3hr scanning period" have ever said
+anything about the strategy that's actually live.
+
+**Fix**: new `vwap_scalp_status_line()` (`vwap_scalp_addon.py`) -- a
+one-line summary built from the same data the periodic digest already
+uses for VWAP Scalp (`vwap_scalp_bucket_summary`, `HIGH_IMPACT_EVENT_
+DAYS`): today's trade count and win/loss, the reason if zero trades is
+an event-day pause, and whether a VWAP_SCALP position (specifically,
+not any other strategy's) is currently open. `/scan` now appends this
+to its existing flash message whenever `vwap_scalp_enabled`, best-
+effort (a failure here must not block the base-strategy scan result
+already computed) -- combining the ad-hoc button and the periodic
+digest's own view of VWAP Scalp into one consistent picture, instead of
+the button staying silent about the strategy that's actually trading.
+
+**Verification**: 5 new tests covering zero-trades/no-position, the
+event-day-pause reason line, a same-day win/loss count, reporting the
+currently open VWAP_SCALP position, and correctly ignoring an open
+position that belongs to a DIFFERENT strategy tag. `git stash`-
+confirmed all 5 fail against pre-fix code (`AttributeError`, the
+function doesn't exist yet). Full suite (679 tests) green; `py_compile`
++ real `import app` both clean.

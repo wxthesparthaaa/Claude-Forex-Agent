@@ -689,6 +689,37 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     return summary
 
 
+def vwap_scalp_status_line(now: datetime = None) -> str:
+    """One-line, dashboard-flash-friendly summary of VWAP Scalp's current
+    state -- built from the same data the periodic 3-hour scan digest
+    uses (vwap_scalp_bucket_summary, HIGH_IMPACT_EVENT_DAYS). Real
+    finding (2026-09-14): the "Scan Now" button (app.py's /scan route)
+    only ever runs the base strategy's own scan -- with base_strategy_
+    enabled off (the normal state whenever VWAP Scalp is the strategy
+    actually live), pressing it reports on a disabled strategy and says
+    nothing about the one that's actually trading. This lets /scan
+    append VWAP Scalp's real status instead of staying silent about it.
+    Read-only, no lock needed."""
+    now = now or datetime.now(timezone.utc)
+    buckets = vwap_scalp_bucket_summary(now)
+    total = sum(b["count"] for b in buckets)
+    wins = sum(b["wins"] for b in buckets)
+    losses = sum(b["losses"] for b in buckets)
+
+    open_vwap = [e for e in open_entries(load_journal()) if e.get("experiment_tag") == "VWAP_SCALP"]
+
+    if total == 0:
+        event = _high_impact_event_today(now)
+        trades_part = f"0 trades today -- paused: {event}" if event else "0 trades today"
+    else:
+        trades_part = f"{total} trade{'s' if total != 1 else ''} today ({wins}W/{losses}L)"
+
+    position_part = f"{open_vwap[0]['instrument']} {open_vwap[0]['direction']} open" if open_vwap \
+        else "no position open"
+
+    return f"VWAP Scalp (live): {trades_part}, {position_part}."
+
+
 def _force_close(client, entry: dict) -> None:
     try:
         result = client.close_trade(entry["trade_id"])

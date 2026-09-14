@@ -731,10 +731,10 @@ def scan():
             # just silently redirected with nothing on the page, which
             # read as "did this even run?" rather than "ran fine, found
             # nothing right now".
-            flash("Scan complete: no qualifying setups found right now.", "success")
+            message = "Scan complete: no qualifying setups found right now."
         elif phase_state.phase == "autopilot" and not state.base_strategy_enabled:
-            flash(f"Scan complete: {len(qualifying)} candidate(s) found, but the base strategy is disabled "
-                  f"in Settings right now -- not auto-executed.", "success")
+            message = (f"Scan complete: {len(qualifying)} candidate(s) found, but the base strategy is disabled "
+                       f"in Settings right now -- not auto-executed.")
         elif phase_state.phase == "autopilot":
             # Same non-blocking lock the scheduled autopilot scan uses
             # around its own auto-execution -- without this, a click on
@@ -751,16 +751,34 @@ def scan():
                     _evening_scan_lock.release()
                 if executed:
                     names = ", ".join(f"{c['instrument']} {c['direction']}" for c in executed)
-                    flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
-                          f"{len(executed)} auto-executed ({names}).", "success")
+                    message = (f"Scan complete: {len(qualifying)} candidate(s) found, "
+                               f"{len(executed)} auto-executed ({names}).")
                 else:
-                    flash(f"Scan complete: {len(qualifying)} candidate(s) found, "
-                          f"none met the autopilot confidence threshold or risk caps.", "success")
+                    message = (f"Scan complete: {len(qualifying)} candidate(s) found, "
+                               f"none met the autopilot confidence threshold or risk caps.")
             else:
-                flash(f"Scan complete: {len(qualifying)} candidate(s) found, but a scheduled autopilot scan "
-                      f"was already executing -- skipped this round to avoid a duplicate order.", "success")
+                message = (f"Scan complete: {len(qualifying)} candidate(s) found, but a scheduled autopilot scan "
+                           f"was already executing -- skipped this round to avoid a duplicate order.")
         else:
-            flash(f"Scan complete: {len(qualifying)} candidate(s) found. Review to execute manually.", "success")
+            message = f"Scan complete: {len(qualifying)} candidate(s) found. Review to execute manually."
+
+        # Real finding (2026-09-14): everything above only ever covers the
+        # base strategy -- with it disabled (the normal state whenever
+        # VWAP Scalp is the strategy actually live), Scan Now reported on
+        # a strategy that isn't trading and said nothing about the one
+        # that is. Appends the same status the periodic 3-hour scan
+        # digest already shows for VWAP Scalp, so a manual "ad-hoc" scan
+        # and the scheduled one give a consistent picture. Best-effort --
+        # a failure here must not stop the base-strategy scan result above
+        # from reaching the user.
+        if state.vwap_scalp_enabled:
+            try:
+                from vwap_scalp_addon import vwap_scalp_status_line
+                message += " " + vwap_scalp_status_line()
+            except Exception as e:
+                print(f"WARNING: could not compute VWAP Scalp status for Scan Now: {e}", flush=True)
+
+        flash(message, "success")
     except Exception as e:
         # Previously a scan failure just silently produced nothing visible
         # -- likely masking real gunicorn worker timeouts on Render. Now

@@ -1067,6 +1067,67 @@ def test_vwap_scalp_bucket_summary_computes_win_rate_pct_from_real_pnl_sign(tmp_
     assert london_morning["win_rate_pct"] == 75.0
 
 
+def test_vwap_scalp_status_line_reports_zero_trades_and_no_position(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    ds.save_state(ds.default_state())
+
+    line = vs.vwap_scalp_status_line(FIXED_NOW)
+
+    assert line == "VWAP Scalp (live): 0 trades today, no position open."
+
+
+def test_vwap_scalp_status_line_reports_event_day_pause_when_zero_trades(tmp_path, monkeypatch):
+    # Real finding (2026-09-11): a full UTC-day pause on known high-impact
+    # events. A zero-trade day should say WHY, not look indistinguishable
+    # from a quiet ordinary day.
+    _isolate(tmp_path, monkeypatch)
+    ds.save_state(ds.default_state())
+    monkeypatch.setattr(vs, "HIGH_IMPACT_EVENT_DAYS", {FIXED_NOW.strftime("%Y-%m-%d"): "US CPI (Aug)"})
+
+    line = vs.vwap_scalp_status_line(FIXED_NOW)
+
+    assert line == "VWAP Scalp (live): 0 trades today -- paused: US CPI (Aug), no position open."
+
+
+def test_vwap_scalp_status_line_reports_todays_win_loss_count(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    ds.save_state(ds.default_state())
+    _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=8), pnl=15.0)   # 2 wins
+    _seed_closed_vwap_trades(1, FIXED_NOW.replace(hour=8), pnl=-10.0)  # 1 loss
+
+    line = vs.vwap_scalp_status_line(FIXED_NOW)
+
+    assert line == "VWAP Scalp (live): 3 trades today (2W/1L), no position open."
+
+
+def test_vwap_scalp_status_line_reports_the_currently_open_position(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    ds.save_state(ds.default_state())
+    tj.record_open_trade("open-1", {
+        "instrument": "AUD_JPY", "direction": "SHORT", "units": -71228, "entry_price": 109.989,
+        "stop_loss": 110.006, "take_profit": 109.963, "confidence_pct": 89.2,
+        "account_currency": "SGD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
+    })
+
+    line = vs.vwap_scalp_status_line(FIXED_NOW)
+
+    assert line == "VWAP Scalp (live): 0 trades today, AUD_JPY SHORT open."
+
+
+def test_vwap_scalp_status_line_ignores_open_positions_from_other_strategies(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    ds.save_state(ds.default_state())
+    tj.record_open_trade("open-1", {
+        "instrument": "EUR_USD", "direction": "LONG", "units": 1000, "entry_price": 1.1,
+        "stop_loss": 1.09, "take_profit": 1.12, "confidence_pct": 70.0,
+        "account_currency": "SGD", "risk_amount": 40.0, "experiment_tag": "RANGE_CONFLUENCE",
+    })
+
+    line = vs.vwap_scalp_status_line(FIXED_NOW)
+
+    assert line == "VWAP Scalp (live): 0 trades today, no position open."
+
+
 @patch("vwap_scalp_addon.send_message")
 def test_global_cooldown_blocks_a_different_instrument_within_the_window(mock_send, tmp_path, monkeypatch):
     # Real incident, 2026-09-04: 5 trades fired in a single scan tick,
