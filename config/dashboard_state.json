@@ -62,7 +62,8 @@
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 32 min ago, needs 40",
-    "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it"
+    "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it",
+    "VWAP Scalp: reward:risk 0.72:1 is below the 1:1 floor (risking 0.02500 to make 0.01800)"
   ],
   "last_scan_digest_sent_at": "2026-09-14T15:21:42.535306+00:00",
   "paused_instruments": {
