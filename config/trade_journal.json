@@ -7358,5 +7358,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": null,
     "decision_entry_price": 89.192
+  },
+  {
+    "trade_id": "4487",
+    "instrument": "NZD_JPY",
+    "direction": "SHORT",
+    "units": -67485,
+    "entry_price": 89.185,
+    "stop_loss": 89.215,
+    "take_profit": 89.142,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-14T08:49:55.821705+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 9.986773837209304,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 89.197
   }
 ]
