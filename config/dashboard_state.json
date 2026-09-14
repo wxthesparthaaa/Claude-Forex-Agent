@@ -57,7 +57,9 @@
     "AUD_USD",
     "NZD_USD"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it"
+  ],
   "last_scan_digest_sent_at": "2026-09-14T03:09:40.216624+00:00",
   "paused_instruments": {
     "EUR_USD": "2026-09-11T21:03:30.674909+00:00",
