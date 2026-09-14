@@ -43,7 +43,7 @@
     "USD_JPY": "2026-09-14T15:14:47.126434+08:00",
     "EUR_USD": "2026-09-11T23:54:34.677064+08:00",
     "GBP_USD": "2026-09-11T23:54:34.677064+08:00",
-    "USD_CHF": "2026-09-14T15:04:47.618052+08:00",
+    "USD_CHF": "2026-09-14T15:24:48.755862+08:00",
     "USD_CAD": "2026-09-12T04:58:33.896505+08:00",
     "XAU_USD": "2026-09-11T23:54:34.677064+08:00",
     "XAG_USD": "2026-09-11T23:54:34.677064+08:00",
@@ -63,7 +63,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40",
     "VWAP Scalp: trend filter: skipped LONG XAG_USD -- 5-day trend is DOWN, fading against it",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-14T06:14:40.215043+00:00",
   "paused_instruments": {
