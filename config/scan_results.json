@@ -1,45 +1,12 @@
 {
-  "scanned_at": "2026-09-15T12:01:54.860839+00:00",
+  "scanned_at": "2026-09-15T12:21:56.020741+00:00",
   "candidates": [
-    {
-      "instrument": "USD_CAD",
-      "direction": "LONG",
-      "entry_price": 1.39214,
-      "stop_loss": 1.39123,
-      "take_profit": 1.39396,
-      "confidence_pct": 65.4,
-      "confidence_components": {
-        "breadth": 57.14285714285714,
-        "rsi": 86.60196664484616,
-        "candlestick": 50.0,
-        "news": 64.83516483516483
-      },
-      "units": 13416,
-      "unit_label": "units",
-      "risk_amount": 11.157488249999998,
-      "notional_account_currency": 17068.96,
-      "account_currency": "SGD",
-      "rationale": [
-        "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
-        "RSI is 68 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
-        "News sentiment: supportive of this direction."
-      ],
-      "rejected_reason": null,
-      "confidence_components_available": {
-        "breadth": true,
-        "rsi": true,
-        "candlestick": false,
-        "news": true
-      }
-    },
     {
       "instrument": "USD_CHF",
       "direction": "LONG",
-      "entry_price": 0.81839,
+      "entry_price": 0.81851,
       "stop_loss": 0.8175,
-      "take_profit": 0.82017,
+      "take_profit": 0.82053,
       "confidence_pct": 68.7,
       "confidence_components": {
         "breadth": 57.14285714285714,
@@ -47,10 +14,10 @@
         "candlestick": 50.0,
         "news": 64.83516483516483
       },
-      "units": 8064,
+      "units": 7105,
       "unit_label": "units",
       "risk_amount": 11.157488249999998,
-      "notional_account_currency": 10258.66,
+      "notional_account_currency": 9041.6,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
