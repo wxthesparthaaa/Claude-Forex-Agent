@@ -57,7 +57,7 @@
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-15T09:36:42.536257+00:00",
   "paused_instruments": {
@@ -174,5 +174,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-15T09:46:42.536443+00:00"
+  "last_process_heartbeat_at": "2026-09-15T09:51:42.536195+00:00"
 }
