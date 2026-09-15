@@ -534,6 +534,24 @@
           within this long of the last one, on top of the daily/session caps above.
         </p>
 
+        <div class="toggle-row" style="border:1px solid var(--red); border-radius:8px; padding:0.5rem 0.75rem;">
+          <span style="color:var(--red); font-weight:600;">VWAP Scalp LIVE TRIAL -- REAL MONEY</span>
+          <label class="switch">
+            <input type="checkbox" name="live_trial_enabled" {{ 'checked' if live_trial_enabled else '' }}>
+            <span class="switch-track" style="{{ 'background:var(--red);' if live_trial_enabled else '' }}"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Off by default, and inert even when on unless OANDA_ACCESS_TOKEN_LIVE/OANDA_ACCOUNT_ID_LIVE are also
+          set as separate Render secrets. Mirrors each VWAP Scalp signal onto a SEPARATE real-money account
+          ({{ live_trial_pairs }} only) at a small fixed risk per trade, to compare real live fills against
+          practice fills directly. Bounded to {{ live_trial_max_trades }} trades or
+          ${{ '%.0f'|format(live_trial_max_capital) }} total risk deployed, whichever comes first --
+          currently {{ live_trial_trade_count }}/{{ live_trial_max_trades }} trades,
+          ${{ '%.2f'|format(live_trial_cumulative_risk_deployed) }}/${{ '%.0f'|format(live_trial_max_capital) }}
+          deployed. Practice-side VWAP Scalp trading is completely unaffected either way.
+        </p>
+
         <div class="toggle-row">
           <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
           <label class="switch">

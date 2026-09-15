@@ -276,6 +276,33 @@ class DashboardState:
     # risk skip -- a sleeping process can't record either). See
     # DEVELOPMENT_LOG.md 2026-08-31 and 2026-09-10.
     last_process_heartbeat_at: str | None = None
+    # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): a real-money
+    # trial to test one specific hypothesis -- that some of the live-
+    # vs-backtest gap traced this week (severe stop-overshoot losses on
+    # a genuine shock day) might be an artifact of OANDA's PRACTICE
+    # server's own fill simulation, not purely real market
+    # microstructure a live account would also experience. Mirrors the
+    # SAME frozen entry/stop/target VWAP Scalp already computed for the
+    # practice-side trade onto a SEPARATE live account, at a small fixed
+    # risk size, restricted to a few tightest-spread pairs, so live and
+    # practice fills for the identical signal under identical market
+    # conditions can be compared directly. Off by default -- requires
+    # BOTH this flag AND OANDA_ACCESS_TOKEN_LIVE/OANDA_ACCOUNT_ID_LIVE
+    # set as separate Render secrets (see live_trial.get_live_trial_
+    # client) before anything actually submits to the live account.
+    # Bounded on three independent axes (trade count, cumulative risk,
+    # elapsed days) -- whichever is hit first stops new live-trial
+    # trades; practice-side VWAP Scalp trading is completely unaffected
+    # either way. See src/live_trial.py.
+    live_trial_enabled: bool = False
+    live_trial_started_at: str | None = None
+    live_trial_trade_count: int = 0
+    live_trial_cumulative_risk_deployed: float = 0.0
+    live_trial_max_capital: float = 400.0
+    live_trial_max_trades: int = 30
+    live_trial_max_duration_days: int = 14
+    live_trial_risk_per_trade: float = 10.0
+    live_trial_pairs: list = field(default_factory=lambda: ["EUR_USD", "USD_JPY", "GBP_USD"])
 
 
 def default_state() -> DashboardState:

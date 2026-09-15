@@ -85,6 +85,14 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-16", "EXPERIMENTAL REVERSION, user-approved: VWAP Scalp reverted to its 2026-09-07 configuration "
+                    "(its one clearly profitable live day) to test whether new data behaves differently -- watch "
+                    "window back to 07:00-20:00 UTC, the reward:risk floor / 5-day trend filter / event-day pause "
+                    "all removed (none existed on 09-07). Kept: half-size mode, the 09-10 pair-priority reorder "
+                    "(commodities first -- itself motivated by 09-07's result), and two unrelated bug fixes. "
+                    "This is a test, not a verdict that the removed filters were wrong -- see DEVELOPMENT_LOG.md "
+                    "for the full reasoning, including why the backtest predicting a 74-75% win rate for this "
+                    "config isn't trusted at face value."),
     ("2026-09-12", "The journal now records the REAL OANDA fill price on every new trade's open (entry_price), "
                     "not just the pre-order price estimate -- that estimate is kept too, as decision_entry_price, "
                     "so real slippage is finally directly measurable. Found while digging into why live VWAP "
@@ -697,6 +705,12 @@ def dashboard():
         vwap_scalp_global_cooldown_minutes_max=state.vwap_scalp_global_cooldown_minutes_max,
         vwap_scalp_global_cooldown_minutes_step=state.vwap_scalp_global_cooldown_minutes_step,
         vwap_scalp_global_cooldown_label=_format_cooldown_minutes(state.vwap_scalp_global_cooldown_minutes),
+        live_trial_enabled=state.live_trial_enabled,
+        live_trial_trade_count=state.live_trial_trade_count,
+        live_trial_max_trades=state.live_trial_max_trades,
+        live_trial_cumulative_risk_deployed=state.live_trial_cumulative_risk_deployed,
+        live_trial_max_capital=state.live_trial_max_capital,
+        live_trial_pairs=", ".join(state.live_trial_pairs),
         base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -1090,6 +1104,14 @@ def settings():
             state.vwap_scalp_global_cooldown_minutes_min, state.vwap_scalp_global_cooldown_minutes_max)
         step = state.vwap_scalp_global_cooldown_minutes_step
         state.vwap_scalp_global_cooldown_minutes = round(raw_cooldown / step) * step
+
+        # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): off by
+        # default, and inert even when on unless OANDA_ACCESS_TOKEN_LIVE/
+        # OANDA_ACCOUNT_ID_LIVE are also set as separate Render secrets
+        # (see src/live_trial.py). This toggle alone can never place a
+        # real-money order -- matches app.py's own module docstring on
+        # why a UI toggle alone can never turn on real-money trading.
+        state.live_trial_enabled = request.form.get("live_trial_enabled") == "on"
 
         # Base strategy: ON by default -- this is the original strategy
         # the app was built around, not a new experiment. Turning it off

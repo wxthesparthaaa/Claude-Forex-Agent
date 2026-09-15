@@ -15,7 +15,7 @@ import vwap_scalp_addon as vs
 import vwap_scalp_tie_log as tie_log
 from autopilot import PhaseState
 
-FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 04:00-24:00 UTC watch window
+FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 07:00-20:00 UTC watch window
 
 
 class _FrozenDatetime(datetime):
@@ -46,20 +46,6 @@ def _autopilot_state(vwap_scalp_enabled=True, kill_switch_engaged=False):
 def _m1_candle(dt, close, volume=10):
     return {"time": dt.isoformat().replace("+00:00", "Z"), "complete": True,
             "mid": {"c": str(close)}, "volume": volume}
-
-
-def _daily_candles_with_change(change_pct, reference_close=100.0, complete=True):
-    """A minimal run of complete Daily candles spanning exactly
-    TREND_FILTER_LOOKBACK_DAYS -- the reference close (index
-    -1-LOOKBACK_DAYS) and the latest close (index -1) are the only two
-    _multi_day_trend_direction actually reads; the ones between are
-    filler. `complete=False` simulates today's still-forming candle
-    leaking in, to confirm it's correctly excluded."""
-    latest_close = reference_close * (1 + change_pct / 100)
-    candles = [{"time": f"2026-08-{20+i:02d}T00:00:00Z", "complete": True, "mid": {"c": str(reference_close)}}
-               for i in range(vs.TREND_FILTER_LOOKBACK_DAYS)]
-    candles.append({"time": "2026-08-31T00:00:00Z", "complete": complete, "mid": {"c": str(latest_close)}})
-    return candles
 
 
 def _extended_session_candles(n_flat=30, extension_price=105.0, confirmation_price=104.0, end_time=None):
@@ -115,33 +101,15 @@ def _valid_entry_price(candles, direction):
     return target + stop_distance / 2      # inside (target, target + stop_distance)
 
 
-def _bad_reward_risk_entry_price(candles, direction):
-    """An entry price still on the correct (valid) side of the frozen
-    stop/target, but close enough to the target that tp_distance ends up
-    well under sl_distance -- the reward:risk-floor rejection scenario.
-    _valid_entry_price sits exactly halfway (1:1 by construction); this
-    sits 10% of the way from target toward stop_loss instead."""
-    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
-    signal_index, direction_found = vs._find_confirmed_signal(times, z, times[-1])
-    target = vwap[signal_index]
-    stop_distance = (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
-    if direction == "LONG":
-        return target - stop_distance * 0.1
-    return target + stop_distance * 0.1
-
-
 class FakeClient:
     def __init__(self, candles_by_instrument=None, price=1.1000, fill_trade_id="999",
                  close_result=None, account_currency="USD", daily_candles_by_instrument=None):
         self._candles_by_instrument = candles_by_instrument or {}
         # Separate from the M1 store above -- real OANDA returns different
-        # data per granularity, so the trend filter's own "D" requests
-        # (_multi_day_trend_direction) must not silently be served M1
-        # candles. Empty by default: no test needs to configure daily
-        # data unless it's specifically exercising the trend filter, and
-        # an empty response correctly resolves to "no trend detected" (see
-        # _multi_day_trend_direction's own len() guard), preserving every
-        # existing test's pre-trend-filter behavior unchanged.
+        # data per granularity. Unused by any current test since the
+        # trend filter that consumed "D" requests was removed in the
+        # 2026-09-16 experimental reversion -- kept as generic FakeClient
+        # infrastructure in case a future Daily-candle consumer needs it.
         self._daily_candles_by_instrument = daily_candles_by_instrument or {}
         self._price = price
         self._fill_trade_id = fill_trade_id
@@ -296,249 +264,53 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
 
 
 @patch("vwap_scalp_addon.send_message")
-def test_rejects_entry_when_reward_risk_ratio_is_below_the_floor(mock_send, tmp_path, monkeypatch, capsys):
-    # User request (2026-09-07), after two same-day live trades (GBP_JPY,
-    # XAU_USD) showed the stop 3-4x wider than the target. Checked first
-    # whether this was previously tried and reverted: it wasn't -- the
-    # wide designed-R:R range was investigated twice as a suspected bug
-    # (2026-08-31, 2026-09-01) and both times concluded structural, and a
-    # placebo-signal backtest found the strategy's edge survives it. This
-    # floor is a new, not-backtested filter layered on top regardless,
-    # per explicit user choice to reject the worst tail.
+def test_open_position_mirrors_to_live_trial_when_enabled(mock_send, tmp_path, monkeypatch):
+    # 2026-09-15, user-approved: a separate real-money live trial mirrors
+    # each VWAP Scalp signal onto its own account. Proves the wiring in
+    # _open_position actually invokes it with the SAME frozen entry/
+    # stop/target already used for the practice-side trade -- live_trial
+    # itself is unit-tested in tests/test_live_trial.py.
+    import live_trial as lt
+    import oanda_client as oc
     _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
+    state = _autopilot_state()
+    state.live_trial_enabled = True
+    state.live_trial_pairs = ["EUR_USD"]
+    ds.save_state(state)
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles},
-                         price=_bad_reward_risk_entry_price(candles, "SHORT"))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    assert client.orders_placed == []
-    entries = tj.load_journal()
-    assert [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG] == []
-    captured = capsys.readouterr()
-    assert "reward:risk" in captured.out
-    assert "below the 1:1 floor" in captured.out
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_a_favorable_reward_risk_ratio_still_opens_normally(mock_send, tmp_path, monkeypatch):
-    # The mirror image of the rejection test -- entry close to the STOP
-    # side instead of the target side, so tp_distance is well ABOVE
-    # sl_distance. Must not be caught by the new floor.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
-    signal_index, _ = vs._find_confirmed_signal(times, z, times[-1])
-    target = vwap[signal_index]
-    stop_distance = (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
-    favorable_entry = target + stop_distance * 0.9  # close to the stop side -> small SL, big TP
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=favorable_entry)
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["EUR_USD"]
-    assert client.orders_placed == ["EUR_USD"]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_blocks_a_long_fade_against_an_established_down_trend(mock_send, tmp_path, monkeypatch):
-    # 2026-09-11 full-week review: a sustained multi-day yen-strengthening
-    # trend (real BOJ rate-hike speculation) explained 10 of 41 losses,
-    # all LONG JPY-cross fades betting against that same trend. This LONG
-    # signal (fading a downward extension, betting price reverts UP) must
-    # be skipped when the pair's own 5-day trend is DOWN -- fading against
-    # an established trend, not genuine reversion.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    daily = _daily_candles_with_change(-vs.TREND_FILTER_THRESHOLD_PCT - 1.0)  # a real DOWN trend
-    client = FakeClient(candles_by_instrument={"CHF_JPY": candles}, price=_valid_entry_price(candles, "LONG"),
-                         daily_candles_by_instrument={"CHF_JPY": daily})
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    assert client.orders_placed == []
-    state = ds.load_state()
-    skips = [s for s in state.risk_limit_skips_since_digest if "trend filter" in s]
-    assert len(skips) == 1
-    assert "CHF_JPY" in skips[0]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_blocks_a_short_fade_against_an_established_up_trend(mock_send, tmp_path, monkeypatch):
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 1.0)  # a real UP trend
-    client = FakeClient(candles_by_instrument={"EUR_JPY": candles}, price=_valid_entry_price(candles, "SHORT"),
-                         daily_candles_by_instrument={"EUR_JPY": daily})
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    assert client.orders_placed == []
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_allows_a_long_fade_with_the_trend(mock_send, tmp_path, monkeypatch):
-    # The mirror image -- a LONG fade (betting price reverts UP) WITH an
-    # established UP trend must open normally; the filter only blocks
-    # fading AGAINST a trend, never trading with one.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 1.0)  # UP trend, same direction as the fade
-    client = FakeClient(candles_by_instrument={"CHF_JPY": candles}, price=_valid_entry_price(candles, "LONG"),
-                         daily_candles_by_instrument={"CHF_JPY": daily})
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["CHF_JPY"]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_allows_a_fade_when_the_multi_day_move_is_below_threshold(mock_send, tmp_path, monkeypatch):
-    # Ordinary chop (a move smaller than TREND_FILTER_THRESHOLD_PCT) is
-    # not a "trend" -- must not block anything.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT - 0.5)  # below the threshold
-    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"),
-                         daily_candles_by_instrument={"GBP_USD": daily})
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["GBP_USD"]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_allows_a_fade_when_no_daily_candle_data_is_available(mock_send, tmp_path, monkeypatch):
-    # Matches every existing test's FakeClient default (no daily candles
-    # configured at all) -- must degrade to "no trend detected", not
-    # block trading. This is what keeps every pre-trend-filter test's
-    # behavior unchanged.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["GBP_USD"]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_trend_filter_ignores_an_incomplete_latest_daily_candle(mock_send, tmp_path, monkeypatch):
-    # Today's still-forming daily candle must never factor into the
-    # trend read -- same look-ahead-safety discipline as every other
-    # Daily-candle consumer in this codebase (complete=True only).
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
-    daily = _daily_candles_with_change(vs.TREND_FILTER_THRESHOLD_PCT + 5.0, complete=False)
-    client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"),
-                         daily_candles_by_instrument={"GBP_USD": daily})
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["GBP_USD"]  # insufficient COMPLETE history -> no trend asserted -> trade proceeds
-
-
-class _EventDayDatetime(_FrozenDatetime):
-    _frozen = datetime(2026, 9, 11, 10, 0, tzinfo=timezone.utc)  # US CPI day, inside the watch window
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_event_day_filter_blocks_all_new_entries(mock_send, tmp_path, monkeypatch):
-    # 2026-09-11 real incident: US CPI day, -$157.26 across 18 trades,
-    # broad-based across pairs/directions -- a narrow window around the
-    # exact release barely helped (see HIGH_IMPACT_EVENT_DAYS' own
-    # comment), so this is a full UTC-calendar-day pause instead.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
-                                         end_time=_EventDayDatetime._frozen)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    assert client.orders_placed == []
-    state = ds.load_state()
-    skips = [s for s in state.risk_limit_skips_since_digest if "event day" in s]
-    assert len(skips) == 1
-    assert "US CPI" in skips[0]
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_event_day_filter_records_one_risk_skip_per_tick_not_per_pair(mock_send, tmp_path, monkeypatch):
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
-                                         end_time=_EventDayDatetime._frozen)
-    client = FakeClient(candles_by_instrument={p: candles for p in vs.VWAP_SCALP_PAIRS},
-                         price=_valid_entry_price(candles, "SHORT"))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    state = ds.load_state()
-    skips = [s for s in state.risk_limit_skips_since_digest if "event day" in s]
-    assert len(skips) == 1
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_event_day_filter_still_force_closes_an_existing_position(mock_send, tmp_path, monkeypatch):
-    # A pause on new entries must never suppress the 30-min hold-cap
-    # safeguard on a position already held -- same discipline already
-    # established for the daily/bucket/cooldown caps.
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    tj.record_open_trade("601", {
-        "instrument": "EUR_USD", "direction": "SHORT", "units": 1000, "entry_price": 1.1050,
-        "stop_loss": 1.1080, "take_profit": 1.1020, "confidence_pct": 89.2,
-        "account_currency": "USD", "risk_amount": 40.0, "experiment_tag": vs.VWAP_SCALP_TAG,
-    })
-    entries = tj.load_journal()
-    for e in entries:
-        if e["trade_id"] == "601":
-            e["opened_at"] = (_EventDayDatetime._frozen - timedelta(minutes=31)).isoformat()
-    tj.save_journal(entries)
-    monkeypatch.setattr(vs, "datetime", _EventDayDatetime)
-    client = FakeClient()
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == []
-    assert client.closed_ids == ["601"]  # force-close still fires despite the event-day pause
-
-
-@patch("vwap_scalp_addon.send_message")
-def test_event_day_filter_does_not_block_an_ordinary_day(mock_send, tmp_path, monkeypatch):
-    _isolate(tmp_path, monkeypatch)
-    _autopilot_state()
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)  # FIXED_NOW, not in HIGH_IMPACT_EVENT_DAYS
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
+    class FakeLiveClient:
+        def __init__(self):
+            self.orders_placed = []
+
+        def get_account_summary(self):
+            return {"currency": "USD"}
+
+        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
+            self.orders_placed.append(instrument)
+            return {"orderFillTransaction": {"tradeOpened": {"tradeID": "live-1"}, "price": stop_loss_price}}
+
+        def get_trade(self, trade_id):
+            return {"stopLossOrder": {"price": "1.0"}, "takeProfitOrder": {"price": "2.0"}}
+
+        def get_open_trades(self):
+            return []
+
+    fake_live = FakeLiveClient()
+    monkeypatch.setattr(oc.OandaClient, "for_live_trial", staticmethod(lambda: fake_live))
+
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == ["EUR_USD"]
+    assert opened == ["EUR_USD"]  # practice-side trade unaffected
+    assert fake_live.orders_placed == ["EUR_USD"]  # live trial mirrored it
+    entries = tj.load_journal()
+    practice_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    live_trial_entries = [e for e in entries if e.get("experiment_tag") == lt.VWAP_SCALP_LIVE_TRIAL_TAG]
+    assert len(practice_entries) == 1
+    assert len(live_trial_entries) == 1
+    assert live_trial_entries[0]["direction"] == practice_entries[0]["direction"]
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -932,10 +704,10 @@ def test_weak_hour_pair_exclusion_blocks_a_listed_pair_in_its_excluded_bucket(mo
     # just a pair not being tradeable in this one specific window.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
-    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(12, 16): {"CAD_JPY"}})
 
     class _WeakBucket(_FrozenDatetime):
-        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+        _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
@@ -956,10 +728,10 @@ def test_weak_hour_pair_exclusion_does_not_block_the_same_pair_in_a_different_bu
     # pair globally.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
-    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(12, 16): {"CAD_JPY"}})
 
     class _StrongBucket(_FrozenDatetime):
-        _frozen = FIXED_NOW.replace(hour=21)  # inside 20:00-24:00 UTC
+        _frozen = FIXED_NOW.replace(hour=16)  # inside the watch window, but NOT the excluded 12:00-16:00 bucket
 
     monkeypatch.setattr(vs, "datetime", _StrongBucket)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
@@ -982,7 +754,7 @@ def test_weak_hour_pair_exclusions_empty_by_default_so_cad_jpy_trades_normally(m
     _autopilot_state()
 
     class _WeakBucket(_FrozenDatetime):
-        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+        _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
@@ -1000,10 +772,10 @@ def test_weak_hour_pair_exclusion_does_not_block_an_unlisted_pair_in_the_same_bu
     # must still trade normally in an excluded bucket.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
-    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(4, 7): {"CAD_JPY"}})
+    monkeypatch.setattr(vs, "WEAK_HOUR_PAIR_EXCLUSIONS", {(12, 16): {"CAD_JPY"}})
 
     class _WeakBucket(_FrozenDatetime):
-        _frozen = FIXED_NOW.replace(hour=5)  # inside 04:00-07:00 UTC
+        _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
@@ -1074,19 +846,6 @@ def test_vwap_scalp_status_line_reports_zero_trades_and_no_position(tmp_path, mo
     line = vs.vwap_scalp_status_line(FIXED_NOW)
 
     assert line == "VWAP Scalp (live): 0 trades today, no position open."
-
-
-def test_vwap_scalp_status_line_reports_event_day_pause_when_zero_trades(tmp_path, monkeypatch):
-    # Real finding (2026-09-11): a full UTC-day pause on known high-impact
-    # events. A zero-trade day should say WHY, not look indistinguishable
-    # from a quiet ordinary day.
-    _isolate(tmp_path, monkeypatch)
-    ds.save_state(ds.default_state())
-    monkeypatch.setattr(vs, "HIGH_IMPACT_EVENT_DAYS", {FIXED_NOW.strftime("%Y-%m-%d"): "US CPI (Aug)"})
-
-    line = vs.vwap_scalp_status_line(FIXED_NOW)
-
-    assert line == "VWAP Scalp (live): 0 trades today -- paused: US CPI (Aug), no position open."
 
 
 def test_vwap_scalp_status_line_reports_todays_win_loss_count(tmp_path, monkeypatch):

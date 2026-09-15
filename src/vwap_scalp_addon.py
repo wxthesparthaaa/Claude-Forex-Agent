@@ -3,6 +3,36 @@ VWAP Scalp -- the third live strategy built from this session's own
 research, and the first genuine SCALP (minutes, not hours-to-months) to
 ship. Off by default; the user must explicitly enable it via Settings.
 
+EXPERIMENTAL REVERSION (2026-09-16), user-approved: 2026-09-07 was this
+strategy's one clearly profitable live day (+$311.45, 60% win rate);
+every day since has been a net loser (11 of 12 trading days, -$1,971.55
+before this reversion). Live results were compared against the code as
+it stood at the END of 2026-09-07 (commit 7ce09f26) and reverted back
+to that configuration, EXCEPT for three things deliberately KEPT from
+the current code: half-size position mode (risk_config.half_size_mode_
+enabled), the 2026-09-10 pair-priority reorder (commodities first in
+VWAP_SCALP_PAIRS -- itself motivated by 09-07's own result, not being
+undone), and the 2026-09-08 pacing-cap-freshness bug fix (a genuine
+correctness fix, not a strategy choice). Reverted: the watch window
+(back to 07:00-20:00 UTC from 04:00-24:00), the reward:risk floor
+(removed entirely -- MIN_REWARD_RISK_RATIO didn't exist on 09-07), the
+5-day trend filter and the high-impact-event-day pause (neither existed
+on 09-07), and two live-setting values (vwap_scalp_max_trades_per_day
+back to 15, vwap_scalp_global_cooldown_minutes back to 20 -- see
+DEVELOPMENT_LOG.md 2026-09-16 for the real historical values these were
+reverted TO, pulled directly from that day's own state-sync commit).
+This is explicitly a TEST to see whether the 09-07 configuration
+behaves differently over new data -- not a conclusion that the filters
+being removed were wrong. Two backtests run before this decision (both
+using the same backtest methodology already known to run optimistic)
+predicted the 09-07 config would do well over 09-10 onward; real live
+results under the current config over that same window did not, and
+there is no strong reason to trust the backtest's prediction here any
+more than it was trusted for any of the other filters rejected this
+same week. If this reversion doesn't produce different results, that
+would be real evidence the removed filters weren't the driver of the
+gap either.
+
 THE SIGNAL, exactly as validated in scripts/backtest_vwap_reversion_scalp.py
 (2026-08-30, see DEVELOPMENT_LOG.md): a real, documented scalp technique
 (VWAP standard-deviation bands), NOT invented for this test. Each UTC
@@ -11,9 +41,8 @@ price, reset at 00:00 UTC) plus a trailing 30-minute rolling standard
 deviation of price's own deviation from that VWAP. A trade fires when
 price is 2.0 standard deviations away from VWAP -- fading BACK toward
 it (buy when unusually far BELOW VWAP, sell when unusually far ABOVE),
-only during 04:00-24:00 UTC (widened 2026-09-08 from the original
-07:00-20:00 "London+NY liquid hours" -- see WATCH_START_HOUR below for
-the backtest that justified it).
+only during 07:00-20:00 UTC (reverted 2026-09-16 to the original window
+-- see the EXPERIMENTAL REVERSION note above).
 
 WHY THIS ONE NEEDED EXTRA SCRUTINY BEFORE SHIPPING, stated plainly: the
 first real backtest run came back at t=43 -- an order of magnitude
@@ -187,8 +216,8 @@ VWAP_SCALP_PAIRS = [
 # 3 pairs excluded specifically from that bucket. 00:00-04:00 UTC was
 # tested and REJECTED -- genuinely negative (mean_R -0.056, day-win
 # 44.1%), the one real dead zone in the day, deliberately left dark.
-WATCH_START_HOUR = 4
-WATCH_END_HOUR = 24            # exclusive -- 24 means through end-of-day, no upper bound
+WATCH_START_HOUR = 7
+WATCH_END_HOUR = 20            # exclusive -- reverted 2026-09-16, see EXPERIMENTAL REVERSION note above
 ROLLING_WINDOW_MINUTES = 30
 MIN_SESSION_SAMPLES = 20
 Z_ENTRY = 2.0                   # the single validated threshold -- not swept live
@@ -197,27 +226,6 @@ MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
 SIGNAL_RECENCY_MINUTES = 10     # ignore a confirmed signal older than this -- don't chase a stale setup
-
-# Reward:risk floor (2026-09-07), user request after two live trades on
-# the same day (GBP_JPY, XAU_USD) showed the stop distance sitting 3-4x
-# WIDER than the target distance -- risking meaningfully more than the
-# trade could make. take_profit is always the frozen session VWAP;
-# stop_loss is (Z_ENTRY + STOP_Z_BUFFER) stdevs BEYOND that same VWAP --
-# so unlike a fixed-R:R strategy, how favorable this ratio is on any
-# given trade depends entirely on how far price already was from VWAP
-# at signal time, not on anything this code controls directly. This is
-# NOT re-litigating settled research: the wide 0.35-4.24 designed-R:R
-# range itself was investigated twice (2026-08-31 live-detection-window
-# bug, 2026-09-01 post-fix check-in) and both times concluded structural,
-# not a defect -- and the 2026-08-31 placebo-signal backtest (see
-# DEVELOPMENT_LOG.md) found the strategy's real edge comes from genuine
-# z-extreme entries winning even under this same unfavorable-by-default
-# geometry, not from R:R consistency. This floor is a genuinely new,
-# NOT backtested filter layered on top of that validated signal -- an
-# explicit user choice to reject the worst tail (SL wider than TP)
-# rather than trust the aggregate backtest result to keep covering it,
-# not a claim that the wider validated range was ever wrong.
-MIN_REWARD_RISK_RATIO = 1.0
 
 # Real incident (2026-08-31, 2026-09-02): VWAP Scalp alone opened 18 of the
 # account's shared 30-trade daily allowance on each of two separate days
@@ -318,75 +326,11 @@ REALIZED_LOSS_INFLATION = 1.29  # divides risk_amount so REAL realized losses la
                                  # user's intended risk_per_trade_pct; recalibrate as more live
                                  # data accumulates, and revisit if the root cause is ever found.
 
-# Real live finding (2026-09-11, full-week review): the week's weak
-# realized performance (20W/41L since the R:R floor fix) traced heavily
-# to fading GENUINE multi-day trends, not ordinary intraday chop -- a
-# sustained yen-strengthening move (BOJ rate-hike speculation, ~Sept
-# 3-8) explained 10 of 41 losses, all LONG JPY-cross fades betting
-# against that same trend; a surprise ECB hike on 09-10 explained
-# another. A real news/economic-calendar filter would need historical
-# calendar data this pipeline doesn't have -- this is the cheaper,
-# price-only proxy for the same idea, testable with data already on
-# hand: skip a fade that bets AGAINST an already-established multi-day
-# directional move, since that's a real repricing continuing, not a
-# reversion candidate. TREND_FILTER_LOOKBACK_DAYS/THRESHOLD_PCT are a
-# reasoned starting heuristic, NOT independently backtested the way the
-# core VWAP signal was -- recalibrate once enough live data (or a
-# proper price-only backtest) exists to check it against.
-TREND_FILTER_LOOKBACK_DAYS = 5
-TREND_FILTER_THRESHOLD_PCT = 2.0
-
-# Real live finding (2026-09-11): US CPI day. Tested a narrow pause
-# window around the exact 12:30 UTC release first -- it barely helped (a
-# +/-2 hour window caught only 4 of that day's 18 trades, and those 4
-# netted +6.65, not negative). The damage was spread across the WHOLE
-# session instead -- pre-positioning ahead of a widely-anticipated
-# release plus elevated volatility persisting for hours after, not a
-# narrow print-instant effect. A full-day pause would have avoided the
-# entire day's -$157.26 (15 losses, -$250.54) at the cost of foregoing 3
-# wins that also happened that day (+$93.28) -- a clear net improvement.
-# This complements TREND_FILTER_LOOKBACK_DAYS' multi-day price-trend
-# detection with something it structurally can't see: a single KNOWN,
-# scheduled news day needs no historical price data at all, only a
-# forward-looking calendar.
-#
-# The "big four" recurring USD/EUR-moving events -- US CPI, US NFP, FOMC
-# rate decisions, ECB rate decisions -- are the same four implicated
-# across this project's last several weekly reviews (BOJ speculation and
-# a surprise ECB hike the week of 09-10, US CPI on 09-11). Deliberately
-# blunt: pauses EVERY pair for the WHOLE UTC calendar day, not scoped to
-# just the "obviously relevant" currency -- 09-11's losses were broad
-# across USD pairs, JPY crosses, AND commodities alike, since a real
-# risk-off/repricing day moves the whole universe, not just the one
-# currency in the headline. Hardcoded and NOT algorithmically derived
-# (FOMC/ECB/CPI dates don't follow a fixed rule the way NFP's "first
-# Friday of the month" does) -- MUST be refreshed periodically as new
-# release dates are published, since these are only ever known a few
-# months out. Source dates: federalreserve.gov (FOMC), ecb.europa.eu
-# (ECB), bls.gov (CPI).
-HIGH_IMPACT_EVENT_DAYS = {
-    "2026-09-11": "US CPI (Aug)",
-    "2026-09-16": "FOMC rate decision",
-    "2026-10-02": "US NFP (Sep)",
-    "2026-10-14": "US CPI (Sep)",
-    "2026-10-28": "FOMC rate decision",
-    "2026-10-29": "ECB rate decision",
-    "2026-11-06": "US NFP (Oct)",
-    "2026-11-10": "US CPI (Oct)",
-    "2026-12-04": "US NFP (Nov)",
-    "2026-12-09": "FOMC rate decision",
-    "2026-12-10": "US CPI (Nov)",
-    "2026-12-17": "ECB rate decision",
-}
-
-
-def _high_impact_event_today(now: datetime) -> str | None:
-    """The event name if `now`'s UTC calendar date is in
-    HIGH_IMPACT_EVENT_DAYS, else None. A plain date-string lookup --
-    deliberately not timezone- or release-time-aware (see that dict's
-    own comment for why this is a full-day pause, not a narrow window
-    around the actual release time)."""
-    return HIGH_IMPACT_EVENT_DAYS.get(now.strftime("%Y-%m-%d"))
+# EXPERIMENTAL REVERSION (2026-09-16): the trend filter (5-day price-
+# trend skip) and the high-impact-event-day pause that used to live here
+# are REMOVED, along with the reward:risk floor and the widened
+# 04:00-24:00 watch window -- see this module's own top-of-file note for
+# the full reasoning and what's being tested.
 
 
 _vwap_scalp_lock = threading.Lock()
@@ -692,14 +636,14 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
 def vwap_scalp_status_line(now: datetime = None) -> str:
     """One-line, dashboard-flash-friendly summary of VWAP Scalp's current
     state -- built from the same data the periodic 3-hour scan digest
-    uses (vwap_scalp_bucket_summary, HIGH_IMPACT_EVENT_DAYS). Real
-    finding (2026-09-14): the "Scan Now" button (app.py's /scan route)
-    only ever runs the base strategy's own scan -- with base_strategy_
-    enabled off (the normal state whenever VWAP Scalp is the strategy
-    actually live), pressing it reports on a disabled strategy and says
-    nothing about the one that's actually trading. This lets /scan
-    append VWAP Scalp's real status instead of staying silent about it.
-    Read-only, no lock needed."""
+    uses (vwap_scalp_bucket_summary). Real finding (2026-09-14): the
+    "Scan Now" button (app.py's /scan route) only ever runs the base
+    strategy's own scan -- with base_strategy_enabled off (the normal
+    state whenever VWAP Scalp is the strategy actually live), pressing
+    it reports on a disabled strategy and says nothing about the one
+    that's actually trading. This lets /scan append VWAP Scalp's real
+    status instead of staying silent about it. Read-only, no lock
+    needed."""
     now = now or datetime.now(timezone.utc)
     buckets = vwap_scalp_bucket_summary(now)
     total = sum(b["count"] for b in buckets)
@@ -709,8 +653,7 @@ def vwap_scalp_status_line(now: datetime = None) -> str:
     open_vwap = [e for e in open_entries(load_journal()) if e.get("experiment_tag") == "VWAP_SCALP"]
 
     if total == 0:
-        event = _high_impact_event_today(now)
-        trades_part = f"0 trades today -- paused: {event}" if event else "0 trades today"
+        trades_part = "0 trades today"
     else:
         trades_part = f"{total} trade{'s' if total != 1 else ''} today ({wins}W/{losses}L)"
 
@@ -799,25 +742,8 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
               f"a real broker would reject this order", flush=True)
         return False
 
-    # Reward:risk floor -- see MIN_REWARD_RISK_RATIO's own comment for
-    # why this is a new filter, not a fix to a previously-identified bug.
-    # sl_distance/tp_distance are both guaranteed > 0 here: the `valid`
-    # check above already confirmed stop_loss/take_profit sit strictly
-    # on either side of entry_price.
-    sl_distance = abs(entry_price - stop_loss)
-    tp_distance = abs(take_profit - entry_price)
-    floor_distance = MIN_REWARD_RISK_RATIO * sl_distance
-    # math.isclose guards against rejecting a genuinely-1:1 trade over a
-    # floating-point rounding artifact from round_price -- real fixture
-    # data hit exactly this (both distances printed identically at 5
-    # decimals, but compared unequal at full float precision).
-    if tp_distance < floor_distance and not math.isclose(tp_distance, floor_distance, rel_tol=1e-9):
-        from dashboard_state import record_risk_limit_skip
-        reason = (f"reward:risk {tp_distance / sl_distance:.2f}:1 is below the {MIN_REWARD_RISK_RATIO:.0f}:1 "
-                  f"floor (risking {sl_distance:.5f} to make {tp_distance:.5f})")
-        record_risk_limit_skip("VWAP Scalp", reason)
-        print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- {reason}", flush=True)
-        return False
+    # EXPERIMENTAL REVERSION (2026-09-16): the reward:risk floor that
+    # used to gate here is removed -- see this module's top-of-file note.
 
     summary = client.get_account_summary()
     account_currency = summary.get("currency", "USD")
@@ -872,6 +798,17 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     except Exception as e:
         print(f"WARNING: VWAP Scalp open notification failed for {instrument} "
               f"(trade already placed and journaled): {e}", flush=True)
+
+    # LIVE TRIAL (2026-09-15, user-approved): best-effort mirror of this
+    # SAME signal onto a separate real-money account -- see live_trial.py's
+    # own docstring. Runs only after the practice-side trade above has
+    # fully succeeded; cannot affect it either way.
+    try:
+        from dashboard_state import load_state
+        from live_trial import mirror_to_live_trial
+        mirror_to_live_trial(load_state(), instrument, direction, entry_price, stop_loss, take_profit, meta)
+    except Exception as e:
+        print(f"WARNING: VWAP Scalp live trial hook failed for {instrument}: {e}", flush=True)
 
     return True
 
@@ -960,24 +897,9 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
                     _force_close(client, entry)
                 continue  # a position we already hold this tick -- never a candidate for a fresh entry
 
-            # High-impact event day (2026-09-11) -- see HIGH_IMPACT_EVENT_DAYS'
-            # own comment for why this is a FULL-DAY pause, not a narrow
-            # window: tested a +/-2 hour window around that day's exact CPI
-            # release first and it barely helped (caught only 4 of 18 trades,
-            # netting +6.65 -- not the problem). The damage was spread across
-            # the whole session, so the whole session is what's paused. Still
-            # allows the force-close above -- an existing position isn't
-            # abandoned, just no fresh ones on a known high-impact day.
-            event_reason = _high_impact_event_today(now)
-            if event_reason is not None:
-                category = "event_day"
-                if category not in notified_categories:
-                    notified_categories.add(category)
-                    from dashboard_state import record_risk_limit_skip
-                    record_risk_limit_skip("VWAP Scalp", f"event day: {event_reason} -- no new entries today")
-                    print(f"INFO: VWAP Scalp paused for the day ({event_reason}) -- no new entries; existing "
-                          f"positions still monitored for the hold-cap force-close", flush=True)
-                continue
+            # EXPERIMENTAL REVERSION (2026-09-16): the high-impact
+            # event-day pause that used to gate here is removed -- see
+            # this module's top-of-file note.
 
             # Re-checked fresh EVERY iteration, from `entries` reloaded
             # THIS iteration -- not a value computed once before the loop
@@ -1023,26 +945,9 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             if direction is None:
                 continue
 
-            # Trend filter (2026-09-11) -- see TREND_FILTER_LOOKBACK_DAYS'
-            # own comment. A LONG fade bets price reverts UP; skip it
-            # against an established DOWN trend. A SHORT fade bets price
-            # reverts DOWN; skip it against an established UP trend.
-            # Silent-skip mechanics deliberately mirror the R:R floor
-            # (record_risk_limit_skip -- digest-visible, not a separate
-            # immediate Telegram ping per occurrence) rather than the
-            # weak-hour exclusion's fully silent one, since WHICH filter
-            # blocked a trade is exactly the kind of thing worth being
-            # able to see later, unlike a pair simply not being scheduled
-            # for this hour at all.
-            trend = _multi_day_trend_direction(client, instrument)
-            if (direction == "LONG" and trend == "DOWN") or (direction == "SHORT" and trend == "UP"):
-                from dashboard_state import record_risk_limit_skip
-                reason = (f"trend filter: skipped {direction} {instrument} -- {TREND_FILTER_LOOKBACK_DAYS}-day "
-                          f"trend is {trend}, fading against it")
-                record_risk_limit_skip("VWAP Scalp", reason)
-                print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- fading against a {trend} "
-                      f"{TREND_FILTER_LOOKBACK_DAYS}-day trend", flush=True)
-                continue
+            # EXPERIMENTAL REVERSION (2026-09-16): the multi-day trend
+            # filter that used to gate here is removed -- see this
+            # module's top-of-file note.
 
             account = account_state_from_tracked_capital(state, entries)
             if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
@@ -1071,37 +976,6 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     times, vwap, dev_stdev, z = _compute_vwap_series(candles)
     signal_index, direction = _find_confirmed_signal(times, z, now)
     return signal_index, direction, vwap, dev_stdev
-
-
-def _multi_day_trend_direction(client, instrument: str) -> str | None:
-    """"UP" if the latest COMPLETE daily close is at least
-    TREND_FILTER_THRESHOLD_PCT higher than the close
-    TREND_FILTER_LOOKBACK_DAYS complete trading days before it, "DOWN"
-    if that much lower, None otherwise (ordinary chop, or not enough
-    history yet). Only complete=True daily candles are used, and BOTH
-    reference points are strictly prior, already-closed days -- nothing
-    from today (which is what the VWAP Scalp signal this gates is
-    actually trading) ever enters this calculation. That clean
-    separation is deliberate: the retired trend_addon.py's look-ahead
-    bug (DEVELOPMENT_LOG.md 2026-08-30) came from a signal computed
-    from data that overlapped the very outcome it was later scored
-    against -- this function never touches today's price at all, so it
-    can't leak into the intraday decision it's gating."""
-    candles = client.get_candles(instrument, "D", count=TREND_FILTER_LOOKBACK_DAYS + 5)
-    candles = [c for c in candles if c.get("complete", True)]
-    if len(candles) <= TREND_FILTER_LOOKBACK_DAYS:
-        return None
-    closes = [float(c["mid"]["c"]) for c in candles]
-    latest = closes[-1]
-    reference = closes[-1 - TREND_FILTER_LOOKBACK_DAYS]
-    if reference == 0:
-        return None
-    change_pct = 100 * (latest - reference) / reference
-    if change_pct >= TREND_FILTER_THRESHOLD_PCT:
-        return "UP"
-    if change_pct <= -TREND_FILTER_THRESHOLD_PCT:
-        return "DOWN"
-    return None
 
 
 def _record_ties_if_any(client, winner: str, today_start) -> None:

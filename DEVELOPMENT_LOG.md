@@ -8661,3 +8661,212 @@ position that belongs to a DIFFERENT strategy tag. `git stash`-
 confirmed all 5 fail against pre-fix code (`AttributeError`, the
 function doesn't exist yet). Full suite (679 tests) green; `py_compile`
 + real `import app` both clean.
+
+## 2026-09-15 -- Two candidate circuit-breaker filters backtested and rejected
+
+**Volatility filter** (`scripts/backtest_vwap_volatility_filter.py`):
+per-instrument, causal ratio of trailing-30min realized vol to a
+trailing-24h baseline; candidate blocked above a swept threshold
+(1.5x-3.0x). Pooled across all 17 pairs with the real 40-minute global
+cooldown applied (a gap the earlier regime-filter script had, fixed
+here). Result: no measurable effect at any threshold (win rate/mean_R
+statistically indistinguishable from baseline); the targeted check on
+what the 2.0x threshold actually blocked showed those 154 trades were
+themselves still profitable (81.2% win, mean_R +0.69) by this
+backtest's own reckoning -- not identifying anything harmful. Rejected.
+
+**Cross-instrument correlation filter**
+(`scripts/backtest_vwap_crossinstrument_filter.py`): pauses all 17
+pairs when N of the 7 USD-related majors simultaneously show an
+unusually large, same-direction drift (a real-time signature of a
+broad dollar move, matching the event-day filter's own "a real
+repricing day moves the whole universe" rationale). First pass
+(z>=1.5, agree>=3-5/7) was net harmful -- USD majors are inherently
+correlated with each other under ordinary conditions, so this fired on
+~9-23% of all minutes and blocked a third of genuinely good trades.
+Stricter pass (z>=3.0, agree>=6-7/7) looked more promising on the
+102-day backtest window (small positive lift; blocked trades showed
+real, meaningfully weaker mean_R than baseline) -- but a direct check
+against the real 2026-09-14 Hormuz shock (fresh M1 data fetched for
+just that window, not touching the main year-long cache) found it
+NEVER fired that day at all. Peak agreement reached was only 4/7 even
+though several individual pairs were reading z>4.9 -- pairs don't
+crest to the exact same 60-second bar even during a genuinely broad
+move, so same-minute agreement is too rigid a synchronization
+requirement. Rejected -- fails on the one real event it was built for.
+
+**Diagnostic, not a filter** (`scripts/diagnose_backtest_volatility_blindness.py`):
+does the BACKTEST's own simulation degrade in locally volatile bars,
+the way real execution visibly did on 09-14 (trades overshooting their
+own stop by 2-3.3x intended risk within 0-60 seconds)? Split ~29,000
+backtested candidates into quartiles by local vol-ratio: win rate
+declines genuinely and monotonically, 85.7% (calmest) -> 77.3% (most
+volatile) -- so the backtest is NOT blind to volatility, but the
+degradation it can see is far smaller than what live actually
+experiences. Mechanistic explanation: 1-minute-bar fill simulation
+has a bounded, finite O-H-L-C range to draw a "worst case" fill from,
+even on its most volatile bars -- real execution during a genuine
+news shock can slip beyond any single bar's own range entirely. This
+would apply to ANY historical period a bar-level backtest validates
+against, not just this one -- directly answering the user's challenge
+("it doesn't make sense the strategy would conveniently fail to
+survive just because of current conditions") with a structural,
+methodology-level explanation instead of a hand-wave.
+
+**OANDA practice vs. live research**: confirmed via `OANDA_ENV`
+(account is currently on the PRACTICE server, a deliberate pre-live
+testing phase). Checked OANDA's own docs directly (API Comparison,
+Best Practices) -- neither addresses practice/live fill differences at
+all. The one concrete claim found (a third-party source, not OANDA's
+own docs): practice doesn't model market impact -- but that's about
+large orders moving the market, not applicable at VWAP Scalp's
+retail-scale position sizes. Whether practice-server stop-loss/take-
+profit fill logic specifically differs from live during fast markets
+remains genuinely undocumented anywhere checked.
+
+## 2026-09-15 -- Scoped and built a small real-money live trial; caught two real incidents building it
+
+**User-approved** ($400 cap, dual-account parallel design): a new
+`src/live_trial.py` mirrors each VWAP Scalp signal (same frozen entry/
+stop/target already computed for the practice-side trade) onto a
+SEPARATE real-money OANDA account, at a small fixed risk ($10/trade),
+restricted to EUR_USD/USD_JPY/GBP_USD, bounded on three independent
+axes (30 trades / $400 cumulative risk / 14 days) via `live_trial_
+still_active`. `OandaClient.for_live_trial()` reads OANDA_ACCESS_TOKEN_
+LIVE/OANDA_ACCOUNT_ID_LIVE (separate Render secrets, not yet set) and
+returns None -- a safe no-op, not a crash -- until they are. New
+`live_trial_enabled` Settings toggle, off by default, inert either way
+without those credentials. Hooked into `_open_position` AFTER the
+practice-side trade succeeds; every failure mode inside the mirror is
+caught and logged, never able to affect the practice trade already
+placed. 11 new tests in `tests/test_live_trial.py`, 3 more in
+`tests/test_oanda_client.py`, 1 integration test proving the wiring in
+`vwap_scalp_addon.py` actually invokes it with the practice trade's own
+signal. `git stash`-confirmed all new tests fail on pre-fix code.
+
+**Real incident #1, caught before any commit**: none of the new tests
+mocked `live_trial.send_message` -- this codebase already has a
+purpose-built safety net for exactly this class of bug
+(`tests/conftest.py`'s `_block_real_telegram_sends`, built after an
+earlier real incident), but it patches `send_message` by explicit
+per-module name, and `live_trial.py` (a brand-new module) was never
+added to that list. Every local test run whose live-trial mirror
+"succeeded" against a fully fake OANDA client sent a genuine Telegram
+message anyway -- several times, once per run. Confirmed zero real
+OANDA orders were ever placed (fake client, no network calls; the
+malformed values in the messages -- "2000 units @ 1.1", "-7 units @
+101.5842" -- are test-fixture giveaways). Auditing further found FOUR
+more modules never on that list either (`dashboard_state`,
+`orb_fade_addon`, `range_confluence_addon`, `vwap_scalp_addon`) --
+safe so far only because every individual test for them happened to
+carry its own local `@patch`, exactly the "forgets to mock it
+locally" failure this fixture exists to catch automatically. All five
+now added defensively. Full suite (694 tests) green after the fix.
+
+**Real incident #2, a genuine design bug in the loss-cluster routine
+itself** (found via the user manually cross-referencing 12 real trade
+IDs against what they were seeing on their phone): the routine built
+2026-09-14 used "5+ losses within a rolling 3-hour window." VWAP Scalp
+trades roughly every 45 minutes under its own 40-minute cooldown, so a
+3-hour window can physically only ever hold about 3-4 trades --
+"5 in 3h" was close to mathematically unreachable regardless of how
+bad a real streak got. It missed a real, confirmed 12-CONSECUTIVE-loss
+streak (trade IDs 4590-4663, 2026-09-14 20:56 UTC through 2026-09-15
+09:16 UTC, every single trade a loss -- verified directly against the
+real journal) entirely, because the streak was spread across many
+hours rather than concentrated inside any single 3-hour lookback the
+hourly checks happened to take. Confirmed via a direct query that 12
+is the actual maximum consecutive-loss streak in the entire journal to
+date. Fixed by rebuilding the trigger around CONSECUTIVE losses
+(no time-boxing at all) instead of a windowed count -- doesn't depend
+on guessing a window size against a cadence that can change, and would
+have fired at loss #5 of this exact streak instead of never.
+
+## 2026-09-16 -- EXPERIMENTAL REVERSION to the 2026-09-07 configuration
+
+**User decision, stated explicitly as a test, not a verdict**: revert
+VWAP Scalp to how it was configured at the end of 2026-09-07 -- its one
+clearly profitable live day (+$311.45, 60% win rate) against 11 losing
+days and -$1,971.55 since. Framed and logged here specifically as an
+experiment to see whether real new data behaves differently under this
+configuration, not as a conclusion that the filters being removed were
+mistakes.
+
+**Full accounting of what changed, verified via git diff against commit
+7ce09f26 (the last vwap_scalp_addon.py commit before 09-07's trading
+day, in effect for 11 of that day's 15 real trades) rather than
+relying on memory:**
+
+REVERTED (removed/restored to 09-07's actual state):
+- Watch window: 04:00-24:00 UTC -> back to 07:00-20:00 UTC.
+- Reward:risk floor: `MIN_REWARD_RISK_RATIO = 1.0` and its gating check
+  in `_open_position` removed entirely -- it didn't exist at all until
+  09-07 23:58 SGT, essentially the very end of that day.
+- 5-day multi-day trend filter (`TREND_FILTER_LOOKBACK_DAYS`/
+  `_THRESHOLD_PCT`, `_multi_day_trend_direction`, and its gate in the
+  tick loop) removed entirely -- added 09-11, didn't exist on 09-07.
+- High-impact event-day pause (`HIGH_IMPACT_EVENT_DAYS`,
+  `_high_impact_event_today`, and its gate) removed entirely -- added
+  09-12, didn't exist on 09-07. `vwap_scalp_status_line` (the Scan Now
+  integration, 09-14) updated to drop its now-dead reference to this.
+- Live settings, reverted to the REAL historical values pulled directly
+  from state-sync's own commit `2bb18c67` (2026-09-07 23:59 SGT, the
+  actual end-of-day state, not the dataclass default): `vwap_scalp_max_
+  trades_per_day` 50 -> 15, `vwap_scalp_global_cooldown_minutes` 40 ->
+  20. The cooldown difference was NOT caught in the original full
+  comparison a few turns earlier in this project's own conversation --
+  found only once this revert prompted checking state-sync history
+  directly instead of trusting an earlier "complete" accounting.
+
+DELIBERATELY KEPT (explicit user instruction, not reverted):
+- Half-size position mode (`risk_config.half_size_mode_enabled`,
+  added 09-09) -- didn't exist on 09-07 at all; stays ON.
+- The 2026-09-10 `VWAP_SCALP_PAIRS` reorder (commodities first, was FX-
+  majors-first on 09-07) -- itself motivated by 09-07's own result (7
+  of that day's 15 trades were commodities and drove most of the day's
+  profit), so reverting it would work against the same instinct behind
+  reverting everything else. A backtest comparing both pair orders
+  under the reverted 09-07 filter set over 09-10 onward found the
+  current order modestly outperforming the 09-07 order within the
+  backtest's own (already-known-optimistic) numbers -- no support for
+  reverting this one specifically.
+- The 2026-09-08 pacing-cap-freshness fix (re-checks caps fresh per
+  pair every loop iteration instead of once per tick) -- a genuine
+  correctness bug fix, not a strategy/filter design choice; reverting
+  it would reintroduce a known defect rather than test anything real.
+  Not explicitly on the user's "keep" list but treated as obviously
+  correct to keep, same reasoning applied (without being asked) to the
+  2026-09-09 same-tick-clustering fix and the 2026-09-12 real-fill-
+  price journaling -- both bug/data-quality fixes, not filter choices.
+
+**What this reversion is NOT claiming**: two backtests (both using the
+same backtest methodology already shown this week to run far more
+optimistic than live reality, on multiple independent dimensions --
+hour-of-day, reward:risk-quartile ranking) predicted the 09-07
+configuration would win 74-75% of trades over 2026-09-10 onward, the
+exact window the CURRENT configuration actually lost -$699.84 (21.2%
+win rate) on in real trading. There is no principled reason to trust
+that backtest prediction here when it has already been shown wrong,
+specifically on relative rankings and not just absolute levels, for
+every other filter tested this week. This reversion is a real live
+test of the 09-07 configuration, not a backtest-validated fix.
+
+**Verification**: removed 13 tests that directly tested now-removed
+functionality (the R:R floor rejection/acceptance pair, all 6 trend-
+filter tests, all 4 event-day-filter tests, the status-line event-day-
+pause test); fixed 4 weak-hour-pair-exclusion tests whose fixture hour
+(04-07 UTC) fell outside the reverted 07:00-20:00 watch window for an
+unrelated reason, moving them to a bucket the watch window still
+covers; removed two now-dead test helper functions
+(`_daily_candles_with_change`, `_bad_reward_risk_entry_price`). Full
+suite green (680 passed, 1 deselected -- an unrelated pre-existing
+flaky test using real `datetime.now()` near an SGT-midnight boundary,
+spawned as a separate task, not touched here). `py_compile` + real
+`import app` clean.
+
+**Not yet done as of this entry**: the two live-setting values
+(`vwap_scalp_max_trades_per_day`, `vwap_scalp_global_cooldown_minutes`)
+still need to be changed on the actual running practice account via
+its own Settings page -- direct git surgery on state-sync's
+dashboard_state.json was deliberately avoided given the real risk of
+racing the live app's own periodic state pull/push.
