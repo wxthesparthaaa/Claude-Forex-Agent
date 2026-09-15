@@ -184,5 +184,18 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-15T16:12:33.148141+00:00"
+  "last_process_heartbeat_at": "2026-09-15T16:13:31.077398+00:00",
+  "live_trial_enabled": false,
+  "live_trial_started_at": null,
+  "live_trial_trade_count": 0,
+  "live_trial_cumulative_risk_deployed": 0.0,
+  "live_trial_max_capital": 400.0,
+  "live_trial_max_trades": 30,
+  "live_trial_max_duration_days": 14,
+  "live_trial_risk_per_trade": 10.0,
+  "live_trial_pairs": [
+    "EUR_USD",
+    "USD_JPY",
+    "GBP_USD"
+  ]
 }
