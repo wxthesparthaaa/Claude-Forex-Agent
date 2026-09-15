@@ -51,7 +51,7 @@
     "BCO_USD": "2026-09-14T23:51:55.057934+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 3,
+  "interval_scan_count_since_digest": 2,
   "interval_scanned_instruments_since_digest": [
     "USD_JPY",
     "USD_CHF"
@@ -64,8 +64,7 @@
     "VWAP Scalp: trend filter: skipped SHORT WTICO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: trend filter: skipped SHORT BCO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-15T06:36:42.534606+00:00",
   "paused_instruments": {
@@ -182,5 +181,5 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-15T07:31:42.538187+00:00"
+  "last_process_heartbeat_at": "2026-09-15T07:41:42.536404+00:00"
 }
