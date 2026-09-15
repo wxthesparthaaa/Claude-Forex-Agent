@@ -69,7 +69,8 @@
     "VWAP Scalp: trend filter: skipped SHORT WTICO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: trend filter: skipped SHORT BCO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: VWAP Scalp's own daily trade cap reached: 17/15",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 20"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 20",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 20"
   ],
   "last_scan_digest_sent_at": "2026-09-15T15:46:42.534577+00:00",
   "paused_instruments": {
