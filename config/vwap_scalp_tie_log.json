@@ -763,5 +763,12 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-15T10:47:05.012264+00:00",
+    "opened": "CAD_JPY",
+    "also_signaled": [
+      "CHF_JPY"
+    ]
   }
 ]
