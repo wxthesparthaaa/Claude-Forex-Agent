@@ -7860,5 +7860,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": null,
     "decision_entry_price": 110.224
+  },
+  {
+    "trade_id": "4621",
+    "instrument": "GBP_JPY",
+    "direction": "LONG",
+    "units": 36272,
+    "entry_price": 208.589,
+    "stop_loss": 208.542,
+    "take_profit": 208.685,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-15T04:02:04.991260+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 8.649215697674418,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 208.571
   }
 ]
