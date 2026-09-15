@@ -1,28 +1,28 @@
 {
-  "scanned_at": "2026-09-15T16:28:43.234317+00:00",
+  "scanned_at": "2026-09-15T16:48:41.076852+00:00",
   "candidates": [
     {
       "instrument": "WTICO_USD",
       "direction": "LONG",
-      "entry_price": 105.44,
+      "entry_price": 106.042,
       "stop_loss": 104.406,
-      "take_profit": 107.508,
-      "confidence_pct": 74.4,
+      "take_profit": 109.314,
+      "confidence_pct": 58.0,
       "confidence_components": {
-        "breadth": 85.71428571428571,
-        "rsi": 97.42122516034271,
+        "breadth": 57.14285714285714,
+        "rsi": 72.13694296416804,
         "candlestick": 50.0,
         "news": 50.0
       },
-      "units": 8,
+      "units": 5,
       "unit_label": "barrels",
       "risk_amount": 11.157488249999998,
-      "notional_account_currency": 1073.65,
+      "notional_account_currency": 674.85,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 66 (neutral range).",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 71 (overbought -- some chase risk).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
       ],
