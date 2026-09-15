@@ -51,7 +51,7 @@
     "BCO_USD": "2026-09-15T22:51:56.590035+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 7,
+  "interval_scan_count_since_digest": 6,
   "interval_scanned_instruments_since_digest": [
     "USD_CAD",
     "USD_CHF",
@@ -73,8 +73,7 @@
     "VWAP Scalp: trend filter: skipped SHORT WTICO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: trend filter: skipped SHORT BCO_USD -- 5-day trend is UP, fading against it",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-15T12:41:42.534605+00:00",
   "paused_instruments": {
