@@ -40,10 +40,10 @@
   "last_autopilot_scan_timestamps": {
     "AUD_USD": "2026-09-16T13:43:41.815620+08:00",
     "NZD_USD": "2026-09-16T13:43:41.815620+08:00",
-    "USD_JPY": "2026-09-16T16:03:42.292871+08:00",
+    "USD_JPY": "2026-09-16T16:23:40.847625+08:00",
     "EUR_USD": "2026-09-11T23:54:34.677064+08:00",
     "GBP_USD": "2026-09-11T23:54:34.677064+08:00",
-    "USD_CHF": "2026-09-16T16:03:42.292871+08:00",
+    "USD_CHF": "2026-09-16T16:23:40.847625+08:00",
     "USD_CAD": "2026-09-16T04:48:40.153748+08:00",
     "XAU_USD": "2026-09-15T23:51:55.395248+08:00",
     "XAG_USD": "2026-09-15T23:51:55.395248+08:00",
@@ -65,7 +65,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 30 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 35 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-16T07:03:32.109732+00:00",
   "paused_instruments": {
@@ -182,7 +183,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-16T08:23:32.109541+00:00",
+  "last_process_heartbeat_at": "2026-09-16T08:08:32.110459+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
