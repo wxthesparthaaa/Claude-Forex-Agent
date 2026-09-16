@@ -1141,5 +1141,17 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-16T13:48:49.040877+00:00",
+    "opened": "USD_JPY",
+    "also_signaled": [
+      "USD_CAD",
+      "NZD_USD",
+      "USD_CHF",
+      "NZD_JPY",
+      "GBP_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
