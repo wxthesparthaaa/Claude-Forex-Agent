@@ -56,7 +56,9 @@
     "USD_JPY",
     "USD_CHF"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
+  ],
   "last_scan_digest_sent_at": "2026-09-16T07:03:32.109732+00:00",
   "paused_instruments": {
     "EUR_USD": "2026-09-11T21:03:30.674909+00:00",
