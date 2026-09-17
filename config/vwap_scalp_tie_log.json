@@ -1513,5 +1513,21 @@
       "AUD_JPY",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-17T19:18:49.138452+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "GBP_USD",
+      "USD_JPY",
+      "AUD_USD",
+      "USD_CHF",
+      "AUD_JPY",
+      "NZD_JPY",
+      "GBP_JPY",
+      "EUR_JPY",
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
