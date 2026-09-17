@@ -53,9 +53,7 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
-  "risk_limit_skips_since_digest": [
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40"
-  ],
+  "risk_limit_skips_since_digest": [],
   "last_scan_digest_sent_at": "2026-09-17T16:28:33.090422+00:00",
   "paused_instruments": {
     "EUR_USD": "2026-09-11T21:03:30.674909+00:00",
@@ -172,7 +170,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-17T16:33:33.090896+00:00",
+  "last_process_heartbeat_at": "2026-09-17T16:38:33.091371+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
