@@ -73,7 +73,8 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 27 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 32 min ago, needs 40",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-17T13:28:32.108418+00:00",
   "paused_instruments": {
