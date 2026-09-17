@@ -1,4 +1,38 @@
 {
-  "scanned_at": "2026-09-17T11:43:38.837850+00:00",
-  "candidates": []
+  "scanned_at": "2026-09-17T12:03:42.137589+00:00",
+  "candidates": [
+    {
+      "instrument": "BCO_USD",
+      "direction": "SHORT",
+      "entry_price": 104.012,
+      "stop_loss": 106.185,
+      "take_profit": 99.666,
+      "confidence_pct": 75.0,
+      "confidence_components": {
+        "breadth": 85.71428571428571,
+        "rsi": 100.0,
+        "candlestick": 50.0,
+        "news": 50.0
+      },
+      "units": -3,
+      "unit_label": "barrels",
+      "risk_amount": 9.512191499999998,
+      "notional_account_currency": 398.13,
+      "account_currency": "SGD",
+      "rationale": [
+        "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
+        "Currency strength: 86% of major currencies moving the same way (broad, reliable move).",
+        "RSI is 35 (neutral range).",
+        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "News sentiment: not tracked for this instrument (no currency to attach headlines to -- gold/silver/oil aren't in the news-keyword map)."
+      ],
+      "rejected_reason": null,
+      "confidence_components_available": {
+        "breadth": true,
+        "rsi": true,
+        "candlestick": false,
+        "news": false
+      }
+    }
+  ]
 }
