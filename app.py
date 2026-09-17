@@ -85,6 +85,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-17", "New Settings toggle: 'VWAP Scalp daily/bucket trade cap' -- switch it off to remove the "
+                    "daily and per-session trade limits entirely instead of raising the number, relying on "
+                    "half-size mode + the cooldown (which always still applies) as the safety mechanism instead. "
+                    "Built to collect data faster for an ongoing time-of-day pattern check -- two days running "
+                    "now show the 07:00-11:00 UTC window outperforming (4/6 win both days) versus the two days "
+                    "before the VWAP Scalp reversion (1/5, 1/6) -- still early, not yet conclusive."),
     ("2026-09-16", "EXPERIMENTAL REVERSION, user-approved: VWAP Scalp reverted to its 2026-09-07 configuration "
                     "(its one clearly profitable live day) to test whether new data behaves differently -- watch "
                     "window back to 07:00-20:00 UTC, the reward:risk floor / 5-day trend filter / event-day pause "
@@ -697,6 +703,7 @@ def dashboard():
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
+        vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
         vwap_scalp_max_trades_per_day_min=state.vwap_scalp_max_trades_per_day_min,
         vwap_scalp_max_trades_per_day_max=state.vwap_scalp_max_trades_per_day_max,
@@ -1093,6 +1100,11 @@ def settings():
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
         state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
+        # 2026-09-17: toggle to disable the daily+bucket caps entirely,
+        # rather than raising the number -- see DashboardState.vwap_
+        # scalp_daily_cap_enabled's own comment. The slider below still
+        # applies whenever this stays on (the normal case).
+        state.vwap_scalp_daily_cap_enabled = request.form.get("vwap_scalp_daily_cap_enabled") == "on"
         state.vwap_scalp_max_trades_per_day = int(_clamp(
             float(request.form.get("vwap_scalp_max_trades_per_day", state.vwap_scalp_max_trades_per_day)),
             state.vwap_scalp_max_trades_per_day_min, state.vwap_scalp_max_trades_per_day_max))

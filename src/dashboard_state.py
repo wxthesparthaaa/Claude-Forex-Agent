@@ -230,6 +230,16 @@ class DashboardState:
     vwap_scalp_max_trades_per_day: int = 6
     vwap_scalp_max_trades_per_day_min: int = 5
     vwap_scalp_max_trades_per_day_max: int = 50
+    # User request (2026-09-17): rather than raising the daily/bucket cap
+    # number to collect data faster, a toggle to turn those two caps off
+    # entirely -- relying on half-size mode + the global cooldown (see
+    # below) as the actual safety mechanism instead of a trade count. ON
+    # by default (matches every prior day's real behavior); when turned
+    # off, _pacing_cap_reason skips the daily AND per-bucket checks (the
+    # bucket cap is derived FROM the daily one, so disabling one without
+    # the other would be incoherent) -- the cooldown check always still
+    # applies regardless of this toggle.
+    vwap_scalp_daily_cap_enabled: bool = True
     # Global cross-instrument cooldown (2026-09-04): real data showed 5 of
     # one day's trades firing within a single scan tick, all on their own
     # separate instrument cooldowns (COOLDOWN_MINUTES, per-pair) so none

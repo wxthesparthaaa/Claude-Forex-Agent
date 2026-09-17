@@ -519,7 +519,19 @@
             found no such weakness, so no pairs are currently excluded from any session.
           </p>
         </details>
-        <label>VWAP Scalp trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
+        <div class="toggle-row">
+          <span>VWAP Scalp daily/bucket trade cap</span>
+          <label class="switch">
+            <input type="checkbox" name="vwap_scalp_daily_cap_enabled" {{ 'checked' if vwap_scalp_daily_cap_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          On by default. Switch off to remove the daily and per-session-bucket trade limits entirely, instead of
+          raising the number below -- the cooldown pacing (below) still applies either way and is the actual safety
+          mechanism when this is off. Turned off 2026-09-17 to collect data faster for a time-of-day observation.
+        </p>
+        <label>VWAP Scalp trades per day (only applies while the cap above is on): <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
         <input type="range" name="vwap_scalp_max_trades_per_day"
                min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
                value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">

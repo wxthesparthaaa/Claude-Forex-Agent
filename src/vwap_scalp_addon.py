@@ -528,7 +528,7 @@ def _current_bucket(now: datetime):
 
 
 def _pacing_cap_reason(entries: list, now: datetime, today_start: datetime, max_trades_per_day: int,
-                        per_bucket_cap: int, global_cooldown_minutes: int):
+                        per_bucket_cap: int, global_cooldown_minutes: int, daily_cap_enabled: bool = True):
     """None if none of the daily/bucket/cooldown pacing caps are
     currently tripped, else (category, reason) -- category is one of
     "daily"/"bucket"/"cooldown", for the caller to de-duplicate
@@ -548,20 +548,31 @@ def _pacing_cap_reason(entries: list, now: datetime, today_start: datetime, max_
     despite the 20-minute global cooldown existing specifically to
     prevent this exact clustering). Extracting this as its own function
     lets the caller re-run it fresh, per instrument, against freshly-
-    reloaded entries that DO include anything opened earlier this tick."""
-    trades_today = _vwap_scalp_trades_today(entries, today_start)
-    if trades_today >= max_trades_per_day:
-        return ("daily", f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}")
+    reloaded entries that DO include anything opened earlier this tick.
 
-    bucket = _current_bucket(now)
-    if bucket is not None:
-        bucket_start_h, bucket_end_h, bucket_session = bucket
-        bucket_start = today_start + timedelta(hours=bucket_start_h)
-        bucket_end = today_start + timedelta(hours=bucket_end_h)
-        trades_in_bucket = _vwap_scalp_trades_between(entries, bucket_start, bucket_end)
-        if trades_in_bucket >= per_bucket_cap:
-            return ("bucket", f"VWAP Scalp's {bucket_session} ({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) "
-                               f"time-bucket cap reached: {trades_in_bucket}/{per_bucket_cap}")
+    `daily_cap_enabled` (2026-09-17): user request -- a toggle to turn
+    OFF the daily AND per-bucket checks entirely (the bucket cap is
+    derived FROM the daily one, so there's no coherent way to disable
+    just one), relying on half-size mode + the cooldown below as the
+    actual safety mechanism instead of a trade-count ceiling, to collect
+    real data faster for the ongoing time-of-day observation. The
+    cooldown check always still applies regardless of this toggle --
+    it's the one pacing gate that's never optional."""
+    if daily_cap_enabled:
+        trades_today = _vwap_scalp_trades_today(entries, today_start)
+        if trades_today >= max_trades_per_day:
+            return ("daily", f"VWAP Scalp's own daily trade cap reached: {trades_today}/{max_trades_per_day}")
+
+        bucket = _current_bucket(now)
+        if bucket is not None:
+            bucket_start_h, bucket_end_h, bucket_session = bucket
+            bucket_start = today_start + timedelta(hours=bucket_start_h)
+            bucket_end = today_start + timedelta(hours=bucket_end_h)
+            trades_in_bucket = _vwap_scalp_trades_between(entries, bucket_start, bucket_end)
+            if trades_in_bucket >= per_bucket_cap:
+                return ("bucket", f"VWAP Scalp's {bucket_session} "
+                                   f"({_bucket_label_sgt(bucket_start_h, bucket_end_h)}) time-bucket cap reached: "
+                                   f"{trades_in_bucket}/{per_bucket_cap}")
 
     most_recent_open = _most_recent_vwap_scalp_open(entries)
     if most_recent_open is not None:
@@ -859,6 +870,10 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     # whole day's allowance in one tight cluster. See
     # VWAP_SCALP_TIME_BUCKETS_UTC's own comment for the real incident.
     per_bucket_cap = math.ceil(max_trades_per_day / len(VWAP_SCALP_TIME_BUCKETS_UTC))
+    # 2026-09-17: user-adjustable toggle to turn the two caps above off
+    # entirely -- see DashboardState.vwap_scalp_daily_cap_enabled's own
+    # comment.
+    daily_cap_enabled = state.vwap_scalp_daily_cap_enabled
     # Global cross-instrument cooldown (2026-09-04): an independent,
     # additional pacing gate on top of the daily/bucket caps -- paces
     # entries across the WHOLE strategy regardless of instrument.
@@ -914,7 +929,7 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             # fresh and the loop is sequential (no concurrency within one
             # tick), so this genuinely can't miss a same-tick open.
             cap_result = _pacing_cap_reason(entries, now, today_start, max_trades_per_day,
-                                             per_bucket_cap, global_cooldown_minutes)
+                                             per_bucket_cap, global_cooldown_minutes, daily_cap_enabled)
             if cap_result is not None:
                 category, cap_reason = cap_result
                 if category not in notified_categories:

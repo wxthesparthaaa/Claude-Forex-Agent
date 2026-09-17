@@ -647,6 +647,50 @@ def test_own_daily_cap_respects_a_user_adjusted_settings_value(mock_send, tmp_pa
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_daily_cap_disabled_allows_trading_past_the_normal_cap(mock_send, tmp_path, monkeypatch):
+    # User request (2026-09-17): a toggle to remove the daily AND
+    # per-bucket caps entirely, to collect data faster, rather than
+    # raising the number. Seed well past both the default daily cap AND
+    # what the per-bucket cap would be -- with the toggle off, neither
+    # may block a fresh entry.
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.vwap_scalp_daily_cap_enabled = False
+    ds.save_state(state)
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    # Small positive pnl, not the seeding helper's default -10.0 loss --
+    # 18 real losing trades would trip the unrelated account-wide daily
+    # loss limit gate, which isn't what this test is isolating.
+    _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY * 3, FIXED_NOW - timedelta(hours=1), pnl=0.01)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_daily_cap_disabled_still_respects_the_global_cooldown(mock_send, tmp_path, monkeypatch):
+    # The cooldown is the one pacing gate that's never optional -- it's
+    # the actual safety mechanism this toggle relies on in place of a
+    # trade count, so it must keep blocking regardless.
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.vwap_scalp_daily_cap_enabled = False
+    ds.save_state(state)
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=10))  # well inside the 20-min default cooldown
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    assert client.orders_placed == []
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_time_bucket_cap_blocks_a_burst_within_one_session_even_below_the_daily_cap(
         mock_send, tmp_path, monkeypatch):
     # Real incident, 2026-09-03: 3 of that day's 6 trades fired within a
@@ -1040,6 +1084,27 @@ def test_pacing_cap_reason_treats_an_opened_at_after_now_as_still_cooling_down(t
 
     assert result is not None
     assert result[0] == "cooldown"
+
+
+def test_pacing_cap_reason_daily_cap_enabled_false_skips_daily_and_bucket_but_not_cooldown(tmp_path, monkeypatch):
+    # Direct unit test of the 2026-09-17 toggle: max_trades_per_day=1 and
+    # per_bucket_cap=1 would both trip on their own (a single prior entry
+    # already meets/exceeds either), but daily_cap_enabled=False must
+    # skip both checks entirely and fall through to the cooldown --
+    # which stays live and must still block, since it's never optional.
+    _isolate(tmp_path, monkeypatch)
+    now = FIXED_NOW
+    entries = [{
+        "instrument": "USD_CHF", "experiment_tag": vs.VWAP_SCALP_TAG,
+        "opened_at": (now - timedelta(minutes=5)).isoformat(), "status": tj.SUCCESSFUL,
+    }]
+
+    result = vs._pacing_cap_reason(entries, now, now.replace(hour=0, minute=0, second=0, microsecond=0),
+                                    max_trades_per_day=1, per_bucket_cap=1, global_cooldown_minutes=20,
+                                    daily_cap_enabled=False)
+
+    assert result is not None
+    assert result[0] == "cooldown"  # daily/bucket skipped -- only the always-on cooldown trips
 
 
 @patch("vwap_scalp_addon.send_message")

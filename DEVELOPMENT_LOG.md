@@ -8870,3 +8870,45 @@ still need to be changed on the actual running practice account via
 its own Settings page -- direct git surgery on state-sync's
 dashboard_state.json was deliberately avoided given the real risk of
 racing the live app's own periodic state pull/push.
+
+## 2026-09-16/17 -- Time-of-day observation on the reverted config; daily-cap toggle
+
+**Live trade-cap correction**: the daily trade cap was set to 15 (09-07's
+real historical value) as part of the reversion above, then the user
+asked to keep it at 50 -- reverted back via the live Settings form,
+confirmed synced.
+
+**Time-of-day pattern investigation**: user recalled back-to-back win
+streaks in "the late afternoon" on two prior days running this
+strategy and asked to cross-reference them. Real data showed the two
+streaks do NOT overlap: 09-07's streak was 16:14-18:10 UTC (00:14-02:10
+SGT -- matches this codebase's internal "NY afternoon" session label,
+not late afternoon in the user's own local time); 09-16's streak (the
+first day of the reversion) was 07:48-10:03 UTC (15:48-18:03 SGT --
+genuinely late afternoon SGT). Recommended holding off on any special-
+period carve-out given the tiny sample (2 days, non-overlapping
+windows) -- user agreed.
+
+Follow-up check on 09-17 found the London-morning window (07:00-11:00
+UTC) repeating: 4/6 on 09-16, 4/6 on 09-17, versus 1/5 and 1/6 on the
+two days immediately before the reversion (09-14, 09-15) -- a real,
+specific update, while the NY-afternoon window (09-07's original) did
+NOT repeat well on its own next two chances (1/8 on 09-15, 2/6 on
+09-16). Reported as suggestive but not yet conclusive (still only 2
+days) -- no code change made from this alone.
+
+**Daily-cap toggle (2026-09-17, user request)**: rather than raising
+the trade-count cap further to collect data faster, added
+`vwap_scalp_daily_cap_enabled` (`DashboardState`, `_pacing_cap_reason`
+in `vwap_scalp_addon.py`) -- a Settings toggle that, when off, skips
+the daily AND per-bucket caps entirely (the bucket cap is derived from
+the daily one, so there's no coherent way to disable just one). The
+global cooldown check is NOT gated by this toggle and always still
+applies -- per the user's own stated reasoning, half-size mode + the
+cooldown together are the intended safety mechanism in place of a
+trade-count ceiling while this runs. 4 new tests (toggle-off allows
+trading well past the normal cap; toggle-off still respects the
+cooldown; a direct unit test of `_pacing_cap_reason`'s new parameter).
+`git stash`-confirmed both integration-level new tests fail against
+pre-fix code. Full suite green (683 passed, 1 deselected -- the same
+pre-existing unrelated flaky test from 09-15, still not touched here).
