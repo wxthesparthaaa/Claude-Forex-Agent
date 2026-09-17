@@ -178,7 +178,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-17T19:38:33.092402+00:00",
+  "last_process_heartbeat_at": "2026-09-17T20:13:33.090599+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
