@@ -51,7 +51,7 @@
     "BCO_USD": "2026-09-17T23:48:44.444839+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 4,
+  "interval_scan_count_since_digest": 3,
   "interval_scanned_instruments_since_digest": [
     "USD_CAD",
     "WTICO_USD"
@@ -181,7 +181,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-17T17:38:33.092465+00:00",
+  "last_process_heartbeat_at": "2026-09-17T17:48:33.091190+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
