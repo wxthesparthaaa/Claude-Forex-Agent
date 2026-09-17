@@ -51,10 +51,18 @@
     "BCO_USD": "2026-09-17T21:33:47.151471+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 0,
-  "interval_scanned_instruments_since_digest": [],
+  "interval_scan_count_since_digest": 1,
+  "interval_scanned_instruments_since_digest": [
+    "USD_CAD",
+    "USD_CHF",
+    "XAU_USD",
+    "XAG_USD",
+    "WTICO_USD",
+    "BCO_USD"
+  ],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-17T13:28:32.108418+00:00",
   "paused_instruments": {
@@ -171,7 +179,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-17T13:48:32.111231+00:00",
+  "last_process_heartbeat_at": "2026-09-17T13:53:32.110540+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
