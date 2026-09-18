@@ -1,61 +1,61 @@
 {
-  "scanned_at": "2026-09-18T01:23:42.478502+00:00",
+  "scanned_at": "2026-09-18T01:43:50.185235+00:00",
   "candidates": [
     {
       "instrument": "NZD_USD",
       "direction": "SHORT",
-      "entry_price": 0.57204,
+      "entry_price": 0.57197,
       "stop_loss": 0.57322,
-      "take_profit": 0.56968,
-      "confidence_pct": 66.6,
+      "take_profit": 0.56947,
+      "confidence_pct": 56.1,
       "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 86.35247391018794,
-        "candlestick": 50.0,
+        "breadth": 57.14285714285714,
+        "rsi": 82.5042067813687,
+        "candlestick": 20.0,
         "news": 50.0
       },
-      "units": -6319,
+      "units": -5966,
       "unit_label": "units",
       "risk_amount": 9.512191499999998,
-      "notional_account_currency": 4611.06,
+      "notional_account_currency": 4352.04,
       "account_currency": "SGD",
       "rationale": [
         "Bearish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
         "RSI is 32 (neutral range).",
-        "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
+        "Candlestick pattern at this level: hammer -- adds confidence, but the trade doesn't depend on it.",
         "News sentiment: no NZD-relevant headlines in the latest fetch (neutral)."
       ],
       "rejected_reason": null,
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": false,
+        "candlestick": true,
         "news": false
       }
     },
     {
       "instrument": "USD_JPY",
       "direction": "LONG",
-      "entry_price": 156.225,
-      "stop_loss": 155.87,
-      "take_profit": 156.935,
-      "confidence_pct": 68.2,
+      "entry_price": 156.278,
+      "stop_loss": 156.145,
+      "take_profit": 156.544,
+      "confidence_pct": 60.8,
       "confidence_components": {
-        "breadth": 71.42857142857143,
-        "rsi": 97.93983587744847,
+        "breadth": 57.14285714285714,
+        "rsi": 88.1119016374604,
         "candlestick": 50.0,
         "news": 45.0
       },
-      "units": 3282,
+      "units": 8765,
       "unit_label": "units",
       "risk_amount": 9.512191499999998,
-      "notional_account_currency": 4185.69,
+      "notional_account_currency": 11176.65,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
-        "Currency strength: 71% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 65 (neutral range).",
+        "Currency strength: 57% of major currencies moving the same way (mixed signal).",
+        "RSI is 67 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
@@ -63,7 +63,7 @@
       "confidence_components_available": {
         "breadth": true,
         "rsi": true,
-        "candlestick": true,
+        "candlestick": false,
         "news": true
       }
     }
