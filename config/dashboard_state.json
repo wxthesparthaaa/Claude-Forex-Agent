@@ -56,7 +56,9 @@
     "USD_CAD",
     "WTICO_USD"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 40"
+  ],
   "last_scan_digest_sent_at": "2026-09-18T16:53:33.091678+00:00",
   "paused_instruments": {
     "EUR_USD": "2026-09-11T21:03:30.674909+00:00",
