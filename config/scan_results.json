@@ -1,28 +1,28 @@
 {
-  "scanned_at": "2026-09-18T12:03:43.345213+00:00",
+  "scanned_at": "2026-09-18T12:23:42.795960+00:00",
   "candidates": [
     {
       "instrument": "USD_CAD",
       "direction": "LONG",
-      "entry_price": 1.40125,
+      "entry_price": 1.40122,
       "stop_loss": 1.40016,
-      "take_profit": 1.40343,
-      "confidence_pct": 74.9,
+      "take_profit": 1.40334,
+      "confidence_pct": 76.3,
       "confidence_components": {
         "breadth": 100.0,
-        "rsi": 80.21752164085228,
+        "rsi": 85.66728087923238,
         "candlestick": 50.0,
         "news": 49.333333333333336
       },
-      "units": 9564,
+      "units": 9832,
       "unit_label": "units",
       "risk_amount": 9.512191499999998,
-      "notional_account_currency": 12227.65,
+      "notional_account_currency": 12573.32,
       "account_currency": "SGD",
       "rationale": [
         "Bullish break on the entry chart, confirmed by the 4-hour trend direction.",
         "Currency strength: 100% of major currencies moving the same way (broad, reliable move).",
-        "RSI is 69 (neutral range).",
+        "RSI is 68 (neutral range).",
         "No candlestick pattern at this level -- not required; the structure break and 4-hour trend already confirm the trade.",
         "News sentiment: neutral."
       ],
