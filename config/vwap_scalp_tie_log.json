@@ -1829,5 +1829,23 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-18T17:18:47.228025+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "EUR_USD",
+      "GBP_USD",
+      "USD_JPY",
+      "AUD_USD",
+      "NZD_USD",
+      "USD_CHF",
+      "AUD_JPY",
+      "NZD_JPY",
+      "GBP_JPY",
+      "EUR_JPY",
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
