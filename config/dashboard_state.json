@@ -43,22 +43,17 @@
     "USD_JPY": "2026-09-18T16:43:42.958443+08:00",
     "EUR_USD": "2026-09-11T23:54:34.677064+08:00",
     "GBP_USD": "2026-09-11T23:54:34.677064+08:00",
-    "USD_CHF": "2026-09-18T21:03:46.395582+08:00",
-    "USD_CAD": "2026-09-18T21:03:46.395582+08:00",
-    "XAU_USD": "2026-09-18T21:03:46.395582+08:00",
-    "XAG_USD": "2026-09-18T21:03:46.395582+08:00",
-    "WTICO_USD": "2026-09-18T21:03:46.395582+08:00",
-    "BCO_USD": "2026-09-18T21:03:46.395582+08:00"
+    "USD_CHF": "2026-09-18T21:23:46.444969+08:00",
+    "USD_CAD": "2026-09-18T21:23:46.444969+08:00",
+    "XAU_USD": "2026-09-18T21:23:46.444969+08:00",
+    "XAG_USD": "2026-09-18T21:23:46.444969+08:00",
+    "WTICO_USD": "2026-09-18T21:23:46.444969+08:00",
+    "BCO_USD": "2026-09-18T21:23:46.444969+08:00"
   },
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 2,
+  "interval_scan_count_since_digest": 1,
   "interval_scanned_instruments_since_digest": [
-    "USD_CHF",
-    "USD_CAD",
-    "XAU_USD",
-    "XAG_USD",
-    "WTICO_USD",
-    "BCO_USD"
+    "USD_CHF"
   ],
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 20",
@@ -79,8 +74,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 20",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 20",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 20"
   ],
   "last_scan_digest_sent_at": "2026-09-18T10:48:33.089786+00:00",
   "paused_instruments": {
@@ -198,7 +192,7 @@
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
   "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-18T13:23:33.091757+00:00",
+  "last_process_heartbeat_at": "2026-09-18T13:18:33.090875+00:00",
   "live_trial_enabled": false,
   "live_trial_started_at": null,
   "live_trial_trade_count": 0,
