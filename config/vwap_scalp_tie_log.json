@@ -1540,5 +1540,15 @@
       "AUD_JPY",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-18T07:48:53.439648+00:00",
+    "opened": "NZD_JPY",
+    "also_signaled": [
+      "GBP_JPY",
+      "EUR_JPY",
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
