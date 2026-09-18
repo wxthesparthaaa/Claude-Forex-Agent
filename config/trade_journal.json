@@ -10049,7 +10049,8 @@
     "take_profit": 4367.245,
     "confidence_pct": 89.2,
     "rationale": [
-      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L -8.21."
     ],
     "opened_at": "2026-09-18T16:38:35.188450+00:00",
     "account_currency": "SGD",
@@ -10057,7 +10058,7 @@
     "confidence_components": {},
     "confidence_components_available": {},
     "status": "FAILED",
-    "closed_at": "2026-09-18T17:13:33.874842+00:00",
+    "closed_at": "2026-09-18T17:13:33.850713+00:00",
     "exit_price": 4384.945,
     "realized_pnl": -8.2087,
     "pyramided": false,
@@ -10065,5 +10066,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": false,
     "decision_entry_price": 4378.66
+  },
+  {
+    "trade_id": "5137",
+    "instrument": "BCO_USD",
+    "direction": "LONG",
+    "units": 36,
+    "entry_price": 104.521,
+    "stop_loss": 104.349,
+    "take_profit": 104.732,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-18T17:18:38.867205+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 7.373791860465115,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": false,
+    "decision_entry_price": 104.506
   }
 ]
