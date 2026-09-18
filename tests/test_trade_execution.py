@@ -19,7 +19,7 @@ def _isolate(tmp_path, monkeypatch):
 
 class FakeClient:
     def __init__(self, open_trades=None, fill_trade_id="999", trade_detail=None,
-                 get_trade_side_effect=None, close_trade_result=None, fill_price=None):
+                 get_trade_side_effect=None, close_trade_result=None, fill_price=None, fill_time=None):
         self._open = open_trades or []
         self._fill_trade_id = fill_trade_id
         self.orders_placed = []
@@ -38,6 +38,10 @@ class FakeClient:
         # deliberately omitting "price" here (not just leaving it None)
         # so those tests keep proving the graceful fallback still works.
         self._fill_price = fill_price
+        # None by default -- same rationale as _fill_price above, so tests
+        # written before filled_at existed keep proving the graceful
+        # fallback to None still works.
+        self._fill_time = fill_time
 
     def get_open_trades(self):
         return self._open
@@ -47,6 +51,8 @@ class FakeClient:
         fill = {"tradeOpened": {"tradeID": self._fill_trade_id}}
         if self._fill_price is not None:
             fill["price"] = self._fill_price
+        if self._fill_time is not None:
+            fill["time"] = self._fill_time
         return {"orderFillTransaction": fill}
 
     def get_trade(self, trade_id):
@@ -222,6 +228,35 @@ def test_place_and_record_falls_back_to_the_estimate_when_no_real_fill_price_is_
     entries = tj.load_journal()
     assert entries[0]["entry_price"] == 1.10
     assert entries[0]["decision_entry_price"] == 1.10
+
+
+def test_place_and_record_journals_the_real_oanda_fill_time(tmp_path, monkeypatch):
+    # 2026-09-18: paired with decision_entry_price/decision_at, the real
+    # OANDA fill time makes the actual decision-to-fill latency directly
+    # measurable instead of only inferable from the price gap.
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient(fill_time="2026-09-18T08:00:01.500000000Z")
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    trade_execution.place_and_record(client, cd)
+
+    entries = tj.load_journal()
+    assert entries[0]["filled_at"] == "2026-09-18T08:00:01.500000000Z"
+
+
+def test_place_and_record_falls_back_to_none_when_no_fill_time_is_reported(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    client = FakeClient()  # fill_time omitted -- no "time" key in orderFillTransaction at all
+    cd = {"instrument": "EUR_USD", "direction": "LONG", "units": 8000, "entry_price": 1.10,
+          "stop_loss": 1.095, "take_profit": 1.11, "confidence_pct": 80.0, "rationale": [],
+          "account_currency": "SGD", "risk_amount": 40.0}
+
+    trade_execution.place_and_record(client, cd)
+
+    entries = tj.load_journal()
+    assert entries[0]["filled_at"] is None
 
 
 def test_place_and_record_does_not_hold_journal_lock_during_the_oanda_call(tmp_path, monkeypatch):

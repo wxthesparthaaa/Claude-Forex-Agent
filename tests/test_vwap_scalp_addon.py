@@ -264,6 +264,27 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_opens_fade_position_records_decision_at_for_latency_analysis(mock_send, tmp_path, monkeypatch):
+    # 2026-09-18: decision_entry_price alone showed slippage was
+    # systematic but not how much of it is our own code's latency (the
+    # several sequential OANDA calls between this price fetch and the
+    # actual order in _open_position) vs broker-side execution cost.
+    # decision_at captures the instant right after the fetch, to diff
+    # against the real OANDA fill time (JournalEntry.filled_at) later.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    vs.check_vwap_scalp_opportunities(client)
+
+    entries = tj.load_journal()
+    scalp_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    assert scalp_entries[0]["decision_at"] == FIXED_NOW.isoformat()
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_open_position_mirrors_to_live_trial_when_enabled(mock_send, tmp_path, monkeypatch):
     # 2026-09-15, user-approved: a separate real-money live trial mirrors
     # each VWAP Scalp signal onto its own account. Proves the wiring in

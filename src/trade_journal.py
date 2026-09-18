@@ -150,6 +150,23 @@ class JournalEntry:
     # real fill price wasn't available (falls back to the estimate for
     # entry_price too in that case -- see record_open_trade).
     decision_entry_price: float | None = None
+    # The instant fetch_mid_price() returned the estimate above -- the
+    # true decision moment. Added 2026-09-18 while investigating WHY
+    # slippage was so systematic: this entry's own opened_at is stamped
+    # by record_open_trade() well AFTER the order is placed and filled,
+    # so it can't measure the actual decision-to-fill gap. Paired with
+    # filled_at, this makes that gap directly measurable in wall-clock
+    # time instead of only inferable from entry_price vs
+    # decision_entry_price. None for any candidate that doesn't supply
+    # it (only VWAP Scalp does so far) and for every trade journaled
+    # before this field existed.
+    decision_at: str | None = None
+    # OANDA's own orderFillTransaction["time"] -- the broker's timestamp
+    # for the real fill, independent of whenever THIS process got around
+    # to calling record_open_trade() afterward. None when no real fill
+    # time was reported (see record_open_trade's own fallback) or on a
+    # trade journaled before this field existed.
+    filled_at: str | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -251,14 +268,21 @@ def _in_liquidity_window_now(instrument: str, now_utc: datetime) -> bool | None:
     return instrument_window_active(instrument, now_utc.astimezone(SGT))
 
 
-def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | None = None) -> None:
+def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | None = None,
+                       filled_at: str | None = None) -> None:
     """`real_entry_price`: the actual OANDA fill price
     (orderFillTransaction["price"]) if the caller has it -- see
     JournalEntry.decision_entry_price's own comment for why this
     matters. Falls back to candidate["entry_price"] (the pre-order
     estimate) when not supplied, matching every caller from before this
     parameter existed and any future caller that genuinely has no real
-    fill price to report (e.g. a defensive/degraded path)."""
+    fill price to report (e.g. a defensive/degraded path).
+
+    `filled_at`: OANDA's own orderFillTransaction["time"] if the caller
+    has it -- paired with candidate["decision_at"] (see
+    JournalEntry.decision_at's own comment) to make the real decision-
+    to-fill latency measurable. Both are optional and independently
+    None when not supplied."""
     with JOURNAL_LOCK:
         now_utc = datetime.now(timezone.utc)
         entries = load_journal()
@@ -275,6 +299,8 @@ def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | 
             experiment_tag=candidate.get("experiment_tag"), parent_trade_id=candidate.get("parent_trade_id"),
             in_liquidity_window=_in_liquidity_window_now(candidate["instrument"], now_utc),
             decision_entry_price=candidate["entry_price"],
+            decision_at=candidate.get("decision_at"),
+            filled_at=filled_at,
         )
         entries.append(asdict(entry))
         save_journal(entries)
