@@ -13,7 +13,7 @@ LOSS with a positive R. This script reports, at 1- and 5-minute entry
 delay over the cached year: the share of invalid candidates, the win rate
 the old method reports, and the win rate once invalid candidates are
 dropped BEFORE the global cooldown (as live does: a skipped order never
-starts a cooldown). Uses the 09-07 config constants. Win = r_multiple > 0
+starts a cooldown). Uses bt's CURRENT_LIVE_* constants, which mirror the live (reverted 09-07) config. Win = r_multiple > 0
 for the old method, which is how the pre-existing reports counted it.
 """
 from __future__ import annotations
@@ -37,10 +37,6 @@ def is_invalid(c: dict) -> bool:
 def main():
     client = OandaClient()
     bt.fetch_instrument_metadata(client, bt.SCALP_PAIRS)
-    bt.CURRENT_LIVE_WATCH_START_HOUR = 7
-    bt.CURRENT_LIVE_WATCH_END_HOUR = 20
-    bt.CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS = {}
-    bt.CURRENT_LIVE_MIN_REWARD_RISK_RATIO = 0.0
 
     for delay in (1, 5):
         pool, candles_by_inst = [], {}

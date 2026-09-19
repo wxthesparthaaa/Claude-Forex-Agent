@@ -8956,3 +8956,29 @@ gives 168 real trades at 28.6% win, mean R -0.68 -- no improvement.
 **Housekeeping**: the 09-12 one-time slippage routine ran, opened
 GitHub PR #1 (decision_at/fill-time capture) and has been re-arming an
 hourly self-check for ~19h; left for the user to stop/merge.
+
+## 2026-09-19 (continued) -- Phase 0 + first cleanup
+
+- Shipped: broker-invalid-entry guard in the shared backtest builders,
+  `EVIDENCE_BAR.md`, `scripts/strategy_scoreboard.py`.
+- Deleted (user-approved, recoverable from git history): 11 scripts for the
+  already-removed trend-following and carry strategies plus
+  `tests/test_backtest_carry_historical_rates.py`; and the 10-script VWAP
+  filter-tuning family built on the flawed candidate builder
+  (`backtest_vwap_{0907_revert,crossinstrument_filter,hourly_breakdown,
+  regime_filter,rr_quartile,volatility_filter,watch_window_hours,
+  live_signal_replay}`, `check_crossinstrument_signal_on_shock_day`,
+  `diagnose_backtest_volatility_blindness`). Verified first that nothing in
+  `src/`, `app.py`, `templates/`, `tests/` or `render.yaml` (Render runs
+  only `gunicorn app:app`) references any of them.
+- Kept `backtest_carry_trade.py` and `backtest_carry_momentum_filter.py`:
+  shared helpers (CARRY_CANDIDATES, _parse_time, max_drawdown,
+  stats_for_returns) imported by ~20 remaining research scripts and by
+  `backtest_orb_session_breakout.py`. They go with the group C cleanup.
+- Found while checking: the backtest's `CURRENT_LIVE_*` constants still
+  described the pre-reversion config (04-24 window, weak-hour exclusions,
+  1.0 R:R floor) and `SCALP_PAIRS` used the old FX-first order, so "current
+  live" backtests no longer matched what runs live after the deliberate
+  2026-09-16 reversion. Synced to 07-20, no exclusions, no floor, live
+  commodities-first pair order. Audit results essentially unchanged
+  (clean win 15.5% at 1-min delay, 18.3% at 5-min).

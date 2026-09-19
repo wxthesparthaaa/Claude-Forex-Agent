@@ -422,10 +422,10 @@ from candle_history import fetch_history_cached
 from spread_aware_trade_simulator import simulate_scalp_trade
 
 SCALP_PAIRS = [
+    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
     "EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CAD", "NZD_USD", "USD_CHF",
     "AUD_JPY", "NZD_JPY", "GBP_JPY", "EUR_JPY", "CAD_JPY", "CHF_JPY",
-    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
-]  # JPY-quoted pairs briefly removed then restored 2026-09-02 -- a deeper check showed the
+]  # order = live VWAP_SCALP_PAIRS order (commodities first) -- it decides same-tick ties (synced 2026-09-19)  # JPY-quoted pairs briefly removed then restored 2026-09-02 -- a deeper check showed the
   # live realized-vs-sizing gap that prompted the removal is a GENERAL effect across every
   # quote currency this account trades (not caught by this backtest at all, which measures
   # signal quality via spread-aware bid/ask fills, never the account-currency conversion step
@@ -458,10 +458,15 @@ CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never rever
 # above are deliberately NOT touched -- they stay the historical 07-20
 # UTC baseline every earlier pass in this script was validated against;
 # these new names are this one pass's own inputs.
-CURRENT_LIVE_WATCH_START_HOUR = 4
-CURRENT_LIVE_WATCH_END_HOUR = 24
-CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS = {(4, 7): {"CAD_JPY", "EUR_JPY", "CHF_JPY"}}
-CURRENT_LIVE_MIN_REWARD_RISK_RATIO = 1.0
+# 2026-09-19: synced to the live config AFTER the user's deliberate
+# 2026-09-16 reversion to the 09-07 setup (07-20 UTC window, no weak-hour
+# exclusions, no reward:risk floor) -- these used to hold the pre-reversion
+# values (04-24, exclusions, 1.0 floor), so "current live" backtests here
+# silently described a config that is no longer running.
+CURRENT_LIVE_WATCH_START_HOUR = 7
+CURRENT_LIVE_WATCH_END_HOUR = 20
+CURRENT_LIVE_WEAK_HOUR_PAIR_EXCLUSIONS = {}
+CURRENT_LIVE_MIN_REWARD_RISK_RATIO = 0.0
 # User-specified condition for this pass, not read from live state (the
 # real vwap_scalp_global_cooldown_minutes is Settings-adjustable,
 # 20-120) -- this pass answers "what if it's fixed at 40," matching what
