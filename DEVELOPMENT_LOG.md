@@ -8912,3 +8912,47 @@ cooldown; a direct unit test of `_pacing_cap_reason`'s new parameter).
 `git stash`-confirmed both integration-level new tests fail against
 pre-fix code. Full suite green (683 passed, 1 deselected -- the same
 pre-existing unrelated flaky test from 09-15, still not touched here).
+
+## 2026-09-19 -- Slippage question led to the real cause of the backtest-vs-live gap
+
+**User question**: can slippage be predicted from collected data, and would
+a slippage-aware backtest explain live results?
+
+**Slippage itself (110 closed post-09-12 trades with `decision_entry_price`)**:
+fills were worse than the decision (mid) price 99% of the time, mean 0.35R
+of the stop distance -- but measured against OANDA's own M1 ask/bid open at
+the fill minute (what the backtest already assumes: LONG at ask, SHORT at
+bid, exits on the closing side), live fills were on average slightly BETTER
+(mean -0.16R, median -0.05R). So the "slippage" is the half-spread the
+backtest already charges, not excess. Also, with SL/TP frozen, entry price
+cannot change win/loss in the simulator, only R size. Win rate does fall
+with spread/stop-distance (262 trades: 48% / 30% / 12% by tercile), i.e.
+tight-stop trades lose more, but even the best tercile is far below 75%.
+
+**Actual cause found**: `backtest_vwap_reversion_scalp._current_live_candidates`
+freezes stop/target at the signal bar but takes the entry price 1-5 min
+later. In 72-75% of the year's 95k candidates, price had already run through
+the frozen stop (or past the target) by then. Live skips those trades
+(`_open_position` guard, added 2026-09-07); the backtest simulated them
+anyway and booked the "stop-out" at the stop price, which is better than
+the entry -- a LOSS with positive R. The old method's ~74-76% win rate is
+dominated by these phantom trades (3,385 of 4,846 at 1-min delay). With
+invalid candidates dropped before the cooldown (as live does): 15.2% win at
+1-min delay, 18.1% at 5-min, median R -1.00. Live: 262 closed trades, 30.2%
+win, mean R -0.58, -2,428.52 SGD (demo). The two now agree. Reproduce:
+`scripts/backtest_vwap_invalid_entry_audit.py`.
+
+**Not reconciled**: `replay_vwap_scalp_recent_days.py` already has the
+validity guard yet was recorded as agreeing with the ~75% backtest; not
+re-run today. The earlier "no edge but backtest says 75%" investigations
+(hour-of-day, RR quartile, 09-07 re-simulation) all used this candidate
+builder and should be treated as unreliable.
+
+**Proposed gate (virtual trade -> disable cap until 3 real losses)**: not
+built. Live sequence shows no significant streakiness (P(W|W)=0.34 vs
+P(W|L)=0.28, permutation p=0.15); replaying the gate on the live sequence
+gives 168 real trades at 28.6% win, mean R -0.68 -- no improvement.
+
+**Housekeeping**: the 09-12 one-time slippage routine ran, opened
+GitHub PR #1 (decision_at/fill-time capture) and has been re-arming an
+hourly self-check for ~19h; left for the user to stop/merge.
