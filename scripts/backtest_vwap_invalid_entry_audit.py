@@ -52,7 +52,7 @@ def main():
             candles_by_inst[inst] = candles
             sigs = bt.find_scalp_signals_confirmed_any_hour(times, z)
             pool.extend(bt._current_live_candidates(candles, times, vwap, dev, sigs, inst,
-                                                     entry_delay_minutes=delay))
+                                                     entry_delay_minutes=delay, drop_invalid=False))
         n_bad = sum(is_invalid(c) for c in pool)
         print(f"\nDELAY={delay}min: {len(pool)} candidates, {n_bad} invalid ({100*n_bad/len(pool):.0f}%)")
 

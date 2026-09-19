@@ -645,6 +645,22 @@ def _delayed_entry_index(times: list, signal_index: int, delay_minutes: float):
     return None
 
 
+def entry_is_valid_bracket(direction: str, entry_price: float, stop_loss: float, target: float) -> bool:
+    """A real broker only accepts stop_loss < entry < target for a LONG
+    (mirrored for SHORT) -- same check vwap_scalp_addon._open_position
+    makes before ordering, so live skips these trades entirely. Stop and
+    target are frozen at the signal bar but the entry price is taken
+    `entry_delay_minutes` later; if price has already run through the
+    frozen stop or past the target by then, simulating the trade anyway
+    books a "stop-out" at the stop price, which is BETTER than the entry
+    (a LOSS with positive R). 2026-09-19 audit: that was 72-75% of all
+    candidates and produced the ~75% headline win rate (clean: 15-18%).
+    See scripts/backtest_vwap_invalid_entry_audit.py."""
+    if direction == "LONG":
+        return stop_loss < entry_price < target
+    return target < entry_price < stop_loss
+
+
 # Two execution models tested side by side against the IDENTICAL signal
 # set: (label, delay_minutes). "immediate" is what every result so far
 # in this script assumed (entry within ~1 real minute of the signal);
@@ -1333,6 +1349,15 @@ def _selftest():
         f"expected the shortest cooldown (20 min) to accept strictly more than the longest (120 min), " \
         f"got {list(zip(COOLDOWN_SWEEP_MINUTES, sweep_counts))}"
 
+    # entry_is_valid_bracket: entries already through the frozen stop or
+    # past the target must be rejected (2026-09-19 audit).
+    assert entry_is_valid_bracket("LONG", 100.0, 99.0, 101.0)
+    assert not entry_is_valid_bracket("LONG", 98.5, 99.0, 101.0)
+    assert not entry_is_valid_bracket("LONG", 101.5, 99.0, 101.0)
+    assert entry_is_valid_bracket("SHORT", 100.0, 101.0, 99.0)
+    assert not entry_is_valid_bracket("SHORT", 101.5, 101.0, 99.0)
+    assert not entry_is_valid_bracket("SHORT", 98.5, 101.0, 99.0)
+
     print("Self-test passed: VWAP/deviation/z-score reset cleanly at each session boundary, a flat market "
           "never fires, and a real deviation fires the correct fade direction with no look-ahead.\n")
 
@@ -1462,7 +1487,8 @@ SIGNAL_MODES = [
 ]
 
 
-def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, entry_delay_minutes):
+def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, entry_delay_minutes,
+                   drop_invalid=True):
     results_by_buffer = {buf: [] for buf in STOP_Z_BUFFER_SWEEP}
     total_entries = 0
     already_past_target = 0  # see module docstring's EXECUTION-DELAY REALISM note
@@ -1500,6 +1526,8 @@ def resolve_trades(candles, times, vwap, dev_stdev, signals, instrument, meta, e
             else:
                 stop_loss = target + (Z_ENTRY + buf) * std_at_signal
 
+            if drop_invalid and not entry_is_valid_bracket(direction, entry_price, stop_loss, target):
+                continue
             result = simulate_scalp_trade(candles, entry_index, direction, entry_price,
                                            stop_loss, target, max_bars=max_bars)
             if result.outcome in ("WIN", "LOSS"):
@@ -1516,7 +1544,8 @@ LOSS_STREAK_THRESHOLDS = [1, 2, 3]  # pre-specified sweep, not tuned after seein
 
 
 def resolve_trades_with_loss_streak_breaker(candles, times, vwap, dev_stdev, signals, instrument,
-                                             entry_delay_minutes, stop_buf, max_same_direction_losses):
+                                             entry_delay_minutes, stop_buf, max_same_direction_losses,
+                                             drop_invalid=True):
     """User-requested fix (2026-09-01) targeting the ACTUAL observed
     failure -- a real GBP_USD live loss cluster was 4 consecutive LONG
     "fade the dip" attempts over ~4 hours as GBP_USD ground steadily
@@ -1582,6 +1611,8 @@ def resolve_trades_with_loss_streak_breaker(candles, times, vwap, dev_stdev, sig
         else:
             stop_loss = target + (Z_ENTRY + stop_buf) * std_at_signal
 
+        if drop_invalid and not entry_is_valid_bracket(direction, entry_price, stop_loss, target):
+            continue
         result = simulate_scalp_trade(candles, entry_index, direction, entry_price, stop_loss, target,
                                        max_bars=max_bars)
         if result.outcome in ("WIN", "LOSS"):
@@ -1592,7 +1623,8 @@ def resolve_trades_with_loss_streak_breaker(candles, times, vwap, dev_stdev, sig
     return returns, already_past_target, total_entries, blocked_by_streak
 
 
-def _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrument, entry_delay_minutes):
+def _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrument, entry_delay_minutes,
+                             drop_invalid=True):
     """Every confirmed-1-bar signal for `instrument` that would actually
     be a valid trade OPPORTUNITY under current live signal-validity
     rules -- the watch window (CURRENT_LIVE_WATCH_START_HOUR-
@@ -1641,6 +1673,8 @@ def _current_live_candidates(candles, times, vwap, dev_stdev, signals, instrumen
         else:
             stop_loss = target + (Z_ENTRY + 1.0) * std_at_signal
 
+        if drop_invalid and not entry_is_valid_bracket(direction, entry_price, stop_loss, target):
+            continue
         sl_distance = abs(entry_price - stop_loss)
         tp_distance = abs(target - entry_price)
         if sl_distance <= 0:
