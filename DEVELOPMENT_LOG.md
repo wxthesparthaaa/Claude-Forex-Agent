@@ -8982,3 +8982,32 @@ hourly self-check for ~19h; left for the user to stop/merge.
   2026-09-16 reversion. Synced to 07-20, no exclusions, no floor, live
   commodities-first pair order. Audit results essentially unchanged
   (clean win 15.5% at 1-min delay, 18.3% at 5-min).
+
+## 2026-09-19 (continued) -- Phase 1 strategy audit
+
+Only VWAP Scalp is enabled live (base strategy, ORB Fade, Range Confluence
+and the live trial are all off). Audited each against EVIDENCE_BAR.md.
+
+- **VWAP Scalp**: 262 closed live trades, 30.2% win, mean R -0.58, -2,428.52
+  SGD (demo); clean backtest 15-18% win. Fails.
+- **ORB Fade** (`scripts/audit_orb_fade_clean.py`): the recorded 76.5% win /
+  RR=2.0 result came from `backtest_orb_fade.py` DROPPING every trade that
+  neither hit its stop nor target within the 8h cap. Re-tested over ~400
+  days x 17 instruments with the identical breakout detection and live level
+  rule: 61% of signals (2,635 of 4,341) hit the 8h cap unresolved; the
+  resolved 39% win 74% (spread-aware, next-bar entry), but counting the
+  force-closes live performs at market gives 51.1% win, mean R -0.044,
+  day-pooled t = -3.43 (significantly negative), worse in the second half.
+  Live: 6 trades on 2026-09-04 only, 4 of them 8h force-closes. Fails.
+- **Range Confluence** (`scripts/audit_range_confluence_clean.py`): 0 live
+  trades ever. Walk-forward, non-overlapping 40-day holds, real bid/ask,
+  15 years / 17 instruments: 495 trades, 52% win, +0.61% mean, but
+  month-pooled t = +0.63 (the "11 sigma" came from overlapping windows on
+  correlated instruments); since 2025: 46 trades, 33% win, -1.83% mean.
+  No demonstrable edge. Financing not modeled.
+- **Base strategy**: 35 closed live trades (last 2026-09-08), 31% win, mean
+  R -0.25, -327 SGD; the log already calls its raw signal a coin flip.
+- **Live trial**: real-money mirror of VWAP Scalp built to compare practice
+  vs live fills; fill/slippage turned out not to be the gap. 0 trades.
+
+No strategy passes the bar. Nothing removed yet (audit only).

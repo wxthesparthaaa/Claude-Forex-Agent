@@ -16,5 +16,10 @@ Check live status any time: `./venv/Scripts/python.exe scripts/strategy_scoreboa
 (reads the journal from the `state-sync` branch).
 Check the backtest guard: `./venv/Scripts/python.exe scripts/backtest_vwap_invalid_entry_audit.py`.
 
-Status when written (2026-09-19): no strategy passes. VWAP Scalp: 262 trades, 30% win,
-mean R -0.58, clean backtest 15-18% win.
+Status (2026-09-19 Phase 1 audit): no strategy passes.
+- VWAP Scalp: 262 live trades, 30% win, mean R -0.58; clean backtest 15-18% win.
+- ORB Fade: original 76.5% dropped trades that hit the 8h cap (61% of signals);
+  counting them, 51% win, day-pooled t = -3.4 (scripts/audit_orb_fade_clean.py).
+- Range Confluence: 0 live trades; walk-forward 495 trades, month-pooled t = +0.6
+  (scripts/audit_range_confluence_clean.py).
+- Base strategy: 35 live trades, 31% win, mean R -0.25.
