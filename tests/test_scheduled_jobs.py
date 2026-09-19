@@ -1251,3 +1251,22 @@ def test_friday_preclose_cancel_fires_again_for_a_later_friday(mock_send, tmp_pa
     scheduled_jobs.check_friday_preclose_cancel(now, client)
 
     assert client.closed_ids == ["101"]
+
+
+@patch("scheduled_jobs.send_message")
+def test_run_nightly_review_folds_every_closed_trade_into_equity_not_just_the_last_fifty(mock_send, tmp_path, monkeypatch):
+    # The review used to cap its lookup at 50 trades, so on any stretch with more (VWAP Scalp's daily
+    # cap alone allows 50/day, and a stale review timestamp spans days) the older trades' P&L was
+    # silently dropped from tracked equity the moment last_review_timestamp advanced.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.strategy_realized_pnl = 0.0
+    dashboard_state.save_state(state)
+    tj.save_journal([_closed_entry(instrument="EUR_USD", realized_pnl=1.0, closed_at="2026-08-10T22:00:00Z")
+                     for _ in range(60)])
+
+    closed = run_nightly_review()
+
+    assert len(closed) == 60
+    assert dashboard_state.load_state().strategy_realized_pnl == 60.0
+    assert "earlier" in mock_send.call_args[0][0]  # the Telegram list is trimmed, the accounting is not

@@ -254,7 +254,8 @@ def run_nightly_review(client: OandaClient = None) -> list:
     state = load_state()
 
     starting_equity = tracked_equity(state)
-    closed = _closed_trades_since(state.last_review_timestamp, limit=50)
+    # No limit: the P&L folded into tracked equity must cover EVERY trade since the last review.
+    closed = _closed_trades_since(state.last_review_timestamp)
 
     state.strategy_realized_pnl += sum(t["pnl"] for t in closed)
     ending_equity = tracked_equity(state)
@@ -280,7 +281,7 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     run_nightly_review."""
     state = load_state()
 
-    closed = _closed_trades_since(state.week_start_timestamp, limit=200)
+    closed = _closed_trades_since(state.week_start_timestamp)
     week_pnl = sum(t["pnl"] for t in closed)
 
     ending_equity = tracked_equity(state)

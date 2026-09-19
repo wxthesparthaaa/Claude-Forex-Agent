@@ -9129,3 +9129,44 @@ under a collapsed Advanced section.
   drawdown now explained inline (today only, resets nightly vs. fall from the
   highest balance, never resets), with the live drawdown shown next to the
   breaker.
+
+## 2026-09-19 (continued) -- Nightly review's equity save was overwritten every night
+
+**Found while answering "why is there a max drawdown breaker?"**: the state-sync
+history shows `last_review_date` advancing daily but `last_review_timestamp`
+and `strategy_realized_pnl` frozen at 2026-09-15 / -731.71. Each night at
+01:03 SGT the review DID save the new values (commit at :33), and 2-4 seconds
+later a commit carrying the OLD values for exactly those two fields (nothing
+else differed, same key set) overwrote them; the flip-flop repeated until the
+dispatcher's own stamp landed stale. Consequences: the risk engine sees settled
+equity 1268.29 (36.6% drawdown) while the true, live-tracked equity is 987.96
+(50.6% drawdown, past the 50% limit); the dashboard looked right only because
+tracked_equity_live adds realized P&L since the (stale) timestamp.
+
+**Causes fixed (all three were plausible and each matches the signature)**:
+1. `save_state` wrote the whole file from a possibly stale in-memory copy. A job
+   that loaded before the review saved and saved after (heartbeat, peak-equity
+   ratchet, digest tally, dispatcher stamps...) reverted the review's fields. Now
+   `load_state` remembers its starting snapshot and `save_state` applies only the
+   fields that writer changed onto the current file, under one re-entrant
+   `STATE_LOCK` (`SCAN_DIGEST_LOCK` is now that same lock).
+2. `pull_state_from_github` (10-minute job, lands on the same :03 tick as the
+   review) overwrote the local file with GitHub's copy unconditionally, and
+   GitHub's Contents API can serve the previous version right after a push. A
+   pull now skips a file whose local copy changed since the last confirmed sync
+   or was pushed within 90 seconds, and writes atomically under `STATE_LOCK`.
+3. Pushes read the file before their (slow) PUT, so an older read could land after
+   a newer one. Pushes are now serialized and read the file inside the lock.
+
+**Related latent bug fixed**: `run_nightly_review` looked up at most 50 closed
+trades (`limit=50`) when folding P&L into `strategy_realized_pnl`, then advanced
+the timestamp -- any stretch with more than 50 closes (VWAP's own daily cap
+allows 50; the stale timestamp spans days) silently dropped the older trades'
+P&L. The Friday reflection had the same cap at 200. Both now sum every closed
+trade; only the Telegram list is trimmed to the last 20.
+
+**Effect on the account**: the first review after this deploys folds everything
+since 09-15 into settled equity (-731.71 -> -1012.04, equity 987.96), which puts
+the drawdown at 50.6% against a 50% limit. The user chose to switch the max
+drawdown breaker OFF for the demo run (decision recorded here); it must be turned
+back on before any real money. Daily loss limit was already off.

@@ -11,12 +11,14 @@ tests are unaffected.
 import base64
 import json
 import os
+import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from state_paths import STATE_DIR, STATE_FILES
+from state_paths import STATE_DIR, STATE_FILES, STATE_LOCK, atomic_write_text
 
 API_BASE = "https://api.github.com"
 
@@ -93,6 +95,45 @@ def _github_request(method: str, url: str, token: str, body: Optional[dict] = No
         raise
 
 
+# Real incident (2026-09-16 onward): the 01:03 SGT nightly review saved the new
+# tracked equity, and within two seconds an older copy of dashboard_state.json
+# was written over it -- every night, so strategy_realized_pnl and
+# last_review_timestamp stayed frozen at 2026-09-15. The pull job fires on the
+# same 5-minute tick as the review, and GitHub's Contents API can return the
+# previous version for a moment after a push, so a pull could overwrite a
+# fresh local save with stale content. A pull now skips any file whose local
+# copy changed since it was last confirmed in sync (or was pushed very
+# recently), and pushes are serialized so a slower, older push can't land
+# after a newer one.
+_synced_mtime: dict = {}
+_last_push_monotonic: dict = {}
+_push_lock = threading.Lock()
+RECENT_PUSH_GRACE_SECONDS = 90
+
+
+def _mtime_ns(path: str):
+    try:
+        return os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+
+
+def _local_copy_is_newer(local_path: str, remote_content: str) -> bool:
+    if not os.path.exists(local_path):
+        return False
+    try:
+        with open(local_path, "r", encoding="utf-8") as f:
+            if f.read() == remote_content:
+                return False  # identical -- nothing to protect, nothing to change
+    except OSError:
+        return False
+    synced = _synced_mtime.get(local_path)
+    if synced is not None and _mtime_ns(local_path) != synced:
+        return True  # changed locally since the last confirmed sync
+    pushed_at = _last_push_monotonic.get(local_path)
+    return pushed_at is not None and (time.monotonic() - pushed_at) < RECENT_PUSH_GRACE_SECONDS
+
+
 def pull_state_from_github() -> int:
     """Real incident: this used to let ANY non-404 failure (a 504 from
     GitHub's own API, a network timeout) propagate straight out --
@@ -121,8 +162,13 @@ def pull_state_from_github() -> int:
             if status == 404 or data is None:
                 continue
             content = base64.b64decode(data["content"]).decode("utf-8")
-            with open(local_path, "w", encoding="utf-8") as f:
-                f.write(content)
+            with STATE_LOCK:
+                if _local_copy_is_newer(local_path, content):
+                    print(f"INFO: skipped pulling {repo_path} -- the local copy has changes GitHub does not "
+                          f"show yet (an unfinished or very recent push)", flush=True)
+                    continue
+                atomic_write_text(local_path, content)
+                _synced_mtime[local_path] = _mtime_ns(local_path)
             pulled += 1
         except Exception as e:
             print(f"WARNING: failed to pull {repo_path} from GitHub, "
@@ -191,10 +237,18 @@ def push_state_to_github(local_path: str) -> bool:
     if not os.path.exists(local_path):
         return False
 
-    with open(local_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    return _tracked_push(repo_path, content.encode("utf-8"), config)
+    # Read INSIDE the lock so whichever push runs last always carries the
+    # newest local content -- a slow push holding an older read can no longer
+    # land after a newer one.
+    with _push_lock:
+        mtime_before = _mtime_ns(local_path)
+        with open(local_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        _last_push_monotonic[local_path] = time.monotonic()
+        ok = _tracked_push(repo_path, content.encode("utf-8"), config)
+        if ok:
+            _synced_mtime[local_path] = mtime_before
+        return ok
 
 
 def push_binary_file(local_bytes: bytes, repo_path: str) -> bool:

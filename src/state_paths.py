@@ -10,8 +10,15 @@ three, rather than duplicated three times."""
 import json
 import os
 import tempfile
+import threading
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
+
+# Serializes every read-modify-write of the state files AND the GitHub pull's
+# overwrite of them (see dashboard_state.save_state / github_state_sync.pull_
+# state_from_github). Re-entrant so a writer that already holds it (e.g. the
+# scan digest) can call save_state.
+STATE_LOCK = threading.RLock()
 
 STATE_FILES = {
     "config/dashboard_state.json": os.path.join(STATE_DIR, "dashboard_state.json"),
@@ -45,6 +52,24 @@ def atomic_write_json(path: str, data, indent: int | None = 2) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=indent)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_text(path: str, text: str) -> None:
+    """Same temp-file-then-os.replace guarantee as atomic_write_json, for
+    already-serialized text (used when a pull writes GitHub's copy locally)."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
         os.replace(tmp_path, path)
     except Exception:
         try:

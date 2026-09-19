@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from autopilot import PhaseState
 from risk_engine import RiskConfig
-from state_paths import atomic_write_json, load_json_resilient
+from state_paths import STATE_LOCK, atomic_write_json, load_json_resilient
 from telegram_notifier import send_message
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
@@ -313,11 +313,40 @@ def load_state() -> DashboardState:
     # above) so a code-level tuning always takes effect immediately.
     known_fields = {f.name for f in fields(DashboardState)}
     data = {k: v for k, v in data.items() if k in known_fields and k not in _CODE_DEFINED_BOUND_FIELDS}
-    return DashboardState(**data)
+    state = DashboardState(**data)
+    state._base = asdict(state)  # what this writer started from -- see save_state's merge
+    return state
 
 
 def save_state(state: DashboardState) -> None:
-    atomic_write_json(STATE_PATH, asdict(state))
+    """Writes only what THIS writer changed onto the file's current contents,
+    instead of overwriting the whole file with a possibly stale in-memory copy.
+    Real incident (2026-09-16 onward): several jobs run on the same 5-minute
+    tick, each loading the full state and saving the whole thing back after
+    slow network calls -- one that loaded before the 01:03 nightly review saved
+    could write the OLD strategy_realized_pnl / last_review_timestamp back over
+    it, every night. A state loaded by load_state() remembers what it started
+    from; only fields that differ from that snapshot are applied to the fresh
+    file under STATE_LOCK. Two writers changing the SAME field still resolve as
+    last-writer-wins. A state that was never loaded (default_state()) writes in
+    full, as before."""
+    with STATE_LOCK:
+        to_write = state
+        base = getattr(state, "_base", None)
+        if base is not None:
+            current = asdict(state)
+            changed = {k: v for k, v in current.items() if base.get(k) != v}
+            on_disk = load_json_resilient(STATE_PATH, None)
+            if on_disk is not None:
+                fresh = load_state()
+                for name, value in changed.items():
+                    setattr(fresh, name, value)
+                to_write = fresh
+        atomic_write_json(STATE_PATH, asdict(to_write))
+        if to_write is not state:
+            for f in fields(DashboardState):
+                setattr(state, f.name, getattr(to_write, f.name))
+        state._base = asdict(state)
     try:
         from github_state_sync import push_state_to_github
         push_state_to_github(STATE_PATH)
@@ -350,7 +379,7 @@ def save_state(state: DashboardState) -> None:
 # counters (see scheduled_jobs.py's own comment on this lock), just
 # missed here because the risk-skip list was added later and given its
 # own separate lock instead of joining the existing one.
-SCAN_DIGEST_LOCK = threading.Lock()
+SCAN_DIGEST_LOCK = STATE_LOCK  # one re-entrant lock for every state read-modify-write
 
 
 def record_risk_limit_skip(source: str, message: str) -> None:

@@ -187,8 +187,10 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
         f"Closed trades: {len(closed_trades)} ({wins}W / {losses}L)",
         f"P&L tonight: {pnl:+.2f} ({pnl_pct:+.2f}%)",
     ]
-    for t in closed_trades:
+    for t in closed_trades[-20:]:
         lines.append(f"  {t['instrument']} {t['direction']}: {t['outcome']}")
+    if len(closed_trades) > 20:
+        lines.append(f"  ...and {len(closed_trades) - 20} earlier")
     if not closed_trades:
         lines.append("No trades closed tonight -- anything still open carries into tomorrow, broker-protected.")
     return "\n".join(lines)
