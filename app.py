@@ -618,6 +618,10 @@ def dashboard():
     # every open stop-loss hit), which is the honestly-computable analog
     # already available here without a currency-conversion detour.
     invested = total_open_risk(journal)
+    # The true fall from the highest balance reached (what the Max drawdown
+    # breaker's setting is compared against), shown next to that setting.
+    peak_equity = max(state.peak_tracked_equity or strategy_capital, strategy_capital)
+    drawdown_now_pct = 100 * (peak_equity - strategy_capital) / peak_equity if peak_equity > 0 else 0.0
     week_gain = realized_pnl_since(journal, state.week_start_timestamp)
     week_start_capital = strategy_capital - week_gain  # equity before this week's trades
     week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
@@ -645,6 +649,7 @@ def dashboard():
         "dashboard.html",
         journal_url=journal_url,
         live_trades=live_trades, status=trading_status,
+        peak_equity=peak_equity, drawdown_now_pct=drawdown_now_pct,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
         risk_config=asdict(risk_config),

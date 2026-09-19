@@ -166,11 +166,49 @@
     .ghost-btn:disabled { cursor: default; opacity: 0.6; }
     .hint { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.8rem; }
     .section-note { color: var(--muted); font-size: 0.8rem; margin: -0.2rem 0 0.5rem; }
+
+    /* Section navigation (sticky) + back-to-top */
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    [id] { scroll-margin-top: 4rem; }
+    .topnav {
+      position: sticky; top: 0; z-index: 20; display: flex; gap: 0.35rem; overflow-x: auto;
+      margin: 0 -1.5rem 1.25rem; padding: 0.6rem 1.5rem; background: rgba(25, 25, 25, 0.92);
+      border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); scrollbar-width: none;
+    }
+    .topnav::-webkit-scrollbar { display: none; }
+    .topnav a {
+      flex-shrink: 0; color: var(--muted); text-decoration: none; font-size: 0.85rem; font-weight: 600;
+      padding: 0.35rem 0.8rem; border-radius: 999px; border: 1px solid transparent;
+      transition: color 0.15s ease, background-color 0.15s ease;
+    }
+    .topnav a:hover { color: var(--fg); background: var(--card-raised); }
+    .topnav a.active { color: var(--fg); background: var(--accent-soft); border-color: rgba(217, 119, 87, 0.35); }
+    .topnav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .to-top {
+      position: fixed; right: 1rem; bottom: 3.75rem; z-index: 30; width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--card-raised); color: var(--fg); font-size: 1.2rem;
+      line-height: 1; cursor: pointer; box-shadow: var(--shadow-card); opacity: 0; pointer-events: none;
+      transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.15s ease;
+    }
+    .to-top.show { opacity: 1; pointer-events: auto; transform: none; }
+    .to-top:hover { border-color: var(--accent); }
+    .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   </style>
 </head>
 <body>
   <h1>Claude Forex Agent</h1>
   <p class="subtitle">{{ phase_label }} &middot; {{ mode|upper }} mode</p>
+  <nav class="topnav" id="topnav" aria-label="Sections">
+    <a href="#overview">Overview</a>
+    {% if weekly_gain_chart %}<a href="#gain" data-open>Gain chart</a>{% endif %}
+    <a href="#status">Status</a>
+    <a href="#live-trades">Trades</a>
+    <a href="#safety">Safety</a>
+    <a href="#advanced" data-open>Advanced</a>
+    <a href="#capital" data-open>Capital</a>
+    <a href="#notes" data-open>Notes</a>
+  </nav>
   {% if kill_switch_engaged %}
   <p class="banner banner-error">
     <span class="banner-icon">&#9888;</span>
@@ -197,7 +235,86 @@
     {% endfor %}
   {% endwith %}
 
-  <div class="card status-card">
+  <div id="overview">
+  <div class="row">
+    <div class="stat-grid">
+      <div class="stat-row">
+        <div class="stat-tile">
+          <div class="stat-tile-label">Strategy capital</div>
+          <div class="stat-tile-value">{{ "%.2f"|format(strategy_capital) }}</div>
+          <div class="stat-tile-sub">{{ account_currency }} &middot; {{ mode|upper }}</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-label">Cash reserve</div>
+          <div class="stat-tile-value">{{ "%.2f"|format(broker_balance) if broker_balance is not none else "n/a" }}</div>
+          <div class="stat-tile-sub">{{ account_currency }} demo NAV &middot; not used for sizing</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-label">Invested</div>
+          <div class="stat-tile-value">{{ "%.2f"|format(invested) }}</div>
+          <div class="stat-tile-sub">at risk in open trades</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-tile">
+          <div class="stat-tile-label">Gain (this week)</div>
+          <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">
+            {{ "%+.2f"|format(week_gain) }} <span style="font-size:0.85rem; font-weight:400;">({{ "%+.1f"|format(week_gain_pct) }}%)</span>
+          </div>
+          <div class="stat-tile-sub">{{ account_currency }} &middot; vs {{ "%.0f"|format(weekly_gain_target) }}/week target</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-label">Overall gain</div>
+          <div class="stat-tile-value {{ 'long' if overall_gain > 0 else ('short' if overall_gain < 0 else '') }}">
+            {{ "%+.2f"|format(overall_gain) }} <span style="font-size:0.85rem; font-weight:400;">({{ "%+.1f"|format(overall_gain_pct) }}%)</span>
+          </div>
+          <div class="stat-tile-sub">{{ account_currency }} &middot; since capital last reset</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1; min-width:260px;">
+      <h3 style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+        <button type="button" id="winRatePrevBtn" class="scan-btn" aria-label="Previous strategy"
+                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&lsaquo;</button>
+        <span><span id="winRateGroupLabel">Overall</span> win rate
+          <span id="winRatePct" style="font-weight:700; font-size:1em;">{% if (wins + losses) > 0 %}&mdash; {{ "%.1f"|format(100 * wins / (wins + losses)) }}%{% endif %}</span>
+        </span>
+        <button type="button" id="winRateNextBtn" class="scan-btn" aria-label="Next strategy"
+                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&rsaquo;</button>
+      </h3>
+      <div style="max-width:220px; margin:0 auto;">
+        <canvas id="winRateChart" width="220" height="220"></canvas>
+      </div>
+      <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
+        <span id="winRateClosedCount">{{ closed_trades }}</span> closed trade<span id="winRateClosedPlural">{{ '' if closed_trades == 1 else 's' }}</span>
+        <br><span id="winRateExcludedNote" style="font-size:0.78rem; {{ '' if closed_trades > (wins + losses) else 'display:none;' }}">({{ closed_trades - wins - losses }} with unrecoverable P&amp;L, excluded from win rate)</span>
+      </p>
+      <p style="text-align:center; margin:0.35rem 0 0;" id="winRateDots"></p>
+    </div>
+  </div>
+  </div>
+
+  {% if weekly_gain_chart %}
+  <div class="card" id="gain">
+    <details id="gainDetails">
+      <summary>
+        <span id="gainChartTitle">Gain per week
+          <span style="font-weight:700;">&mdash; {{ "%+.2f"|format(week_gain) }} {{ account_currency }} this week</span>
+        </span>
+      </summary>
+      <div class="toggle-row" style="gap:0.4rem; justify-content:flex-start; margin-top:0.75rem;">
+        <button type="button" id="gainChartWeekBtn" class="scan-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per week</button>
+        <button type="button" id="gainChartDayBtn" class="cancel-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per day</button>
+      </div>
+      <div style="max-width:100%; height:180px; margin-top:0.75rem;">
+        <canvas id="weeklyGainChart"></canvas>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
+  <div class="card status-card" id="status">
     <div class="status-head">
       <span class="pill pill-{{ status.tone }}">{{ status.label }}</span>
       <span class="status-detail">{{ status.detail }}</span>
@@ -243,7 +360,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="live-trades">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin:0;">Live trades</h3>
       {% if journal_url %}
@@ -294,7 +411,7 @@
   <form method="post" action="/settings" id="settingsForm">
     {% if kill_switch_engaged %}<input type="hidden" name="kill_switch" value="on">{% endif %}
 
-    <div class="card settings">
+    <div class="card settings" id="safety">
       <h3 style="margin-top:0;">Safety limits</h3>
 
       <div class="toggle-row">
@@ -311,17 +428,19 @@
              value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
       <div class="toggle-row">
-        <span>Limit VWAP trades per day{{ ' -- OFF (unlimited)' if not vwap_scalp_daily_cap_enabled else '' }}</span>
+        <span>Daily trade cap{{ ' -- ON, max ' ~ vwap_scalp_max_trades_per_day ~ ' per day' if vwap_scalp_daily_cap_enabled else ' -- OFF (unlimited)' }}</span>
         <label class="switch">
           <input type="checkbox" name="vwap_scalp_daily_cap_enabled" {{ 'checked' if vwap_scalp_daily_cap_enabled else '' }}>
           <span class="switch-track"></span>
         </label>
       </div>
-      <label>Max VWAP trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
-      <input type="range" name="vwap_scalp_max_trades_per_day"
-             min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
-             value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
-      <p class="hint">Only applies while the limit is on. With it off, only the cooldown below spaces trades.</p>
+      <div id="vwapCapSlider">
+        <label>Max VWAP trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
+        <input type="range" name="vwap_scalp_max_trades_per_day"
+               min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
+               value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
+      </div>
+      <p class="hint">On: no more than this many VWAP trades a day. Off: no daily limit, only the cooldown below spaces trades.</p>
 
       <label>Cooldown between trades: <span id="vwapCooldownVal">{{ vwap_scalp_global_cooldown_label }}</span></label>
       <input type="range" name="vwap_scalp_global_cooldown_minutes"
@@ -341,6 +460,7 @@
       <input type="range" name="max_daily_loss_pct"
              min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
              value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
+      <p class="hint">Counts today's losses only, then resets every night.</p>
 
       <div class="toggle-row">
         <span>Max drawdown breaker{{ ' -- DISABLED' if not risk_config.max_drawdown_enabled else '' }}</span>
@@ -353,7 +473,11 @@
       <input type="range" name="max_drawdown_pct"
              min="{{ risk_config.max_drawdown_pct_min }}" max="{{ risk_config.max_drawdown_pct_max }}" step="1"
              value="{{ risk_config.max_drawdown_pct }}" oninput="drawdownVal.textContent = this.value">
-      <p class="hint">Unlike the daily limit, this never resets on its own -- only Reset capital clears it.</p>
+      <p class="hint">
+        Counts the total fall from your highest balance, across any number of days -- it never resets on its own
+        (only Reset capital clears it). Right now: {{ "%.1f"|format(drawdown_now_pct) }}% below the
+        {{ "%.0f"|format(peak_equity) }} peak{{ ' -- at or past the limit' if risk_config.max_drawdown_enabled and drawdown_now_pct >= risk_config.max_drawdown_pct else '' }}.
+      </p>
 
       {% for warning in out_of_range_warnings %}
         <p class="out-of-range">&#9888; {{ warning }}</p>
@@ -361,7 +485,7 @@
       <button class="scan-btn" type="submit" style="margin-top:0.5rem;" data-loading-text="Saving...">Save settings</button>
     </div>
 
-    <div class="card settings">
+    <div class="card settings" id="advanced">
       <details>
         <summary>Advanced</summary>
 
@@ -424,7 +548,7 @@
     </div>
   </form>
 
-  <div class="card settings">
+  <div class="card settings" id="capital">
     <details>
       <summary>Reset capital</summary>
       <!-- Deliberately a separate form from Settings above (real bug,
@@ -456,83 +580,7 @@
     </details>
   </div>
 
-  <div class="row">
-    <div class="stat-grid">
-      <div class="stat-row">
-        <div class="stat-tile">
-          <div class="stat-tile-label">Strategy capital</div>
-          <div class="stat-tile-value">{{ "%.2f"|format(strategy_capital) }}</div>
-          <div class="stat-tile-sub">{{ account_currency }} &middot; {{ mode|upper }}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-tile-label">Cash reserve</div>
-          <div class="stat-tile-value">{{ "%.2f"|format(broker_balance) if broker_balance is not none else "n/a" }}</div>
-          <div class="stat-tile-sub">{{ account_currency }} demo NAV &middot; not used for sizing</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-tile-label">Invested</div>
-          <div class="stat-tile-value">{{ "%.2f"|format(invested) }}</div>
-          <div class="stat-tile-sub">at risk in open trades</div>
-        </div>
-      </div>
-      <div class="stat-row">
-        <div class="stat-tile">
-          <div class="stat-tile-label">Gain (this week)</div>
-          <div class="stat-tile-value {{ 'long' if week_gain > 0 else ('short' if week_gain < 0 else '') }}">
-            {{ "%+.2f"|format(week_gain) }} <span style="font-size:0.85rem; font-weight:400;">({{ "%+.1f"|format(week_gain_pct) }}%)</span>
-          </div>
-          <div class="stat-tile-sub">{{ account_currency }} &middot; vs {{ "%.0f"|format(weekly_gain_target) }}/week target</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-tile-label">Overall gain</div>
-          <div class="stat-tile-value {{ 'long' if overall_gain > 0 else ('short' if overall_gain < 0 else '') }}">
-            {{ "%+.2f"|format(overall_gain) }} <span style="font-size:0.85rem; font-weight:400;">({{ "%+.1f"|format(overall_gain_pct) }}%)</span>
-          </div>
-          <div class="stat-tile-sub">{{ account_currency }} &middot; since capital last reset</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="flex:1; min-width:260px;">
-      <h3 style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
-        <button type="button" id="winRatePrevBtn" class="scan-btn" aria-label="Previous strategy"
-                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&lsaquo;</button>
-        <span><span id="winRateGroupLabel">Overall</span> win rate
-          <span id="winRatePct" style="font-weight:700; font-size:1em;">{% if (wins + losses) > 0 %}&mdash; {{ "%.1f"|format(100 * wins / (wins + losses)) }}%{% endif %}</span>
-        </span>
-        <button type="button" id="winRateNextBtn" class="scan-btn" aria-label="Next strategy"
-                style="padding:0.15rem 0.55rem; font-size:0.85rem; line-height:1;">&rsaquo;</button>
-      </h3>
-      <div style="max-width:220px; margin:0 auto;">
-        <canvas id="winRateChart" width="220" height="220"></canvas>
-      </div>
-      <p style="text-align:center; color:var(--muted); font-size:0.85rem;">
-        <span id="winRateClosedCount">{{ closed_trades }}</span> closed trade<span id="winRateClosedPlural">{{ '' if closed_trades == 1 else 's' }}</span>
-        <br><span id="winRateExcludedNote" style="font-size:0.78rem; {{ '' if closed_trades > (wins + losses) else 'display:none;' }}">({{ closed_trades - wins - losses }} with unrecoverable P&amp;L, excluded from win rate)</span>
-      </p>
-      <p style="text-align:center; margin:0.35rem 0 0;" id="winRateDots"></p>
-    </div>
-  </div>
-
-  {% if weekly_gain_chart %}
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-      <h3 id="gainChartTitle" style="margin:0;">
-        Gain per week
-        <span style="font-weight:700; font-size:1em;">&mdash; {{ "%+.2f"|format(week_gain) }} {{ account_currency }} this week</span>
-      </h3>
-      <div class="toggle-row" style="gap:0.4rem;">
-        <button type="button" id="gainChartWeekBtn" class="scan-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per week</button>
-        <button type="button" id="gainChartDayBtn" class="cancel-btn" style="padding:0.3rem 0.7rem; font-size:0.78rem;">Per day</button>
-      </div>
-    </div>
-    <div style="max-width:100%; height:180px; margin-top:0.75rem;">
-      <canvas id="weeklyGainChart"></canvas>
-    </div>
-  </div>
-  {% endif %}
-
-  <div class="card">
+  <div class="card" id="notes">
     <details>
       <summary style="cursor:pointer; font-weight:600;">Developer Notes</summary>
       <ul style="margin:0.75rem 0 0; padding-left:1.1rem; font-size:0.85rem; color:var(--muted);">
@@ -550,6 +598,8 @@
     </details>
   </div>
 
+  <button type="button" class="to-top" id="toTop" aria-label="Back to top" title="Back to top">&uarr;</button>
+
   <footer>
     <span class="{{ 'session-open' if forex_open else 'session-closed' }}">
       {% if forex_open %}
@@ -561,6 +611,75 @@
   </footer>
 
   <script>
+
+    // Section nav: jump to a section and open it if it's a collapsed dropdown;
+    // highlight whichever section is in view. Back-to-top appears after scrolling.
+    (function () {
+      var links = [].slice.call(document.querySelectorAll('.topnav a'));
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function goTo(id, opts) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (opts.open) {
+          var d = el.tagName === 'DETAILS' ? el : el.querySelector('details');
+          if (d) d.open = true;
+        }
+        el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      }
+
+      links.forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          var id = a.getAttribute('href').slice(1);
+          goTo(id, { open: a.hasAttribute('data-open') });
+          history.replaceState(null, '', '#' + id);
+        });
+      });
+
+      if (location.hash.length > 1) {
+        var hashId = location.hash.slice(1);
+        var hashLink = links.filter(function (a) { return a.getAttribute('href') === '#' + hashId; })[0];
+        goTo(hashId, { open: !!(hashLink && hashLink.hasAttribute('data-open')) });
+      }
+
+      if ('IntersectionObserver' in window) {
+        var visible = {};
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) { visible[en.target.id] = en.isIntersecting; });
+          var current = null;
+          links.forEach(function (a) {
+            var id = a.getAttribute('href').slice(1);
+            if (!current && visible[id]) current = id;
+          });
+          if (current) links.forEach(function (a) {
+            a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+          });
+        }, { rootMargin: '-15% 0px -70% 0px' });
+        links.forEach(function (a) {
+          var target = document.getElementById(a.getAttribute('href').slice(1));
+          if (target) observer.observe(target);
+        });
+      }
+
+      var toTop = document.getElementById('toTop');
+      function syncToTop() { toTop.classList.toggle('show', window.scrollY > 400); }
+      window.addEventListener('scroll', syncToTop, { passive: true });
+      syncToTop();
+      toTop.addEventListener('click', function () {
+        window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+      });
+
+      // Dim the daily-cap slider while the cap is switched off.
+      var capBox = document.querySelector('input[name=vwap_scalp_daily_cap_enabled]');
+      var capSlider = document.getElementById('vwapCapSlider');
+      if (capBox && capSlider) {
+        var syncCap = function () { capSlider.style.opacity = capBox.checked ? '' : '0.4'; };
+        capBox.addEventListener('change', syncCap);
+        syncCap();
+      }
+    })();
+
     function formatCooldownMinutes(mins) {
       mins = parseInt(mins, 10);
       if (mins < 60) return mins + ' min';
@@ -696,6 +815,7 @@
         inactiveBtn.style.cssText = 'padding:0.3rem 0.7rem; font-size:0.78rem;';
       }
 
+      document.getElementById('gainDetails').addEventListener('toggle', function () { chart.resize(); });
       weekBtn.addEventListener('click', function () { show('week', weekBtn, dayBtn); });
       dayBtn.addEventListener('click', function () { show('day', dayBtn, weekBtn); });
     })();

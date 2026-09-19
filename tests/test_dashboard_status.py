@@ -140,3 +140,27 @@ def test_saving_settings_while_paused_keeps_it_paused(tmp_path, monkeypatch):
     client.post("/settings", data={"kill_switch": "on", "autopilot": "on", "vwap_scalp_enabled": "on"})
 
     assert ds.load_state().phase_state["kill_switch_engaged"] is True
+
+
+def test_dashboard_has_section_nav_back_to_top_and_a_collapsed_gain_chart(tmp_path, monkeypatch):
+    client = _client_with_state(tmp_path, monkeypatch, _state())
+    page = client.get("/").get_data(as_text=True)
+
+    for anchor in ("#overview", "#status", "#live-trades", "#safety", "#advanced", "#capital", "#notes"):
+        assert f'href="{anchor}"' in page and f'id="{anchor[1:]}"' in page
+    assert 'id="toTop"' in page
+    # Stats first, settings after; the gain chart is a dropdown closed by default.
+    assert page.index('id="overview"') < page.index('id="status"') < page.index('id="safety"')
+    assert '<details id="gainDetails">' in page or 'id="gainDetails"' not in page  # present only when there is chart data
+    assert 'id="gainDetails" open' not in page
+
+
+def test_safety_panel_shows_the_current_drawdown_next_to_the_breaker(tmp_path, monkeypatch):
+    state = _state()
+    state.peak_tracked_equity = 2000.0
+    client = _client_with_state(tmp_path, monkeypatch, state)
+
+    page = client.get("/").get_data(as_text=True)
+
+    assert "below the" in page and "peak" in page
+    assert "Daily trade cap" in page

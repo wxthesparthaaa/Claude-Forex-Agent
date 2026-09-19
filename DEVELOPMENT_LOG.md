@@ -9115,3 +9115,17 @@ under a collapsed Advanced section.
   should not be used to click Save).
 - Not changed: time windows and pair order are code constants, not settings,
   so they are not on the page; adding them would be a new feature.
+
+### Phase 3 follow-up (2026-09-19, user feedback on the first pass)
+- Stat tiles + win-rate carousel moved back to the very top (user preference);
+  the gain chart is now a dropdown, closed by default (Chart.js resizes on open).
+- Sticky section nav (Overview / Gain chart / Status / Trades / Safety /
+  Advanced / Capital / Notes): a click scrolls to the section and opens it if
+  it is a collapsed dropdown; the section in view is highlighted; scrolls
+  instantly under prefers-reduced-motion. Floating back-to-top button
+  (bottom right, appears after 400px).
+- "Limit VWAP trades per day" renamed "Daily trade cap -- ON, max N per day /
+  OFF (unlimited)"; its slider dims while the cap is off. Daily loss vs max
+  drawdown now explained inline (today only, resets nightly vs. fall from the
+  highest balance, never resets), with the live drawdown shown next to the
+  breaker.
