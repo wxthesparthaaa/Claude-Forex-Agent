@@ -120,6 +120,34 @@ def test_record_open_trade_falls_back_to_candidate_price_without_a_real_fill(tmp
     assert entries[0]["decision_entry_price"] == 1.10
 
 
+def test_record_open_trade_stores_decision_at_from_candidate(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(decision_at="2026-09-18T08:00:00+00:00"))
+    entries = tj.load_journal()
+    assert entries[0]["decision_at"] == "2026-09-18T08:00:00+00:00"
+
+
+def test_record_open_trade_decision_at_defaults_to_none_without_it(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())  # no decision_at key at all -- only VWAP Scalp sets one
+    entries = tj.load_journal()
+    assert entries[0]["decision_at"] is None
+
+
+def test_record_open_trade_stores_filled_at_when_given(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(), filled_at="2026-09-18T08:00:01.500000000Z")
+    entries = tj.load_journal()
+    assert entries[0]["filled_at"] == "2026-09-18T08:00:01.500000000Z"
+
+
+def test_record_open_trade_filled_at_defaults_to_none_without_it(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())  # filled_at omitted
+    entries = tj.load_journal()
+    assert entries[0]["filled_at"] is None
+
+
 def test_open_entries_filters_by_status(tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     tj.record_open_trade("101", candidate())

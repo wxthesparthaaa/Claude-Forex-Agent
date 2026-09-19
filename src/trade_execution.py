@@ -157,8 +157,14 @@ def place_and_record(client: OandaClient, candidate: dict, allow_duplicate: bool
         # simply never read here. See JournalEntry.decision_entry_price's
         # own comment.
         real_price = result.get("orderFillTransaction", {}).get("price")
+        # OANDA's own fill timestamp -- paired with candidate["decision_at"]
+        # (see JournalEntry.decision_at's own comment) so the real
+        # decision-to-fill latency is directly measurable, not just
+        # inferable from the price gap alone.
+        fill_time = result.get("orderFillTransaction", {}).get("time")
         record_open_trade(trade_id, candidate,
-                           real_entry_price=float(real_price) if real_price is not None else None)
+                           real_entry_price=float(real_price) if real_price is not None else None,
+                           filled_at=fill_time)
         _verify_protective_orders_attached(client, trade_id, candidate)
         return {"success": True, "trade_id": trade_id, "reason": None}
 
