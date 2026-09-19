@@ -36,20 +36,6 @@
   "last_review_timestamp": "2026-09-15T17:03:34.574532+00:00",
   "week_start_timestamp": "2026-09-18T21:03:37.471099+00:00",
   "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
-  "autopilot_scan_interval_minutes": 15,
-  "last_autopilot_scan_timestamps": {
-    "AUD_USD": "2026-09-18T21:33:48.601631+08:00",
-    "NZD_USD": "2026-09-18T21:33:48.601631+08:00",
-    "USD_JPY": "2026-09-18T21:33:48.601631+08:00",
-    "EUR_USD": "2026-09-11T23:54:34.677064+08:00",
-    "GBP_USD": "2026-09-11T23:54:34.677064+08:00",
-    "USD_CHF": "2026-09-18T23:53:45.615343+08:00",
-    "USD_CAD": "2026-09-19T04:53:41.038236+08:00",
-    "XAU_USD": "2026-09-18T23:53:45.615343+08:00",
-    "XAG_USD": "2026-09-18T23:53:45.615343+08:00",
-    "WTICO_USD": "2026-09-19T04:53:41.038236+08:00",
-    "BCO_USD": "2026-09-18T23:53:45.615343+08:00"
-  },
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
@@ -59,118 +45,11 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 40 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-18T19:58:33.090485+00:00",
-  "paused_instruments": {
-    "EUR_USD": "2026-09-11T21:03:30.674909+00:00",
-    "GBP_USD": "2026-09-11T21:03:30.674909+00:00",
-    "XAU_USD": "2026-09-18T21:03:37.467360+00:00",
-    "USD_CHF": "2026-09-18T21:03:37.467360+00:00",
-    "GBP_JPY": "2026-09-18T21:03:37.467360+00:00"
-  },
-  "weekly_pnl_by_instrument": {
-    "USD_JPY": [
-      79.044,
-      31.803199999999997,
-      -4.235200000000001,
-      -44.5844
-    ],
-    "USD_CHF": [
-      4.0486,
-      -42.4611,
-      -32.359899999999996,
-      -51.45450000000001
-    ],
-    "NZD_USD": [
-      2.2434,
-      -105.4068,
-      -17.2243
-    ],
-    "AUD_USD": [
-      36.651900000000005,
-      19.7284,
-      -2.0608000000000004,
-      -66.8158
-    ],
-    "XAG_USD": [
-      -81.4148,
-      15.5668,
-      -38.5723,
-      -22.483900000000006
-    ],
-    "EUR_USD": [
-      -91.6199,
-      -79.5119,
-      -59.4541
-    ],
-    "GBP_USD": [
-      42.834,
-      -45.4025,
-      -29.992300000000004,
-      -68.9829
-    ],
-    "WTICO_USD": [
-      -0.699,
-      66.4945,
-      21.3653,
-      23.599500000000003
-    ],
-    "USD_CAD": [
-      -40.8549,
-      17.5956,
-      -19.2178,
-      -53.3378
-    ],
-    "XAU_USD": [
-      70.6943,
-      -35.1219,
-      -28.7168,
-      -87.3587
-    ],
-    "BCO_USD": [
-      40.84850000000001,
-      -13.0485,
-      -71.17620000000001
-    ],
-    "AUD_JPY": [
-      -40.366,
-      14.608200000000004,
-      -51.090500000000006
-    ],
-    "NZD_JPY": [
-      45.1542,
-      -17.7874,
-      -30.949800000000003
-    ],
-    "GBP_JPY": [
-      -37.3148,
-      -35.004000000000005,
-      -38.8352
-    ],
-    "CAD_JPY": [
-      3.8205,
-      -15.141
-    ],
-    "CHF_JPY": [
-      -3.598600000000001,
-      -26.9146
-    ],
-    "EUR_JPY": [
-      -15.6639,
-      10.4121
-    ]
-  },
-  "last_evening_listing_date": "2026-09-18",
   "last_review_date": "2026-09-19",
   "last_health_check_date": "2026-09-18",
   "last_reflection_sent_at": "2026-09-18T21:03:39.223564+00:00",
   "last_market_status": "closed",
   "last_market_status_sent_at": "2026-09-18T21:03:33.093425+00:00",
-  "last_evening_listing_sent_at": "2026-08-21T13:31:35.083721+00:00",
-  "confidence_weights": {
-    "breadth": 0.35,
-    "rsi": 0.25,
-    "candlestick": 0.15,
-    "news": 0.25
-  },
   "peak_tracked_equity": 2000.0,
   "friday_preclose_cancel_enabled": true,
   "last_friday_preclose_cancel_at": "2026-09-11T17:00:00-04:00",
@@ -183,6 +62,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "base_strategy_enabled": false,
-  "last_process_heartbeat_at": "2026-09-19T07:00:30.390321+00:00"
+  "last_process_heartbeat_at": "2026-09-19T07:03:37.201976+00:00"
 }
