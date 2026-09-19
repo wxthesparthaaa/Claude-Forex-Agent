@@ -264,56 +264,6 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
 
 
 @patch("vwap_scalp_addon.send_message")
-def test_open_position_mirrors_to_live_trial_when_enabled(mock_send, tmp_path, monkeypatch):
-    # 2026-09-15, user-approved: a separate real-money live trial mirrors
-    # each VWAP Scalp signal onto its own account. Proves the wiring in
-    # _open_position actually invokes it with the SAME frozen entry/
-    # stop/target already used for the practice-side trade -- live_trial
-    # itself is unit-tested in tests/test_live_trial.py.
-    import live_trial as lt
-    import oanda_client as oc
-    _isolate(tmp_path, monkeypatch)
-    state = _autopilot_state()
-    state.live_trial_enabled = True
-    state.live_trial_pairs = ["EUR_USD"]
-    ds.save_state(state)
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
-
-    class FakeLiveClient:
-        def __init__(self):
-            self.orders_placed = []
-
-        def get_account_summary(self):
-            return {"currency": "USD"}
-
-        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
-            self.orders_placed.append(instrument)
-            return {"orderFillTransaction": {"tradeOpened": {"tradeID": "live-1"}, "price": stop_loss_price}}
-
-        def get_trade(self, trade_id):
-            return {"stopLossOrder": {"price": "1.0"}, "takeProfitOrder": {"price": "2.0"}}
-
-        def get_open_trades(self):
-            return []
-
-    fake_live = FakeLiveClient()
-    monkeypatch.setattr(oc.OandaClient, "for_live_trial", staticmethod(lambda: fake_live))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["EUR_USD"]  # practice-side trade unaffected
-    assert fake_live.orders_placed == ["EUR_USD"]  # live trial mirrored it
-    entries = tj.load_journal()
-    practice_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
-    live_trial_entries = [e for e in entries if e.get("experiment_tag") == lt.VWAP_SCALP_LIVE_TRIAL_TAG]
-    assert len(practice_entries) == 1
-    assert len(live_trial_entries) == 1
-    assert live_trial_entries[0]["direction"] == practice_entries[0]["direction"]
-
-
-@patch("vwap_scalp_addon.send_message")
 def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send, tmp_path, monkeypatch):
     # Real live data showed losses landing ~1.18x bigger than their own
     # intended risk_amount -- REALIZED_LOSS_INFLATION compensates so the

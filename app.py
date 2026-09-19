@@ -68,8 +68,6 @@ from trade_execution import place_and_record, instrument_already_open, auto_exec
 from autopilot import PhaseState
 from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
-from range_confluence_addon import check_range_confluence_opportunities, RANGE_CONFLUENCE_TAG
-from orb_fade_addon import check_orb_fade_opportunities, ORB_FADE_TAG
 from vwap_scalp_addon import check_vwap_scalp_opportunities, VWAP_SCALP_TAG
 
 app = Flask(__name__)
@@ -85,6 +83,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-19", "Archived ORB Fade, Range Confluence and the VWAP Scalp live trial (real-money mirror). "
+                    "Re-testing them the way they actually trade showed no edge: ORB Fade's 76.5% win rate had "
+                    "dropped every trade that hit its 8-hour cap (61% of signals) -- counting them it is 51% "
+                    "win and significantly negative; Range Confluence's significance came from overlapping "
+                    "windows; the live trial mirrored a strategy that isn't profitable. Only VWAP Scalp remains, "
+                    "on demo. The removed code is recoverable from git tag archive/strategies-pre-prune-2026-09-19."),
     ("2026-09-17", "New Settings toggle: 'VWAP Scalp daily/bucket trade cap' -- switch it off to remove the "
                     "daily and per-session trade limits entirely instead of raising the number, relying on "
                     "half-size mode + the cooldown (which always still applies) as the safety mechanism instead. "
@@ -534,9 +538,9 @@ def _news_summary() -> dict:
 
 def _win_rate_breakdown(journal: list) -> list:
     """Per-strategy win/loss breakdown for the dashboard's win-rate pie
-    chart carousel (user request, 2026-09-05, now that 4 strategies --
-    base, Range Confluence, ORB Fade, VWAP Scalp -- all trade live off
-    the same account). "Overall" (index 0) covers every closed trade
+    chart carousel (user request, 2026-09-05; ORB Fade and Range Confluence
+    were archived 2026-09-19 -- their old journal entries still count
+    toward Overall but get no dedicated slide). "Overall" (index 0) covers every closed trade
     regardless of tag; the base strategy is identified by the ABSENCE
     of an experiment_tag, matching JournalEntry's own convention, not a
     tag of its own. Retired-experiment tags (PYRAMID_ADDON, CARRY_TRADE,
@@ -547,8 +551,6 @@ def _win_rate_breakdown(journal: list) -> list:
         ("Overall", journal),
         ("Base Strategy", [e for e in journal if e.get("experiment_tag") is None]),
         ("VWAP Scalp", [e for e in journal if e.get("experiment_tag") == VWAP_SCALP_TAG]),
-        ("ORB Fade", [e for e in journal if e.get("experiment_tag") == ORB_FADE_TAG]),
-        ("Range Confluence", [e for e in journal if e.get("experiment_tag") == RANGE_CONFLUENCE_TAG]),
     ]
     breakdown = []
     for label, subset in groups:
@@ -701,7 +703,6 @@ def dashboard():
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
-        orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -712,12 +713,6 @@ def dashboard():
         vwap_scalp_global_cooldown_minutes_max=state.vwap_scalp_global_cooldown_minutes_max,
         vwap_scalp_global_cooldown_minutes_step=state.vwap_scalp_global_cooldown_minutes_step,
         vwap_scalp_global_cooldown_label=_format_cooldown_minutes(state.vwap_scalp_global_cooldown_minutes),
-        live_trial_enabled=state.live_trial_enabled,
-        live_trial_trade_count=state.live_trial_trade_count,
-        live_trial_max_trades=state.live_trial_max_trades,
-        live_trial_cumulative_risk_deployed=state.live_trial_cumulative_risk_deployed,
-        live_trial_max_capital=state.live_trial_max_capital,
-        live_trial_pairs=", ".join(state.live_trial_pairs),
         base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
@@ -1083,19 +1078,6 @@ def settings():
         # checkbox pattern as the toggles above.
         state.friday_preclose_cancel_enabled = request.form.get("friday_preclose_cancel_enabled") == "on"
 
-        # Range Confluence's toggle was removed from Settings (2026-09-08,
-        # user request) -- no longer parsed here. state.range_confluence_enabled
-        # stays frozen at whatever it last was (False on the live account) rather
-        # than being force-set from an absent checkbox on every save; the
-        # scheduler job (see start_scheduler below) and src/range_confluence_addon.py
-        # itself are untouched, so it can still be re-enabled directly in
-        # dashboard_state.json if ever needed.
-
-        # ORB Fade: off by default -- see src/orb_fade_addon.py and
-        # DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it fades
-        # a documented failure rather than confirming a fresh finding.
-        state.orb_fade_enabled = request.form.get("orb_fade_enabled") == "on"
-
         # VWAP Scalp: off by default -- see src/vwap_scalp_addon.py and
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
@@ -1116,14 +1098,6 @@ def settings():
             state.vwap_scalp_global_cooldown_minutes_min, state.vwap_scalp_global_cooldown_minutes_max)
         step = state.vwap_scalp_global_cooldown_minutes_step
         state.vwap_scalp_global_cooldown_minutes = round(raw_cooldown / step) * step
-
-        # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): off by
-        # default, and inert even when on unless OANDA_ACCESS_TOKEN_LIVE/
-        # OANDA_ACCOUNT_ID_LIVE are also set as separate Render secrets
-        # (see src/live_trial.py). This toggle alone can never place a
-        # real-money order -- matches app.py's own module docstring on
-        # why a UI toggle alone can never turn on real-money trading.
-        state.live_trial_enabled = request.form.get("live_trial_enabled") == "on"
 
         # Base strategy: ON by default -- this is the original strategy
         # the app was built around, not a new experiment. Turning it off
@@ -1261,19 +1235,6 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # Range Confluence: off by default via Settings. Same uniform 5-minute
-    # cadence as every other job here even though the underlying Daily-
-    # candle signal only changes once a day -- the function itself short-
-    # circuits quickly on every tick where nothing needs to open or close,
-    # matching this codebase's own established convention (see
-    # src/range_confluence_addon.py's module docstring).
-    scheduler.add_job(check_range_confluence_opportunities,
-                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # ORB Fade: same uniform 5-minute cadence every job in this app uses --
-    # comfortably fine-grained against its 15-minute breakout bars and
-    # 8-hour hold cap. See src/orb_fade_addon.py's module docstring.
-    scheduler.add_job(check_orb_fade_opportunities,
-                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # VWAP Scalp: same uniform 5-minute cadence -- validated at exactly
     # this execution delay in the backtest (see src/vwap_scalp_addon.py's
     # module docstring), not a compromise made after the fact.

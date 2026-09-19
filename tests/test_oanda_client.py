@@ -229,30 +229,3 @@ def test_circuit_breaker_makes_repeated_stacked_calls_fail_fast_not_slow(mock_re
             pass
 
     assert mock_request.call_count == 1  # only the first one actually hit the network
-
-
-def test_for_live_trial_returns_none_when_credentials_not_configured(monkeypatch):
-    monkeypatch.delenv("OANDA_ACCESS_TOKEN_LIVE", raising=False)
-    monkeypatch.delenv("OANDA_ACCOUNT_ID_LIVE", raising=False)
-    assert OandaClient.for_live_trial() is None
-
-
-def test_for_live_trial_returns_none_when_only_one_credential_is_set(monkeypatch):
-    monkeypatch.setenv("OANDA_ACCESS_TOKEN_LIVE", "tok")
-    monkeypatch.delenv("OANDA_ACCOUNT_ID_LIVE", raising=False)
-    assert OandaClient.for_live_trial() is None
-
-
-def test_for_live_trial_builds_a_live_env_client_with_its_own_separate_credentials(monkeypatch):
-    monkeypatch.setenv("OANDA_ACCESS_TOKEN_LIVE", "live-tok")
-    monkeypatch.setenv("OANDA_ACCOUNT_ID_LIVE", "101-live-account")
-    monkeypatch.setenv("OANDA_ACCESS_TOKEN", "practice-tok")
-    monkeypatch.setenv("OANDA_ACCOUNT_ID", "101-practice-account")
-
-    client = OandaClient.for_live_trial()
-
-    assert client is not None
-    assert client.env == "live"
-    assert client.access_token == "live-tok"
-    assert client.account_id == "101-live-account"
-    assert client.base_url == oc.LIVE_URL

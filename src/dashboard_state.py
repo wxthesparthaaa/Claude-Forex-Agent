@@ -189,25 +189,6 @@ class DashboardState:
     # proof across restarts/re-reads, no separate "which Friday was
     # this" bookkeeping needed.
     last_friday_preclose_cancel_at: str | None = None
-    # Range Confluence: the first live strategy built from this session's
-    # pattern-discovery/combination-search research (not a named trader's
-    # book). Off by default -- every layer of retrospective validation
-    # this session used (discovery screen, split-half, one-shot holdout)
-    # has now been applied to all of this account's available history, so
-    # there is no more untouched data left to confirm it against; shipping
-    # it live is deliberately the next honest test, not a confirmed edge.
-    # See src/range_confluence_addon.py and DEVELOPMENT_LOG.md 2026-08-30.
-    range_confluence_enabled: bool = False
-    # ORB Fade: the second live strategy built from this session's own
-    # research -- fades a London-session Asian-range breakout, which this
-    # account's own backtest (scripts/backtest_orb_session_breakout.py)
-    # found decisively loses money when traded WITH the breakout instead.
-    # Honest caveat: fading a proven failure is the SAME finding, not an
-    # independent second discovery, and it was validated on a shorter
-    # ~270-day 15-minute window than Range Confluence's multi-year Daily
-    # data. Off by default. See src/orb_fade_addon.py and
-    # DEVELOPMENT_LOG.md 2026-08-30.
-    orb_fade_enabled: bool = False
     # VWAP Scalp: the third live strategy and this session's first
     # genuine scalp (minutes, not hours-to-months) -- fades a 2-stdev
     # extension from the session VWAP back toward it. The most
@@ -286,33 +267,6 @@ class DashboardState:
     # risk skip -- a sleeping process can't record either). See
     # DEVELOPMENT_LOG.md 2026-08-31 and 2026-09-10.
     last_process_heartbeat_at: str | None = None
-    # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): a real-money
-    # trial to test one specific hypothesis -- that some of the live-
-    # vs-backtest gap traced this week (severe stop-overshoot losses on
-    # a genuine shock day) might be an artifact of OANDA's PRACTICE
-    # server's own fill simulation, not purely real market
-    # microstructure a live account would also experience. Mirrors the
-    # SAME frozen entry/stop/target VWAP Scalp already computed for the
-    # practice-side trade onto a SEPARATE live account, at a small fixed
-    # risk size, restricted to a few tightest-spread pairs, so live and
-    # practice fills for the identical signal under identical market
-    # conditions can be compared directly. Off by default -- requires
-    # BOTH this flag AND OANDA_ACCESS_TOKEN_LIVE/OANDA_ACCOUNT_ID_LIVE
-    # set as separate Render secrets (see live_trial.get_live_trial_
-    # client) before anything actually submits to the live account.
-    # Bounded on three independent axes (trade count, cumulative risk,
-    # elapsed days) -- whichever is hit first stops new live-trial
-    # trades; practice-side VWAP Scalp trading is completely unaffected
-    # either way. See src/live_trial.py.
-    live_trial_enabled: bool = False
-    live_trial_started_at: str | None = None
-    live_trial_trade_count: int = 0
-    live_trial_cumulative_risk_deployed: float = 0.0
-    live_trial_max_capital: float = 400.0
-    live_trial_max_trades: int = 30
-    live_trial_max_duration_days: int = 14
-    live_trial_risk_per_trade: float = 10.0
-    live_trial_pairs: list = field(default_factory=lambda: ["EUR_USD", "USD_JPY", "GBP_USD"])
 
 
 def default_state() -> DashboardState:
@@ -461,7 +415,7 @@ SCAN_DIGEST_LOCK = threading.Lock()
 
 def record_risk_limit_skip(source: str, message: str) -> None:
     """Call this from any strategy's existing `except RiskViolation as e:`
-    block (VWAP Scalp, ORB Fade, Range Confluence, the base strategy's
+    block (VWAP Scalp, the base strategy's
     scan/autopilot paths) -- appends "{source}: {message}" to
     risk_limit_skips_since_digest so scheduled_jobs.check_scan_digest can
     surface it in the periodic scan digest. User request: the digest

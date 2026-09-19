@@ -8990,7 +8990,7 @@ and the live trial are all off). Audited each against EVIDENCE_BAR.md.
 
 - **VWAP Scalp**: 262 closed live trades, 30.2% win, mean R -0.58, -2,428.52
   SGD (demo); clean backtest 15-18% win. Fails.
-- **ORB Fade** (`scripts/audit_orb_fade_clean.py`): the recorded 76.5% win /
+- **ORB Fade** (`scripts/audit_orb_fade_clean.py`, now in the archive tag): the recorded 76.5% win /
   RR=2.0 result came from `backtest_orb_fade.py` DROPPING every trade that
   neither hit its stop nor target within the 8h cap. Re-tested over ~400
   days x 17 instruments with the identical breakout detection and live level
@@ -8999,7 +8999,7 @@ and the live trial are all off). Audited each against EVIDENCE_BAR.md.
   force-closes live performs at market gives 51.1% win, mean R -0.044,
   day-pooled t = -3.43 (significantly negative), worse in the second half.
   Live: 6 trades on 2026-09-04 only, 4 of them 8h force-closes. Fails.
-- **Range Confluence** (`scripts/audit_range_confluence_clean.py`): 0 live
+- **Range Confluence** (`scripts/audit_range_confluence_clean.py`, now in the archive tag): 0 live
   trades ever. Walk-forward, non-overlapping 40-day holds, real bid/ask,
   15 years / 17 instruments: 495 trades, 52% win, +0.61% mean, but
   month-pooled t = +0.63 (the "11 sigma" came from overlapping windows on
@@ -9011,3 +9011,24 @@ and the live trial are all off). Audited each against EVIDENCE_BAR.md.
   vs live fills; fill/slippage turned out not to be the gap. 0 trades.
 
 No strategy passes the bar. Nothing removed yet (audit only).
+
+## 2026-09-19 (continued) -- Archived ORB Fade, Range Confluence and the live trial
+
+User approved archiving all three after the Phase 1 audit. Removed from the
+running app: `src/orb_fade_addon.py`, `src/range_confluence_addon.py`,
+`src/live_trial.py` and their three test files; their scheduler jobs,
+Settings toggles/handlers, dashboard sections, DashboardState fields
+(`range_confluence_enabled`, `orb_fade_enabled`, `live_trial_*`; a persisted
+state file with those keys still loads -- unknown keys are dropped), the
+VWAP Scalp live-trial mirror hook, `OandaClient.for_live_trial()` (the only
+code that read `OANDA_ACCESS_TOKEN_LIVE`/`OANDA_ACCOUNT_ID_LIVE`, so no code
+path can reach a real-money account now), and the win-rate carousel slides
+for the two strategies (their old journal entries still count in Overall).
+Also removed the four ORB/audit scripts that imported them.
+
+**Recovery**: everything is in git tag `archive/strategies-pre-prune-2026-09-19`
+(`git show archive/strategies-pre-prune-2026-09-19:src/orb_fade_addon.py`).
+No open ORB/Range Confluence/live-trial trades existed at removal time
+(checked the journal). 627 tests pass (48 removed with the three modules).
+Base strategy is intentionally still present: `live_scan.py`, which VWAP
+Scalp imports, is shared with its pipeline.

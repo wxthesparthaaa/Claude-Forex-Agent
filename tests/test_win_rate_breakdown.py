@@ -1,8 +1,9 @@
 """
-User request (2026-09-05): now that 4 strategies (base, Range
-Confluence, ORB Fade, VWAP Scalp) all trade live off the same account,
-the dashboard's single win-rate pie chart became a carousel so each
-strategy's own win rate is visible, not just the account-wide figure.
+User request (2026-09-05): the dashboard's single win-rate pie chart
+became a carousel so each strategy's own win rate is visible, not just the
+account-wide figure. ORB Fade and Range Confluence were archived
+2026-09-19: their old journal entries still count toward Overall but get
+no dedicated slide.
 app._win_rate_breakdown() computes the per-group (wins, losses,
 closed_trades) tuples the carousel's JS cycles through.
 """
@@ -23,8 +24,8 @@ def test_overall_group_covers_every_closed_trade_regardless_of_tag():
     journal = [
         _entry(experiment_tag=None, realized_pnl=10.0),
         _entry(experiment_tag="VWAP_SCALP", realized_pnl=-5.0),
-        _entry(experiment_tag="ORB_FADE", realized_pnl=10.0),
-        _entry(experiment_tag="RANGE_CONFLUENCE", realized_pnl=-5.0),
+        _entry(experiment_tag="ORB_FADE", realized_pnl=10.0),  # archived experiment, still counts toward Overall
+        _entry(experiment_tag="RANGE_CONFLUENCE", realized_pnl=-5.0),  # archived experiment, still counts toward Overall
         _entry(experiment_tag="TREND_FOLLOWING", realized_pnl=10.0),  # retired experiment, still counts toward Overall
     ]
     breakdown = flask_app._win_rate_breakdown(journal)
@@ -48,7 +49,7 @@ def test_base_strategy_group_is_untagged_entries_only():
     assert base["closed_trades"] == 2
 
 
-def test_each_addon_strategy_only_sees_its_own_tagged_entries():
+def test_vwap_scalp_group_only_sees_its_own_tagged_entries():
     journal = [
         _entry(experiment_tag="VWAP_SCALP", realized_pnl=10.0),
         _entry(experiment_tag="VWAP_SCALP", realized_pnl=10.0),
@@ -60,25 +61,21 @@ def test_each_addon_strategy_only_sees_its_own_tagged_entries():
 
     assert by_label["VWAP Scalp"]["wins"] == 2
     assert by_label["VWAP Scalp"]["losses"] == 0
-    assert by_label["ORB Fade"]["wins"] == 0
-    assert by_label["ORB Fade"]["losses"] == 1
-    assert by_label["Range Confluence"]["wins"] == 1
-    assert by_label["Range Confluence"]["losses"] == 0
 
 
 def test_retired_experiment_tags_get_no_dedicated_group():
     journal = [_entry(experiment_tag="CARRY_TRADE", realized_pnl=10.0)]
     breakdown = flask_app._win_rate_breakdown(journal)
     labels = [g["label"] for g in breakdown]
-    assert labels == ["Overall", "Base Strategy", "VWAP Scalp", "ORB Fade", "Range Confluence"]
-    for label in ("Base Strategy", "VWAP Scalp", "ORB Fade", "Range Confluence"):
+    assert labels == ["Overall", "Base Strategy", "VWAP Scalp"]
+    for label in ("Base Strategy", "VWAP Scalp"):
         group = next(g for g in breakdown if g["label"] == label)
         assert group["closed_trades"] == 0
 
 
-def test_empty_journal_returns_five_zeroed_groups():
+def test_empty_journal_returns_three_zeroed_groups():
     breakdown = flask_app._win_rate_breakdown([])
-    assert len(breakdown) == 5
+    assert len(breakdown) == 3
     for group in breakdown:
         assert group["wins"] == 0
         assert group["losses"] == 0

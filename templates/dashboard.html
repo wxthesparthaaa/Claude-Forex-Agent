@@ -385,7 +385,7 @@
                min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
                value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Account-wide, not per-strategy -- every strategy (base, ORB Fade, VWAP Scalp) draws
+          Account-wide, not per-strategy -- every strategy (base, VWAP Scalp) draws
           from the same daily P&amp;L figure. Switch this off temporarily to keep a candidate's live data
           collection running past a normal day's losses (the threshold below stays wherever you leave it,
           ready for when you switch back on); the default (6%) is a genuine safety limit, so turn it back on
@@ -463,30 +463,9 @@
         <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
                value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Base strategy only -- ORB Fade and VWAP Scalp trade on their own binary signal rather than a
-          scanned confidence score, so this threshold has no effect on them.
+          Base strategy only -- VWAP Scalp trades on its own binary signal rather than a
+          scanned confidence score, so this threshold has no effect on it.
         </p>
-        <div class="toggle-row">
-          <span>ORB Fade (experimental)</span>
-          <label class="switch">
-            <input type="checkbox" name="orb_fade_enabled" {{ 'checked' if orb_fade_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. Fades the first London-session breakout of the overnight Asian range, RR=2.0, force-closed after 8 hours.
-        </p>
-        <details style="margin:-0.4rem 0 0.75rem;">
-          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
-          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
-            Takes the opposite side of the first breakout of the overnight Asian range (00:00-06:45 UTC),
-            stop and target mirrored around entry. Honest caveat: this is the SAME finding as a backtest
-            that decisively ruled out trading WITH that breakout, expressed as a trade rather than an
-            independent new discovery, and it was validated on a shorter ~270-day window of 15-minute data
-            than Range Confluence's multi-year daily history. Every trade it places is tagged "ORB Fade" in
-            the journal and on Telegram.
-          </p>
-        </details>
         <div class="toggle-row">
           <span>VWAP Scalp (experimental)</span>
           <label class="switch">
@@ -542,24 +521,6 @@
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
           Paces entries across the WHOLE strategy, not per pair -- no new VWAP Scalp trade (any instrument)
           within this long of the last one, on top of the daily/session caps above.
-        </p>
-
-        <div class="toggle-row" style="border:1px solid var(--red); border-radius:8px; padding:0.5rem 0.75rem;">
-          <span style="color:var(--red); font-weight:600;">VWAP Scalp LIVE TRIAL -- REAL MONEY</span>
-          <label class="switch">
-            <input type="checkbox" name="live_trial_enabled" {{ 'checked' if live_trial_enabled else '' }}>
-            <span class="switch-track" style="{{ 'background:var(--red);' if live_trial_enabled else '' }}"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default, and inert even when on unless OANDA_ACCESS_TOKEN_LIVE/OANDA_ACCOUNT_ID_LIVE are also
-          set as separate Render secrets. Mirrors each VWAP Scalp signal onto a SEPARATE real-money account
-          ({{ live_trial_pairs }} only) at a small fixed risk per trade, to compare real live fills against
-          practice fills directly. Bounded to {{ live_trial_max_trades }} trades or
-          ${{ '%.0f'|format(live_trial_max_capital) }} total risk deployed, whichever comes first --
-          currently {{ live_trial_trade_count }}/{{ live_trial_max_trades }} trades,
-          ${{ '%.2f'|format(live_trial_cumulative_risk_deployed) }}/${{ '%.0f'|format(live_trial_max_capital) }}
-          deployed. Practice-side VWAP Scalp trading is completely unaffected either way.
         </p>
 
         <div class="toggle-row">
@@ -699,7 +660,7 @@
 
     (function () {
       // Carousel over per-strategy win rates (user request, 2026-09-05,
-      // now that base/VWAP Scalp/ORB Fade/Range Confluence all trade
+      // now that base/VWAP Scalp all trade
       // live off the same account) -- one shared pie chart, prev/next
       // arrows and clickable dots switch which group's wins/losses it
       // shows. Index 0 is always "Overall" so getting back to it is at

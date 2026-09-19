@@ -810,17 +810,6 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         print(f"WARNING: VWAP Scalp open notification failed for {instrument} "
               f"(trade already placed and journaled): {e}", flush=True)
 
-    # LIVE TRIAL (2026-09-15, user-approved): best-effort mirror of this
-    # SAME signal onto a separate real-money account -- see live_trial.py's
-    # own docstring. Runs only after the practice-side trade above has
-    # fully succeeded; cannot affect it either way.
-    try:
-        from dashboard_state import load_state
-        from live_trial import mirror_to_live_trial
-        mirror_to_live_trial(load_state(), instrument, direction, entry_price, stop_loss, take_profit, meta)
-    except Exception as e:
-        print(f"WARNING: VWAP Scalp live trial hook failed for {instrument}: {e}", flush=True)
-
     return True
 
 
