@@ -5,28 +5,20 @@ On Render, gunicorn runs this via `gunicorn --workers 1 --bind 0.0.0.0:$PORT app
 -- workers MUST stay at 1 (same reasoning as the sibling project: a
 second worker would duplicate any scheduled background jobs added later).
 
-Order-placement boundary: /execute/<instrument> and /cancel_all_trades
-are the human-click paths, same as before. The one deliberate exception
-is Autopilot mode (trade_execution.auto_execute_candidates) -- once the
-user explicitly toggles it on via /settings, /scan and the scheduled
-9:30pm scan are both allowed to place real orders on qualifying
-candidates without a per-trade click. That's the entire point of
-Autopilot; it defaults off, the user has to turn it on themselves, and
-every autopilot trade still passes the same risk_engine.validate_trade()
-gate and duplicate-position guard as a manual execution, re-checked
-against the running state of that batch, not a stale snapshot. True
-Actual/live trading additionally requires OANDA_ENV=live set as a
-separate credential-level change, not just the dashboard's Demo/Actual
-label -- a UI toggle alone can never turn on real-money trading.
+Order-placement boundary: the only orders this app places are VWAP Scalp's
+own scheduled, autopilot-gated trades (src/vwap_scalp_addon.py) and the
+"Cancel all trades"/per-trade close buttons. Every VWAP Scalp trade passes
+risk_engine.validate_trade(). True Actual/live trading additionally requires
+OANDA_ENV=live set as a separate credential-level change, not just the
+dashboard's Demo/Actual label -- a UI toggle alone can never turn on
+real-money trading.
 """
 import io
-import json
 import os
 import sys
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
-import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -44,33 +36,24 @@ from apscheduler.triggers.interval import IntervalTrigger
 load_dotenv(encoding="utf-8-sig", override=True)
 
 from dashboard_state import (
-    load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity, tracked_equity_live,
-    DEFAULT_STRATEGY_CAPITAL, confidence_weights_from_state, account_state_from_tracked_capital,
-    record_risk_limit_skip, check_cold_boot_gap,
+    load_state, save_state, risk_config_from_state, phase_state_from_state, tracked_equity_live,
+    DEFAULT_STRATEGY_CAPITAL, check_cold_boot_gap,
 )
 from autopilot import PHASE_LABELS
-from market_hours import (is_forex_market_open, time_until_forex_reopen, format_duration,
-                           SGT, ALL_INSTRUMENT_WINDOWS, format_instrument_window)
-from risk_engine import is_out_of_recommended_range, validate_trade, ProposedTrade, RiskViolation
-from currency_exposure import currency_deltas_for_trade
+from market_hours import is_forex_market_open, time_until_forex_reopen, format_duration
+from risk_engine import is_out_of_recommended_range
 from oanda_client import OandaClient
-from live_scan import run_live_scan, fetch_news_articles, fetch_mid_price
-from universe import GRANULARITY, MAJOR_PAIRS
-from scan_results import save_candidates, load_candidates, load_scan_results, find_candidate
-from scheduled_jobs import run_autopilot_interval_scan, run_daily_dispatcher, _evening_scan_lock
+from scheduled_jobs import run_daily_dispatcher
 from github_state_sync import pull_state_from_github, github_file_url, get_sync_status
 from trade_journal import (
     load_journal, total_open_risk, win_loss_counts, closed_entries, realized_pnl_since,
     weekly_gain_series, daily_gain_series, JOURNAL_XLSX_REPO_PATH,
 )
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
-from trade_execution import place_and_record, instrument_already_open, auto_execute_candidates
 from autopilot import PhaseState
-from news_relevance import currency_news_score, tag_headline
 from journal_export import build_journal_workbook
-from range_confluence_addon import check_range_confluence_opportunities, RANGE_CONFLUENCE_TAG
-from orb_fade_addon import check_orb_fade_opportunities, ORB_FADE_TAG
-from vwap_scalp_addon import check_vwap_scalp_opportunities, VWAP_SCALP_TAG
+from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
+                              VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -85,6 +68,23 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-19", "Dashboard redesign: a status strip at the top (RUNNING / WAITING / PAUSED with the reason, "
+                    "trades today, P&L today, open trades, time until the next allowed entry), a one-click "
+                    "Pause/Resume trading button, and your safety limits (half size, risk, VWAP trade limit, "
+                    "cooldown, daily loss, drawdown) in one panel. Everything else moved under Advanced with "
+                    "one-line explanations; the stats and charts moved below the settings."),
+    ("2026-09-19", "Removed the old base strategy's scanner and its dead code (about 15 modules): the manual "
+                    "Review/Execute pages, the candidates table, News sentiment, the confidence slider, the base "
+                    "on/off toggle, the per-pair scan interval and the 9:30pm 'Potential trades' message. "
+                    "Scan now still works (VWAP Scalp status) and the 3-hour digest is unchanged -- its scan "
+                    "count now comes from VWAP Scalp's own 5-minute ticks. Nightly review, Friday reflection, "
+                    "health check and market open/close notices are unchanged."),
+    ("2026-09-19", "Archived ORB Fade, Range Confluence and the VWAP Scalp live trial (real-money mirror). "
+                    "Re-testing them the way they actually trade showed no edge: ORB Fade's 76.5% win rate had "
+                    "dropped every trade that hit its 8-hour cap (61% of signals) -- counting them it is 51% "
+                    "win and significantly negative; Range Confluence's significance came from overlapping "
+                    "windows; the live trial mirrored a strategy that isn't profitable. Only VWAP Scalp remains, "
+                    "on demo. The removed code is recoverable from git tag archive/strategies-pre-prune-2026-09-19."),
     ("2026-09-17", "New Settings toggle: 'VWAP Scalp daily/bucket trade cap' -- switch it off to remove the "
                     "daily and per-session trade limits entirely instead of raising the number, relying on "
                     "half-size mode + the cooldown (which always still applies) as the safety mechanism instead. "
@@ -466,77 +466,48 @@ DEVELOPER_NOTES = [
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
 
 
-def _oanda_time_to_unix(time_str: str) -> int:
-    # OANDA gives nanosecond precision ("...000000000Z"), and Python's
-    # fromisoformat() (3.11+) accepts a fractional-seconds part of any
-    # length -- just swap the trailing "Z" for an explicit offset. The
-    # previous [:26] fixed-length slice assumed a 9-digit fraction was
-    # always present; a real OANDA timestamp with none at all (e.g.
-    # "...T05:11:57Z") produced "...57Z+00:00" -- both a Z and an
-    # offset, which fromisoformat rejects outright.
-    trimmed = time_str[:-1] + "+00:00" if time_str.endswith("Z") else time_str
-    return int(datetime.fromisoformat(trimmed).timestamp())
-
-
-def _news_summary() -> dict:
-    """Dashboard's news-sentiment section: per-currency score across the
-    7 majors plus the most relevant recent headlines. Degrades honestly
-    -- if FINNHUB_API_KEY isn't set, or the fetch itself fails, this
-    returns configured=False rather than pretending there's data.
-
-    No economic-calendar section here -- Finnhub's /calendar/economic
-    endpoint is not included on the free tier (403 Forbidden, confirmed
-    live), so that feature was removed rather than left as permanently-
-    failing dead code."""
-    configured = bool(os.environ.get("FINNHUB_API_KEY"))
-    articles = fetch_news_articles()
-    if not articles:
-        return {"configured": configured, "currencies": [], "headlines": [], "most_recent_at": None}
-
-    # Freshness of the underlying data, not just the fetch cache (which
-    # uses a monotonic clock with no fixed relationship to wall-clock
-    # time) -- the newest article's own Finnhub timestamp answers "how
-    # dated is this" directly, regardless of caching mechanics.
-    most_recent_epoch = max((a.get("datetime", 0) for a in articles), default=0)
-    most_recent_at = _format_sgt(
-        datetime.fromtimestamp(most_recent_epoch, tz=timezone.utc).isoformat()
-    ) if most_recent_epoch else None
-
-    currencies = []
-    for pair in MAJOR_PAIRS:
-        for ccy in pair.split("_"):
-            if ccy not in [c["currency"] for c in currencies]:
-                score = currency_news_score(articles, ccy)
-                if score is not None:
-                    currencies.append({"currency": ccy, "score": round(score, 2)})
-
-    # Tags every article so the dashboard shows WHICH currency (if any)
-    # each headline actually feeds a score for, instead of just listing
-    # "5 most recent" with no indication of relevance -- real confusion
-    # otherwise: general market/geopolitical headlines (oil, Iran,
-    # equities) show up in Finnhub's feed constantly and previously
-    # looked indistinguishable from headlines the algorithm actually
-    # used. Currency-tagged headlines are shown first (most recent
-    # within that group); untagged ones only fill remaining slots.
-    tagged = []
-    for a in articles:
-        tag = tag_headline(a.get("headline", ""), a.get("summary", ""))
-        tagged.append({
-            "headline": a.get("headline", ""), "source": a.get("source", ""),
-            "datetime": a.get("datetime", 0),
-            "currencies": tag["currencies"], "polarity": round(tag["polarity"], 2),
-        })
-    tagged.sort(key=lambda h: (not h["currencies"], -h["datetime"]))
-    headlines = tagged[:5]
-
-    return {"configured": True, "currencies": currencies, "headlines": headlines, "most_recent_at": most_recent_at}
+def _trading_status(state, phase_state, journal: list, open_count: int, reopen_delta, now=None) -> dict:
+    """What the dashboard's status strip shows: is anything actually going
+    to trade right now, and why not if it isn't. tone: running / waiting
+    (fine, just not the right time) / paused (needs the user)."""
+    now = now or datetime.now(timezone.utc)
+    snapshot = vwap_scalp_pacing_snapshot(journal, state.vwap_scalp_global_cooldown_minutes, now)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if phase_state.kill_switch_engaged:
+        tone, label = "paused", "PAUSED"
+        detail = "No new trades. Open trades keep their stop and target."
+    elif phase_state.phase != "autopilot":
+        tone, label = "paused", "PAUSED"
+        detail = "Autopilot is off (Advanced) -- nothing will trade."
+    elif not state.vwap_scalp_enabled:
+        tone, label = "paused", "PAUSED"
+        detail = "VWAP Scalp is switched off (Advanced)."
+    elif reopen_delta is not None:
+        tone, label = "waiting", "WAITING"
+        detail = f"Forex is closed -- reopens in {format_duration(reopen_delta)}."
+    elif not (WATCH_START_HOUR <= now.hour < WATCH_END_HOUR):
+        tone, label = "waiting", "WAITING"
+        detail = (f"Outside VWAP's watch window -- resumes at {(WATCH_START_HOUR + 8) % 24:02d}:00 SGT "
+                  f"(closes {(WATCH_END_HOUR + 8) % 24:02d}:00 SGT).")
+    else:
+        tone, label = "running", "RUNNING"
+        detail = f"Scanning {len(VWAP_SCALP_PAIRS)} pairs every 5 minutes."
+    return {
+        "tone": tone, "label": label, "detail": detail,
+        "trades_today": snapshot["trades_today"],
+        "cap_label": ("no cap" if not state.vwap_scalp_daily_cap_enabled
+                      else f"of {state.vwap_scalp_max_trades_per_day}"),
+        "pnl_today": realized_pnl_since(journal, today_start.isoformat()),
+        "open_count": open_count,
+        "cooldown_remaining_minutes": snapshot["cooldown_remaining_minutes"],
+    }
 
 
 def _win_rate_breakdown(journal: list) -> list:
     """Per-strategy win/loss breakdown for the dashboard's win-rate pie
-    chart carousel (user request, 2026-09-05, now that 4 strategies --
-    base, Range Confluence, ORB Fade, VWAP Scalp -- all trade live off
-    the same account). "Overall" (index 0) covers every closed trade
+    chart carousel (user request, 2026-09-05; ORB Fade and Range Confluence
+    were archived 2026-09-19 -- their old journal entries still count
+    toward Overall but get no dedicated slide). "Overall" (index 0) covers every closed trade
     regardless of tag; the base strategy is identified by the ABSENCE
     of an experiment_tag, matching JournalEntry's own convention, not a
     tag of its own. Retired-experiment tags (PYRAMID_ADDON, CARRY_TRADE,
@@ -547,8 +518,6 @@ def _win_rate_breakdown(journal: list) -> list:
         ("Overall", journal),
         ("Base Strategy", [e for e in journal if e.get("experiment_tag") is None]),
         ("VWAP Scalp", [e for e in journal if e.get("experiment_tag") == VWAP_SCALP_TAG]),
-        ("ORB Fade", [e for e in journal if e.get("experiment_tag") == ORB_FADE_TAG]),
-        ("Range Confluence", [e for e in journal if e.get("experiment_tag") == RANGE_CONFLUENCE_TAG]),
     ]
     breakdown = []
     for label, subset in groups:
@@ -616,21 +585,11 @@ def health():
     return {"status": "ok"}, 200
 
 
-def _format_sgt(iso_utc: str | None) -> str | None:
-    if not iso_utc:
-        return None
-    return datetime.fromisoformat(iso_utc).astimezone(SGT).strftime("%Y-%m-%d %H:%M SGT")
-
-
 @app.route("/")
 def dashboard():
     state = load_state()
     risk_config = risk_config_from_state(state)
     phase_state = phase_state_from_state(state)
-    scan_results = load_scan_results()
-    candidates = scan_results["candidates"]
-    last_scan_at = _format_sgt(scan_results["scanned_at"])
-    instrument_windows = [(i, format_instrument_window(i)) for i in ALL_INSTRUMENT_WINDOWS]
 
     broker_balance = None
     account_currency = ""
@@ -659,6 +618,10 @@ def dashboard():
     # every open stop-loss hit), which is the honestly-computable analog
     # already available here without a currency-conversion detour.
     invested = total_open_risk(journal)
+    # The true fall from the highest balance reached (what the Max drawdown
+    # breaker's setting is compared against), shown next to that setting.
+    peak_equity = max(state.peak_tracked_equity or strategy_capital, strategy_capital)
+    drawdown_now_pct = 100 * (peak_equity - strategy_capital) / peak_equity if peak_equity > 0 else 0.0
     week_gain = realized_pnl_since(journal, state.week_start_timestamp)
     week_start_capital = strategy_capital - week_gain  # equity before this week's trades
     week_gain_pct = 100 * week_gain / week_start_capital if week_start_capital else 0.0
@@ -670,8 +633,8 @@ def dashboard():
                          if state.strategy_starting_capital else 0.0)
 
     reopen_delta = time_until_forex_reopen()
+    trading_status = _trading_status(state, phase_state, journal, len(live_trades), reopen_delta)
 
-    news = _news_summary()
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
     # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
     # whenever a trade actually opens/closes/expires/cancels -- not from
@@ -685,14 +648,14 @@ def dashboard():
     return render_template(
         "dashboard.html",
         journal_url=journal_url,
-        live_trades=live_trades, news=news,
+        live_trades=live_trades, status=trading_status,
+        peak_equity=peak_equity, drawdown_now_pct=drawdown_now_pct,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
         risk_config=asdict(risk_config),
         out_of_range_warnings=_out_of_range_warnings(risk_config, state.vwap_scalp_max_trades_per_day),
-        autopilot_scan_interval_minutes=state.autopilot_scan_interval_minutes, instrument_windows=instrument_windows,
         scan_digest_interval_minutes=state.scan_digest_interval_minutes,
-        candidates=candidates, last_scan_at=last_scan_at, wins=wins, losses=losses, closed_trades=closed_trades,
+        wins=wins, losses=losses, closed_trades=closed_trades,
         win_rate_breakdown=_win_rate_breakdown(journal),
         forex_open=reopen_delta is None,
         reopens_in=format_duration(reopen_delta) if reopen_delta is not None else None,
@@ -701,7 +664,6 @@ def dashboard():
         weekly_gain_chart=weekly_gain_chart, daily_gain_chart=daily_gain_chart,
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
-        orb_fade_enabled=state.orb_fade_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -712,13 +674,6 @@ def dashboard():
         vwap_scalp_global_cooldown_minutes_max=state.vwap_scalp_global_cooldown_minutes_max,
         vwap_scalp_global_cooldown_minutes_step=state.vwap_scalp_global_cooldown_minutes_step,
         vwap_scalp_global_cooldown_label=_format_cooldown_minutes(state.vwap_scalp_global_cooldown_minutes),
-        live_trial_enabled=state.live_trial_enabled,
-        live_trial_trade_count=state.live_trial_trade_count,
-        live_trial_max_trades=state.live_trial_max_trades,
-        live_trial_cumulative_risk_deployed=state.live_trial_cumulative_risk_deployed,
-        live_trial_max_capital=state.live_trial_max_capital,
-        live_trial_pairs=", ".join(state.live_trial_pairs),
-        base_strategy_enabled=state.base_strategy_enabled,
         default_strategy_capital=DEFAULT_STRATEGY_CAPITAL, developer_notes=DEVELOPER_NOTES,
         development_log_url=DEVELOPMENT_LOG_URL,
     )
@@ -726,197 +681,43 @@ def dashboard():
 
 @app.route("/scan", methods=["POST"])
 def scan():
+    """Scan Now: reports VWAP Scalp's current status (bucket usage, cooldown,
+    last trade) -- the same line the periodic scan digest shows. VWAP Scalp
+    itself scans on its own 5-minute schedule; this never places a trade."""
     if not is_forex_market_open():
-        # Forex closes Friday ~5pm to Sunday ~5pm New York time. Scanning
-        # while closed would just return stale/last-known prices with no
-        # real trading possible -- tell the user clearly why, instead of
-        # an empty or confusing scan result.
         flash("Forex markets are closed right now (weekend) -- trading isn't available until they reopen.", "error")
         return redirect(url_for("dashboard"))
 
     state = load_state()
-    risk_config = risk_config_from_state(state)
-    phase_state = phase_state_from_state(state)
-
+    if not state.vwap_scalp_enabled:
+        flash("VWAP Scalp is switched off in Settings -- nothing is scanning right now.", "success")
+        return redirect(url_for("dashboard"))
     try:
-        client = OandaClient()
-        summary = client.get_account_summary()
-        account = account_state_from_tracked_capital(state)
-        candidates = run_live_scan(client, account, risk_config, account_currency=summary.get("currency", "USD"),
-                                    confidence_weights=confidence_weights_from_state(state))
-        save_candidates(candidates)
-
-        qualifying = [c for c in candidates if not c.rejected_reason]
-        if not candidates:
-            # Explicit feedback either way -- previously a 0-result scan
-            # just silently redirected with nothing on the page, which
-            # read as "did this even run?" rather than "ran fine, found
-            # nothing right now".
-            message = "Scan complete: no qualifying setups found right now."
-        elif phase_state.phase == "autopilot" and not state.base_strategy_enabled:
-            message = (f"Scan complete: {len(qualifying)} candidate(s) found, but the base strategy is disabled "
-                       f"in Settings right now -- not auto-executed.")
-        elif phase_state.phase == "autopilot":
-            # Same non-blocking lock the scheduled autopilot scan uses
-            # around its own auto-execution -- without this, a click on
-            # Scan Now landing at the same moment as a scheduled scan
-            # could have both independently check "is this instrument
-            # already open?", both see no, and both place the same
-            # trade. The loser here skips execution entirely rather than
-            # racing the scheduled scan for it, matching that lock's own
-            # "loser skips" semantics.
-            if _evening_scan_lock.acquire(blocking=False):
-                try:
-                    executed = auto_execute_candidates(client, candidates, phase_state, risk_config, account)
-                finally:
-                    _evening_scan_lock.release()
-                if executed:
-                    names = ", ".join(f"{c['instrument']} {c['direction']}" for c in executed)
-                    message = (f"Scan complete: {len(qualifying)} candidate(s) found, "
-                               f"{len(executed)} auto-executed ({names}).")
-                else:
-                    message = (f"Scan complete: {len(qualifying)} candidate(s) found, "
-                               f"none met the autopilot confidence threshold or risk caps.")
-            else:
-                message = (f"Scan complete: {len(qualifying)} candidate(s) found, but a scheduled autopilot scan "
-                           f"was already executing -- skipped this round to avoid a duplicate order.")
-        else:
-            message = f"Scan complete: {len(qualifying)} candidate(s) found. Review to execute manually."
-
-        # Real finding (2026-09-14): everything above only ever covers the
-        # base strategy -- with it disabled (the normal state whenever
-        # VWAP Scalp is the strategy actually live), Scan Now reported on
-        # a strategy that isn't trading and said nothing about the one
-        # that is. Appends the same status the periodic 3-hour scan
-        # digest already shows for VWAP Scalp, so a manual "ad-hoc" scan
-        # and the scheduled one give a consistent picture. Best-effort --
-        # a failure here must not stop the base-strategy scan result above
-        # from reaching the user.
-        if state.vwap_scalp_enabled:
-            try:
-                from vwap_scalp_addon import vwap_scalp_status_line
-                message += " " + vwap_scalp_status_line()
-            except Exception as e:
-                print(f"WARNING: could not compute VWAP Scalp status for Scan Now: {e}", flush=True)
-
-        flash(message, "success")
+        from vwap_scalp_addon import vwap_scalp_status_line
+        flash("VWAP Scalp scans automatically every 5 minutes. " + vwap_scalp_status_line(), "success")
     except Exception as e:
-        # Previously a scan failure just silently produced nothing visible
-        # -- likely masking real gunicorn worker timeouts on Render. Now
-        # surfaced on the dashboard instead of failing invisibly.
-        print(f"WARNING: scan failed: {e}", flush=True)
-        flash(str(e), "error")
-
+        print(f"WARNING: could not compute VWAP Scalp status for Scan Now: {e}", flush=True)
+        flash(f"Couldn't read VWAP Scalp's status right now: {e}", "error")
     return redirect(url_for("dashboard"))
 
 
-@app.route("/trade/<instrument>")
-def trade_review(instrument):
-    candidate = find_candidate(instrument)
-    if candidate is None:
-        return redirect(url_for("dashboard"))
-
-    try:
-        client = OandaClient()
-        candles = client.get_candles(instrument, GRANULARITY["15m"], count=80)
-        chart_data = [
-            {
-                "time": _oanda_time_to_unix(c["time"]),
-                "open": float(c["mid"]["o"]), "high": float(c["mid"]["h"]),
-                "low": float(c["mid"]["l"]), "close": float(c["mid"]["c"]),
-            }
-            for c in candles
-        ]
-    except Exception as e:
-        # dashboard() already degrades gracefully on the same kind of
-        # OANDA blip -- this route made the same calls with no guard at
-        # all, so a transient timeout here produced an unhandled 500
-        # instead of a friendly redirect.
-        print(f"WARNING: could not load candles for {instrument}: {e}", flush=True)
-        flash(f"Couldn't load the price chart for {instrument} right now -- OANDA didn't respond. Try again shortly.",
-              "error")
-        return redirect(url_for("dashboard"))
-
-    return render_template("trade_review.html", candidate=candidate, candles_json=json.dumps(chart_data))
-
-
-@app.route("/execute/<instrument>", methods=["POST"])
-def execute(instrument):
-    """The one route that ever places a real order -- only ever reached
-    by a human's own click on a specific reviewed trade. Re-checks risk
-    against a fresh AccountState and re-fetches current pricing rather
-    than trusting the scan-time snapshot before submitting -- this
-    docstring used to claim both and do neither; a candidate clicked
-    minutes after it was scanned was submitted with no re-check of
-    whether risk limits had since been used up by other trades, or
-    whether price had already moved past the recorded stop-loss."""
-    candidate = find_candidate(instrument)
-    if candidate is None or candidate.get("rejected_reason"):
-        return redirect(url_for("dashboard"))
-
-    confirmed_duplicate = request.form.get("confirm_duplicate") == "1"
-
+@app.route("/pause", methods=["POST"])
+def pause():
+    """One-click pause/resume: flips ONLY the kill switch. Deliberately not
+    part of /settings -- that handler treats every absent checkbox as "off",
+    so posting a single field there would reset the other settings."""
     state = load_state()
-    account = account_state_from_tracked_capital(state)
-    proposed = ProposedTrade(
-        instrument=instrument, direction=candidate["direction"], risk_amount=candidate["risk_amount"],
-        currency_deltas=currency_deltas_for_trade(instrument, candidate["direction"]),
-    )
-    try:
-        validate_trade(proposed, account, risk_config_from_state(state))
-    except RiskViolation as e:
-        record_risk_limit_skip("Manual execute", str(e))
-        flash(f"Execute blocked -- risk limits no longer clear: {e}", "error")
-        return redirect(url_for("dashboard"))
-
-    try:
-        client = OandaClient()
-        if not confirmed_duplicate and instrument_already_open(client, instrument):
-            # Not an outright block -- shows a confirmation step so an
-            # intentional add-to-position/re-entry can still go through.
-            return render_template("confirm_duplicate.html", candidate=candidate)
-
-        # A market order always fills at the real live price regardless
-        # of this candidate's recorded entry_price -- what actually goes
-        # stale is the stop-loss: if price has already moved through it
-        # since the scan, submitting the old level opens a position
-        # already on the wrong side of its own stop. current_price is
-        # None (fetch_mid_price never raises) only degrades this one
-        # extra sanity check -- OANDA's own rejection, already handled
-        # below, remains the backstop either way.
-        current_price = fetch_mid_price(client, instrument)
-        if current_price is not None:
-            stop_loss = candidate["stop_loss"]
-            stale = (candidate["direction"] == "LONG" and current_price <= stop_loss) or \
-                    (candidate["direction"] == "SHORT" and current_price >= stop_loss)
-            if stale:
-                flash(f"Execute blocked -- price has moved to {current_price}, already at or past this "
-                      f"candidate's stop-loss ({stop_loss}). Scan again for a current setup.", "error")
-                return redirect(url_for("dashboard"))
-
-        result = place_and_record(client, candidate, allow_duplicate=confirmed_duplicate)
-        if not result["success"]:
-            flash(f"Order did not fill (reason: {result['reason']}) -- nothing recorded.", "error")
-        else:
-            flash(f"Executed: {candidate['direction']} {instrument} -- "
-                  f"{candidate['units']} {candidate.get('unit_label', 'units')} "
-                  f"@ {candidate['entry_price']} (SL {candidate['stop_loss']} / TP {candidate['take_profit']}). "
-                  f"Will auto-close in 2 hours if SL/TP hasn't hit.",
-                  "success")
-    except requests.exceptions.HTTPError as e:
-        # Surface OANDA's own rejection reason (e.g. bad price precision,
-        # insufficient margin) instead of a bare 500 -- previously
-        # unhandled entirely.
-        try:
-            detail = e.response.json().get("errorMessage", e.response.text)
-        except Exception:
-            detail = str(e)
-        print(f"WARNING: execute failed: {detail}", flush=True)
-        flash(f"Order rejected by OANDA: {detail}", "error")
-    except Exception as e:
-        print(f"WARNING: execute failed: {e}", flush=True)
-        flash(str(e), "error")
-
+    phase_state = phase_state_from_state(state)
+    engage = request.form.get("action") != "resume"
+    if phase_state.kill_switch_engaged != engage:
+        state.phase_state = asdict(PhaseState(
+            phase=phase_state.phase, closed_trades_in_phase=phase_state.closed_trades_in_phase,
+            kill_switch_engaged=engage))
+        save_state(state)
+    if engage:
+        flash("Paused -- no new trades will be placed. Open trades keep their stop and target.", "success")
+    else:
+        flash("Resumed -- trading is back on.", "success")
     return redirect(url_for("dashboard"))
 
 
@@ -1044,10 +845,6 @@ def settings():
         risk_config.max_drawdown_pct = _clamp(
             float(request.form.get("max_drawdown_pct", risk_config.max_drawdown_pct)),
             risk_config.max_drawdown_pct_min, risk_config.max_drawdown_pct_max)
-        risk_config.autopilot_confidence_threshold_pct = _clamp(
-            float(request.form.get("autopilot_confidence_threshold_pct",
-                                    risk_config.autopilot_confidence_threshold_pct)),
-            0.0, 100.0)
 
         # Direct toggle, bypassing the original 30-closed-trades phase gate
         # (explicit user request) -- checking the box turns autopilot on
@@ -1083,19 +880,6 @@ def settings():
         # checkbox pattern as the toggles above.
         state.friday_preclose_cancel_enabled = request.form.get("friday_preclose_cancel_enabled") == "on"
 
-        # Range Confluence's toggle was removed from Settings (2026-09-08,
-        # user request) -- no longer parsed here. state.range_confluence_enabled
-        # stays frozen at whatever it last was (False on the live account) rather
-        # than being force-set from an absent checkbox on every save; the
-        # scheduler job (see start_scheduler below) and src/range_confluence_addon.py
-        # itself are untouched, so it can still be re-enabled directly in
-        # dashboard_state.json if ever needed.
-
-        # ORB Fade: off by default -- see src/orb_fade_addon.py and
-        # DEVELOPMENT_LOG.md 2026-08-30 for what this is and why it fades
-        # a documented failure rather than confirming a fresh finding.
-        state.orb_fade_enabled = request.form.get("orb_fade_enabled") == "on"
-
         # VWAP Scalp: off by default -- see src/vwap_scalp_addon.py and
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
@@ -1116,25 +900,6 @@ def settings():
             state.vwap_scalp_global_cooldown_minutes_min, state.vwap_scalp_global_cooldown_minutes_max)
         step = state.vwap_scalp_global_cooldown_minutes_step
         state.vwap_scalp_global_cooldown_minutes = round(raw_cooldown / step) * step
-
-        # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): off by
-        # default, and inert even when on unless OANDA_ACCESS_TOKEN_LIVE/
-        # OANDA_ACCOUNT_ID_LIVE are also set as separate Render secrets
-        # (see src/live_trial.py). This toggle alone can never place a
-        # real-money order -- matches app.py's own module docstring on
-        # why a UI toggle alone can never turn on real-money trading.
-        state.live_trial_enabled = request.form.get("live_trial_enabled") == "on"
-
-        # Base strategy: ON by default -- this is the original strategy
-        # the app was built around, not a new experiment. Turning it off
-        # stops IT from auto-executing (checked alongside, not instead
-        # of, phase_state.phase=="autopilot" in scheduled_jobs.py and the
-        # /scan route above) without touching any add-on's own toggle.
-        state.base_strategy_enabled = request.form.get("base_strategy_enabled") == "on"
-
-        interval = request.form.get("autopilot_scan_interval_minutes")
-        if interval is not None and int(interval) in (15, 30, 60, 240):
-            state.autopilot_scan_interval_minutes = int(interval)
 
         digest_interval = request.form.get("scan_digest_interval_minutes")
         if digest_interval is not None and int(digest_interval) in (0, 60, 120, 180, 240, 360):
@@ -1245,10 +1010,6 @@ def start_scheduler():
     # can no longer each get an immediate, unsynchronized first run.
     now = datetime.now(timezone.utc)
     scheduler.add_job(run_daily_dispatcher, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # Ticks every 5 min; only actually re-scans once Autopilot's configured
-    # interval (15/30/60/240 min, Settings) has elapsed since the last scan
-    # for each instrument currently inside its own trading window.
-    scheduler.add_job(run_autopilot_interval_scan, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # Re-pull state from GitHub periodically so a locally-placed trade or
     # locally-run job shows up on the cloud dashboard without a manual restart.
     scheduler.add_job(pull_state_from_github, IntervalTrigger(minutes=10, start_date=now + timedelta(minutes=10)))
@@ -1261,19 +1022,6 @@ def start_scheduler():
     # same "runs unattended too, not just on page load" reasoning as
     # check_open_trades above.
     scheduler.add_job(reconcile_orphan_trades, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # Range Confluence: off by default via Settings. Same uniform 5-minute
-    # cadence as every other job here even though the underlying Daily-
-    # candle signal only changes once a day -- the function itself short-
-    # circuits quickly on every tick where nothing needs to open or close,
-    # matching this codebase's own established convention (see
-    # src/range_confluence_addon.py's module docstring).
-    scheduler.add_job(check_range_confluence_opportunities,
-                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
-    # ORB Fade: same uniform 5-minute cadence every job in this app uses --
-    # comfortably fine-grained against its 15-minute breakout bars and
-    # 8-hour hold cap. See src/orb_fade_addon.py's module docstring.
-    scheduler.add_job(check_orb_fade_opportunities,
-                       IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # VWAP Scalp: same uniform 5-minute cadence -- validated at exactly
     # this execution delay in the backtest (see src/vwap_scalp_addon.py's
     # module docstring), not a compromise made after the fact.

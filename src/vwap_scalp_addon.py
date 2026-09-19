@@ -156,7 +156,8 @@ from datetime import datetime, timedelta, timezone
 from autopilot import PhaseState, is_auto_execute_mode
 from currency_exposure import currency_deltas_for_trade
 from instrument_metadata import fetch_instrument_metadata, round_price
-from live_scan import fetch_mid_price
+from market_hours import is_forex_market_open
+from pricing import fetch_mid_price
 from oanda_client import OandaClient
 from position_sizing import calculate_units, resolve_conversion_rate
 from risk_engine import AccountState, ProposedTrade, RiskConfig, RiskViolation, validate_trade, risk_amount_for_trade
@@ -644,17 +645,26 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     return summary
 
 
+def vwap_scalp_pacing_snapshot(entries: list, global_cooldown_minutes: int, now: datetime = None) -> dict:
+    """Read-only numbers for the dashboard's status strip: trades opened
+    today (UTC day -- the same measure the daily cap uses) and the whole
+    minutes until the global cooldown allows another entry (0 = clear)."""
+    now = now or datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    remaining = 0
+    last_open = _most_recent_vwap_scalp_open(entries)
+    if last_open is not None:
+        elapsed_minutes = (now - last_open).total_seconds() / 60
+        if 0 <= elapsed_minutes < global_cooldown_minutes:
+            remaining = math.ceil(global_cooldown_minutes - elapsed_minutes)
+    return {"trades_today": _vwap_scalp_trades_today(entries, today_start), "cooldown_remaining_minutes": remaining}
+
+
 def vwap_scalp_status_line(now: datetime = None) -> str:
     """One-line, dashboard-flash-friendly summary of VWAP Scalp's current
-    state -- built from the same data the periodic 3-hour scan digest
-    uses (vwap_scalp_bucket_summary). Real finding (2026-09-14): the
-    "Scan Now" button (app.py's /scan route) only ever runs the base
-    strategy's own scan -- with base_strategy_enabled off (the normal
-    state whenever VWAP Scalp is the strategy actually live), pressing
-    it reports on a disabled strategy and says nothing about the one
-    that's actually trading. This lets /scan append VWAP Scalp's real
-    status instead of staying silent about it. Read-only, no lock
-    needed."""
+    state -- built from the same data the periodic 3-hour scan digest uses
+    (vwap_scalp_bucket_summary); shown by the dashboard's "Scan now" button
+    (app.py's /scan route). Read-only, no lock needed."""
     now = now or datetime.now(timezone.utc)
     buckets = vwap_scalp_bucket_summary(now)
     total = sum(b["count"] for b in buckets)
@@ -823,18 +833,26 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         print(f"WARNING: VWAP Scalp open notification failed for {instrument} "
               f"(trade already placed and journaled): {e}", flush=True)
 
-    # LIVE TRIAL (2026-09-15, user-approved): best-effort mirror of this
-    # SAME signal onto a separate real-money account -- see live_trial.py's
-    # own docstring. Runs only after the practice-side trade above has
-    # fully succeeded; cannot affect it either way.
-    try:
-        from dashboard_state import load_state
-        from live_trial import mirror_to_live_trial
-        mirror_to_live_trial(load_state(), instrument, direction, entry_price, stop_loss, take_profit, meta)
-    except Exception as e:
-        print(f"WARNING: VWAP Scalp live trial hook failed for {instrument}: {e}", flush=True)
-
     return True
+
+
+def _record_scan_for_digest(instruments: list) -> None:
+    """Feeds the periodic "still scanning" Telegram digest's tally (N scans
+    across these pairs) -- the heartbeat that tells "quietly working" apart
+    from "not running at all". Shares SCAN_DIGEST_LOCK with the digest's own
+    read-reset-save cycle (see dashboard_state.SCAN_DIGEST_LOCK). Best-effort:
+    a failure here must never stop the scan itself."""
+    try:
+        from dashboard_state import SCAN_DIGEST_LOCK, load_state, save_state
+        with SCAN_DIGEST_LOCK:
+            fresh = load_state()
+            fresh.interval_scan_count_since_digest += 1
+            for instrument in instruments:
+                if instrument not in fresh.interval_scanned_instruments_since_digest:
+                    fresh.interval_scanned_instruments_since_digest.append(instrument)
+            save_state(fresh)
+    except Exception as e:
+        print(f"WARNING: could not record VWAP Scalp scan tally for the digest: {e}", flush=True)
 
 
 def check_vwap_scalp_opportunities(client: OandaClient = None, vwap_scalp_enabled: bool = None) -> list:
@@ -873,6 +891,8 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     print(f"INFO: VWAP Scalp tick at {now.isoformat()} -- watching {', '.join(VWAP_SCALP_PAIRS)} "
           f"({'inside' if in_watch_window else 'outside'} the {WATCH_START_HOUR:02d}:00-{WATCH_END_HOUR:02d}:00 "
           f"UTC watch window)", flush=True)
+    if in_watch_window and is_forex_market_open(now):
+        _record_scan_for_digest(VWAP_SCALP_PAIRS)
 
     # User-adjustable via Settings (5-25) since 2026-09-03 -- read fresh
     # from state every tick, not the module constant (which is now only

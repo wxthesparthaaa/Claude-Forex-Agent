@@ -73,24 +73,6 @@ class OandaClient:
         self.env = env or os.environ.get("OANDA_ENV", "practice")
         self.base_url = LIVE_URL if self.env == "live" else PRACTICE_URL
 
-    @staticmethod
-    def for_live_trial() -> Optional["OandaClient"]:
-        """A SEPARATE client for the VWAP Scalp live trial (2026-09-15,
-        user-approved) -- deliberately distinct credentials from the
-        main OANDA_ACCESS_TOKEN/OANDA_ACCOUNT_ID pair (practice or live
-        depending on OANDA_ENV), since practice and live are different
-        OANDA accounts with their own separate token/account ID (mixing
-        them up fails authentication silently per OANDA's own docs).
-        Returns None -- not an error -- when either secret isn't set on
-        Render yet, so live_trial.py's mirror step degrades to a no-op
-        instead of crashing until the user has actually configured
-        real-money credentials."""
-        token = os.environ.get("OANDA_ACCESS_TOKEN_LIVE")
-        account_id = os.environ.get("OANDA_ACCOUNT_ID_LIVE")
-        if not token or not account_id:
-            return None
-        return OandaClient(access_token=token, account_id=account_id, env="live")
-
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self.access_token}",

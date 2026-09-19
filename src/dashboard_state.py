@@ -12,9 +12,8 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta, timezone
 
 from autopilot import PhaseState
-from confidence_score import ConfidenceWeights
 from risk_engine import RiskConfig
-from state_paths import atomic_write_json, load_json_resilient
+from state_paths import STATE_LOCK, atomic_write_json, load_json_resilient
 from telegram_notifier import send_message
 
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), "..", "config"))
@@ -55,27 +54,16 @@ class DashboardState:
     # would otherwise collapse this chart's multi-week trend view every
     # single day.
     capital_reset_at: str | None = None
-    # How often Autopilot re-scans each instrument once its own trading
-    # window is open (see scheduled_jobs.run_autopilot_interval_scan).
-    # Minutes; one of 15/30/60/240.
-    autopilot_scan_interval_minutes: int = 30
-    # {instrument: iso timestamp last scanned} -- per-instrument, since
-    # each pair now has its own window (market_hours.INSTRUMENT_WINDOWS_SGT)
-    # instead of one shared fixed evening slot; replaces the old single
-    # last_autopilot_scan_timestamp field.
-    last_autopilot_scan_timestamps: dict = field(default_factory=dict)
     # Periodic "still scanning, nothing to trade" Telegram digest -- the
     # interval scanner is deliberately silent otherwise (only an actual
     # executed trade notifies), which left no way to tell "quietly
     # working" apart from "not running at all" during the day. Minutes;
-    # one of 0 (off)/60/120/180/240/360. User-adjustable in Settings, same
-    # pattern as autopilot_scan_interval_minutes above.
+    # one of 0 (off)/60/120/180/240/360. User-adjustable in Settings.
     scan_digest_interval_minutes: int = 180
     # Running tally since the last digest send -- reset to 0/[] every time
-    # scheduled_jobs.check_scan_digest fires. Counts DISTINCT interval-scan
-    # ticks that actually scanned something, not per-instrument, so "8
-    # scans" means 8 separate dispatcher ticks found at least one
-    # in-window pair due, however many pairs each covered.
+    # scheduled_jobs.check_scan_digest fires. Counts VWAP Scalp ticks that
+    # actually scanned (inside its watch window, market open) -- fed by
+    # vwap_scalp_addon._record_scan_for_digest.
     interval_scan_count_since_digest: int = 0
     interval_scanned_instruments_since_digest: list = field(default_factory=list)
     # Running tally of RiskViolation messages (e.g. "Daily loss limit
@@ -89,15 +77,6 @@ class DashboardState:
     # "since when" the current tally has been accumulating, shown in the
     # next digest's own message.
     last_scan_digest_sent_at: str | None = None
-    # {instrument: iso date the pause started} -- see
-    # scheduled_jobs.apply_self_improvement. A paused instrument is
-    # skipped entirely by both the interval scanner and the evening
-    # listing until its fixed cooldown expires.
-    paused_instruments: dict = field(default_factory=dict)
-    # {instrument: [weekly P&L, oldest first]} -- trailing history used
-    # by apply_self_improvement to decide pauses; only weeks an
-    # instrument actually traded get an entry.
-    weekly_pnl_by_instrument: dict = field(default_factory=dict)
     # Date-stamps (SGT, YYYY-MM-DD) marking the last calendar day each
     # touchpoint actually ran -- lets scheduled_jobs.run_daily_dispatcher
     # catch a touchpoint up whenever the process next wakes, rather than
@@ -106,9 +85,8 @@ class DashboardState:
     # only wakes it on an incoming HTTP request, so a plain APScheduler
     # CronTrigger firing at exactly 21:30/01:00 has no way to catch up a
     # job it missed because nothing was running at that moment.
-    last_evening_listing_date: str | None = None
     last_review_date: str | None = None
-    last_health_check_date: str | None = None  # 21:00 SGT pre-evening OANDA/GitHub connectivity check
+    last_health_check_date: str | None = None  # 21:00 SGT OANDA/GitHub connectivity check
     # Precise UTC ISO timestamp, NOT a date-stamp like its siblings above --
     # gating this against a bare calendar date (or ISO week number, an
     # earlier version of this fix) double-sent a real reflection: it fired
@@ -128,33 +106,13 @@ class DashboardState:
     # there's no genuine prior status to have transitioned from.
     last_market_status: str | None = None
     # Precise timestamp (UTC ISO) of the last market-status-change Telegram
-    # send -- a hard backstop on top of last_market_status, same MIN_LISTING_GAP
-    # pattern as last_evening_listing_sent_at below. Real incident:
-    # run_autopilot_interval_scan (a separate scheduled job, same 5-minute
-    # tick) can be mid-flight scanning AUD_USD/NZD_USD at the exact moment
-    # the market reopens (their own trading window also starts at 5am
-    # SGT); its own end-of-scan state save silently carried a stale
-    # last_market_status back into the file, making the next tick treat
-    # an already-announced transition as brand new. This timestamp,
-    # re-checked immediately before sending, catches that regardless of
-    # which field got clobbered.
+    # send -- a hard backstop on top of last_market_status (see
+    # scheduled_jobs.MIN_MARKET_STATUS_GAP). Real incident: a concurrent
+    # job's state save silently carried a stale last_market_status back
+    # into the file, making the next tick treat an already-announced
+    # transition as brand new. This timestamp, re-checked immediately
+    # before sending, catches that regardless of which field got clobbered.
     last_market_status_sent_at: str | None = None
-    # Precise timestamp (UTC ISO) of the last "Potential trades tonight"
-    # Telegram send -- a hard backstop on top of last_evening_listing_date.
-    # Real incident: duplicate sends kept recurring despite the date-stamp
-    # gate, most likely from overlapping process instances (Render
-    # sleep/wake or deploy transitions) each holding their own in-memory
-    # lock and each finding the date-stamp not yet updated. A per-day
-    # stamp can be raced across processes; re-checking a precise
-    # timestamp with a minimum gap, re-read immediately before sending,
-    # narrows that window regardless of which processes are involved.
-    last_evening_listing_sent_at: str | None = None
-    # Blend weights compute_confidence() uses for breadth/rsi/candlestick/
-    # news -- starts at ConfidenceWeights()'s defaults, nudged weekly by
-    # confidence_reweighting.reweight_confidence_components from the
-    # accumulated live journal (see run_friday_reflection). Kept as a
-    # plain dict in state, same pattern as risk_config.
-    confidence_weights: dict = field(default_factory=lambda: asdict(ConfidenceWeights()))
     # Persisted high-water mark for risk_engine's max-drawdown circuit
     # breaker -- None until the first real AccountState is built, then
     # only ever ratchets upward. Without this, the breaker has nothing
@@ -189,25 +147,6 @@ class DashboardState:
     # proof across restarts/re-reads, no separate "which Friday was
     # this" bookkeeping needed.
     last_friday_preclose_cancel_at: str | None = None
-    # Range Confluence: the first live strategy built from this session's
-    # pattern-discovery/combination-search research (not a named trader's
-    # book). Off by default -- every layer of retrospective validation
-    # this session used (discovery screen, split-half, one-shot holdout)
-    # has now been applied to all of this account's available history, so
-    # there is no more untouched data left to confirm it against; shipping
-    # it live is deliberately the next honest test, not a confirmed edge.
-    # See src/range_confluence_addon.py and DEVELOPMENT_LOG.md 2026-08-30.
-    range_confluence_enabled: bool = False
-    # ORB Fade: the second live strategy built from this session's own
-    # research -- fades a London-session Asian-range breakout, which this
-    # account's own backtest (scripts/backtest_orb_session_breakout.py)
-    # found decisively loses money when traded WITH the breakout instead.
-    # Honest caveat: fading a proven failure is the SAME finding, not an
-    # independent second discovery, and it was validated on a shorter
-    # ~270-day 15-minute window than Range Confluence's multi-year Daily
-    # data. Off by default. See src/orb_fade_addon.py and
-    # DEVELOPMENT_LOG.md 2026-08-30.
-    orb_fade_enabled: bool = False
     # VWAP Scalp: the third live strategy and this session's first
     # genuine scalp (minutes, not hours-to-months) -- fades a 2-stdev
     # extension from the session VWAP back toward it. The most
@@ -256,23 +195,6 @@ class DashboardState:
     vwap_scalp_global_cooldown_minutes_min: int = 20
     vwap_scalp_global_cooldown_minutes_max: int = 120
     vwap_scalp_global_cooldown_minutes_step: int = 20
-    # User request (2026-09-01): a way to stop the ORIGINAL base
-    # strategy (currency-strength/pivot/RSI confluence -- the one every
-    # add-on above was built alongside, not instead of) from
-    # auto-executing, independent of Autopilot phase itself -- every
-    # add-on's own on/off toggle already exists separately from this,
-    # but the base strategy never had one; autopilot phase was the ONLY
-    # switch, and it gates every add-on too. On by default (this is the
-    # strategy the app was originally built around, not a new
-    # experiment) -- turning it off lets a candidate like VWAP Scalp
-    # collect live data without the base strategy's own trades
-    # consuming the shared max_trades_per_day slots or contributing
-    # losses to the shared weekly loss limit. Checked in
-    # scheduled_jobs.run_evening_scan_and_notify and app.py's /scan
-    # route, both ALONGSIDE (not replacing) the existing
-    # phase_state.phase=="autopilot" check -- addons are unaffected,
-    # since none of them read this field.
-    base_strategy_enabled: bool = True
     # Precise UTC ISO timestamp of the last confirmed "the process is
     # alive" moment -- refreshed by check_open_trades (trade_monitor.py)
     # on every tick, since that job runs unconditionally every 5 minutes
@@ -286,39 +208,11 @@ class DashboardState:
     # risk skip -- a sleeping process can't record either). See
     # DEVELOPMENT_LOG.md 2026-08-31 and 2026-09-10.
     last_process_heartbeat_at: str | None = None
-    # VWAP Scalp LIVE TRIAL (2026-09-15, user-approved): a real-money
-    # trial to test one specific hypothesis -- that some of the live-
-    # vs-backtest gap traced this week (severe stop-overshoot losses on
-    # a genuine shock day) might be an artifact of OANDA's PRACTICE
-    # server's own fill simulation, not purely real market
-    # microstructure a live account would also experience. Mirrors the
-    # SAME frozen entry/stop/target VWAP Scalp already computed for the
-    # practice-side trade onto a SEPARATE live account, at a small fixed
-    # risk size, restricted to a few tightest-spread pairs, so live and
-    # practice fills for the identical signal under identical market
-    # conditions can be compared directly. Off by default -- requires
-    # BOTH this flag AND OANDA_ACCESS_TOKEN_LIVE/OANDA_ACCOUNT_ID_LIVE
-    # set as separate Render secrets (see live_trial.get_live_trial_
-    # client) before anything actually submits to the live account.
-    # Bounded on three independent axes (trade count, cumulative risk,
-    # elapsed days) -- whichever is hit first stops new live-trial
-    # trades; practice-side VWAP Scalp trading is completely unaffected
-    # either way. See src/live_trial.py.
-    live_trial_enabled: bool = False
-    live_trial_started_at: str | None = None
-    live_trial_trade_count: int = 0
-    live_trial_cumulative_risk_deployed: float = 0.0
-    live_trial_max_capital: float = 400.0
-    live_trial_max_trades: int = 30
-    live_trial_max_duration_days: int = 14
-    live_trial_risk_per_trade: float = 10.0
-    live_trial_pairs: list = field(default_factory=lambda: ["EUR_USD", "USD_JPY", "GBP_USD"])
 
 
 def default_state() -> DashboardState:
     return DashboardState(risk_config=asdict(RiskConfig()), phase_state=asdict(PhaseState()),
-                           strategy_starting_capital=DEFAULT_STRATEGY_CAPITAL,
-                           confidence_weights=asdict(ConfidenceWeights()))
+                           strategy_starting_capital=DEFAULT_STRATEGY_CAPITAL)
 
 
 def tracked_equity(state: DashboardState) -> float:
@@ -419,11 +313,40 @@ def load_state() -> DashboardState:
     # above) so a code-level tuning always takes effect immediately.
     known_fields = {f.name for f in fields(DashboardState)}
     data = {k: v for k, v in data.items() if k in known_fields and k not in _CODE_DEFINED_BOUND_FIELDS}
-    return DashboardState(**data)
+    state = DashboardState(**data)
+    state._base = asdict(state)  # what this writer started from -- see save_state's merge
+    return state
 
 
 def save_state(state: DashboardState) -> None:
-    atomic_write_json(STATE_PATH, asdict(state))
+    """Writes only what THIS writer changed onto the file's current contents,
+    instead of overwriting the whole file with a possibly stale in-memory copy.
+    Real incident (2026-09-16 onward): several jobs run on the same 5-minute
+    tick, each loading the full state and saving the whole thing back after
+    slow network calls -- one that loaded before the 01:03 nightly review saved
+    could write the OLD strategy_realized_pnl / last_review_timestamp back over
+    it, every night. A state loaded by load_state() remembers what it started
+    from; only fields that differ from that snapshot are applied to the fresh
+    file under STATE_LOCK. Two writers changing the SAME field still resolve as
+    last-writer-wins. A state that was never loaded (default_state()) writes in
+    full, as before."""
+    with STATE_LOCK:
+        to_write = state
+        base = getattr(state, "_base", None)
+        if base is not None:
+            current = asdict(state)
+            changed = {k: v for k, v in current.items() if base.get(k) != v}
+            on_disk = load_json_resilient(STATE_PATH, None)
+            if on_disk is not None:
+                fresh = load_state()
+                for name, value in changed.items():
+                    setattr(fresh, name, value)
+                to_write = fresh
+        atomic_write_json(STATE_PATH, asdict(to_write))
+        if to_write is not state:
+            for f in fields(DashboardState):
+                setattr(state, f.name, getattr(to_write, f.name))
+        state._base = asdict(state)
     try:
         from github_state_sync import push_state_to_github
         push_state_to_github(STATE_PATH)
@@ -456,12 +379,12 @@ def save_state(state: DashboardState) -> None:
 # counters (see scheduled_jobs.py's own comment on this lock), just
 # missed here because the risk-skip list was added later and given its
 # own separate lock instead of joining the existing one.
-SCAN_DIGEST_LOCK = threading.Lock()
+SCAN_DIGEST_LOCK = STATE_LOCK  # one re-entrant lock for every state read-modify-write
 
 
 def record_risk_limit_skip(source: str, message: str) -> None:
     """Call this from any strategy's existing `except RiskViolation as e:`
-    block (VWAP Scalp, ORB Fade, Range Confluence, the base strategy's
+    block (VWAP Scalp, the base strategy's
     scan/autopilot paths) -- appends "{source}: {message}" to
     risk_limit_skips_since_digest so scheduled_jobs.check_scan_digest can
     surface it in the periodic scan digest. User request: the digest
@@ -548,7 +471,7 @@ def check_cold_boot_gap(threshold_minutes: float = COLD_BOOT_GAP_ALERT_THRESHOLD
 # settings() route) -- everything else on RiskConfig (bounds, suggested
 # defaults, the risk-limit percentages) is a code-defined constant, never
 # written by any route.
-_USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day", "autopilot_confidence_threshold_pct",
+_USER_ADJUSTABLE_RISK_FIELDS = ("risk_per_trade_pct", "max_trades_per_day",
                                  "max_daily_loss_pct", "daily_loss_limit_enabled", "half_size_mode_enabled",
                                  "max_drawdown_pct", "max_drawdown_enabled")
 
@@ -582,5 +505,3 @@ def phase_state_from_state(state: DashboardState) -> PhaseState:
     return PhaseState(**state.phase_state)
 
 
-def confidence_weights_from_state(state: DashboardState) -> ConfidenceWeights:
-    return ConfidenceWeights(**state.confidence_weights)

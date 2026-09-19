@@ -116,8 +116,6 @@ class RiskConfig:
     max_trades_per_day_min: int = 1
     max_trades_per_day_max: int = 50
 
-    # Auto-execute threshold in autopilot phases. Adjustable slider.
-    autopilot_confidence_threshold_pct: float = 50.0
 
 
 @dataclass

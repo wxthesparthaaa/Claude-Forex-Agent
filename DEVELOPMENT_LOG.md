@@ -8912,3 +8912,261 @@ cooldown; a direct unit test of `_pacing_cap_reason`'s new parameter).
 `git stash`-confirmed both integration-level new tests fail against
 pre-fix code. Full suite green (683 passed, 1 deselected -- the same
 pre-existing unrelated flaky test from 09-15, still not touched here).
+
+## 2026-09-19 -- Slippage question led to the real cause of the backtest-vs-live gap
+
+**User question**: can slippage be predicted from collected data, and would
+a slippage-aware backtest explain live results?
+
+**Slippage itself (110 closed post-09-12 trades with `decision_entry_price`)**:
+fills were worse than the decision (mid) price 99% of the time, mean 0.35R
+of the stop distance -- but measured against OANDA's own M1 ask/bid open at
+the fill minute (what the backtest already assumes: LONG at ask, SHORT at
+bid, exits on the closing side), live fills were on average slightly BETTER
+(mean -0.16R, median -0.05R). So the "slippage" is the half-spread the
+backtest already charges, not excess. Also, with SL/TP frozen, entry price
+cannot change win/loss in the simulator, only R size. Win rate does fall
+with spread/stop-distance (262 trades: 48% / 30% / 12% by tercile), i.e.
+tight-stop trades lose more, but even the best tercile is far below 75%.
+
+**Actual cause found**: `backtest_vwap_reversion_scalp._current_live_candidates`
+freezes stop/target at the signal bar but takes the entry price 1-5 min
+later. In 72-75% of the year's 95k candidates, price had already run through
+the frozen stop (or past the target) by then. Live skips those trades
+(`_open_position` guard, added 2026-09-07); the backtest simulated them
+anyway and booked the "stop-out" at the stop price, which is better than
+the entry -- a LOSS with positive R. The old method's ~74-76% win rate is
+dominated by these phantom trades (3,385 of 4,846 at 1-min delay). With
+invalid candidates dropped before the cooldown (as live does): 15.2% win at
+1-min delay, 18.1% at 5-min, median R -1.00. Live: 262 closed trades, 30.2%
+win, mean R -0.58, -2,428.52 SGD (demo). The two now agree. Reproduce:
+`scripts/backtest_vwap_invalid_entry_audit.py`.
+
+**Not reconciled**: `replay_vwap_scalp_recent_days.py` already has the
+validity guard yet was recorded as agreeing with the ~75% backtest; not
+re-run today. The earlier "no edge but backtest says 75%" investigations
+(hour-of-day, RR quartile, 09-07 re-simulation) all used this candidate
+builder and should be treated as unreliable.
+
+**Proposed gate (virtual trade -> disable cap until 3 real losses)**: not
+built. Live sequence shows no significant streakiness (P(W|W)=0.34 vs
+P(W|L)=0.28, permutation p=0.15); replaying the gate on the live sequence
+gives 168 real trades at 28.6% win, mean R -0.68 -- no improvement.
+
+**Housekeeping**: the 09-12 one-time slippage routine ran, opened
+GitHub PR #1 (decision_at/fill-time capture) and has been re-arming an
+hourly self-check for ~19h; left for the user to stop/merge.
+
+## 2026-09-19 (continued) -- Phase 0 + first cleanup
+
+- Shipped: broker-invalid-entry guard in the shared backtest builders,
+  `EVIDENCE_BAR.md`, `scripts/strategy_scoreboard.py`.
+- Deleted (user-approved, recoverable from git history): 11 scripts for the
+  already-removed trend-following and carry strategies plus
+  `tests/test_backtest_carry_historical_rates.py`; and the 10-script VWAP
+  filter-tuning family built on the flawed candidate builder
+  (`backtest_vwap_{0907_revert,crossinstrument_filter,hourly_breakdown,
+  regime_filter,rr_quartile,volatility_filter,watch_window_hours,
+  live_signal_replay}`, `check_crossinstrument_signal_on_shock_day`,
+  `diagnose_backtest_volatility_blindness`). Verified first that nothing in
+  `src/`, `app.py`, `templates/`, `tests/` or `render.yaml` (Render runs
+  only `gunicorn app:app`) references any of them.
+- Kept `backtest_carry_trade.py` and `backtest_carry_momentum_filter.py`:
+  shared helpers (CARRY_CANDIDATES, _parse_time, max_drawdown,
+  stats_for_returns) imported by ~20 remaining research scripts and by
+  `backtest_orb_session_breakout.py`. They go with the group C cleanup.
+- Found while checking: the backtest's `CURRENT_LIVE_*` constants still
+  described the pre-reversion config (04-24 window, weak-hour exclusions,
+  1.0 R:R floor) and `SCALP_PAIRS` used the old FX-first order, so "current
+  live" backtests no longer matched what runs live after the deliberate
+  2026-09-16 reversion. Synced to 07-20, no exclusions, no floor, live
+  commodities-first pair order. Audit results essentially unchanged
+  (clean win 15.5% at 1-min delay, 18.3% at 5-min).
+
+## 2026-09-19 (continued) -- Phase 1 strategy audit
+
+Only VWAP Scalp is enabled live (base strategy, ORB Fade, Range Confluence
+and the live trial are all off). Audited each against EVIDENCE_BAR.md.
+
+- **VWAP Scalp**: 262 closed live trades, 30.2% win, mean R -0.58, -2,428.52
+  SGD (demo); clean backtest 15-18% win. Fails.
+- **ORB Fade** (`scripts/audit_orb_fade_clean.py`, now in the archive tag): the recorded 76.5% win /
+  RR=2.0 result came from `backtest_orb_fade.py` DROPPING every trade that
+  neither hit its stop nor target within the 8h cap. Re-tested over ~400
+  days x 17 instruments with the identical breakout detection and live level
+  rule: 61% of signals (2,635 of 4,341) hit the 8h cap unresolved; the
+  resolved 39% win 74% (spread-aware, next-bar entry), but counting the
+  force-closes live performs at market gives 51.1% win, mean R -0.044,
+  day-pooled t = -3.43 (significantly negative), worse in the second half.
+  Live: 6 trades on 2026-09-04 only, 4 of them 8h force-closes. Fails.
+- **Range Confluence** (`scripts/audit_range_confluence_clean.py`, now in the archive tag): 0 live
+  trades ever. Walk-forward, non-overlapping 40-day holds, real bid/ask,
+  15 years / 17 instruments: 495 trades, 52% win, +0.61% mean, but
+  month-pooled t = +0.63 (the "11 sigma" came from overlapping windows on
+  correlated instruments); since 2025: 46 trades, 33% win, -1.83% mean.
+  No demonstrable edge. Financing not modeled.
+- **Base strategy**: 35 closed live trades (last 2026-09-08), 31% win, mean
+  R -0.25, -327 SGD; the log already calls its raw signal a coin flip.
+- **Live trial**: real-money mirror of VWAP Scalp built to compare practice
+  vs live fills; fill/slippage turned out not to be the gap. 0 trades.
+
+No strategy passes the bar. Nothing removed yet (audit only).
+
+## 2026-09-19 (continued) -- Archived ORB Fade, Range Confluence and the live trial
+
+User approved archiving all three after the Phase 1 audit. Removed from the
+running app: `src/orb_fade_addon.py`, `src/range_confluence_addon.py`,
+`src/live_trial.py` and their three test files; their scheduler jobs,
+Settings toggles/handlers, dashboard sections, DashboardState fields
+(`range_confluence_enabled`, `orb_fade_enabled`, `live_trial_*`; a persisted
+state file with those keys still loads -- unknown keys are dropped), the
+VWAP Scalp live-trial mirror hook, `OandaClient.for_live_trial()` (the only
+code that read `OANDA_ACCESS_TOKEN_LIVE`/`OANDA_ACCOUNT_ID_LIVE`, so no code
+path can reach a real-money account now), and the win-rate carousel slides
+for the two strategies (their old journal entries still count in Overall).
+Also removed the four ORB/audit scripts that imported them.
+
+**Recovery**: everything is in git tag `archive/strategies-pre-prune-2026-09-19`
+(`git show archive/strategies-pre-prune-2026-09-19:src/orb_fade_addon.py`).
+No open ORB/Range Confluence/live-trial trades existed at removal time
+(checked the journal). 627 tests pass (48 removed with the three modules).
+Base strategy is intentionally still present: `live_scan.py`, which VWAP
+Scalp imports, is shared with its pipeline.
+
+## 2026-09-19 (continued) -- Dead modules and the base-strategy separation
+
+**Dead modules** (no importer in src/app): `backtest_stats`, `cot_data`,
+`cot_signal`, `profit_decay_exit`, `timing_filter`, `trade_simulator`, and
+their tests. Removing them broke every research script that imported them
+directly or transitively (35 scripts, plus `backtest_momentum_addon` and
+`backtest_rsi_volume_entry_filter`, which studied a module that no longer
+exists) -- i.e. essentially all remaining research. Deleted together; six
+scripts survive (VWAP backtest, invalid-entry audit, replay, scoreboard,
+`test_connection`). Recovery: tag `archive/research-scripts-pre-prune-2026-09-19`.
+
+**Base strategy separation.** The base strategy (currency-strength / pivot /
+RSI scanner) was disabled but its code was entangled with shared paths.
+Removed: `scan_workflow`, `confidence_score`, `confidence_reweighting`,
+`currency_strength`, `stats_signals`, `pivot_detection`, `candlestick_patterns`,
+`multi_timeframe`, `indicators`, `finnhub_adapter`, `news_relevance`,
+`rationale`, `trade_levels`, `scan_results`, `live_scan`, `universe`;
+`trade_execution.auto_execute_candidates`, `autopilot.should_auto_execute`;
+the `/trade` and `/execute` routes and both templates; the candidates table,
+News sentiment, base toggle, confidence slider and scan-interval selector;
+scheduled jobs `run_evening_scan_and_notify`, `run_autopilot_interval_scan`,
+the weekly self-improvement pause and confidence reweighting; the "Potential
+trades" Telegram message; and DashboardState fields `confidence_weights`,
+`base_strategy_enabled`, `autopilot_scan_interval_minutes`,
+`last_autopilot_scan_timestamps`, `paused_instruments`,
+`weekly_pnl_by_instrument`, `last_evening_listing_date/_sent_at`, plus
+`RiskConfig.autopilot_confidence_threshold_pct`. `config/scan_results.json`
+is no longer synced. Persisted state files with those keys still load
+(unknown keys are dropped).
+
+**Kept / rewired so nothing VWAP-related changed**:
+- `fetch_mid_price` moved to `src/pricing.py` (VWAP Scalp's only use of the
+  old `live_scan`), with its tests.
+- The 3-hour "still scanning" digest is unchanged, but its scan count used to
+  come from the base interval scanner. VWAP Scalp's own tick now feeds it
+  (`_record_scan_for_digest`, inside the watch window with the market open),
+  under the same `SCAN_DIGEST_LOCK`; new tests cover the tally and the lock.
+- "Scan now" now reports VWAP Scalp's status line only (never trades).
+- Nightly review, Friday reflection (windows/self-improvement sections
+  dropped), 21:00 health check, market open/close notices, Friday pre-close
+  cancel are unchanged. `market_hours` instrument windows stay (the journal's
+  `in_liquidity_window` flag uses them); their two tests moved with them.
+- The loss-cluster cloud routine and the KEEP-at-50 cap / cooldown are untouched.
+
+**Not touched**: `render.yaml` still declares `FINNHUB_API_KEY` (now unused);
+harmless, left for the user to drop when convenient. Tests: 421 passed.
+Recovery for everything above: tag `archive/strategies-pre-prune-2026-09-19`
+and `git log` for this commit's parent.
+
+## 2026-09-19 (continued) -- Phase 3: dashboard streamlined
+
+Layout order is now: status strip -> live trades -> Safety limits -> Advanced
+-> Reset capital -> performance (stat tiles, win-rate carousel, gain chart)
+-> developer notes. Motivation: the user works almost entirely in Settings and
+Telegram, so the page opens on "is it trading and why not" and the controls
+they change (half size, risk per trade, VWAP trade limit + cap, cooldown, daily
+loss limit, max drawdown), with rarely-touched switches (Autopilot, VWAP
+Scalp on/off, account-wide trades/day, weekend close, digest interval, Mode)
+under a collapsed Advanced section.
+
+- **Status strip** (`app._trading_status`): PAUSED (kill switch / Autopilot off /
+  VWAP off), WAITING (forex closed / outside the 07-20 UTC watch window, with
+  the SGT resume time) or RUNNING; trades today (UTC day, same measure as the
+  cap, via `vwap_scalp_pacing_snapshot`), P&L today, open now, next-entry
+  cooldown.
+- **Pause/Resume trading** = new `POST /pause`, which flips ONLY the kill
+  switch. It is deliberately not routed through `/settings`, whose handler
+  treats every absent checkbox as "off". The Settings form now carries the
+  paused state in a hidden `kill_switch` field so Save can't un-pause
+  (tested). Pausing stops new entries; open trades keep their broker stop/
+  target (the VWAP hold-cap force-close only runs while trading is on).
+- Copy cut to one line per control. Removed claims that were no longer true
+  (e.g. "the most rigorously tested strategy this session") and the long
+  history paragraphs; that history lives in this log.
+- Scan now moved into the status strip. All form field names are unchanged.
+- Checked in a browser (desktop and 375px mobile): no horizontal scroll, no
+  console errors, Pause/Resume and Save-while-paused behave. Previewed with a
+  temp copy of state and GitHub/OANDA access stubbed out (the checked-in
+  `.claude/launch.json` config runs `app.py` against real credentials, so it
+  should not be used to click Save).
+- Not changed: time windows and pair order are code constants, not settings,
+  so they are not on the page; adding them would be a new feature.
+
+### Phase 3 follow-up (2026-09-19, user feedback on the first pass)
+- Stat tiles + win-rate carousel moved back to the very top (user preference);
+  the gain chart is now a dropdown, closed by default (Chart.js resizes on open).
+- Sticky section nav (Overview / Gain chart / Status / Trades / Safety /
+  Advanced / Capital / Notes): a click scrolls to the section and opens it if
+  it is a collapsed dropdown; the section in view is highlighted; scrolls
+  instantly under prefers-reduced-motion. Floating back-to-top button
+  (bottom right, appears after 400px).
+- "Limit VWAP trades per day" renamed "Daily trade cap -- ON, max N per day /
+  OFF (unlimited)"; its slider dims while the cap is off. Daily loss vs max
+  drawdown now explained inline (today only, resets nightly vs. fall from the
+  highest balance, never resets), with the live drawdown shown next to the
+  breaker.
+
+## 2026-09-19 (continued) -- Nightly review's equity save was overwritten every night
+
+**Found while answering "why is there a max drawdown breaker?"**: the state-sync
+history shows `last_review_date` advancing daily but `last_review_timestamp`
+and `strategy_realized_pnl` frozen at 2026-09-15 / -731.71. Each night at
+01:03 SGT the review DID save the new values (commit at :33), and 2-4 seconds
+later a commit carrying the OLD values for exactly those two fields (nothing
+else differed, same key set) overwrote them; the flip-flop repeated until the
+dispatcher's own stamp landed stale. Consequences: the risk engine sees settled
+equity 1268.29 (36.6% drawdown) while the true, live-tracked equity is 987.96
+(50.6% drawdown, past the 50% limit); the dashboard looked right only because
+tracked_equity_live adds realized P&L since the (stale) timestamp.
+
+**Causes fixed (all three were plausible and each matches the signature)**:
+1. `save_state` wrote the whole file from a possibly stale in-memory copy. A job
+   that loaded before the review saved and saved after (heartbeat, peak-equity
+   ratchet, digest tally, dispatcher stamps...) reverted the review's fields. Now
+   `load_state` remembers its starting snapshot and `save_state` applies only the
+   fields that writer changed onto the current file, under one re-entrant
+   `STATE_LOCK` (`SCAN_DIGEST_LOCK` is now that same lock).
+2. `pull_state_from_github` (10-minute job, lands on the same :03 tick as the
+   review) overwrote the local file with GitHub's copy unconditionally, and
+   GitHub's Contents API can serve the previous version right after a push. A
+   pull now skips a file whose local copy changed since the last confirmed sync
+   or was pushed within 90 seconds, and writes atomically under `STATE_LOCK`.
+3. Pushes read the file before their (slow) PUT, so an older read could land after
+   a newer one. Pushes are now serialized and read the file inside the lock.
+
+**Related latent bug fixed**: `run_nightly_review` looked up at most 50 closed
+trades (`limit=50`) when folding P&L into `strategy_realized_pnl`, then advanced
+the timestamp -- any stretch with more than 50 closes (VWAP's own daily cap
+allows 50; the stale timestamp spans days) silently dropped the older trades'
+P&L. The Friday reflection had the same cap at 200. Both now sum every closed
+trade; only the Telegram list is trimmed to the last 20.
+
+**Effect on the account**: the first review after this deploys folds everything
+since 09-15 into settled equity (-731.71 -> -1012.04, equity 987.96), which puts
+the drawdown at 50.6% against a 50% limit. The user chose to switch the max
+drawdown breaker OFF for the demo run (decision recorded here); it must be turned
+back on before any real money. Daily loss limit was already off.

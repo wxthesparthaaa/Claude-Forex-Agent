@@ -285,56 +285,6 @@ def test_opens_fade_position_records_decision_at_for_latency_analysis(mock_send,
 
 
 @patch("vwap_scalp_addon.send_message")
-def test_open_position_mirrors_to_live_trial_when_enabled(mock_send, tmp_path, monkeypatch):
-    # 2026-09-15, user-approved: a separate real-money live trial mirrors
-    # each VWAP Scalp signal onto its own account. Proves the wiring in
-    # _open_position actually invokes it with the SAME frozen entry/
-    # stop/target already used for the practice-side trade -- live_trial
-    # itself is unit-tested in tests/test_live_trial.py.
-    import live_trial as lt
-    import oanda_client as oc
-    _isolate(tmp_path, monkeypatch)
-    state = _autopilot_state()
-    state.live_trial_enabled = True
-    state.live_trial_pairs = ["EUR_USD"]
-    ds.save_state(state)
-    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
-    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
-
-    class FakeLiveClient:
-        def __init__(self):
-            self.orders_placed = []
-
-        def get_account_summary(self):
-            return {"currency": "USD"}
-
-        def place_market_order_with_sltp(self, instrument, units, stop_loss_price, take_profit_price):
-            self.orders_placed.append(instrument)
-            return {"orderFillTransaction": {"tradeOpened": {"tradeID": "live-1"}, "price": stop_loss_price}}
-
-        def get_trade(self, trade_id):
-            return {"stopLossOrder": {"price": "1.0"}, "takeProfitOrder": {"price": "2.0"}}
-
-        def get_open_trades(self):
-            return []
-
-    fake_live = FakeLiveClient()
-    monkeypatch.setattr(oc.OandaClient, "for_live_trial", staticmethod(lambda: fake_live))
-
-    opened = vs.check_vwap_scalp_opportunities(client)
-
-    assert opened == ["EUR_USD"]  # practice-side trade unaffected
-    assert fake_live.orders_placed == ["EUR_USD"]  # live trial mirrored it
-    entries = tj.load_journal()
-    practice_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
-    live_trial_entries = [e for e in entries if e.get("experiment_tag") == lt.VWAP_SCALP_LIVE_TRIAL_TAG]
-    assert len(practice_entries) == 1
-    assert len(live_trial_entries) == 1
-    assert live_trial_entries[0]["direction"] == practice_entries[0]["direction"]
-
-
-@patch("vwap_scalp_addon.send_message")
 def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send, tmp_path, monkeypatch):
     # Real live data showed losses landing ~1.18x bigger than their own
     # intended risk_amount -- REALIZED_LOSS_INFLATION compensates so the
@@ -1236,3 +1186,69 @@ def test_force_close_fires_even_outside_watch_window(mock_send, tmp_path, monkey
     opened = vs.check_vwap_scalp_opportunities(client)
 
     assert client.closed_ids == ["501"]  # the 30-min safeguard isn't gated by the watch window
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_tick_inside_the_watch_window_tallies_a_scan_for_the_digest(mock_send, tmp_path, monkeypatch):
+    # The periodic "still scanning" digest is the proof-of-life heartbeat;
+    # since the base strategy's interval scanner was removed, VWAP Scalp's
+    # own tick is what feeds its count.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)  # Monday 10:00 UTC: inside the window, market open
+
+    vs.check_vwap_scalp_opportunities(FakeClient())
+    vs.check_vwap_scalp_opportunities(FakeClient())
+
+    state = ds.load_state()
+    assert state.interval_scan_count_since_digest == 2
+    assert set(state.interval_scanned_instruments_since_digest) == set(vs.VWAP_SCALP_PAIRS)
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_tick_outside_the_watch_window_does_not_tally_a_scan(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+
+    class _NightDatetime(_FrozenDatetime):
+        _frozen = datetime(2026, 3, 2, 3, 0, tzinfo=timezone.utc)  # before the 07:00 watch start
+
+    monkeypatch.setattr(vs, "datetime", _NightDatetime)
+
+    vs.check_vwap_scalp_opportunities(FakeClient())
+
+    assert ds.load_state().interval_scan_count_since_digest == 0
+
+
+def test_scan_tally_waits_for_a_concurrent_digest_reset_and_builds_on_it(tmp_path, monkeypatch):
+    # Regression for the real 2026-09-07 incident (digests re-sent 5 minutes
+    # apart): the tally must be mutually exclusive with the digest's own
+    # read-reset-save cycle. While a reset holds SCAN_DIGEST_LOCK the tally
+    # must block, then count on top of the RESET value -- not a stale one.
+    import threading
+    import time as _time
+    _isolate(tmp_path, monkeypatch)
+    state = ds.default_state()
+    state.interval_scan_count_since_digest = 7  # stale, pre-reset value
+    ds.save_state(state)
+
+    def held_reset():
+        with ds.SCAN_DIGEST_LOCK:
+            _time.sleep(0.3)
+            fresh = ds.load_state()
+            fresh.interval_scan_count_since_digest = 0
+            fresh.interval_scanned_instruments_since_digest = []
+            fresh.last_scan_digest_sent_at = "2026-03-02T09:00:00+00:00"
+            ds.save_state(fresh)
+
+    t = threading.Thread(target=held_reset)
+    t.start()
+    _time.sleep(0.05)  # let the reset take the lock first
+
+    vs._record_scan_for_digest(["EUR_USD"])
+    t.join(timeout=2)
+
+    updated = ds.load_state()
+    assert updated.interval_scan_count_since_digest == 1
+    assert updated.last_scan_digest_sent_at == "2026-03-02T09:00:00+00:00"
+    assert updated.interval_scanned_instruments_since_digest == ["EUR_USD"]

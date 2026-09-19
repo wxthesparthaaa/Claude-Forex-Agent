@@ -30,19 +30,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _block_real_telegram_sends():
-    # Real incident (2026-09-15): live_trial.py imports send_message too
-    # (added for the VWAP Scalp real-money trial) and wasn't on this
-    # list -- every local test run whose live-trial mirror path
-    # "succeeded" against a fake OANDA client sent a genuine Telegram
-    # message anyway, several times over several runs. Auditing every
-    # module that imports send_message at the same time turned up FOUR
-    # more never added here (dashboard_state, orb_fade_addon,
-    # range_confluence_addon, vwap_scalp_addon) -- those happened to be
-    # safe so far only because every individual test exercising them
-    # already carries its own local @patch, which is exactly the
-    # "forgets to mock it locally" failure mode this fixture exists to
-    # catch automatically. Added defensively rather than trusting that
-    # to keep holding. This list must be kept in sync BY HAND with every
+    # Real incident (2026-09-15): a module that imports send_message
+    # (the since-removed live trial) wasn't on this list, so a local test
+    # run sent a genuine Telegram message. Every module that imports
+    # send_message must be patched here by default, so a test that
+    # forgets its own local @patch can never send anything real. This
+    # list must be kept in sync BY HAND with every
     # module that imports send_message (see this fixture's own module
     # docstring for why it patches by import site rather than the
     # shared source) -- add any new one here the moment it's created,
@@ -50,10 +43,7 @@ def _block_real_telegram_sends():
     with patch("scheduled_jobs.send_message"), \
          patch("trade_execution.send_message"), \
          patch("trade_monitor.send_message"), \
-         patch("live_trial.send_message"), \
          patch("dashboard_state.send_message"), \
-         patch("orb_fade_addon.send_message"), \
-         patch("range_confluence_addon.send_message"), \
          patch("vwap_scalp_addon.send_message"):
         yield
 
