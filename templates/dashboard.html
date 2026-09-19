@@ -140,6 +140,32 @@
     }
     .session-open { color: var(--green); font-weight: 600; }
     .session-closed { color: var(--muted); }
+
+    /* Status strip (Phase 3): one glance answers "is it trading, and if not, why". */
+    .pill {
+      display: inline-block; padding: 0.22rem 0.7rem; border-radius: 999px; border: 1px solid;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em;
+    }
+    .pill-running { background: var(--green-soft); color: var(--green); border-color: rgba(63, 185, 80, 0.35); }
+    .pill-waiting { background: var(--card-raised); color: var(--muted); border-color: var(--border); }
+    .pill-paused { background: var(--red-soft); color: var(--red); border-color: rgba(248, 81, 73, 0.35); }
+    .status-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .status-detail { color: var(--muted); font-size: 0.9rem; }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .status-value { font-size: 1.35rem; font-weight: 700; margin-top: 0.15rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .status-sub { font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+    .status-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+    .status-actions form { margin: 0; }
+    .ghost-btn {
+      background: transparent; color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.1s ease;
+    }
+    .ghost-btn:hover:not(:disabled) { border-color: var(--muted-2); }
+    .ghost-btn:active:not(:disabled) { transform: scale(0.98); }
+    .ghost-btn:disabled { cursor: default; opacity: 0.6; }
+    .hint { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.8rem; }
+    .section-note { color: var(--muted); font-size: 0.8rem; margin: -0.2rem 0 0.5rem; }
   </style>
 </head>
 <body>
@@ -148,7 +174,7 @@
   {% if kill_switch_engaged %}
   <p class="banner banner-error">
     <span class="banner-icon">&#9888;</span>
-    <span>Kill switch engaged -- Autopilot will not place any new trades until it's switched off in Settings.</span>
+    <span>Trading is paused -- no new trades will be placed until you press Resume trading below.</span>
   </p>
   {% endif %}
   {% if sync_status and not sync_status.ok %}
@@ -161,6 +187,274 @@
     </span>
   </p>
   {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <p class="banner {{ 'banner-success' if category == 'success' else 'banner-error' }}">
+        <span class="banner-icon">{{ '&#10003;'|safe if category == 'success' else '&#9888;'|safe }}</span>
+        <span><strong>{{ 'Success:' if category == 'success' else 'Error:' }}</strong> {{ message }}</span>
+      </p>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="card status-card">
+    <div class="status-head">
+      <span class="pill pill-{{ status.tone }}">{{ status.label }}</span>
+      <span class="status-detail">{{ status.detail }}</span>
+    </div>
+    <div class="status-grid">
+      <div title="Counted per UTC day, the same way the daily limit is.">
+        <div class="stat-tile-label">Trades today</div>
+        <div class="status-value">{{ status.trades_today }} <span class="status-sub">{{ status.cap_label }}</span></div>
+      </div>
+      <div>
+        <div class="stat-tile-label">P&amp;L today</div>
+        <div class="status-value {{ 'long' if status.pnl_today > 0 else ('short' if status.pnl_today < 0 else '') }}">
+          {{ "%+.2f"|format(status.pnl_today) }} <span class="status-sub">{{ account_currency }}</span>
+        </div>
+      </div>
+      <div>
+        <div class="stat-tile-label">Open now</div>
+        <div class="status-value">{{ status.open_count }}</div>
+      </div>
+      <div>
+        <div class="stat-tile-label">Next entry</div>
+        <div class="status-value">
+          {% if status.cooldown_remaining_minutes %}in {{ status.cooldown_remaining_minutes }} <span class="status-sub">min</span>{% else %}ready{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="status-actions">
+      {% if kill_switch_engaged %}
+      <form method="post" action="/pause">
+        <input type="hidden" name="action" value="resume">
+        <button class="scan-btn" type="submit" data-loading-text="Resuming...">Resume trading</button>
+      </form>
+      {% else %}
+      <form method="post" action="/pause">
+        <input type="hidden" name="action" value="pause">
+        <button class="cancel-btn" type="submit" data-loading-text="Pausing...">Pause trading</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/scan">
+        <button class="ghost-btn" type="submit" data-loading-text="Reading..."
+                data-loading-status="Reading VWAP Scalp status.">Scan now</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">Live trades</h3>
+      {% if journal_url %}
+        <a class="trade-link" href="{{ journal_url }}" target="_blank" rel="noopener">Trade journal (GitHub) &#8599;</a>
+      {% else %}
+        <span style="color:var(--muted); font-size:0.8rem;">Journal sync not configured</span>
+      {% endif %}
+    </div>
+    {% if live_trades %}
+    <div style="overflow-x:auto;">
+    <table>
+      <tr>
+        <th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th>
+        <th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th></th>
+      </tr>
+      {% for t in live_trades %}
+      <tr>
+        <td>{{ t.instrument }}</td>
+        <td class="{{ 'long' if t.direction == 'LONG' else 'short' }}">{{ t.direction }}</td>
+        <td class="num">{{ t.entry_price }}</td>
+        <td class="num short">{{ t.stop_loss }}</td>
+        <td class="num long">{{ t.take_profit }}</td>
+        <td class="num">{{ t.current_price if t.current_price is not none else '—' }}</td>
+        <td class="num {{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
+          {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
+        </td>
+        <td class="num">{{ t.hours_open }}h</td>
+        <td>
+          <form method="post" action="/close_trade/{{ t.trade_id }}" class="close-trade-form"
+                data-instrument="{{ t.instrument }}">
+            <button class="cancel-btn" type="submit" data-loading-text="Closing..."
+                    data-loading-status="Closing {{ t.instrument }}.">Close</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    <form method="post" action="/cancel_all_trades" id="cancelAllForm" style="margin-top:0.75rem;">
+      <button class="cancel-btn" type="submit" data-loading-text="Cancelling..."
+              data-loading-status="Closing every open position.">Cancel all trades</button>
+    </form>
+    {% else %}
+    <p style="color:var(--muted); font-size:0.9rem;">No trades currently open.</p>
+    {% endif %}
+  </div>
+
+  <form method="post" action="/settings" id="settingsForm">
+    {% if kill_switch_engaged %}<input type="hidden" name="kill_switch" value="on">{% endif %}
+
+    <div class="card settings">
+      <h3 style="margin-top:0;">Safety limits</h3>
+
+      <div class="toggle-row">
+        <span>Half size mode{{ ' -- ACTIVE' if risk_config.half_size_mode_enabled else '' }}</span>
+        <label class="switch">
+          <input type="checkbox" name="half_size_mode_enabled" {{ 'checked' if risk_config.half_size_mode_enabled else '' }}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <p class="hint">Halves the money risked on every trade.</p>
+
+      <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
+      <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
+             value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
+
+      <div class="toggle-row">
+        <span>Limit VWAP trades per day{{ ' -- OFF (unlimited)' if not vwap_scalp_daily_cap_enabled else '' }}</span>
+        <label class="switch">
+          <input type="checkbox" name="vwap_scalp_daily_cap_enabled" {{ 'checked' if vwap_scalp_daily_cap_enabled else '' }}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <label>Max VWAP trades per day: <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
+      <input type="range" name="vwap_scalp_max_trades_per_day"
+             min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
+             value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
+      <p class="hint">Only applies while the limit is on. With it off, only the cooldown below spaces trades.</p>
+
+      <label>Cooldown between trades: <span id="vwapCooldownVal">{{ vwap_scalp_global_cooldown_label }}</span></label>
+      <input type="range" name="vwap_scalp_global_cooldown_minutes"
+             min="{{ vwap_scalp_global_cooldown_minutes_min }}" max="{{ vwap_scalp_global_cooldown_minutes_max }}"
+             step="{{ vwap_scalp_global_cooldown_minutes_step }}" value="{{ vwap_scalp_global_cooldown_minutes }}"
+             oninput="vwapCooldownVal.textContent = formatCooldownMinutes(this.value)">
+      <p class="hint">Minimum gap between any two VWAP trades, on any pair.</p>
+
+      <div class="toggle-row">
+        <span>Daily loss limit{{ ' -- DISABLED' if not risk_config.daily_loss_limit_enabled else '' }}</span>
+        <label class="switch">
+          <input type="checkbox" name="daily_loss_limit_enabled" {{ 'checked' if risk_config.daily_loss_limit_enabled else '' }}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <label>Stop trading for the day at -<span id="dailyLossVal">{{ risk_config.max_daily_loss_pct }}</span>%</label>
+      <input type="range" name="max_daily_loss_pct"
+             min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
+             value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
+
+      <div class="toggle-row">
+        <span>Max drawdown breaker{{ ' -- DISABLED' if not risk_config.max_drawdown_enabled else '' }}</span>
+        <label class="switch">
+          <input type="checkbox" name="max_drawdown_enabled" {{ 'checked' if risk_config.max_drawdown_enabled else '' }}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <label>Stop trading at -<span id="drawdownVal">{{ risk_config.max_drawdown_pct }}</span>% below the peak</label>
+      <input type="range" name="max_drawdown_pct"
+             min="{{ risk_config.max_drawdown_pct_min }}" max="{{ risk_config.max_drawdown_pct_max }}" step="1"
+             value="{{ risk_config.max_drawdown_pct }}" oninput="drawdownVal.textContent = this.value">
+      <p class="hint">Unlike the daily limit, this never resets on its own -- only Reset capital clears it.</p>
+
+      {% for warning in out_of_range_warnings %}
+        <p class="out-of-range">&#9888; {{ warning }}</p>
+      {% endfor %}
+      <button class="scan-btn" type="submit" style="margin-top:0.5rem;" data-loading-text="Saving...">Save settings</button>
+    </div>
+
+    <div class="card settings">
+      <details>
+        <summary>Advanced</summary>
+
+        <div class="toggle-row">
+          <span>Autopilot</span>
+          <label class="switch">
+            <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p class="hint">Must be on for anything to trade.</p>
+
+        <div class="toggle-row">
+          <span>VWAP Scalp</span>
+          <label class="switch">
+            <input type="checkbox" name="vwap_scalp_enabled" {{ 'checked' if vwap_scalp_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p class="hint">Demo only. Fades a 2-standard-deviation move from session VWAP; closes after 30 minutes.</p>
+
+        <label>Account-wide trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
+        <input type="range" name="max_trades_per_day"
+               min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
+               value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
+        <p class="hint">A ceiling above VWAP's own limit -- whichever is lower wins.</p>
+
+        <div class="toggle-row">
+          <span>Cancel all trades before weekend close</span>
+          <label class="switch">
+            <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p class="hint">Closes everything 10 minutes before Friday's close so no gap risk carries over.</p>
+
+        <label>"Still scanning" Telegram check-in every
+          <select name="scan_digest_interval_minutes">
+            <option value="0" {{ 'selected' if scan_digest_interval_minutes == 0 else '' }}>Off</option>
+            <option value="60" {{ 'selected' if scan_digest_interval_minutes == 60 else '' }}>1 hr</option>
+            <option value="120" {{ 'selected' if scan_digest_interval_minutes == 120 else '' }}>2 hr</option>
+            <option value="180" {{ 'selected' if scan_digest_interval_minutes == 180 else '' }}>3 hr</option>
+            <option value="240" {{ 'selected' if scan_digest_interval_minutes == 240 else '' }}>4 hr</option>
+            <option value="360" {{ 'selected' if scan_digest_interval_minutes == 360 else '' }}>6 hr</option>
+          </select>
+        </label>
+        <p class="hint">Trade alerts always send immediately, whatever this is set to.</p>
+
+        <div class="toggle-row">
+          <span>Mode</span>
+          <select name="mode">
+            <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
+            <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
+          </select>
+        </div>
+        <p class="hint">Real-money trading also needs OANDA_ENV=live set on the server; this label alone can't enable it.</p>
+
+        <button class="scan-btn" type="submit" style="margin-top:0.5rem;" data-loading-text="Saving...">Save settings</button>
+      </details>
+    </div>
+  </form>
+
+  <div class="card settings">
+    <details>
+      <summary>Reset capital</summary>
+      <!-- Deliberately a separate form from Settings above (real bug,
+           2026-09-08): with one shared form, "Save settings" submitted
+           this same strategy_capital field too, and /settings re-baselines
+           capital whenever the submitted value differs from live equity by
+           more than 1 cent -- which any autopilot trade closing between
+           page-load and clicking Save was enough to trigger, silently
+           wiping P&L tracking on what looked like an unrelated settings
+           change. Splitting the form means Save settings no longer sends
+           strategy_capital at all, so it can never trigger a rebase; only
+           this form's own Reset capital button can. -->
+      <form method="post" action="/settings" style="margin-top:1rem;">
+        <label>Strategy capital
+          <input type="number" step="0.01" min="0" name="strategy_capital"
+                 value="{{ '%.2f'|format(strategy_capital) }}">
+        </label>
+        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
+          Updates live as Autopilot's trades close. Type a different amount and click
+          Reset capital to re-baseline it -- that becomes the new starting capital,
+          P&amp;L tracking restarts from zero. Saving the settings above never touches
+          this number.
+        </p>
+        <button class="scan-btn" type="submit" name="reset_capital" value="1"
+                style="margin-top:0.75rem;" data-loading-text="Resetting...">
+          Reset capital
+        </button>
+      </form>
+    </details>
+  </div>
 
   <div class="row">
     <div class="stat-grid">
@@ -220,15 +514,6 @@
     </div>
   </div>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-      <p class="banner {{ 'banner-success' if category == 'success' else 'banner-error' }}">
-        <span class="banner-icon">{{ '&#10003;'|safe if category == 'success' else '&#9888;'|safe }}</span>
-        <span><strong>{{ 'Success:' if category == 'success' else 'Error:' }}</strong> {{ message }}</span>
-      </p>
-    {% endfor %}
-  {% endwith %}
-
   {% if weekly_gain_chart %}
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
@@ -246,276 +531,6 @@
     </div>
   </div>
   {% endif %}
-
-  <div class="card">
-    <form method="post" action="/scan">
-      <button class="scan-btn" type="submit" data-loading-text="Scanning..."
-              data-loading-status="Reading VWAP Scalp status.">Scan now</button>
-    </form>
-  </div>
-
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0;">Live trades</h3>
-      {% if journal_url %}
-        <a class="trade-link" href="{{ journal_url }}" target="_blank" rel="noopener">Trade journal (GitHub) &#8599;</a>
-      {% else %}
-        <span style="color:var(--muted); font-size:0.8rem;">Journal sync not configured</span>
-      {% endif %}
-    </div>
-    {% if live_trades %}
-    <div style="overflow-x:auto;">
-    <table>
-      <tr>
-        <th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th>
-        <th class="num">Current</th><th class="num">Unrealized P&amp;L</th><th class="num">Open for</th><th></th>
-      </tr>
-      {% for t in live_trades %}
-      <tr>
-        <td>{{ t.instrument }}</td>
-        <td class="{{ 'long' if t.direction == 'LONG' else 'short' }}">{{ t.direction }}</td>
-        <td class="num">{{ t.entry_price }}</td>
-        <td class="num short">{{ t.stop_loss }}</td>
-        <td class="num long">{{ t.take_profit }}</td>
-        <td class="num">{{ t.current_price if t.current_price is not none else '—' }}</td>
-        <td class="num {{ 'long' if t.unrealized_pnl and t.unrealized_pnl > 0 else ('short' if t.unrealized_pnl and t.unrealized_pnl < 0 else '') }}">
-          {{ "%.2f"|format(t.unrealized_pnl) if t.unrealized_pnl is not none else '—' }} {{ t.account_currency }}
-        </td>
-        <td class="num">{{ t.hours_open }}h</td>
-        <td>
-          <form method="post" action="/close_trade/{{ t.trade_id }}" class="close-trade-form"
-                data-instrument="{{ t.instrument }}">
-            <button class="cancel-btn" type="submit" data-loading-text="Closing..."
-                    data-loading-status="Closing {{ t.instrument }}.">Close</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    </div>
-    <form method="post" action="/cancel_all_trades" id="cancelAllForm" style="margin-top:0.75rem;">
-      <button class="cancel-btn" type="submit" data-loading-text="Cancelling..."
-              data-loading-status="Closing every open position.">Cancel all trades</button>
-    </form>
-    {% else %}
-    <p style="color:var(--muted); font-size:0.9rem;">No trades currently open.</p>
-    {% endif %}
-  </div>
-
-  <div class="card settings">
-    <details>
-      <summary style="cursor:pointer; font-weight:600;">Settings</summary>
-      <form method="post" action="/settings" style="margin-top:0.75rem;">
-        <div class="toggle-row">
-          <span>Daily loss limit{{ ' -- DISABLED' if not risk_config.daily_loss_limit_enabled else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="daily_loss_limit_enabled" {{ 'checked' if risk_config.daily_loss_limit_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <label>Daily loss threshold: <span id="dailyLossVal">{{ risk_config.max_daily_loss_pct }}</span>%</label>
-        <input type="range" name="max_daily_loss_pct"
-               min="{{ risk_config.max_daily_loss_pct_min }}" max="{{ risk_config.max_daily_loss_pct_max }}" step="1"
-               value="{{ risk_config.max_daily_loss_pct }}" oninput="dailyLossVal.textContent = this.value">
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Account-wide, not per-strategy -- every strategy (base, VWAP Scalp) draws
-          from the same daily P&amp;L figure. Switch this off temporarily to keep a candidate's live data
-          collection running past a normal day's losses (the threshold below stays wherever you leave it,
-          ready for when you switch back on); the default (6%) is a genuine safety limit, so turn it back on
-          when you're done collecting data.
-        </p>
-
-        <div class="toggle-row">
-          <span>Max drawdown breaker{{ ' -- DISABLED' if not risk_config.max_drawdown_enabled else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="max_drawdown_enabled" {{ 'checked' if risk_config.max_drawdown_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <label>Max drawdown threshold: <span id="drawdownVal">{{ risk_config.max_drawdown_pct }}</span>%</label>
-        <input type="range" name="max_drawdown_pct"
-               min="{{ risk_config.max_drawdown_pct_min }}" max="{{ risk_config.max_drawdown_pct_max }}" step="1"
-               value="{{ risk_config.max_drawdown_pct }}" oninput="drawdownVal.textContent = this.value">
-        <details style="margin:-0.4rem 0 0.75rem;">
-          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
-          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
-            Daily loss limit resets every night and only ever sees one day at a time; Max drawdown breaker
-            never resets on its own (only Reset capital clears it) and catches a slow bleed across many
-            days that each individually stayed under the daily limit.
-          </p>
-        </details>
-
-        <label>Risk per trade: <span id="riskVal">{{ risk_config.risk_per_trade_pct }}</span>%</label>
-        <input type="range" name="risk_per_trade_pct" min="1" max="2" step="0.1"
-               value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
-
-        <label>Trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
-        <input type="range" name="max_trades_per_day"
-               min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"
-               value="{{ risk_config.max_trades_per_day }}" oninput="tradesVal.textContent = this.value">
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Also account-wide, like the daily loss limit above -- position sizing and this cap apply the same
-          way to every strategy below, not just the base strategy.
-        </p>
-
-        <div class="toggle-row">
-          <span>Half size mode{{ ' -- ACTIVE' if risk_config.half_size_mode_enabled else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="half_size_mode_enabled" {{ 'checked' if risk_config.half_size_mode_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. Halves every strategy's dollar risk per trade, on top of Risk per trade above --
-          not a replacement for it. Meant for periods where you're raising trade FREQUENCY (e.g. the daily
-          caps below) to collect more timing/pair data: same downside budget, more observations. Applies
-          account-wide the moment it's switched on, same as Risk per trade itself.
-        </p>
-
-        <div class="toggle-row">
-          <span>Autopilot</span>
-          <label class="switch">
-            <input type="checkbox" name="autopilot" {{ 'checked' if phase == 'autopilot' else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <div class="toggle-row">
-          <span>VWAP Scalp (experimental)</span>
-          <label class="switch">
-            <input type="checkbox" name="vwap_scalp_enabled" {{ 'checked' if vwap_scalp_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Off by default. Fades a 2-standard-deviation extension from session VWAP back toward it, force-closed after 30 minutes. The most rigorously tested strategy this session.
-        </p>
-        <details style="margin:-0.4rem 0 0.75rem;">
-          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">More</summary>
-          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
-            This session's first genuine scalp (minutes, not hours-to-months): survived two real bug fixes, a
-            correction for trades on the same day not being independent observations, a check for whether
-            the instruments move together on shared macro days, and a check for whether delayed execution
-            was artificially inflating the result, all confirmed clean before shipping. Runs on the same
-            5-minute scheduler as every other add-on -- validated at exactly that execution delay, not a
-            compromise made after the fact. Every trade it places is tagged "VWAP Scalp" in the journal and
-            on Telegram.
-          </p>
-          <p style="margin:0.5rem 0 0; color:var(--muted); font-size:0.8rem;">
-            Runs its own separate daily trade cap (independent of the shared Trades per day limit above),
-            also spread evenly across five sessions -- 12:00-15:00 SGT / 15:00-20:00 SGT / 20:00-00:00 SGT /
-            00:00-04:00 SGT / 04:00-08:00 SGT -- so one correlated burst can't use up the whole day's
-            allowance in a single tight cluster. Breakdown by session shown in the periodic scan digest on
-            Telegram. Widened 2026-09-08 from the original three (07:00-20:00 UTC only) on the strength of a
-            180-day hour-of-day backtest. That pass also flagged CAD_JPY/EUR_JPY/CHF_JPY as unclear
-            specifically in the 12:00-15:00 SGT session; a 2026-09-10 re-check against a full year of data
-            found no such weakness, so no pairs are currently excluded from any session.
-          </p>
-        </details>
-        <div class="toggle-row">
-          <span>Limit VWAP Scalp trades per day{{ ' -- CAP OFF (unlimited)' if not vwap_scalp_daily_cap_enabled else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="vwap_scalp_daily_cap_enabled" {{ 'checked' if vwap_scalp_daily_cap_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          On = capped at the number below. Off = unlimited, paced only by the cooldown below.
-        </p>
-        <label>VWAP Scalp trades per day (only applies while capped, above): <span id="vwapTradesVal">{{ vwap_scalp_max_trades_per_day }}</span></label>
-        <input type="range" name="vwap_scalp_max_trades_per_day"
-               min="{{ vwap_scalp_max_trades_per_day_min }}" max="{{ vwap_scalp_max_trades_per_day_max }}" step="1"
-               value="{{ vwap_scalp_max_trades_per_day }}" oninput="vwapTradesVal.textContent = this.value">
-
-        <label>VWAP Scalp cooldown between any two trades: <span id="vwapCooldownVal">{{ vwap_scalp_global_cooldown_label }}</span></label>
-        <input type="range" name="vwap_scalp_global_cooldown_minutes"
-               min="{{ vwap_scalp_global_cooldown_minutes_min }}" max="{{ vwap_scalp_global_cooldown_minutes_max }}"
-               step="{{ vwap_scalp_global_cooldown_minutes_step }}" value="{{ vwap_scalp_global_cooldown_minutes }}"
-               oninput="vwapCooldownVal.textContent = formatCooldownMinutes(this.value)">
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Paces entries across the WHOLE strategy, not per pair -- no new VWAP Scalp trade (any instrument)
-          within this long of the last one, on top of the daily/session caps above.
-        </p>
-
-        <div class="toggle-row">
-          <span style="color:var(--red); font-weight:600;">Kill switch{{ ' -- ENGAGED' if kill_switch_engaged else '' }}</span>
-          <label class="switch">
-            <input type="checkbox" name="kill_switch" {{ 'checked' if kill_switch_engaged else '' }}>
-            <span class="switch-track" style="{{ 'background:var(--red);' if kill_switch_engaged else '' }}"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Emergency stop -- when on, Autopilot will not place any new trades, regardless of
-          confidence or phase. Existing open trades are unaffected and stay broker-protected
-          by their own SL/TP. Switch off to resume.
-        </p>
-        <div class="toggle-row">
-          <span>Cancel all trades before weekend close</span>
-          <label class="switch">
-            <input type="checkbox" name="friday_preclose_cancel_enabled" {{ 'checked' if friday_preclose_cancel_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          On by default. Closes every open trade 10 minutes before forex closes for the
-          weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
-        </p>
-
-        <label>"Still scanning" check-in every
-          <select name="scan_digest_interval_minutes">
-            <option value="0" {{ 'selected' if scan_digest_interval_minutes == 0 else '' }}>Off</option>
-            <option value="60" {{ 'selected' if scan_digest_interval_minutes == 60 else '' }}>1 hr</option>
-            <option value="120" {{ 'selected' if scan_digest_interval_minutes == 120 else '' }}>2 hr</option>
-            <option value="180" {{ 'selected' if scan_digest_interval_minutes == 180 else '' }}>3 hr</option>
-            <option value="240" {{ 'selected' if scan_digest_interval_minutes == 240 else '' }}>4 hr</option>
-            <option value="360" {{ 'selected' if scan_digest_interval_minutes == 360 else '' }}>6 hr</option>
-          </select>
-        </label>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          A Telegram summary confirming VWAP Scalp is still scanning even when nothing qualifies
-          to trade -- separate from trade alerts, which always send immediately regardless of this setting.
-        </p>
-        <div class="toggle-row">
-          <span>Mode</span>
-          <select name="mode">
-            <option value="demo" {{ 'selected' if mode == 'demo' else '' }}>Demo</option>
-            <option value="actual" {{ 'selected' if mode == 'actual' else '' }}>Actual</option>
-          </select>
-        </div>
-
-        {% for warning in out_of_range_warnings %}
-          <p class="out-of-range">&#9888; {{ warning }}</p>
-        {% endfor %}
-        <button class="scan-btn" type="submit" style="margin-top:0.75rem;" data-loading-text="Saving...">Save settings</button>
-      </form>
-
-      <!-- Deliberately a separate form from Settings above (real bug,
-           2026-09-08): with one shared form, "Save settings" submitted
-           this same strategy_capital field too, and /settings re-baselines
-           capital whenever the submitted value differs from live equity by
-           more than 1 cent -- which any autopilot trade closing between
-           page-load and clicking Save was enough to trigger, silently
-           wiping P&L tracking on what looked like an unrelated settings
-           change. Splitting the form means Save settings no longer sends
-           strategy_capital at all, so it can never trigger a rebase; only
-           this form's own Reset capital button can. -->
-      <form method="post" action="/settings" style="margin-top:1rem;">
-        <label>Strategy capital
-          <input type="number" step="0.01" min="0" name="strategy_capital"
-                 value="{{ '%.2f'|format(strategy_capital) }}">
-        </label>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Updates live as Autopilot's trades close. Type a different amount and click
-          Reset capital to re-baseline it -- that becomes the new starting capital,
-          P&amp;L tracking restarts from zero. Saving the settings above never touches
-          this number.
-        </p>
-        <button class="scan-btn" type="submit" name="reset_capital" value="1"
-                style="margin-top:0.75rem;" data-loading-text="Resetting...">
-          Reset capital
-        </button>
-      </form>
-    </details>
-  </div>
 
   <div class="card">
     <details>

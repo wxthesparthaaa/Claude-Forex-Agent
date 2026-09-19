@@ -9081,3 +9081,37 @@ is no longer synced. Persisted state files with those keys still load
 harmless, left for the user to drop when convenient. Tests: 421 passed.
 Recovery for everything above: tag `archive/strategies-pre-prune-2026-09-19`
 and `git log` for this commit's parent.
+
+## 2026-09-19 (continued) -- Phase 3: dashboard streamlined
+
+Layout order is now: status strip -> live trades -> Safety limits -> Advanced
+-> Reset capital -> performance (stat tiles, win-rate carousel, gain chart)
+-> developer notes. Motivation: the user works almost entirely in Settings and
+Telegram, so the page opens on "is it trading and why not" and the controls
+they change (half size, risk per trade, VWAP trade limit + cap, cooldown, daily
+loss limit, max drawdown), with rarely-touched switches (Autopilot, VWAP
+Scalp on/off, account-wide trades/day, weekend close, digest interval, Mode)
+under a collapsed Advanced section.
+
+- **Status strip** (`app._trading_status`): PAUSED (kill switch / Autopilot off /
+  VWAP off), WAITING (forex closed / outside the 07-20 UTC watch window, with
+  the SGT resume time) or RUNNING; trades today (UTC day, same measure as the
+  cap, via `vwap_scalp_pacing_snapshot`), P&L today, open now, next-entry
+  cooldown.
+- **Pause/Resume trading** = new `POST /pause`, which flips ONLY the kill
+  switch. It is deliberately not routed through `/settings`, whose handler
+  treats every absent checkbox as "off". The Settings form now carries the
+  paused state in a hidden `kill_switch` field so Save can't un-pause
+  (tested). Pausing stops new entries; open trades keep their broker stop/
+  target (the VWAP hold-cap force-close only runs while trading is on).
+- Copy cut to one line per control. Removed claims that were no longer true
+  (e.g. "the most rigorously tested strategy this session") and the long
+  history paragraphs; that history lives in this log.
+- Scan now moved into the status strip. All form field names are unchanged.
+- Checked in a browser (desktop and 375px mobile): no horizontal scroll, no
+  console errors, Pause/Resume and Save-while-paused behave. Previewed with a
+  temp copy of state and GitHub/OANDA access stubbed out (the checked-in
+  `.claude/launch.json` config runs `app.py` against real credentials, so it
+  should not be used to click Save).
+- Not changed: time windows and pair order are code constants, not settings,
+  so they are not on the page; adding them would be a new feature.

@@ -52,7 +52,8 @@ from trade_journal import (
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from autopilot import PhaseState
 from journal_export import build_journal_workbook
-from vwap_scalp_addon import check_vwap_scalp_opportunities, VWAP_SCALP_TAG
+from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
+                              VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
 
 app = Flask(__name__)
 # Only used for flash-message signing (no login, no sensitive session data
@@ -67,6 +68,11 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "claude-forex-agent-local-de
 # dashboard) -- add one line here per notable change when it ships, and
 # a fuller problem/solution/date entry there.
 DEVELOPER_NOTES = [
+    ("2026-09-19", "Dashboard redesign: a status strip at the top (RUNNING / WAITING / PAUSED with the reason, "
+                    "trades today, P&L today, open trades, time until the next allowed entry), a one-click "
+                    "Pause/Resume trading button, and your safety limits (half size, risk, VWAP trade limit, "
+                    "cooldown, daily loss, drawdown) in one panel. Everything else moved under Advanced with "
+                    "one-line explanations; the stats and charts moved below the settings."),
     ("2026-09-19", "Removed the old base strategy's scanner and its dead code (about 15 modules): the manual "
                     "Review/Execute pages, the candidates table, News sentiment, the confidence slider, the base "
                     "on/off toggle, the per-pair scan interval and the 9:30pm 'Potential trades' message. "
@@ -460,6 +466,43 @@ DEVELOPER_NOTES = [
 DEVELOPMENT_LOG_URL = f"https://github.com/{os.environ.get('GITHUB_REPO', 'wxthesparthaaa/Claude-Forex-Agent')}/blob/main/DEVELOPMENT_LOG.md"
 
 
+def _trading_status(state, phase_state, journal: list, open_count: int, reopen_delta, now=None) -> dict:
+    """What the dashboard's status strip shows: is anything actually going
+    to trade right now, and why not if it isn't. tone: running / waiting
+    (fine, just not the right time) / paused (needs the user)."""
+    now = now or datetime.now(timezone.utc)
+    snapshot = vwap_scalp_pacing_snapshot(journal, state.vwap_scalp_global_cooldown_minutes, now)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if phase_state.kill_switch_engaged:
+        tone, label = "paused", "PAUSED"
+        detail = "No new trades. Open trades keep their stop and target."
+    elif phase_state.phase != "autopilot":
+        tone, label = "paused", "PAUSED"
+        detail = "Autopilot is off (Advanced) -- nothing will trade."
+    elif not state.vwap_scalp_enabled:
+        tone, label = "paused", "PAUSED"
+        detail = "VWAP Scalp is switched off (Advanced)."
+    elif reopen_delta is not None:
+        tone, label = "waiting", "WAITING"
+        detail = f"Forex is closed -- reopens in {format_duration(reopen_delta)}."
+    elif not (WATCH_START_HOUR <= now.hour < WATCH_END_HOUR):
+        tone, label = "waiting", "WAITING"
+        detail = (f"Outside VWAP's watch window -- resumes at {(WATCH_START_HOUR + 8) % 24:02d}:00 SGT "
+                  f"(closes {(WATCH_END_HOUR + 8) % 24:02d}:00 SGT).")
+    else:
+        tone, label = "running", "RUNNING"
+        detail = f"Scanning {len(VWAP_SCALP_PAIRS)} pairs every 5 minutes."
+    return {
+        "tone": tone, "label": label, "detail": detail,
+        "trades_today": snapshot["trades_today"],
+        "cap_label": ("no cap" if not state.vwap_scalp_daily_cap_enabled
+                      else f"of {state.vwap_scalp_max_trades_per_day}"),
+        "pnl_today": realized_pnl_since(journal, today_start.isoformat()),
+        "open_count": open_count,
+        "cooldown_remaining_minutes": snapshot["cooldown_remaining_minutes"],
+    }
+
+
 def _win_rate_breakdown(journal: list) -> list:
     """Per-strategy win/loss breakdown for the dashboard's win-rate pie
     chart carousel (user request, 2026-09-05; ORB Fade and Range Confluence
@@ -586,6 +629,7 @@ def dashboard():
                          if state.strategy_starting_capital else 0.0)
 
     reopen_delta = time_until_forex_reopen()
+    trading_status = _trading_status(state, phase_state, journal, len(live_trades), reopen_delta)
 
     journal_url = github_file_url(JOURNAL_XLSX_REPO_PATH)
     # NOTE: trade_journal.xlsx is pushed to GitHub from save_journal()
@@ -600,7 +644,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         journal_url=journal_url,
-        live_trades=live_trades,
+        live_trades=live_trades, status=trading_status,
         phase_label=PHASE_LABELS[phase_state.phase], mode=state.mode, phase=phase_state.phase,
         kill_switch_engaged=phase_state.kill_switch_engaged, sync_status=get_sync_status(),
         risk_config=asdict(risk_config),
@@ -649,6 +693,26 @@ def scan():
     except Exception as e:
         print(f"WARNING: could not compute VWAP Scalp status for Scan Now: {e}", flush=True)
         flash(f"Couldn't read VWAP Scalp's status right now: {e}", "error")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/pause", methods=["POST"])
+def pause():
+    """One-click pause/resume: flips ONLY the kill switch. Deliberately not
+    part of /settings -- that handler treats every absent checkbox as "off",
+    so posting a single field there would reset the other settings."""
+    state = load_state()
+    phase_state = phase_state_from_state(state)
+    engage = request.form.get("action") != "resume"
+    if phase_state.kill_switch_engaged != engage:
+        state.phase_state = asdict(PhaseState(
+            phase=phase_state.phase, closed_trades_in_phase=phase_state.closed_trades_in_phase,
+            kill_switch_engaged=engage))
+        save_state(state)
+    if engage:
+        flash("Paused -- no new trades will be placed. Open trades keep their stop and target.", "success")
+    else:
+        flash("Resumed -- trading is back on.", "success")
     return redirect(url_for("dashboard"))
 
 

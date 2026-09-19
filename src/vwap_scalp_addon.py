@@ -645,6 +645,21 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     return summary
 
 
+def vwap_scalp_pacing_snapshot(entries: list, global_cooldown_minutes: int, now: datetime = None) -> dict:
+    """Read-only numbers for the dashboard's status strip: trades opened
+    today (UTC day -- the same measure the daily cap uses) and the whole
+    minutes until the global cooldown allows another entry (0 = clear)."""
+    now = now or datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    remaining = 0
+    last_open = _most_recent_vwap_scalp_open(entries)
+    if last_open is not None:
+        elapsed_minutes = (now - last_open).total_seconds() / 60
+        if 0 <= elapsed_minutes < global_cooldown_minutes:
+            remaining = math.ceil(global_cooldown_minutes - elapsed_minutes)
+    return {"trades_today": _vwap_scalp_trades_today(entries, today_start), "cooldown_remaining_minutes": remaining}
+
+
 def vwap_scalp_status_line(now: datetime = None) -> str:
     """One-line, dashboard-flash-friendly summary of VWAP Scalp's current
     state -- built from the same data the periodic 3-hour scan digest uses
