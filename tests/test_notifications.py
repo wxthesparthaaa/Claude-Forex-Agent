@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from notification_formats import (
-    format_potential_trades_message, format_trade_executed_message,
+    format_trade_executed_message,
     format_trade_closed_message, format_nightly_review_message, format_friday_reflection_message,
     format_scan_digest_message,
 )
@@ -20,26 +20,6 @@ def candidate(**overrides):
                      rejected_reason=None)
     defaults.update(overrides)
     return defaults
-
-
-def test_potential_trades_message_manual_mode_liner():
-    msg = format_potential_trades_message([candidate()], mode="manual_paper")
-    assert "EUR_USD LONG" in msg
-    assert "Confidence: 72.0%" in msg
-    assert "broad currency confirmation" in msg
-    assert "Manual mode on: Please execute trades manually" in msg
-    assert "Auto pilot mode on" not in msg
-
-
-def test_potential_trades_message_autopilot_liner():
-    msg = format_potential_trades_message([candidate()], mode="autopilot")
-    assert "Auto pilot mode on" in msg
-
-
-def test_potential_trades_message_excludes_rejected_candidates():
-    msg = format_potential_trades_message([candidate(rejected_reason="Max trades/day reached")], mode="manual_paper")
-    assert "EUR_USD" not in msg
-    assert "No qualifying setups tonight." in msg
 
 
 def test_trade_executed_message_includes_levels():
@@ -82,26 +62,6 @@ def test_friday_reflection_message_includes_weak_and_strong_pairs():
     assert "Weakest pair this week: USD_CHF" in msg
     assert "XAU_USD" in msg
     assert "Preparing for Monday." in msg
-
-
-def test_friday_reflection_message_lists_autopilot_windows_per_pair():
-    stats = {"pnl": 0.0, "pnl_pct": 0.0, "total_trades": 0, "win_rate_pct": None,
-              "weakest_pair": None, "strongest_pair": None}
-    msg = format_friday_reflection_message(stats)
-    assert "Autopilot trading windows" in msg
-    assert "EUR_USD: London" in msg
-    # AUD/NZD/JPY now scan/trade during their OWN window (Autopilot no
-    # longer shares one fixed evening-only slot across every pair).
-    assert "AUD_USD" in msg and "Sydney" in msg
-    assert "USD_JPY" in msg and "Tokyo" in msg
-
-
-def test_friday_reflection_message_shows_self_improvement_changes():
-    stats = {"pnl": 0.0, "pnl_pct": 0.0, "total_trades": 0, "win_rate_pct": None,
-              "weakest_pair": None, "strongest_pair": None}
-    msg = format_friday_reflection_message(stats, ["Auto-paused USD_CAD for 2 weeks: net-negative 3 weeks running"])
-    assert "Automatic adjustments this week" in msg
-    assert "Auto-paused USD_CAD" in msg
 
 
 def test_get_telegram_config_prefers_env_vars(monkeypatch):

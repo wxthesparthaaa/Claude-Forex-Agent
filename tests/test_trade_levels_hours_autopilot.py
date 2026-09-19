@@ -6,39 +6,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
 
-from trade_levels import derive_trade_levels
-from pivot_detection import SwingPoint
 from market_hours import (is_trading_day, is_session_open, is_forex_market_open,
                            time_until_forex_reopen, next_forex_open, next_forex_close,
                            format_duration, SGT, NY)
 from autopilot import (
     PhaseState, can_advance_phase, next_phase, advance_phase,
-    is_auto_execute_mode, should_auto_execute, TRADES_REQUIRED_TO_ADVANCE,
+    is_auto_execute_mode, TRADES_REQUIRED_TO_ADVANCE,
 )
-
-
-def test_derive_trade_levels_long_uses_last_swing_low_as_stop():
-    swings = [SwingPoint(0, 1.0950, "low"), SwingPoint(1, 1.1050, "high")]
-    levels = derive_trade_levels(swings, "LONG", entry_price=1.1000, min_rr=2.0)
-    assert levels.stop_loss == 1.0950
-    assert levels.risk_distance == pytest.approx(0.005)
-    assert levels.take_profit == pytest.approx(1.1000 + 2.0 * 0.005)
-
-
-def test_derive_trade_levels_short_uses_last_swing_high_as_stop():
-    swings = [SwingPoint(0, 1.0950, "low"), SwingPoint(1, 1.1050, "high")]
-    levels = derive_trade_levels(swings, "SHORT", entry_price=1.1000, min_rr=1.8)
-    assert levels.stop_loss == 1.1050
-    assert levels.take_profit == pytest.approx(1.1000 - 1.8 * 0.005)
-
-
-def test_derive_trade_levels_returns_none_when_risk_is_invalid():
-    swings = [SwingPoint(0, 1.1050, "low")]  # low is ABOVE entry -- nonsensical stop
-    assert derive_trade_levels(swings, "LONG", entry_price=1.1000) is None
-
-
-def test_derive_trade_levels_returns_none_without_relevant_swing():
-    assert derive_trade_levels([], "LONG", entry_price=1.1000) is None
 
 
 def test_is_trading_day_weekday_vs_weekend():
@@ -138,15 +112,33 @@ def test_advance_phase_resets_trade_count():
 def test_kill_switch_blocks_auto_execute_even_in_autopilot_phase():
     state = PhaseState(phase="autopilot", kill_switch_engaged=True)
     assert is_auto_execute_mode(state) is False
-    assert should_auto_execute(state, confidence_pct=95, threshold_pct=50) is False
 
 
-def test_should_auto_execute_respects_confidence_threshold():
-    state = PhaseState(phase="autopilot", kill_switch_engaged=False)
-    assert should_auto_execute(state, confidence_pct=60, threshold_pct=50) is True
-    assert should_auto_execute(state, confidence_pct=40, threshold_pct=50) is False
+def _sgt_at(h, m, day=10, month=8):
+    return datetime(2026, month, day, h, m, tzinfo=SGT)
 
 
-def test_manual_phases_never_auto_execute_regardless_of_confidence():
-    state = PhaseState(phase="manual_live", kill_switch_engaged=False)
-    assert should_auto_execute(state, confidence_pct=99, threshold_pct=50) is False
+def test_instrument_window_active_covers_each_pairs_own_session():
+    from market_hours import instrument_window_active
+    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT -- fixed year-round (Tokyo
+    # never observes DST), well outside EUR's window.
+    assert instrument_window_active("AUD_USD", _sgt_at(8, 0)) is True
+    assert instrument_window_active("AUD_USD", _sgt_at(22, 0)) is False
+
+
+def test_instrument_window_active_is_dst_aware_for_london_ny_anchored_pairs():
+    # EUR_USD's window is anchored to London's own open and the London-NY
+    # overlap close, not a precomputed SGT clock time: January (GMT/EST)
+    # is 16:00-01:00 SGT, August (BST/EDT) a full hour earlier. The
+    # trade journal's in_liquidity_window flag depends on this.
+    from market_hours import instrument_window_active
+
+    assert instrument_window_active("EUR_USD", _sgt_at(16, 0, month=1)) is True
+    assert instrument_window_active("EUR_USD", _sgt_at(0, 30, month=1)) is True
+    assert instrument_window_active("EUR_USD", _sgt_at(15, 59, month=1)) is False
+    assert instrument_window_active("EUR_USD", _sgt_at(1, 0, month=1)) is False
+
+    assert instrument_window_active("EUR_USD", _sgt_at(15, 0, month=8)) is True
+    assert instrument_window_active("EUR_USD", _sgt_at(23, 30, month=8)) is True
+    assert instrument_window_active("EUR_USD", _sgt_at(14, 59, month=8)) is False
+    assert instrument_window_active("EUR_USD", _sgt_at(0, 30, month=8)) is False

@@ -9032,3 +9032,52 @@ No open ORB/Range Confluence/live-trial trades existed at removal time
 (checked the journal). 627 tests pass (48 removed with the three modules).
 Base strategy is intentionally still present: `live_scan.py`, which VWAP
 Scalp imports, is shared with its pipeline.
+
+## 2026-09-19 (continued) -- Dead modules and the base-strategy separation
+
+**Dead modules** (no importer in src/app): `backtest_stats`, `cot_data`,
+`cot_signal`, `profit_decay_exit`, `timing_filter`, `trade_simulator`, and
+their tests. Removing them broke every research script that imported them
+directly or transitively (35 scripts, plus `backtest_momentum_addon` and
+`backtest_rsi_volume_entry_filter`, which studied a module that no longer
+exists) -- i.e. essentially all remaining research. Deleted together; six
+scripts survive (VWAP backtest, invalid-entry audit, replay, scoreboard,
+`test_connection`). Recovery: tag `archive/research-scripts-pre-prune-2026-09-19`.
+
+**Base strategy separation.** The base strategy (currency-strength / pivot /
+RSI scanner) was disabled but its code was entangled with shared paths.
+Removed: `scan_workflow`, `confidence_score`, `confidence_reweighting`,
+`currency_strength`, `stats_signals`, `pivot_detection`, `candlestick_patterns`,
+`multi_timeframe`, `indicators`, `finnhub_adapter`, `news_relevance`,
+`rationale`, `trade_levels`, `scan_results`, `live_scan`, `universe`;
+`trade_execution.auto_execute_candidates`, `autopilot.should_auto_execute`;
+the `/trade` and `/execute` routes and both templates; the candidates table,
+News sentiment, base toggle, confidence slider and scan-interval selector;
+scheduled jobs `run_evening_scan_and_notify`, `run_autopilot_interval_scan`,
+the weekly self-improvement pause and confidence reweighting; the "Potential
+trades" Telegram message; and DashboardState fields `confidence_weights`,
+`base_strategy_enabled`, `autopilot_scan_interval_minutes`,
+`last_autopilot_scan_timestamps`, `paused_instruments`,
+`weekly_pnl_by_instrument`, `last_evening_listing_date/_sent_at`, plus
+`RiskConfig.autopilot_confidence_threshold_pct`. `config/scan_results.json`
+is no longer synced. Persisted state files with those keys still load
+(unknown keys are dropped).
+
+**Kept / rewired so nothing VWAP-related changed**:
+- `fetch_mid_price` moved to `src/pricing.py` (VWAP Scalp's only use of the
+  old `live_scan`), with its tests.
+- The 3-hour "still scanning" digest is unchanged, but its scan count used to
+  come from the base interval scanner. VWAP Scalp's own tick now feeds it
+  (`_record_scan_for_digest`, inside the watch window with the market open),
+  under the same `SCAN_DIGEST_LOCK`; new tests cover the tally and the lock.
+- "Scan now" now reports VWAP Scalp's status line only (never trades).
+- Nightly review, Friday reflection (windows/self-improvement sections
+  dropped), 21:00 health check, market open/close notices, Friday pre-close
+  cancel are unchanged. `market_hours` instrument windows stay (the journal's
+  `in_liquidity_window` flag uses them); their two tests moved with them.
+- The loss-cluster cloud routine and the KEEP-at-50 cap / cooldown are untouched.
+
+**Not touched**: `render.yaml` still declares `FINNHUB_API_KEY` (now unused);
+harmless, left for the user to drop when convenient. Tests: 421 passed.
+Recovery for everything above: tag `archive/strategies-pre-prune-2026-09-19`
+and `git log` for this commit's parent.

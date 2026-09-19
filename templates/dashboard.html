@@ -250,41 +250,9 @@
   <div class="card">
     <form method="post" action="/scan">
       <button class="scan-btn" type="submit" data-loading-text="Scanning..."
-              data-loading-status="Checking 11 instruments -- can take up to a minute.">Scan now</button>
+              data-loading-status="Reading VWAP Scalp status.">Scan now</button>
     </form>
   </div>
-
-  {% if candidates %}
-  <div class="card">
-    <h3 style="margin-top:0;">Last scan &mdash; {{ candidates|length }} candidate(s)</h3>
-    {% if last_scan_at %}
-    <p style="color:var(--muted); font-size:0.85rem; margin:-0.25rem 0 0.75rem;">Scanned: {{ last_scan_at }}</p>
-    {% endif %}
-    <div style="overflow-x:auto;">
-    <table>
-      <tr><th>Pair</th><th>Direction</th><th class="num">Confidence</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Amount traded</th><th></th></tr>
-      {% for c in candidates %}
-      <tr>
-        <td>{{ c.instrument }}</td>
-        <td class="{{ 'long' if c.direction == 'LONG' else 'short' }}">{{ c.direction }}</td>
-        <td class="num">{{ c.confidence_pct }}%</td>
-        <td class="num">{{ c.entry_price }}</td>
-        <td class="num">{{ c.stop_loss }}</td>
-        <td class="num">{{ c.take_profit }}</td>
-        <td class="num">{{ "%.2f"|format(c.notional_account_currency) }} {{ c.account_currency }}</td>
-        <td>
-          {% if c.rejected_reason %}
-            <span class="rejected">{{ c.rejected_reason }}</span>
-          {% else %}
-            <a class="trade-link" href="/trade/{{ c.instrument }}">Review &rarr;</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    </div>
-  </div>
-  {% endif %}
 
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -331,41 +299,6 @@
     </form>
     {% else %}
     <p style="color:var(--muted); font-size:0.9rem;">No trades currently open.</p>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h3 style="margin-top:0;">News sentiment</h3>
-    {% if news.most_recent_at %}
-    <p style="color:var(--muted); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">Most recent headline: {{ news.most_recent_at }}</p>
-    {% endif %}
-    {% if not news.configured %}
-    <p style="color:var(--muted); font-size:0.9rem;">
-      Not configured yet &mdash; add a free <code>FINNHUB_API_KEY</code> (finnhub.io signup, no card needed)
-      to activate live news sentiment.
-    </p>
-    {% elif not news.currencies %}
-    <p style="color:var(--muted); font-size:0.9rem;">Configured, but no relevant headlines found in the latest fetch.</p>
-    {% else %}
-    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
-      {% for c in news.currencies %}
-        <span class="chip">
-          {{ c.currency }}
-          <strong class="{{ 'long' if c.score > 0 else ('short' if c.score < 0 else '') }}">{{ "%+.2f"|format(c.score) }}</strong>
-        </span>
-      {% endfor %}
-    </div>
-    {% for h in news.headlines %}
-      <p style="font-size:0.85rem; color:var(--muted); margin:0.25rem 0;">
-        {% if h.currencies %}
-          <strong class="{{ 'long' if h.polarity > 0 else ('short' if h.polarity < 0 else '') }}"
-                  style="font-size:0.75rem;">[{{ h.currencies|join(', ') }} {{ '%+.1f'|format(h.polarity) }}]</strong>
-        {% else %}
-          <span style="font-size:0.75rem; opacity:0.5;">[not currency-tagged]</span>
-        {% endif %}
-        {{ h.headline }} <span style="opacity:0.6;">({{ h.source }})</span>
-      </p>
-    {% endfor %}
     {% endif %}
   </div>
 
@@ -447,26 +380,6 @@
           </label>
         </div>
         <div class="toggle-row">
-          <span>Base strategy (currency-strength/pivot/RSI)</span>
-          <label class="switch">
-            <input type="checkbox" name="base_strategy_enabled" {{ 'checked' if base_strategy_enabled else '' }}>
-            <span class="switch-track"></span>
-          </label>
-        </div>
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          On by default -- this is the original strategy, not an experiment. Turning it off stops IT from
-          auto-executing (while Autopilot is on) without touching any add-on below -- useful for letting a
-          candidate like VWAP Scalp collect live data without the base strategy's own trades competing for
-          the shared trades/day cap or contributing to the shared daily loss limit.
-        </p>
-        <label>Autopilot confidence threshold: <span id="confVal">{{ risk_config.autopilot_confidence_threshold_pct }}</span>%</label>
-        <input type="range" name="autopilot_confidence_threshold_pct" min="0" max="100" step="5"
-               value="{{ risk_config.autopilot_confidence_threshold_pct }}" oninput="confVal.textContent = this.value">
-        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          Base strategy only -- VWAP Scalp trades on its own binary signal rather than a
-          scanned confidence score, so this threshold has no effect on it.
-        </p>
-        <div class="toggle-row">
           <span>VWAP Scalp (experimental)</span>
           <label class="switch">
             <input type="checkbox" name="vwap_scalp_enabled" {{ 'checked' if vwap_scalp_enabled else '' }}>
@@ -547,14 +460,6 @@
           weekend (Friday ~5pm New York), so nothing carries gap risk into Monday's reopen.
         </p>
 
-        <label>Autopilot re-scan every, during each pair's own window
-          <select name="autopilot_scan_interval_minutes">
-            <option value="15" {{ 'selected' if autopilot_scan_interval_minutes == 15 else '' }}>15 min</option>
-            <option value="30" {{ 'selected' if autopilot_scan_interval_minutes == 30 else '' }}>30 min</option>
-            <option value="60" {{ 'selected' if autopilot_scan_interval_minutes == 60 else '' }}>1 hr</option>
-            <option value="240" {{ 'selected' if autopilot_scan_interval_minutes == 240 else '' }}>4 hr</option>
-          </select>
-        </label>
         <label>"Still scanning" check-in every
           <select name="scan_digest_interval_minutes">
             <option value="0" {{ 'selected' if scan_digest_interval_minutes == 0 else '' }}>Off</option>
@@ -566,19 +471,9 @@
           </select>
         </label>
         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.8rem;">
-          A Telegram summary confirming Autopilot is still scanning even when nothing qualifies
+          A Telegram summary confirming VWAP Scalp is still scanning even when nothing qualifies
           to trade -- separate from trade alerts, which always send immediately regardless of this setting.
         </p>
-        {% if instrument_windows %}
-        <details style="margin:0.4rem 0 0.75rem;">
-          <summary style="cursor:pointer; color:var(--muted); font-size:0.8rem;">Each pair's trading window (SGT)</summary>
-          <ul style="margin:0.5rem 0 0; padding-left:1.1rem; font-size:0.8rem; color:var(--muted);">
-            {% for instrument, window in instrument_windows %}
-            <li>{{ instrument }}: {{ window }}</li>
-            {% endfor %}
-          </ul>
-        </details>
-        {% endif %}
         <div class="toggle-row">
           <span>Mode</span>
           <select name="mode">

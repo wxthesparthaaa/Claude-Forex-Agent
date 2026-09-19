@@ -12,8 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import dashboard_state
 import trade_journal as tj
 import scheduled_jobs
-from scan_workflow import TradeCandidate
-from scheduled_jobs import run_nightly_review, run_friday_reflection, run_evening_scan_and_notify
+from scheduled_jobs import run_nightly_review, run_friday_reflection
 
 
 class FakeClient:
@@ -255,225 +254,9 @@ def test_run_friday_reflection_win_rate_matches_the_dashboards_own_convention(mo
     assert updated.week_start_timestamp is not None
 
 
-@patch("scheduled_jobs.send_message")
-def test_run_friday_reflection_leaves_weights_unchanged_without_enough_journal_history(
-        mock_send, tmp_path, monkeypatch):
-    # Same two-trade journal as the test above -- nowhere near
-    # MIN_SAMPLES_PER_BUCKET (15 per side), so reweighting must be a
-    # no-op even though the hook runs every week.
-    _isolate_state(tmp_path, monkeypatch)
-    dashboard_state.save_state(dashboard_state.default_state())
-    tj.save_journal([
-        _closed_entry(instrument="EUR_USD", realized_pnl=80.0, closed_at="2026-08-14T20:00:00Z"),
-        _closed_entry(instrument="USD_CHF", direction="SHORT", realized_pnl=-20.0, closed_at="2026-08-14T21:00:00Z"),
-    ])
-
-    run_friday_reflection()
-
-    updated = dashboard_state.load_state()
-    from confidence_score import ConfidenceWeights
-    assert updated.confidence_weights == dashboard_state.asdict(ConfidenceWeights())
-    sent_text = mock_send.call_args[0][0]
-    assert "not enough data yet to reassess" in sent_text
-
-
-@patch("scheduled_jobs.send_message")
-def test_run_friday_reflection_reweights_confidence_components_from_all_time_journal(
-        mock_send, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    dashboard_state.save_state(dashboard_state.default_state())
-
-    # 15 wins with a high breadth score, 15 losses with a low one --
-    # a clean, maximal lift so breadth's weight should move up.
-    entries = []
-    for i in range(15):
-        entries.append(_closed_entry(instrument="EUR_USD", realized_pnl=10.0,
-                                      closed_at=f"2026-08-01T{i % 24:02d}:00:00Z",
-                                      confidence_components={"breadth": 90.0}))
-    for i in range(15):
-        entries.append(_closed_entry(instrument="EUR_USD", realized_pnl=-10.0,
-                                      closed_at=f"2026-08-02T{i % 24:02d}:00:00Z",
-                                      confidence_components={"breadth": 30.0}))
-    tj.save_journal(entries)
-
-    run_friday_reflection()
-
-    updated = dashboard_state.load_state()
-    assert updated.confidence_weights["breadth"] > 0.35  # ConfidenceWeights() default
-    total = sum(updated.confidence_weights.values())
-    assert abs(total - 1.0) < 1e-9
-
-    sent_text = mock_send.call_args[0][0]
-    assert "Confidence weight reassessment" in sent_text
-    assert "breadth" in sent_text
-
-
 class ScanFakeClient(FakeClient):
     def get_pricing(self, instruments):
         return []
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_run_evening_scan_auto_executes_when_autopilot_on(mock_send, mock_scan, mock_save, mock_auto_exec,
-                                                            tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    fake_candidates = [TradeCandidate(
-        instrument="EUR_USD", direction="LONG", entry_price=1.10, stop_loss=1.095, take_profit=1.11,
-        confidence_pct=80.0, confidence_components={}, units=8000, unit_label="units", risk_amount=40.0,
-        notional_account_currency=8800.0, account_currency="SGD", rationale=["Bullish break"],
-    )]
-    mock_scan.return_value = fake_candidates
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    mock_auto_exec.assert_called_once()
-    call_args = mock_auto_exec.call_args[0]
-    assert call_args[0] is client
-    assert call_args[1] == fake_candidates
-    assert call_args[2].phase == "autopilot"
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_run_evening_scan_still_marks_instruments_scanned_when_auto_execute_raises(
-        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
-    # Regression test: auto_execute_candidates already isolates each
-    # candidate's own failure internally, but if anything still escaped
-    # it unguarded, the exception used to propagate out of this whole
-    # function -- skipping the last_autopilot_scan_timestamps update
-    # below it entirely. That instrument would then never be marked
-    # "scanned," so the interval scanner would silently retry it every
-    # 5 minutes forever with no alert, while every OTHER instrument in
-    # this same batch never got a turn either.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    mock_auto_exec.side_effect = Exception("unexpected failure")
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client, instruments=["EUR_USD"])  # must not raise
-
-    updated = dashboard_state.load_state()
-    assert "EUR_USD" in updated.last_autopilot_scan_timestamps
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_run_evening_scan_does_not_auto_execute_when_manual(mock_send, mock_scan, mock_save, mock_auto_exec,
-                                                               tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()  # defaults to manual_paper
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    mock_auto_exec.assert_not_called()
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_run_evening_scan_does_not_auto_execute_when_base_strategy_disabled(
-        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
-    # User request (2026-09-01): a way to stop the ORIGINAL base
-    # strategy from auto-executing independent of Autopilot phase
-    # itself, so a candidate like VWAP Scalp can collect live data
-    # without the base strategy's own trades competing for the shared
-    # trades/day cap or weekly loss limit. Still in autopilot phase
-    # (add-ons must be unaffected -- they check phase_state, not this
-    # field) -- just base_strategy_enabled=False.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.base_strategy_enabled = False
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    mock_auto_exec.assert_not_called()
-
-
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_reflects_phase_change_made_during_the_scan(mock_send, mock_scan, mock_save,
-                                                                      tmp_path, monkeypatch):
-    # Real incident: the Telegram listing said "Manual mode on" while the
-    # dashboard already showed Autopilot on. Phase was snapshotted once
-    # at the top of the function, before the scan itself (which can take
-    # several seconds) ran -- if the user toggles Autopilot in Settings
-    # while a scan is in flight, the notification text must reflect what
-    # they just set, not what it was when the scan started. Flips FROM
-    # autopilot TO manual here (not the other direction) since autopilot
-    # mode no longer sends this listing at all -- see the dedicated
-    # suppression test below for that direction.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    def _flip_to_manual_mid_scan(*args, **kwargs):
-        mid_state = dashboard_state.load_state()
-        mid_state.phase_state = {"phase": "manual_paper", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-        dashboard_state.save_state(mid_state)
-        return []
-
-    mock_scan.side_effect = _flip_to_manual_mid_scan
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    sent_text = mock_send.call_args[0][0]
-    assert "Manual mode on" in sent_text
-    assert "Auto pilot mode on" not in sent_text
-
-
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_is_not_sent_in_autopilot_mode(mock_send, mock_scan, mock_save, tmp_path, monkeypatch):
-    # Real feedback: "Potential trades tonight ... Auto pilot mode on" is
-    # not relevant once autopilot is on -- any qualifying candidate gets
-    # its own "Trade executed" message from auto_execute_candidates, and
-    # a quiet night is already covered by the periodic scan digest. Only
-    # manual/semi-auto mode actually needs this listing (see the test
-    # above), so autopilot mode must not send it at all.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    mock_send.assert_not_called()
-    # The dedupe timestamp must stay untouched too -- nothing was sent,
-    # so there's nothing to protect a later real send from duplicating.
-    assert dashboard_state.load_state().last_evening_listing_sent_at is None
 
 
 from datetime import datetime as _real_datetime
@@ -484,36 +267,6 @@ _SGT = ZoneInfo("Asia/Singapore")
 
 def _sgt(h, m, day=10, month=8):
     return _real_datetime(2026, month, day, h, m, tzinfo=_SGT)
-
-
-def test_instrument_window_active_covers_each_pairs_own_session():
-    from market_hours import instrument_window_active
-    # AUD_USD: Sydney/Tokyo, 05:00-14:00 SGT -- fixed year-round (Tokyo
-    # never observes DST), well outside EUR's window -- exactly the gap
-    # the old single fixed window used to miss entirely.
-    assert instrument_window_active("AUD_USD", _sgt(8, 0)) is True
-    assert instrument_window_active("AUD_USD", _sgt(22, 0)) is False
-
-
-def test_instrument_window_active_is_dst_aware_for_london_ny_anchored_pairs():
-    # Regression test: EUR_USD's window is anchored to London's own open
-    # and the London-NY overlap close, not a precomputed SGT clock time.
-    # In January (London on GMT, New York on EST) that lands on the old
-    # static 16:00-01:00 SGT window; in August (London on BST, New York
-    # on EDT) the real window is a full hour earlier -- 15:00-00:00 SGT
-    # -- which the old static table, silently assuming EST year-round,
-    # got wrong for roughly 8 months of the year.
-    from market_hours import instrument_window_active
-
-    assert instrument_window_active("EUR_USD", _sgt(16, 0, month=1)) is True   # Jan: matches the old values
-    assert instrument_window_active("EUR_USD", _sgt(0, 30, month=1)) is True
-    assert instrument_window_active("EUR_USD", _sgt(15, 59, month=1)) is False
-    assert instrument_window_active("EUR_USD", _sgt(1, 0, month=1)) is False
-
-    assert instrument_window_active("EUR_USD", _sgt(15, 0, month=8)) is True   # Aug: shifted an hour earlier
-    assert instrument_window_active("EUR_USD", _sgt(23, 30, month=8)) is True
-    assert instrument_window_active("EUR_USD", _sgt(14, 59, month=8)) is False
-    assert instrument_window_active("EUR_USD", _sgt(0, 30, month=8)) is False  # "open" under the old bug -- now correctly closed
 
 
 class _FrozenDatetime(_real_datetime):
@@ -527,315 +280,6 @@ class _FrozenDatetime(_real_datetime):
 def _freeze_at(monkeypatch, sgt_dt):
     _FrozenDatetime.frozen_now = sgt_dt
     monkeypatch.setattr(scheduled_jobs, "datetime", _FrozenDatetime)
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_when_not_autopilot(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(22, 0))
-    state = dashboard_state.default_state()  # manual_paper by default
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result is None
-    mock_run.assert_not_called()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_only_includes_instruments_in_their_own_window(mock_run, tmp_path, monkeypatch):
-    # 14:30 SGT (August, EDT/BST in effect): AUD/NZD's window
-    # (05:00-14:00, fixed year-round) has already closed and EUR/GBP/
-    # CHF's DST-aware window (15:00-00:00 in August; see
-    # test_instrument_window_active_is_dst_aware_for_london_ny_anchored_pairs)
-    # hasn't opened yet -- USD_JPY (08:00-17:00, fixed year-round) is the
-    # only instrument in-window at this hour, unlike the old single
-    # fixed 21:30-01:00 window which would have skipped everything at
-    # this hour regardless of pair.
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(14, 30))
-    mock_run.return_value = []
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result == []
-    mock_run.assert_called_once()
-    _, kwargs = mock_run.call_args
-    assert kwargs.get("instruments") == ["USD_JPY"]
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_paused_instruments(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(14, 30))  # only USD_JPY would otherwise be due, see test above
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.paused_instruments = {"USD_JPY": _sgt(14, 30, day=1).isoformat()}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result is None
-    mock_run.assert_not_called()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_on_a_weekend(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, datetime(2026, 8, 15, 22, 0, tzinfo=_SGT))  # a Saturday
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result is None
-    mock_run.assert_not_called()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_monday_early_morning_before_forex_reopens(mock_run, tmp_path, monkeypatch):
-    # Real gap this closes: forex reopens Sunday ~5pm New York time, which
-    # is ~5am Monday SGT -- a plain SGT weekday check (is_trading_day)
-    # would have treated all of Monday as a trading day starting at
-    # 00:00 SGT, letting this scan (and any auto-execution) run against
-    # closed-market prices for the first few hours of the week. 2026-08-17
-    # is a Monday; is_forex_market_open() must still say closed at 02:00 SGT.
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, datetime(2026, 8, 17, 2, 0, tzinfo=_SGT))
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result is None
-    mock_run.assert_not_called()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_skips_when_interval_not_yet_elapsed(mock_run, tmp_path, monkeypatch):
-    from universe import ALL_INSTRUMENTS
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(22, 0))
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.autopilot_scan_interval_minutes = 30
-    # every instrument "just scanned" 15 min ago -- none due yet regardless
-    # of which ones are inside their own window at 22:00
-    state.last_autopilot_scan_timestamps = {i: _sgt(21, 45).isoformat() for i in ALL_INSTRUMENTS}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result is None
-    mock_run.assert_not_called()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_runs_once_interval_has_elapsed(mock_run, tmp_path, monkeypatch):
-    from universe import ALL_INSTRUMENTS
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(22, 0))
-    mock_run.return_value = ["ran"]
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.autopilot_scan_interval_minutes = 30
-    state.last_autopilot_scan_timestamps = {i: _sgt(21, 30).isoformat() for i in ALL_INSTRUMENTS}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result == ["ran"]
-    mock_run.assert_called_once()
-    # 22:00 SGT: EUR/GBP/CHF, XAU/XAG/BCO, USD_CAD, WTICO_USD are all
-    # in-window; AUD/NZD/USD_JPY are not (their windows are daytime SGT).
-    _, kwargs = mock_run.call_args
-    assert set(kwargs["instruments"]) == {
-        "EUR_USD", "GBP_USD", "USD_CHF", "USD_CAD", "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD",
-    }
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_runs_immediately_when_no_prior_timestamp(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(21, 35))
-    mock_run.return_value = ["ran"]
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    result = scheduled_jobs.run_autopilot_interval_scan()
-
-    assert result == ["ran"]
-    mock_run.assert_called_once()
-
-
-@patch("scheduled_jobs.send_message")
-def test_evening_scan_stamps_last_autopilot_scan_timestamps_per_instrument(mock_send, tmp_path, monkeypatch):
-    from universe import ALL_INSTRUMENTS
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    with patch("scheduled_jobs.run_live_scan", return_value=[]), \
-         patch("scheduled_jobs.save_candidates"):
-        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-        run_evening_scan_and_notify(client)  # instruments=None -> full universe minus paused
-
-    updated = dashboard_state.load_state()
-    for instrument in ALL_INSTRUMENTS:
-        assert updated.last_autopilot_scan_timestamps.get(instrument) is not None
-
-
-@patch("scheduled_jobs.send_message")
-def test_evening_scan_only_stamps_the_instruments_it_actually_scanned(mock_send, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    with patch("scheduled_jobs.run_live_scan", return_value=[]) as mock_scan, \
-         patch("scheduled_jobs.save_candidates"):
-        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-        run_evening_scan_and_notify(client, instruments=["USD_JPY"])
-
-    call_kwargs = mock_scan.call_args[1]
-    assert call_kwargs["instruments"] == ["USD_JPY"]
-
-    updated = dashboard_state.load_state()
-    assert updated.last_autopilot_scan_timestamps.get("USD_JPY") is not None
-    assert "EUR_USD" not in updated.last_autopilot_scan_timestamps
-
-
-def test_evening_scan_skips_when_already_in_progress_on_another_thread(tmp_path, monkeypatch):
-    # Real incident: run_daily_dispatcher's evening-listing branch and
-    # run_autopilot_interval_scan are both IntervalTrigger(minutes=5)
-    # jobs registered back-to-back, so their next-run times land within
-    # milliseconds of each other -- on the first tick past 21:30 SGT
-    # both can decide the scan is due and both call this concurrently.
-    # Simulates that by holding the lock before calling, the same state
-    # a genuinely concurrent second thread would find it in.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    scheduled_jobs._evening_scan_lock.acquire()
-    try:
-        with patch("scheduled_jobs.run_live_scan") as mock_scan:
-            client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-            result = run_evening_scan_and_notify(client)
-        assert result == []
-        mock_scan.assert_not_called()  # the losing call must never even start scanning
-    finally:
-        scheduled_jobs._evening_scan_lock.release()
-
-
-@patch("scheduled_jobs.send_message")
-def test_evening_scan_lock_releases_so_a_later_call_still_works(mock_send, tmp_path, monkeypatch):
-    # Real incident: this test was missing a send_message mock, so every
-    # local `pytest tests/` run sent a genuine "Potential trades tonight"
-    # Telegram message via whichever bot credentials the local
-    # config/telegram_config.properties fallback happened to hold --
-    # explaining a whole day of "phantom" duplicate-notification reports
-    # that had nothing to do with the deployed app, Render, or the
-    # scheduler at all.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    dashboard_state.save_state(state)
-
-    with patch("scheduled_jobs.run_live_scan", return_value=[]), \
-         patch("scheduled_jobs.save_candidates"):
-        client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-        run_evening_scan_and_notify(client)  # first call acquires and releases the lock
-
-        with patch("scheduled_jobs.run_live_scan") as mock_scan:
-            mock_scan.return_value = []
-            result = run_evening_scan_and_notify(client)  # must not be blocked by the first call
-        assert result == []
-        mock_scan.assert_called_once()
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_calls_evening_scan_quietly(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(21, 35))
-    mock_run.return_value = []
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    scheduled_jobs.run_autopilot_interval_scan()
-
-    mock_run.assert_called_once()
-    _, kwargs = mock_run.call_args
-    assert kwargs.get("notify_listing") is False
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_tallies_digest_counters_when_something_is_due(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(21, 35))
-    mock_run.return_value = []
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    scheduled_jobs.run_autopilot_interval_scan()
-
-    updated = dashboard_state.load_state()
-    assert updated.interval_scan_count_since_digest == 1
-    assert updated.interval_scanned_instruments_since_digest  # at least one instrument recorded
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_digest_tally_does_not_revert_a_concurrent_digest_send(mock_run, tmp_path, monkeypatch):
-    # Regression test for a real incident: check_scan_digest and
-    # run_autopilot_interval_scan are separate scheduled jobs on the SAME
-    # 5-minute tick. If check_scan_digest resets the tally and records a
-    # send in the window between this function's own top-of-function
-    # state load and its digest-tally save, saving a STALE state object
-    # here silently reverted that reset -- so the next tick saw a stale,
-    # already-past-due timestamp and re-sent a digest just 5 minutes
-    # later instead of respecting the configured interval. Simulates the
-    # race directly: load_state()'s SECOND call (the fresh reload right
-    # before the save) returns state as if check_scan_digest had already
-    # reset it moments earlier, mid-function.
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(21, 35))
-    mock_run.return_value = []
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    state.interval_scan_count_since_digest = 7  # stale -- as of the top-of-function load
-    dashboard_state.save_state(state)
-
-    real_load_state = dashboard_state.load_state
-    call_count = {"n": 0}
-
-    def racy_load_state():
-        call_count["n"] += 1
-        if call_count["n"] == 2:
-            # Simulate check_scan_digest winning the race in between:
-            # resets the tally and records a send, using the REAL
-            # load_state so this write actually lands on disk.
-            reset_state = real_load_state()
-            reset_state.interval_scan_count_since_digest = 0
-            reset_state.interval_scanned_instruments_since_digest = []
-            reset_state.last_scan_digest_sent_at = "2026-08-17T13:35:00+00:00"
-            dashboard_state.save_state(reset_state)
-        return real_load_state()
-
-    monkeypatch.setattr(scheduled_jobs, "load_state", racy_load_state)
-
-    scheduled_jobs.run_autopilot_interval_scan()
-
-    updated = dashboard_state.load_state()
-    # The concurrent reset must survive -- count built on TOP of the
-    # reset's 0 (not the stale 7), and the send record isn't reverted.
-    assert updated.interval_scan_count_since_digest == 1
-    assert updated.last_scan_digest_sent_at == "2026-08-17T13:35:00+00:00"
 
 
 def test_scan_digest_lock_is_shared_with_risk_skip_recording(tmp_path, monkeypatch):
@@ -893,20 +337,6 @@ def test_risk_skip_recording_blocks_until_a_concurrent_digest_reset_releases_the
     # genuinely gone -- not revived alongside the new one.
     assert dashboard_state.load_state().risk_limit_skips_since_digest == \
         ["VWAP Scalp: Portfolio heat cap exceeded"]
-
-
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_interval_scan_does_not_tally_when_nothing_is_due(mock_run, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday -- forex closed by then
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    scheduled_jobs.run_autopilot_interval_scan()
-
-    mock_run.assert_not_called()
-    assert dashboard_state.load_state().interval_scan_count_since_digest == 0
 
 
 @patch("scheduled_jobs.send_message")
@@ -1199,138 +629,29 @@ def test_scan_digest_skips_send_when_a_fresh_github_pull_shows_another_process_a
     assert updated.last_scan_digest_sent_at == (now - timedelta(minutes=2)).isoformat()
 
 
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_scan_notify_listing_false_suppresses_potential_trades_message(
-        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.phase_state = {"phase": "autopilot", "closed_trades_in_phase": 0, "kill_switch_engaged": False}
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client, notify_listing=False)
-
-    mock_send.assert_not_called()  # no candidates -> auto_execute sends nothing either, and the listing is suppressed
-    mock_auto_exec.assert_called_once()
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_skips_duplicate_send_within_min_gap(
-        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
-    # Real incident: duplicate "Potential trades tonight" sends kept
-    # recurring roughly every 5 minutes despite the once-per-day date
-    # gate in run_daily_dispatcher -- most likely overlapping process
-    # instances each racing past that gate. This is the hard backstop:
-    # a precise recent-timestamp check, independent of which process/
-    # thread/job reaches the send.
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.last_evening_listing_sent_at = datetime.now(timezone.utc).isoformat()  # "just sent"
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)  # notify_listing=True by default
-
-    mock_send.assert_not_called()
-
-
-@patch("scheduled_jobs.auto_execute_candidates")
-@patch("scheduled_jobs.save_candidates")
-@patch("scheduled_jobs.run_live_scan")
-@patch("scheduled_jobs.send_message")
-def test_evening_listing_sends_once_the_min_gap_has_passed(
-        mock_send, mock_scan, mock_save, mock_auto_exec, tmp_path, monkeypatch):
-    from datetime import timedelta
-    _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    long_ago = datetime.now(timezone.utc) - timedelta(minutes=20)
-    state.last_evening_listing_sent_at = long_ago.isoformat()
-    dashboard_state.save_state(state)
-
-    mock_scan.return_value = []
-    client = ScanFakeClient(summary={"NAV": "2000", "currency": "SGD"}, closed_trades=[])
-
-    run_evening_scan_and_notify(client)
-
-    mock_send.assert_called_once()
-    updated = dashboard_state.load_state()
-    assert updated.last_evening_listing_sent_at != long_ago.isoformat()
-
-
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_runs_evening_listing_once_due_on_a_weekday(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(21, 35, day=10))  # Monday, past 21:30
-    state = dashboard_state.default_state()
-    state.last_review_date = "2026-08-10"  # already handled today, isolate the listing behavior
-    state.last_health_check_date = "2026-08-10"
-    dashboard_state.save_state(state)
-
-    scheduled_jobs.run_daily_dispatcher()
-
-    mock_evening.assert_called_once()
-    mock_reflection.assert_not_called()
-    updated = dashboard_state.load_state()
-    assert updated.last_evening_listing_date == "2026-08-10"
-
-
-@patch("scheduled_jobs.run_friday_reflection")
-@patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_does_not_rerun_evening_listing_already_done_today(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
-    _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(22, 0, day=10))
-    state = dashboard_state.default_state()
-    state.last_evening_listing_date = "2026-08-10"
-    state.last_review_date = "2026-08-10"
-    state.last_health_check_date = "2026-08-10"
-    dashboard_state.save_state(state)
-
-    scheduled_jobs.run_daily_dispatcher()
-
-    mock_evening.assert_not_called()
-
-
-@patch("scheduled_jobs.run_friday_reflection")
-@patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_runs_nightly_review_once_due_any_day(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Tuesday, not Monday -- Monday has no legitimate "evening before"
     # session (Sunday was closed), so it's the one day this can't use as
     # its "any ordinary day" example; see the Monday-specific tests below.
     _isolate_state(tmp_path, monkeypatch)
-    _freeze_at(monkeypatch, _sgt(10, 0, day=11))  # well past 1am, before tonight's 21:30
+    _freeze_at(monkeypatch, _sgt(10, 0, day=11))  # well past 1am
     state = dashboard_state.default_state()
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
 
     mock_review.assert_called_once()
-    mock_evening.assert_not_called()  # not yet 21:30
     updated = dashboard_state.load_state()
     assert updated.last_review_date == "2026-08-11"
 
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_does_not_run_nightly_review_before_1am(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(0, 30, day=10))
     state = dashboard_state.default_state()
@@ -1343,9 +664,8 @@ def test_dispatcher_does_not_run_nightly_review_before_1am(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_skips_nightly_review_on_sunday_when_market_is_closed(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Real incident: a "Nightly review" Telegram message went out at
     # 1:04am SGT on a Sunday -- forex is closed the entire day (open
     # Sun ~5pm NY = ~6am Monday SGT), so there was no session to review.
@@ -1364,9 +684,8 @@ def test_dispatcher_skips_nightly_review_on_sunday_when_market_is_closed(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_session(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Friday's session genuinely runs into Saturday 00:00-05:00 SGT
     # (forex closes Fri ~5pm NY = ~5-6am Sat SGT) -- unlike Sunday, this
     # is a legitimate review, not a repeat of the Sunday bug above.
@@ -1384,9 +703,8 @@ def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_se
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_skips_nightly_review_right_at_monday_market_reopen(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test for a real incident: a "Nightly review" Telegram
     # message went out at 5:04am SGT Monday reporting "0 closed trades" --
     # forex only just reopened (~5am SGT Monday) at that exact moment, so
@@ -1409,9 +727,8 @@ def test_dispatcher_skips_nightly_review_right_at_monday_market_reopen(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_still_skips_nightly_review_later_in_the_monday_session(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Not just the exact reopen moment -- Monday has no legitimate
     # "evening before" session at ANY point in its own day, so its own
     # activity is meant to be picked up by Tuesday's 1am review instead
@@ -1431,9 +748,8 @@ def test_dispatcher_still_skips_nightly_review_later_in_the_monday_session(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_weekend(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday, market closed by now
     state = dashboard_state.default_state()
@@ -1449,9 +765,8 @@ def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_wee
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_skips_friday_reflection_while_the_market_is_open(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # Monday, market open
     state = dashboard_state.default_state()
@@ -1464,9 +779,8 @@ def test_dispatcher_skips_friday_reflection_while_the_market_is_open(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_still_reflects_if_render_only_wakes_on_sunday(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test: the old "weekday == 5" gate meant a reflection
     # that missed Saturday entirely was gone for the week, not delayed.
     # Sunday is also a market-closed day (same ISO week as Saturday), so
@@ -1485,9 +799,8 @@ def test_dispatcher_still_reflects_if_render_only_wakes_on_sunday(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test: is_forex_market_open() is False on BOTH Saturday
     # and Sunday, so a plain "already ran today" date-stamp check would
     # fire a second time on Sunday.
@@ -1505,9 +818,8 @@ def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test for a real incident: the reflection correctly fired
     # Saturday, then fired AGAIN a few minutes after midnight Monday --
     # still closed, forex doesn't reopen until ~5am SGT Monday -- because
@@ -1530,9 +842,8 @@ def test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver(
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_weekend(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test: if Render slept through the ENTIRE weekend, the
     # first tick back (early Monday, still closed before the market
     # reopens) must still catch the missed reflection up rather than
@@ -1551,23 +862,21 @@ def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_w
 
 @patch("scheduled_jobs.run_friday_reflection")
 @patch("scheduled_jobs.run_nightly_review")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
 def test_dispatcher_catches_up_after_a_long_sleep_gap(
-        mock_evening, mock_review, mock_reflection, tmp_path, monkeypatch):
+        mock_review, mock_reflection, tmp_path, monkeypatch):
     # Simulates Render's free tier being asleep straight through the
-    # exact 21:30/01:00 firing moments -- the app only wakes up hours
-    # later (e.g. an UptimeRobot ping at 23:00), and the dispatcher must
-    # still catch both of today's touchpoints up in that single tick.
+    # exact 01:00 firing moment -- the app only wakes up hours later
+    # (e.g. an UptimeRobot ping at 23:00), and the dispatcher must still
+    # catch today's touchpoint up in that single tick.
     # Tuesday, not Monday -- see the Monday-specific tests below for why.
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(23, 0, day=11))
     state = dashboard_state.default_state()
-    state.last_health_check_date = "2026-08-11"  # isolate the listing/review catch-up behavior
+    state.last_health_check_date = "2026-08-11"  # isolate the review catch-up behavior
     dashboard_state.save_state(state)
 
     scheduled_jobs.run_daily_dispatcher()
 
-    mock_evening.assert_called_once()
     mock_review.assert_called_once()
 
 
@@ -1652,8 +961,7 @@ def test_health_check_alerts_on_github_failure(mock_send, mock_gh_config, mock_p
 
 
 @patch("scheduled_jobs.run_pre_evening_health_check")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_runs_health_check_at_21_00_not_before(mock_evening, mock_health, tmp_path, monkeypatch):
+def test_dispatcher_runs_health_check_at_21_00_not_before(mock_health, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(20, 59, day=10))  # Monday, one minute before 21:00
     state = dashboard_state.default_state()
@@ -1667,8 +975,7 @@ def test_dispatcher_runs_health_check_at_21_00_not_before(mock_evening, mock_hea
 
 
 @patch("scheduled_jobs.run_pre_evening_health_check")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_runs_health_check_once_due(mock_evening, mock_health, tmp_path, monkeypatch):
+def test_dispatcher_runs_health_check_once_due(mock_health, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(21, 5, day=10))  # Monday, just past 21:00
     state = dashboard_state.default_state()
@@ -1684,8 +991,7 @@ def test_dispatcher_runs_health_check_once_due(mock_evening, mock_health, tmp_pa
 
 
 @patch("scheduled_jobs.run_pre_evening_health_check")
-@patch("scheduled_jobs.run_evening_scan_and_notify")
-def test_dispatcher_does_not_rerun_health_check_already_done_today(mock_evening, mock_health, tmp_path, monkeypatch):
+def test_dispatcher_does_not_rerun_health_check_already_done_today(mock_health, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(22, 0, day=10))
     state = dashboard_state.default_state()

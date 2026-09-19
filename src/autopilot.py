@@ -59,9 +59,3 @@ def advance_phase(state: PhaseState) -> PhaseState:
 
 def is_auto_execute_mode(state: PhaseState) -> bool:
     return state.phase == "autopilot" and not state.kill_switch_engaged
-
-
-def should_auto_execute(state: PhaseState, confidence_pct: float, threshold_pct: float) -> bool:
-    if not is_auto_execute_mode(state):
-        return False
-    return confidence_pct >= threshold_pct

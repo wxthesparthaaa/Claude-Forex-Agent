@@ -1,10 +1,10 @@
 """Central map of state files: repo-relative path -> local path. Both
-dashboard_state.py and scan_results.py already default their local paths
+dashboard_state.py already defaults their local paths
 to this same STATE_DIR, so this only needs to declare which of those
 files are worth persisting through GitHub.
 
 Also the shared atomic-write / resilient-load helpers all three state
-modules (trade_journal, dashboard_state, scan_results) use -- factored
+modules (trade_journal, dashboard_state) use -- factored
 out here since it's already a common, dependency-free import for all
 three, rather than duplicated three times."""
 import json
@@ -15,7 +15,6 @@ STATE_DIR = os.environ.get("STATE_DIR", os.path.join(os.path.dirname(__file__), 
 
 STATE_FILES = {
     "config/dashboard_state.json": os.path.join(STATE_DIR, "dashboard_state.json"),
-    "config/scan_results.json": os.path.join(STATE_DIR, "scan_results.json"),
     "config/trade_journal.json": os.path.join(STATE_DIR, "trade_journal.json"),
     "config/vwap_scalp_tie_log.json": os.path.join(STATE_DIR, "vwap_scalp_tie_log.json"),
 }
@@ -35,7 +34,7 @@ def atomic_write_json(path: str, data, indent: int | None = 2) -> None:
     directory guarantees.
 
     `indent` defaults to 2 (human-inspectable, matching every existing
-    caller -- dashboard_state.json/trade_journal.json/scan_results.json
+    caller -- dashboard_state.json/trade_journal.json
     are all meant to be readable). Pass `indent=None` for compact output
     -- candle_history.py's cache files are 100+MB of nested candle data;
     pretty-printing that would meaningfully bloat both file size and

@@ -9,41 +9,6 @@ so message content is testable without any network call.
 from __future__ import annotations
 
 
-def _one_liner_rationale(candidate: dict) -> str:
-    comps = candidate.get("confidence_components", {})
-    parts = []
-    if comps.get("breadth", 0) >= 70:
-        parts.append("broad currency confirmation")
-    if comps.get("rsi", 0) >= 70:
-        parts.append("RSI confluence")
-    if comps.get("candlestick", 0) >= 70:
-        parts.append("candlestick pattern support")
-    if comps.get("news", 0) >= 70:
-        parts.append("supportive news")
-    if not parts:
-        parts.append("structure break confirmed")
-    return "Rationale: " + ", ".join(parts)
-
-
-def format_potential_trades_message(candidates: list, mode: str) -> str:
-    qualifying = [c for c in candidates if not c.get("rejected_reason")]
-    lines = ["<b>Potential trades tonight</b>"]
-
-    if not qualifying:
-        lines.append("\nNo qualifying setups tonight.")
-    for c in qualifying:
-        lines.append(
-            f"\n<b>{c['instrument']} {c['direction']}</b>\n"
-            f"Price: {c['entry_price']} | TP: {c['take_profit']} | SL: {c['stop_loss']}\n"
-            f"Confidence: {c['confidence_pct']}%\n"
-            f"{_one_liner_rationale(c)}"
-        )
-
-    mode_line = "Auto pilot mode on" if mode == "autopilot" else "Manual mode on: Please execute trades manually"
-    lines.append(f"\n<i>{mode_line}</i>")
-    return "\n".join(lines)
-
-
 def format_market_closed_message(reopen_sgt) -> str:
     """reopen_sgt: an SGT-tzinfo datetime -- the moment forex reopens.
     Sent once on the open-to-closed transition (see
@@ -229,10 +194,7 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
     return "\n".join(lines)
 
 
-def format_friday_reflection_message(week_stats: dict, self_improvement_changes: list | None = None,
-                                      confidence_reweight_lines: list | None = None) -> str:
-    from market_hours import ALL_INSTRUMENT_WINDOWS, format_instrument_window
-
+def format_friday_reflection_message(week_stats: dict) -> str:
     lines = [
         "<b>Friday self-reflection</b>",
         f"Week P&L: {week_stats['pnl']:+.2f} ({week_stats['pnl_pct']:+.2f}%)",
@@ -242,36 +204,5 @@ def format_friday_reflection_message(week_stats: dict, self_improvement_changes:
         lines.append(f"Weakest pair this week: {week_stats['weakest_pair']}")
     if week_stats.get("strongest_pair"):
         lines.append(f"Strongest pair this week: {week_stats['strongest_pair']}")
-
-    # Each pair now actually scans/trades during its OWN window below
-    # (scheduled_jobs.run_autopilot_interval_scan), not just the old
-    # fixed 9:30pm-1am slot -- this list describes real bot behavior,
-    # not just a suggestion for manual reference.
-    lines.append("\n<b>Autopilot trading windows (SGT)</b>")
-    for instrument in ALL_INSTRUMENT_WINDOWS:
-        lines.append(f"  {instrument}: {format_instrument_window(instrument)}")
-
-    if self_improvement_changes:
-        lines.append("\n<b>Automatic adjustments this week</b>")
-        for change in self_improvement_changes:
-            lines.append(f"  {change}")
-
-    if confidence_reweight_lines:
-        # All-time journal data, not just this week -- a single week
-        # rarely clears MIN_SAMPLES_PER_BUCKET, so this reflects the
-        # full accumulated history each time (see confidence_reweighting.py).
-        # "(base strategy only)" (2026-09-12, user question): compute_confidence's
-        # breadth/RSI/candlestick/news blend only ever gets computed and
-        # journaled for the base strategy's own signal -- VWAP Scalp
-        # hardcodes a flat confidence_pct and never populates confidence_
-        # components at all, so this section has nothing to do with
-        # whichever strategy is actually trading live right now unless
-        # that happens to be the base strategy. Without this label the
-        # section read as if it applied to the account's current live
-        # trading in general.
-        lines.append("\n<b>Confidence weight reassessment (base strategy only, all-time data)</b>")
-        for line in confidence_reweight_lines:
-            lines.append(f"  {line}")
-
     lines.append("\nPreparing for Monday.")
     return "\n".join(lines)
