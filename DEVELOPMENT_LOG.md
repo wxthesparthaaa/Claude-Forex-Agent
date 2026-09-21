@@ -9217,3 +9217,15 @@ and verified to reproduce round 1 exactly).
   horizon from 5 minutes to 1 hour. Cheaper execution (raw-spread account, limits, tighter hours) would shrink
   the loss but not create a profit; the best frictionless gross number seen anywhere is about +0.13R, which
   would need total costs to fall to roughly a third of OANDA's just to break even.
+
+## 2026-09-21 -- Tick recorder (does anything exist at second-scale that beats the spread?)
+`scripts/tick_recorder.py` (+ `run_tick_recorder.bat`) records OANDA's live bid/ask pricing stream for 6 pairs
+(EUR_USD, GBP_USD, USD_JPY, AUD_USD, USD_CAD, XAU_USD; override with RECORDER_INSTRUMENTS) to `data/ticks/`, one CSV
+per UTC day (gzipped after rotation), with BOTH the OANDA timestamp and this PC's receive time, plus `gaps.csv`
+for every disconnect/sleep and `recorder.log`. Read-only (opens the stream only; never touches orders or app state).
+It asks Windows not to sleep (not the display), reconnects with backoff, and treats 15s of silence as a dead
+connection. Verified live: 187 ticks/30s across the 6 pairs (~6/s; roughly 35 MB/day raw, 5-8 MB gzipped),
+first check showed PC receive-minus-OANDA time of median 849 ms -- clock error plus network delay -- so the PC
+clock must be synced before the latency modeling means anything. Pass bar (set before collecting): a rule must be
+net-positive after the spread with an assumed 0.5s and 1s reaction delay on weeks it was not chosen from.
+Expected likelihood of a pass is low (<= ~5%); the point is to close the question cheaply.

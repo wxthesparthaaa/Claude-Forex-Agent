@@ -9,3 +9,5 @@ config/*.json
 data/candle_cache/
 
 data/scalp_npz/
+
+data/ticks/
