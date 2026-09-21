@@ -9170,3 +9170,27 @@ since 09-15 into settled equity (-731.71 -> -1012.04, equity 987.96), which puts
 the drawdown at 50.6% against a 50% limit. The user chose to switch the max
 drawdown breaker OFF for the demo run (decision recorded here); it must be turned
 back on before any real money. Daily loss limit was already off.
+
+## 2026-09-21 -- Can VWAP's ~30% win rate earn 10%/week, and do other scalp families do better?
+
+**Live payoff (266 closed trades)**: win 30.1%, average win +1.27R, average loss -1.38R, expectancy
+-0.585R/trade. Break-even win rate at that payoff is 52%; at a 30% win rate the payoff would have to be 2.33:1
+(actual 0.92:1). Weekly results 09-01..: -34R, -38R, -80R. 10%/week at half-size risk (0.75%/trade) and the
+60-107 trades/week seen would need +0.13R/trade AFTER costs. Compounded, 10%/week is 142x a year.
+
+**Scalp-family research** (`scripts/scalp_research.py`, data via `scripts/build_scalp_dataset.py`; numpy is
+research-only, not an app dependency): 3 pre-registered families x 4 configs (opening-range breakout,
+Bollinger fade, Donchian momentum), 17 instruments, 2025-09-09..2026-09-21, M5 signals, entry 5 minutes after
+the decision at the real bid/ask, frozen stop/target with the broker-validity guard, closing-side M1 exits,
+SL-first ties, timeouts closed at market, one position per instrument, discovery/holdout split at 2026-05-15,
+day-pooled t-tests, Bonferroni over 12.
+- Discovery: all 12 configs negative (mean R -0.12 to -0.46, |t| 4-53).
+- One-shot holdout of the best config per family: ORB NY RR1.0 -0.10R (p=0.16), Bollinger k2.5/1.5ATR
+  -0.33R, Donchian48 RR1.5 -0.46R; all worse with +0.5x-spread slippage. None passes.
+- Post-hoc diagnostics (descriptive only): with NO spread the same rules average about zero (ORB -0.02R,
+  Donchian +0.01..+0.02R, Bollinger fade +0.04..+0.13R), so costs are the whole story: spread is 13% (gold)
+  to 71% (NZD_JPY) of a typical M5 range and costs 0.10R (ORB) to ~0.4R (scalp-sized stops) per trade. Even
+  the cheapest instrument (XAU_USD) nets -0.09R. Filtering out trades whose spread exceeds 25% of risk still
+  leaves -0.11 to -0.19R.
+- Conclusion: no simple technical scalp/intraday family beats retail spreads on this data; gross edge is
+  smaller than cost. VWAP Scalp's failure is structural, not a tuning problem.

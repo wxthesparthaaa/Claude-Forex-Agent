@@ -23,3 +23,6 @@ Status (2026-09-19 Phase 1 audit): no strategy passes.
 - Range Confluence: 0 live trades; walk-forward 495 trades, month-pooled t = +0.6
   (script in the same tag).
 - Base strategy: 35 live trades, 31% win, mean R -0.25.
+- Scalp-family search (2026-09-21, `scripts/scalp_research.py`): opening-range breakout, Bollinger fade and
+  Donchian momentum, 12 configs, realistic execution: all negative; best holdout -0.10R. Gross edge ~0, spread
+  is the whole loss.
