@@ -9229,3 +9229,10 @@ first check showed PC receive-minus-OANDA time of median 849 ms -- clock error p
 clock must be synced before the latency modeling means anything. Pass bar (set before collecting): a rule must be
 net-positive after the spread with an assumed 0.5s and 1s reaction delay on weeks it was not chosen from.
 Expected likelihood of a pass is low (<= ~5%); the point is to close the question cheaply.
+
+Follow-up (same day): after the user synced the clock, the recorder's receive-minus-OANDA median was still ~850 ms.
+Cause: Windows' time service left the PC 0.589 s AHEAD of true time (w32tm stripchart -0.5886s and a direct SNTP
+query to time.cloudflare.com both say so, 7 ms round trip), so the real stamp-to-receive delay is only ~277 ms.
+Windows disciplines the clock loosely (it slews rather than steps and can sit off by hundreds of ms), so the
+recorder now measures its own clock error against public NTP every 10 minutes into `clock.csv` and `--check`
+prints the corrected delay; analysis subtracts the logged error instead of trusting the Windows clock.

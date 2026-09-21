@@ -91,3 +91,29 @@ def test_check_mode_writes_nothing(tmp_path):
     with patch("tick_recorder.requests.get", return_value=_FakeResponse([_price().encode()])):
         tr.stream_once("http://x", {}, {}, None, stats, str(tmp_path))
     assert os.listdir(tmp_path) == [] and stats["ticks"] == 1
+
+
+def _ntp_reply(t2_unix: float, t3_unix: float) -> bytes:
+    import struct
+
+    def enc(t):
+        n = t + tr.NTP_EPOCH_OFFSET
+        secs = int(n)
+        return struct.pack("!II", secs, int((n - secs) * 2**32))
+
+    return bytes(32) + enc(t2_unix) + enc(t3_unix)
+
+
+def test_ntp_offset_says_ahead_when_the_local_clock_runs_fast():
+    # True time = local - 0.5s, 10 ms each way, server answers instantly.
+    t1, t4 = 1_800_000_000.000, 1_800_000_000.020
+    reply = _ntp_reply(t2_unix=t1 - 0.5 + 0.010, t3_unix=t1 - 0.5 + 0.010)
+    ahead_ms, rtt_ms = tr.ntp_offset_from_packet(reply, t1, t4)
+    assert abs(ahead_ms - 500.0) < 0.01 and abs(rtt_ms - 20.0) < 0.01
+
+
+def test_ntp_offset_says_behind_when_the_local_clock_runs_slow():
+    t1, t4 = 1_800_000_000.000, 1_800_000_000.020
+    reply = _ntp_reply(t2_unix=t1 + 0.3 + 0.010, t3_unix=t1 + 0.3 + 0.010)
+    ahead_ms, _ = tr.ntp_offset_from_packet(reply, t1, t4)
+    assert abs(ahead_ms + 300.0) < 0.01

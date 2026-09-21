@@ -15,6 +15,7 @@ honestly, and every disconnect/sleep is written to gaps.csv so analysis can excl
 Output (data/ticks/, override with TICK_DIR):
     YYYY-MM-DD.csv(.gz)  recv_ns,oanda_time,instrument,bid,ask,tradeable   (UTC day of the local receive time)
     gaps.csv             start_utc,end_utc,seconds,reason
+    clock.csv            utc,server,local_ahead_ms,rtt_ms  -- this PC's clock error vs public NTP, sampled every 10 min
     recorder.log         one line per event
 
 Config (.env or environment): OANDA_ACCESS_TOKEN, OANDA_ACCOUNT_ID, OANDA_ENV (practice|live; default practice),
@@ -26,8 +27,11 @@ import gzip
 import json
 import os
 import shutil
+import socket
 import statistics
+import struct
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -39,6 +43,9 @@ READ_TIMEOUT_SECONDS = 15        # OANDA sends a heartbeat about every 5s; silen
 FLUSH_EVERY_SECONDS = 5
 STATUS_EVERY_SECONDS = 60
 MIN_FREE_GB = 1.0
+NTP_SERVERS = ["time.cloudflare.com", "time.google.com", "pool.ntp.org"]
+NTP_EPOCH_OFFSET = 2208988800
+CLOCK_SAMPLE_EVERY_SECONDS = 600
 HEADER = "recv_ns,oanda_time,instrument,bid,ask,tradeable\n"
 
 
@@ -148,6 +155,58 @@ def record_gap(directory: str, start_ns: int, end_ns: int, reason: str) -> None:
         f.write(f"{iso(start_ns)},{iso(end_ns)},{(end_ns - start_ns) / 1e9:.0f},{reason.replace(',', ';')}\n")
 
 
+# --------------------------------------------------------------------------- clock error vs NTP
+def ntp_offset_from_packet(reply: bytes, t1: float, t4: float):
+    """SNTP maths. t1 = local send time, t4 = local receive time (unix seconds). Returns (local_ahead_ms, rtt_ms)."""
+    def ts(b):
+        secs, frac = struct.unpack("!II", b)
+        return secs - NTP_EPOCH_OFFSET + frac / 2**32
+    t2, t3 = ts(reply[32:40]), ts(reply[40:48])
+    theta = ((t2 - t1) + (t3 - t4)) / 2          # server minus local
+    rtt = (t4 - t1) - (t3 - t2)
+    return -theta * 1000.0, rtt * 1000.0
+
+
+def measure_clock_error(servers=NTP_SERVERS, samples: int = 3):
+    """Median (local_ahead_ms, rtt_ms, server) over a few SNTP queries, or None if none answer. local_ahead > 0 means
+    this PC's clock is AHEAD of true time."""
+    for server in servers:
+        results = []
+        for _ in range(samples):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.settimeout(2.0)
+                    packet = b"\x1b" + 47 * b"\x00"
+                    t1 = time.time()
+                    sock.sendto(packet, (server, 123))
+                    reply, _ = sock.recvfrom(512)
+                    t4 = time.time()
+                if len(reply) >= 48:
+                    results.append(ntp_offset_from_packet(reply, t1, t4))
+            except OSError:
+                continue
+            time.sleep(0.2)
+        if results:
+            results.sort(key=lambda r: r[1])          # trust the lowest-round-trip answers
+            best = results[: max(1, len(results) // 2 + 1)]
+            return statistics.median(r[0] for r in best), statistics.median(r[1] for r in best), server
+    return None
+
+
+def clock_sampler(directory: str, stop: threading.Event) -> None:
+    path = os.path.join(directory, "clock.csv")
+    while not stop.is_set():
+        result = measure_clock_error()
+        if result is not None:
+            ahead, rtt, server = result
+            new_file = not os.path.exists(path)
+            with open(path, "a", encoding="utf-8") as f:
+                if new_file:
+                    f.write("utc,server,local_ahead_ms,rtt_ms\n")
+                f.write(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')},{server},{ahead:.0f},{rtt:.0f}\n")
+        stop.wait(CLOCK_SAMPLE_EVERY_SECONDS)
+
+
 # --------------------------------------------------------------------------- keep-awake (Windows)
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
 
@@ -232,12 +291,14 @@ def run(check_only: bool = False) -> int:
     stats = {"ticks": 0, "per_instrument": {}, "offsets": [], "connected": False, "last_recv_ns": None,
              "gap_start_ns": None, "gap_reason": "", "backoff": 1.0}
     writer = None if check_only else DayWriter(directory)
+    clock_stop = threading.Event()
 
     if check_only:
         print(f"Checking the {env} pricing stream for 30 seconds ({', '.join(instruments)}); nothing is written...")
     else:
         log(directory, f"recorder started: {', '.join(instruments)} ({env}) -> {directory}")
         keep_system_awake(True)
+        threading.Thread(target=clock_sampler, args=(directory, clock_stop), daemon=True).start()
 
     try:
         while True:
@@ -264,6 +325,7 @@ def run(check_only: bool = False) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        clock_stop.set()
         if writer:
             writer.close()
             log(directory, "recorder stopped")
@@ -276,9 +338,17 @@ def run(check_only: bool = False) -> int:
         offs = stats["offsets"]
         print(f"OK: {stats['ticks']} ticks in 30s ({', '.join(f'{k} {v}' for k, v in sorted(stats['per_instrument'].items()))}).")
         if offs:
-            print(f"PC receive time minus OANDA time: median {statistics.median(offs):.0f} ms "
-                  f"(range {min(offs):.0f} to {max(offs):.0f} ms). Network delay plus any clock error; "
-                  f"steady and positive is good. Large or negative values mean sync this PC's clock.")
+            raw = statistics.median(offs)
+            print(f"PC receive time minus OANDA time: median {raw:.0f} ms (network delay plus any clock error).")
+            clock = measure_clock_error()
+            if clock is None:
+                print("Could not reach an NTP server to measure this PC's clock error (UDP port 123 blocked?).")
+            else:
+                ahead, rtt, server = clock
+                print(f"This PC's clock vs {server}: {'ahead' if ahead > 0 else 'behind'} by {abs(ahead):.0f} ms "
+                      f"(NTP round trip {rtt:.0f} ms).")
+                print(f"=> real delay from OANDA stamping a price to this PC receiving it: about {raw - ahead:.0f} ms. "
+                      f"The recorder logs the clock error every 10 minutes (clock.csv) so the data is corrected either way.")
     return 0
 
 
