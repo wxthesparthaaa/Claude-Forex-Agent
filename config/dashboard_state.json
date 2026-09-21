@@ -57,7 +57,8 @@
     "CHF_JPY"
   ],
   "risk_limit_skips_since_digest": [
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40",
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 25 min ago, needs 40"
   ],
   "last_scan_digest_sent_at": "2026-09-21T18:28:10.726118+00:00",
   "last_review_date": "2026-09-22",
