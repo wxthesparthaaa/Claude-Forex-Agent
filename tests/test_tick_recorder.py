@@ -50,9 +50,9 @@ def test_writer_rotates_at_utc_midnight_and_gzips_the_finished_day(tmp_path):
 
 
 def test_writer_gzips_a_leftover_day_from_a_previous_run_on_startup(tmp_path):
-    (tmp_path / "2027-01-10.csv").write_text(tr.HEADER + "x\n")
+    (tmp_path / "2026-01-10.csv").write_text(tr.HEADER + "x\n")
     tr.DayWriter(str(tmp_path))
-    assert os.listdir(tmp_path) == ["2027-01-10.csv.gz"]
+    assert os.listdir(tmp_path) == ["2026-01-10.csv.gz"]
 
 
 class _FakeResponse:
@@ -232,3 +232,27 @@ def test_writer_flush_puts_buffered_rows_on_disk_immediately(tmp_path):
     w.flush()
     assert "row-1" in (tmp_path / "2027-01-15.csv").read_text()
     w.close()
+
+
+def test_a_same_day_restart_does_not_gzip_todays_file_and_rotation_never_overwrites_a_part(tmp_path):
+    # Real bug found the first time the recorder was restarted mid-day: startup gzipped TODAY's csv, the new run
+    # started a fresh csv, and the UTC-midnight rotation would then have overwritten the first part's .gz.
+    import gzip as _gzip
+    import time as _time
+    today = tr.utc_day(_time.time_ns())
+    part1 = tmp_path / f"{today}.csv"
+    part1.write_text(tr.HEADER + "first-run\n")
+    w = tr.DayWriter(str(tmp_path))
+    assert part1.exists() and not (tmp_path / f"{today}.csv.gz").exists()   # today's file is left alone
+
+    with _gzip.open(tmp_path / "2026-01-11.csv.gz", "wt") as f:              # a part already packed by an earlier run
+        f.write(tr.HEADER + "part-one\n")
+    (tmp_path / "2026-01-11.csv").write_text(tr.HEADER + "part-two\n")
+    w.compress_finished(current=today)
+
+    names = sorted(n for n in os.listdir(tmp_path) if n.startswith("2026-01-11"))
+    assert names == ["2026-01-11.1.csv.gz", "2026-01-11.csv.gz"]
+    with _gzip.open(tmp_path / "2026-01-11.csv.gz", "rt") as f:
+        assert "part-one" in f.read()                                        # not overwritten
+    with _gzip.open(tmp_path / "2026-01-11.1.csv.gz", "rt") as f:
+        assert "part-two" in f.read()

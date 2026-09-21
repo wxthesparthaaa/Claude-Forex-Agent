@@ -147,11 +147,19 @@ class DayWriter:
             self.fh = None
 
     def compress_finished(self, current: str | None) -> None:
+        """Gzips only days strictly BEFORE `current` (default: today, UTC) -- never the day still being written, so a
+        restart mid-day cannot pack away the file we are about to append to -- and never overwrites an existing .gz
+        (a same-day restart leaves an earlier part behind); extra parts get .1, .2 ... in the name."""
+        cutoff = current or utc_day(time.time_ns())
         for name in sorted(os.listdir(self.dir)):
-            if name.endswith(".csv") and name[:-4] != current and name[:4].isdigit():
+            if name.endswith(".csv") and name[:4].isdigit() and name[:-4] < cutoff:
                 src = os.path.join(self.dir, name)
+                dst, n = src + ".gz", 0
+                while os.path.exists(dst):
+                    n += 1
+                    dst = os.path.join(self.dir, f"{name[:-4]}.{n}.csv.gz")
                 try:
-                    with open(src, "rb") as f_in, gzip.open(src + ".gz", "wb") as f_out:
+                    with open(src, "rb") as f_in, gzip.open(dst, "wb") as f_out:
                         shutil.copyfileobj(f_in, f_out)
                     os.remove(src)
                 except OSError as e:
