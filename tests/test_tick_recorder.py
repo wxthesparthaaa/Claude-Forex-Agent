@@ -117,3 +117,22 @@ def test_ntp_offset_says_behind_when_the_local_clock_runs_slow():
     reply = _ntp_reply(t2_unix=t1 + 0.3 + 0.010, t3_unix=t1 + 0.3 + 0.010)
     ahead_ms, _ = tr.ntp_offset_from_packet(reply, t1, t4)
     assert abs(ahead_ms + 300.0) < 0.01
+
+
+def test_live_line_updates_in_place_and_a_log_line_starts_on_a_fresh_line(tmp_path, capsys):
+    tr.live_line("recording OK -- 10 ticks")
+    tr.log(str(tmp_path), "disconnected (test)")
+    out = capsys.readouterr().out
+    assert out.startswith("\rrecording OK -- 10 ticks")
+    assert "\ndisconnected".replace("\n", "") not in out.split("\n")[0]      # live line is on its own line
+    assert out.split("\n")[1].endswith("disconnected (test)")
+
+
+def test_stream_shows_the_live_line_only_when_recording(tmp_path, capsys):
+    stats = {"ticks": 0, "per_instrument": {}, "offsets": [], "connected": False, "last_recv_ns": None,
+             "gap_start_ns": None, "gap_reason": "", "backoff": 1.0}
+    writer = tr.DayWriter(str(tmp_path))
+    with patch("tick_recorder.requests.get", return_value=_FakeResponse([_price().encode()])):
+        tr.stream_once("http://x", {}, {}, writer, stats, str(tmp_path))
+    writer.close()
+    assert "recording OK -- 1 ticks this session" in capsys.readouterr().out

@@ -42,6 +42,7 @@ STREAM_URLS = {"practice": "https://stream-fxpractice.oanda.com", "live": "https
 READ_TIMEOUT_SECONDS = 15        # OANDA sends a heartbeat about every 5s; silence this long means a dead connection
 FLUSH_EVERY_SECONDS = 5
 STATUS_EVERY_SECONDS = 60
+LIVE_LINE_EVERY_SECONDS = 5
 MIN_FREE_GB = 1.0
 NTP_SERVERS = ["time.cloudflare.com", "time.google.com", "pool.ntp.org"]
 NTP_EPOCH_OFFSET = 2208988800
@@ -135,8 +136,22 @@ class DayWriter:
                     log(self.dir, f"could not compress {name}: {e}")
 
 
+_live_line_open = False
+
+
+def live_line(text: str) -> None:
+    """A single console line that updates in place (not written to recorder.log)."""
+    global _live_line_open
+    print("\r" + text.ljust(100), end="", flush=True)
+    _live_line_open = True
+
+
 def log(directory: str, message: str) -> None:
+    global _live_line_open
     line = f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} {message}"
+    if _live_line_open:
+        print(flush=True)  # finish the in-place line before a permanent log line
+        _live_line_open = False
     print(line, flush=True)
     try:
         with open(os.path.join(directory, "recorder.log"), "a", encoding="utf-8") as f:
@@ -263,6 +278,11 @@ def stream_once(url: str, headers: dict, params: dict, writer: DayWriter | None,
                         pass
                 if writer is not None:
                     writer.write(recv_ns, row)
+            if writer is not None and time.monotonic() - stats.get("last_live", 0.0) >= LIVE_LINE_EVERY_SECONDS:
+                gained = stats["ticks"] - stats.get("last_live_ticks", 0)
+                stats["last_live"], stats["last_live_ticks"] = time.monotonic(), stats["ticks"]
+                live_line(f"[{datetime.now().strftime('%H:%M:%S')}] recording OK -- {stats['ticks']:,} ticks this session "
+                          f"(+{gained} in the last {LIVE_LINE_EVERY_SECONDS}s). Leave this window open.")
             if time.monotonic() - last_status >= STATUS_EVERY_SECONDS:
                 last_status = time.monotonic()
                 free_gb = shutil.disk_usage(directory).free / 1e9
