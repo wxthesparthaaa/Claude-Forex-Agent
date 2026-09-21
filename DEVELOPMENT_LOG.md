@@ -9236,3 +9236,13 @@ query to time.cloudflare.com both say so, 7 ms round trip), so the real stamp-to
 Windows disciplines the clock loosely (it slews rather than steps and can sit off by hundreds of ms), so the
 recorder now measures its own clock error against public NTP every 10 minutes into `clock.csv` and `--check`
 prints the corrected delay; analysis subtracts the logged error instead of trusting the Windows clock.
+
+Tick recorder self-check + Telegram alerts (2026-09-21, user request): a 10-second watchdog thread announces PAUSED
+(stream down 60s+; queued and retried if the internet is down too), RESUMED (with the exact missing minutes and the
+cause, incl. PC sleep/freeze detected from a stalled watchdog loop), SILENT (connected but no prices for 5 min while the
+market is open), LOW DISK, STARTED (with how long it had NOT been running, from heartbeat.txt -- the only way to learn
+of a sleep/shutdown/closed window, since a dead process cannot announce itself) and clean STOPPED. Data safety: rows are
+flushed every 5s and immediately when a disconnect is detected, so at most ~5s can be lost to a hard crash/power cut;
+prices during an outage are unrecoverable (OANDA's stream has no replay) and are recorded in gaps.csv instead.
+`--test-telegram` verifies alerts; RECORDER_ALERTS=off disables them. A dead-man's-switch on the always-on Render app
+(alert when heartbeats stop) is a possible add-on; not built.

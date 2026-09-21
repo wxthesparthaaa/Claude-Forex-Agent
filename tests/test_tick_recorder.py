@@ -136,3 +136,99 @@ def test_stream_shows_the_live_line_only_when_recording(tmp_path, capsys):
         tr.stream_once("http://x", {}, {}, writer, stats, str(tmp_path))
     writer.close()
     assert "recording OK -- 1 ticks this session" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- self-check + Telegram alerts
+SEC = 10**9
+
+
+def _health_stats(**kw):
+    base = {"gap_start_ns": None, "gap_reason": "ConnectionError: wifi", "last_price_ns": None,
+            "alerted_outage": False, "alerted_silence": False}
+    base.update(kw)
+    return base
+
+
+def test_short_blips_are_not_announced_but_a_minute_long_outage_is_announced_once():
+    stats = _health_stats(gap_start_ns=NS_DAY1)
+    assert tr.evaluate_health(stats, NS_DAY1 + 30 * SEC, True) == []
+    msgs = tr.evaluate_health(stats, NS_DAY1 + 61 * SEC, True)
+    assert len(msgs) == 1 and "PAUSED" in msgs[0] and "wifi" in msgs[0] and "saved" in msgs[0]
+    assert tr.evaluate_health(stats, NS_DAY1 + 200 * SEC, True) == []          # not repeated
+
+
+def test_silent_stream_alerts_only_while_the_market_is_open_and_recovers_with_a_message():
+    stats = _health_stats(last_price_ns=NS_DAY1)
+    assert tr.evaluate_health(stats, NS_DAY1 + 10 * 60 * SEC, False) == []      # weekend: quiet is normal
+    assert tr.evaluate_health(stats, NS_DAY1 + 10 * 60 * SEC, None) == []       # unknown market state: stay quiet
+    msgs = tr.evaluate_health(stats, NS_DAY1 + 10 * 60 * SEC, True)
+    assert len(msgs) == 1 and "SILENT" in msgs[0]
+    assert tr.evaluate_health(stats, NS_DAY1 + 11 * 60 * SEC, True) == []
+    stats["last_price_ns"] = NS_DAY1 + 12 * 60 * SEC                            # a price arrives
+    recovered = tr.evaluate_health(stats, NS_DAY1 + 12 * 60 * SEC + 5 * SEC, True)
+    assert len(recovered) == 1 and "flowing again" in recovered[0]
+
+
+def test_resume_message_only_for_announced_or_long_gaps_and_names_the_missing_minutes():
+    short = _health_stats()
+    assert tr.resume_message(short, NS_DAY1, NS_DAY1 + 3 * SEC) is None
+    long_gap = _health_stats(frozen_note="this PC was frozen or asleep for about 9 min")
+    msg = tr.resume_message(long_gap, NS_DAY1, NS_DAY1 + 600 * SEC)
+    assert "RESUMED" in msg and "min)" in msg and "asleep" in msg and "wifi" in msg
+    announced = _health_stats(alerted_outage=True)
+    assert tr.resume_message(announced, NS_DAY1, NS_DAY1 + 5 * SEC) is not None
+
+
+def test_reconnect_after_a_long_gap_sends_the_resume_alert_and_clears_the_flags(tmp_path):
+    sent = []
+    stats = {"ticks": 0, "per_instrument": {}, "offsets": [], "connected": False, "last_recv_ns": None,
+             "gap_start_ns": NS_DAY1 - 300 * SEC, "gap_reason": "ReadTimeout", "backoff": 32.0,
+             "alerted_outage": True, "frozen_note": None, "notify": sent.append}
+    writer = tr.DayWriter(str(tmp_path))
+    with patch("tick_recorder.requests.get", return_value=_FakeResponse([_price().encode()])):
+        tr.stream_once("http://x", {}, {}, writer, stats, str(tmp_path))
+    writer.close()
+    assert len(sent) == 1 and "RESUMED" in sent[0]
+    assert stats["alerted_outage"] is False and stats["gap_start_ns"] is None
+
+
+def test_notifier_keeps_an_alert_and_retries_until_the_internet_is_back():
+    import time as _time
+    attempts = []
+
+    def flaky(text):
+        attempts.append(text)
+        if len(attempts) < 3:
+            raise OSError("no internet")
+
+    n = tr.Notifier(sender=flaky, retry_seconds=0.01)
+    n.start()
+    n.send("outage alert")
+    deadline = _time.time() + 3
+    while len(attempts) < 3 and _time.time() < deadline:
+        _time.sleep(0.02)
+    n.stop()
+    assert attempts == ["outage alert"] * 3
+
+
+def test_notifier_disables_itself_when_telegram_is_not_configured():
+    import time as _time
+
+    def unconfigured(text):
+        raise FileNotFoundError("telegram_config.properties")
+
+    n = tr.Notifier(sender=unconfigured, retry_seconds=0.01)
+    n.start()
+    n.send("hello")
+    _time.sleep(0.3)
+    n.stop()
+    assert n.enabled is False
+
+
+def test_writer_flush_puts_buffered_rows_on_disk_immediately(tmp_path):
+    w = tr.DayWriter(str(tmp_path))
+    w.write(NS_DAY1, "row-1\n")
+    assert "row-1" not in (tmp_path / "2027-01-15.csv").read_text()   # still buffered
+    w.flush()
+    assert "row-1" in (tmp_path / "2027-01-15.csv").read_text()
+    w.close()

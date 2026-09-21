@@ -17,6 +17,15 @@ Output (data/ticks/, override with TICK_DIR):
     gaps.csv             start_utc,end_utc,seconds,reason
     clock.csv            utc,server,local_ahead_ms,rtt_ms  -- this PC's clock error vs public NTP, sampled every 10 min
     recorder.log         one line per event
+    heartbeat.txt        refreshed every 10s -- lets the next start tell how long the recorder was NOT running
+
+Telegram alerts (same bot as the trading app; set RECORDER_ALERTS=off to disable, --test-telegram to test):
+    PAUSED   the stream has been down 60s+ (sent as soon as the internet allows -- queued and retried if it is down)
+    RESUMED  recording is back, with exactly which minutes are missing and why
+    SILENT   connected but no prices for 5 min while the forex market is open
+    STARTED  every start, plus how long it was not running before (covers sleep/shutdown/closed window)
+    STOPPED  clean stop (Ctrl+C); LOW DISK
+A recorder that is killed outright or a PC that is off cannot announce it -- but the STARTED message afterwards does.
 
 Config (.env or environment): OANDA_ACCESS_TOKEN, OANDA_ACCOUNT_ID, OANDA_ENV (practice|live; default practice),
 RECORDER_INSTRUMENTS (comma list; default = EUR_USD,GBP_USD,USD_JPY,AUD_USD,USD_CAD,XAU_USD).
@@ -26,6 +35,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import queue
 import shutil
 import socket
 import statistics
@@ -34,6 +44,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -47,6 +58,12 @@ MIN_FREE_GB = 1.0
 NTP_SERVERS = ["time.cloudflare.com", "time.google.com", "pool.ntp.org"]
 NTP_EPOCH_OFFSET = 2208988800
 CLOCK_SAMPLE_EVERY_SECONDS = 600
+OUTAGE_ALERT_SECONDS = 60          # a blip shorter than this is only logged, not announced
+SILENCE_ALERT_SECONDS = 300        # connected but no PRICE this long while the market is open
+WATCHDOG_EVERY_SECONDS = 10
+FROZEN_DETECT_SECONDS = 60         # the 10s watchdog loop took this much longer than planned => PC/process was suspended
+NEW_RUN_GAP_MINUTES = 3            # a start this long after the last heartbeat is reported as a restart with a gap
+SGT = ZoneInfo("Asia/Singapore")
 HEADER = "recv_ns,oanda_time,instrument,bid,ask,tradeable\n"
 
 
@@ -115,6 +132,11 @@ class DayWriter:
             self.compress_finished(current=day)
         self.fh.write(row)
         if time.monotonic() - self.last_flush >= FLUSH_EVERY_SECONDS:
+            self.fh.flush()
+            self.last_flush = time.monotonic()
+
+    def flush(self) -> None:
+        if self.fh:
             self.fh.flush()
             self.last_flush = time.monotonic()
 
@@ -222,6 +244,139 @@ def clock_sampler(directory: str, stop: threading.Event) -> None:
         stop.wait(CLOCK_SAMPLE_EVERY_SECONDS)
 
 
+# --------------------------------------------------------------------------- alerts + self-check
+def sgt_time(ns: int) -> str:
+    return datetime.fromtimestamp(ns / 1e9, SGT).strftime("%H:%M")
+
+
+def sgt_span(start_ns: int, end_ns: int) -> str:
+    return f"{sgt_time(start_ns)}-{sgt_time(end_ns)} SGT ({(end_ns - start_ns) / 60e9:.0f} min)"
+
+
+class Notifier:
+    """Best-effort Telegram alerts. Messages are queued and retried, so an alert raised while the internet is down
+    is delivered as soon as it returns instead of being lost. Never raises into the recording loop."""
+
+    def __init__(self, sender=None, retry_seconds: float = 15.0):
+        self.sender = sender or self._telegram_sender
+        self.retry_seconds = retry_seconds
+        self.pending = queue.Queue()
+        self.stop_event = threading.Event()
+        self.enabled = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    @staticmethod
+    def _telegram_sender(text: str) -> None:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+        from telegram_notifier import send_message
+        send_message(text)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def send(self, text: str) -> None:
+        if self.enabled:
+            self.pending.put(text)
+
+    def send_now(self, text: str) -> bool:
+        """One immediate attempt (used for the clean-stop message, when the queue thread is about to end)."""
+        try:
+            self.sender(text)
+            return True
+        except Exception:
+            return False
+
+    def _run(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                text = self.pending.get(timeout=1)
+            except queue.Empty:
+                continue
+            while not self.stop_event.is_set():
+                try:
+                    self.sender(text)
+                    break
+                except (FileNotFoundError, KeyError):
+                    self.enabled = False          # no Telegram config on this PC: stop trying, keep recording
+                    print("Telegram is not configured on this PC -- alerts disabled (recording is unaffected).", flush=True)
+                    return
+                except Exception:
+                    self.stop_event.wait(self.retry_seconds)   # keep the alert and retry shortly
+
+    def stop(self) -> None:
+        self.stop_event.set()
+
+
+def evaluate_health(stats: dict, now_ns: int, market_open) -> list:
+    """The self-check. Pure decision logic (unit tested): returns the alert messages due right now and updates the
+    alerted flags in `stats` so each problem is announced once. market_open may be None (unknown) -> no silence alerts."""
+    msgs = []
+    gap = stats.get("gap_start_ns")
+    if gap is not None and not stats.get("alerted_outage") and now_ns - gap >= OUTAGE_ALERT_SECONDS * 10**9:
+        stats["alerted_outage"] = True
+        msgs.append(
+            f"⚠️ <b>Tick recorder PAUSED</b>\nThe price stream has been down since {sgt_time(gap)} SGT "
+            f"({(now_ns - gap) / 60e9:.0f} min so far): {stats.get('gap_reason', 'unknown reason')}.\n"
+            f"Retrying automatically. Everything recorded before the pause is saved.")
+    last_price = stats.get("last_price_ns")
+    if gap is None and market_open and last_price is not None and not stats.get("alerted_silence") \
+            and now_ns - last_price >= SILENCE_ALERT_SECONDS * 10**9:
+        stats["alerted_silence"] = True
+        msgs.append(
+            f"⚠️ <b>Tick recorder SILENT</b>\nStill connected, but no prices for "
+            f"{(now_ns - last_price) / 60e9:.0f} min while the forex market is open (last price {sgt_time(last_price)} SGT).")
+    if stats.get("alerted_silence") and last_price is not None and now_ns - last_price < 60 * 10**9:
+        stats["alerted_silence"] = False
+        msgs.append("✅ <b>Tick recorder</b>: prices are flowing again.")
+    return msgs
+
+
+def resume_message(stats: dict, gap_start_ns: int, end_ns: int):
+    """Sent when a gap closes -- but only if it was announced or is long enough to matter."""
+    if not (stats.get("alerted_outage") or (end_ns - gap_start_ns) >= OUTAGE_ALERT_SECONDS * 10**9):
+        return None
+    note = f"\nNote: {stats['frozen_note']}" if stats.get("frozen_note") else ""
+    return (f"✅ <b>Tick recorder RESUMED</b>\nMissing data: {sgt_span(gap_start_ns, end_ns)}. "
+            f"Cause: {stats.get('gap_reason', 'unknown')}.{note}")
+
+
+def market_is_open():
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+        from market_hours import is_forex_market_open
+        return bool(is_forex_market_open())
+    except Exception:
+        return None
+
+
+def read_heartbeat(directory: str):
+    try:
+        with open(os.path.join(directory, "heartbeat.txt"), encoding="utf-8") as f:
+            return datetime.fromisoformat(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def watchdog(stats: dict, directory: str, notifier: Notifier, stop: threading.Event) -> None:
+    path = os.path.join(directory, "heartbeat.txt")
+    last_wall = time.time()
+    while not stop.wait(WATCHDOG_EVERY_SECONDS):
+        wall = time.time()
+        late = (wall - last_wall) - WATCHDOG_EVERY_SECONDS
+        last_wall = wall
+        if late >= FROZEN_DETECT_SECONDS:
+            stats["frozen_note"] = f"this PC (or the recorder) was frozen or asleep for about {late / 60:.0f} min"
+            log(directory, f"watchdog: {stats['frozen_note']}")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        except OSError:
+            pass
+        for msg in evaluate_health(stats, time.time_ns(), market_is_open()):
+            log(directory, "alert: " + msg.replace("\n", " | ").replace("<b>", "").replace("</b>", ""))
+            notifier.send(msg)
+
+
 # --------------------------------------------------------------------------- keep-awake (Windows)
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
 
@@ -266,10 +421,15 @@ def stream_once(url: str, headers: dict, params: dict, writer: DayWriter | None,
                 if writer is not None:
                     record_gap(directory, stats["gap_start_ns"], recv_ns, stats["gap_reason"])
                 log(directory, f"reconnected after {(recv_ns - stats['gap_start_ns']) / 1e9:.0f}s")
+                message = resume_message(stats, stats["gap_start_ns"], recv_ns)
+                if message and stats.get("notify"):
+                    stats["notify"](message)
                 stats["gap_start_ns"], stats["backoff"] = None, 1.0
+                stats["alerted_outage"], stats["frozen_note"] = False, None
             stats["last_recv_ns"] = recv_ns
             if kind == "PRICE":
                 stats["ticks"] += 1
+                stats["last_price_ns"] = recv_ns
                 stats["per_instrument"][row.split(",")[2]] = stats["per_instrument"].get(row.split(",")[2], 0) + 1
                 if len(stats["offsets"]) < 2000:
                     try:
@@ -286,6 +446,9 @@ def stream_once(url: str, headers: dict, params: dict, writer: DayWriter | None,
             if time.monotonic() - last_status >= STATUS_EVERY_SECONDS:
                 last_status = time.monotonic()
                 free_gb = shutil.disk_usage(directory).free / 1e9
+                if free_gb < MIN_FREE_GB and not stats.get("low_disk_alerted") and stats.get("notify"):
+                    stats["low_disk_alerted"] = True
+                    stats["notify"](f"\u26a0\ufe0f <b>Tick recorder</b>: low disk space ({free_gb:.1f} GB free).")
                 log(directory, f"status: {stats['ticks']} ticks recorded, "
                                f"{', '.join(f'{k} {v}' for k, v in sorted(stats['per_instrument'].items()))}"
                                f"{'' if free_gb >= MIN_FREE_GB else f' | LOW DISK: {free_gb:.1f} GB free'}")
@@ -312,6 +475,8 @@ def run(check_only: bool = False) -> int:
              "gap_start_ns": None, "gap_reason": "", "backoff": 1.0}
     writer = None if check_only else DayWriter(directory)
     clock_stop = threading.Event()
+    notifier = Notifier()
+    alerts_on = (not check_only) and os.environ.get("RECORDER_ALERTS", "on").lower() != "off"
 
     if check_only:
         print(f"Checking the {env} pricing stream for 30 seconds ({', '.join(instruments)}); nothing is written...")
@@ -319,6 +484,17 @@ def run(check_only: bool = False) -> int:
         log(directory, f"recorder started: {', '.join(instruments)} ({env}) -> {directory}")
         keep_system_awake(True)
         threading.Thread(target=clock_sampler, args=(directory, clock_stop), daemon=True).start()
+        if alerts_on:
+            notifier.start()
+            stats["notify"] = notifier.send
+            previous = read_heartbeat(directory)
+            now_utc = datetime.now(timezone.utc)
+            was_down = ""
+            if previous is not None and (now_utc - previous) > timedelta(minutes=NEW_RUN_GAP_MINUTES):
+                was_down = (f"\nIt was NOT recording from {previous.astimezone(SGT):%H:%M} to "
+                            f"{now_utc.astimezone(SGT):%H:%M} SGT ({(now_utc - previous).total_seconds() / 60:.0f} min).")
+            notifier.send(f"\u25b6\ufe0f <b>Tick recorder STARTED</b>\n{', '.join(instruments)} ({env}).{was_down}")
+        threading.Thread(target=watchdog, args=(stats, directory, notifier, clock_stop), daemon=True).start()
 
     try:
         while True:
@@ -336,6 +512,8 @@ def run(check_only: bool = False) -> int:
             if check_only:
                 print(f"Connection problem: {reason}")
                 return 1
+            if writer:
+                writer.flush()          # everything received so far is on disk before we wait to reconnect
             if stats["gap_start_ns"] is None:
                 stats["gap_start_ns"] = stats["last_recv_ns"] or time.time_ns()
             stats["gap_reason"] = reason
@@ -349,6 +527,9 @@ def run(check_only: bool = False) -> int:
         if writer:
             writer.close()
             log(directory, "recorder stopped")
+            if alerts_on:
+                notifier.send_now("\u23f9\ufe0f <b>Tick recorder STOPPED</b> (clean shutdown -- recording is not running now).")
+        notifier.stop()
         keep_system_awake(False)
 
     if check_only:
@@ -372,5 +553,17 @@ def run(check_only: bool = False) -> int:
     return 0
 
 
+def test_telegram() -> int:
+    try:
+        Notifier._telegram_sender("\U0001F9EA <b>Tick recorder</b>: test alert -- if you can read this, alerts work.")
+    except Exception as e:
+        print(f"Telegram test FAILED: {type(e).__name__}: {e}")
+        return 1
+    print("Telegram test sent -- check your chat.")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--test-telegram" in sys.argv:
+        sys.exit(test_telegram())
     sys.exit(run(check_only="--check" in sys.argv))
