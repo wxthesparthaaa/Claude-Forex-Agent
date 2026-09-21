@@ -26,3 +26,5 @@ Status (2026-09-19 Phase 1 audit): no strategy passes.
 - Scalp-family search (2026-09-21, `scripts/scalp_research.py`): opening-range breakout, Bollinger fade and
   Donchian momentum, 12 configs, realistic execution: all negative; best holdout -0.10R. Gross edge ~0, spread
   is the whole loss.
+- Round 2 (scripts/scalp_research_round2.py): limit-order entries, slower 15m/60m bars and a lead-lag scan
+  also fail (best holdout -0.10R); gross edge ~0 at every horizon tested, so cheaper execution alone cannot fix it.

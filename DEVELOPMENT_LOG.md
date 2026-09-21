@@ -9194,3 +9194,26 @@ day-pooled t-tests, Bonferroni over 12.
   leaves -0.11 to -0.19R.
 - Conclusion: no simple technical scalp/intraday family beats retail spreads on this data; gross edge is
   smaller than cost. VWAP Scalp's failure is structural, not a tuning problem.
+
+### Round 2 (2026-09-21): can the retail spread be engineered around? (`scripts/scalp_research_round2.py`)
+User was not convinced round 1 (no edge) closed the question, so four mechanisms were tested (20 new configs;
+Bonferroni over 32 with round 1; stop must be >= 1 spread away; round-1 harness generalized to any bar length
+and verified to reproduce round 1 exactly).
+- **E1 spread anatomy**: the cheapest hour everywhere is 14:00 UTC (NY overlap). Spread / median M5 range: gold
+  0.09 (best hour) to 0.15 (07-20 UTC), FX majors 0.3-0.5 (0.26-0.43 at 14:00), crosses/NZD 0.4-0.8; 22-24 UTC is
+  0.6-1.6. There is no time/instrument where a 5-minute scalp's fee is small.
+- **E2 passive (limit) entries** for the Bollinger fade: fill rate 39-58% (market must trade through the limit).
+  Maker net -0.30R vs taker -0.25R on all signals. On the SAME filled trades the taker would have made -0.43R:
+  the ~0.13R spread saved is cancelled by adverse selection (limits fill mostly when the move keeps going
+  against you). Best config holdout -0.30R (t=-10.7). No improvement.
+- **E3 slower bars** (15m, 60m; Bollinger fade and Donchian momentum): spread/risk falls from ~0.3 to 0.10-0.24
+  and losses shrink smoothly (Bollinger best: -0.25R at M5, -0.14R at M15, -0.10R at H1) -- exactly the cost
+  falling with gross edge ~0 underneath. Best per group on the holdout: BOLL tf15 -0.16R, BOLL tf60 -0.10R
+  (p=0.15), MOM tf15 -0.28R, MOM tf60 -0.25R. None passes; all worse with stress.
+- **E4 lead-lag scan** (gross, 272 ordered pairs, M5): largest |corr| 0.042 (explains 0.17% of next-bar
+  variance); the top discovery pairs flip sign in the holdout; the 19 that hold the same sign have |corr|
+  ~0.02-0.03 -- roughly an order of magnitude too small to pay a spread that is 0.3-0.5 of a bar's range.
+- **Conclusion**: the fee is not the only obstacle -- the gross edge of these rule families is ~0 at every
+  horizon from 5 minutes to 1 hour. Cheaper execution (raw-spread account, limits, tighter hours) would shrink
+  the loss but not create a profit; the best frictionless gross number seen anywhere is about +0.13R, which
+  would need total costs to fall to roughly a third of OANDA's just to break even.

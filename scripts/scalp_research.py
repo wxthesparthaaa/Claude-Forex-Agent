@@ -50,16 +50,17 @@ BO, BH, BL, BC, AO, AH, AL, AC = range(8)
 
 # --------------------------------------------------------------------------- data
 class Instrument:
-    def __init__(self, name: str):
+    def __init__(self, name: str, tf: int = 5):
         z = np.load(os.path.join(DATA, f"{name}.npz"))
         self.name = name
+        self.tf = tf  # signal bar length in minutes (5 = round 1)
         self.t = z["t"]            # minutes since epoch (UTC)
         self.a = z["a"]            # (n, 8) bid o/h/l/c, ask o/h/l/c
         mid = (self.a[:, :4] + self.a[:, 4:]) / 2
-        key = self.t // 5
+        key = self.t // tf
         starts = np.flatnonzero(np.r_[True, np.diff(key) != 0])
         ends = np.r_[starts[1:], len(self.t)] - 1
-        self.t5 = key[starts] * 5
+        self.t5 = key[starts] * tf  # start minute of each signal bar (name kept from round 1)
         self.o5 = mid[starts, 0]
         self.h5 = np.maximum.reduceat(mid[:, 1], starts)
         self.l5 = np.minimum.reduceat(mid[:, 2], starts)
@@ -71,7 +72,7 @@ class Instrument:
         n = len(self.t5)
         # a signal must not sit on indicator history that spans a weekend/session gap
         self.clean = np.zeros(n, dtype=bool)
-        self.clean[30:] = (self.t5[30:] - self.t5[:-30]) <= 30 * 5 + 30
+        self.clean[30:] = (self.t5[30:] - self.t5[:-30]) <= 30 * tf + 30
 
 
 def rolling_mean(x, n):
@@ -100,7 +101,7 @@ def simulate(ins: Instrument, i5: int, direction: int, stop: float, target: floa
     pre-registered protocol."""
     t = ins.t
     a = ins.a_mid if frictionless else ins.a
-    decision = ins.t5[i5] + 5
+    decision = ins.t5[i5] + ins.tf
     idx = int(np.searchsorted(t, decision + delay))
     if idx >= len(t) or t[idx] - (decision + delay) > 10:
         return None  # market closed / data gap at the moment we would act
@@ -230,7 +231,7 @@ def run_config(instruments, make_signals, max_hold, delay=DELAY_MIN, **sim_kwarg
             if res is None:
                 continue
             r, r_stress, cost, exit_idx, hold, outcome = res
-            entry_idx = int(np.searchsorted(ins.t, ins.t5[i5] + 5 + delay))
+            entry_idx = int(np.searchsorted(ins.t, ins.t5[i5] + ins.tf + delay))
             if entry_idx <= busy_until:
                 continue
             busy_until = exit_idx
@@ -274,6 +275,7 @@ def _selftest():
     a[:, [AO, AH, AL, AC]] = 100.02
     f.a = a
     f.t5 = np.array([1000], dtype=np.int64)
+    f.tf = 5
     # LONG: fill at ask 100.02; TP 101 reached by bid high in a later bar
     a2 = a.copy(); a2[20, BH] = 101.5
     f.a = a2
