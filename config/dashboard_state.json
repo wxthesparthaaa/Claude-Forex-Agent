@@ -38,7 +38,9 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 40"
+  ],
   "last_scan_digest_sent_at": "2026-09-21T18:28:10.726118+00:00",
   "last_review_date": "2026-09-22",
   "last_health_check_date": "2026-09-21",
