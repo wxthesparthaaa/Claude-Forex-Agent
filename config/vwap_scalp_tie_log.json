@@ -1914,5 +1914,24 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-21T08:34:37.985853+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "EUR_USD",
+      "USD_JPY",
+      "AUD_USD",
+      "USD_CAD",
+      "NZD_USD",
+      "AUD_JPY",
+      "NZD_JPY",
+      "GBP_JPY",
+      "EUR_JPY",
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
