@@ -323,7 +323,17 @@ WEAK_HOUR_PAIR_EXCLUSIONS = {}
 # realized/intended ratio was checked separately and stays close to
 # correct -- this is a VWAP-Scalp-specific execution effect, general
 # across the pairs it trades, not an account-wide setting problem.
-REALIZED_LOSS_INFLATION = 1.29  # divides risk_amount so REAL realized losses land back near the
+# Recalibrated 2026-09-22 against 184 closed VWAP Scalp losses since the
+# compensation above went live (2026-09-02) -- realized_pnl / risk_amount
+# (the already-deflated journal figure, so this ratio measures the SAME
+# leftover drift the 1.29 was meant to cancel) now averages 1.39x
+# (median 1.35x, 5-95% trimmed mean 1.37x), not the 1.29x the original
+# 22-trade sample gave. Winners corroborate the same effect direction
+# (n=82, mean 1.30x, median 1.20x), consistent with a symmetric
+# conversion-rate-drift cause rather than something stop-specific. Using
+# the loser figure (mean) to stay comparable with the original
+# calibration's own methodology.
+REALIZED_LOSS_INFLATION = 1.39  # divides risk_amount so REAL realized losses land back near the
                                  # user's intended risk_per_trade_pct; recalibrate as more live
                                  # data accumulates, and revisit if the root cause is ever found.
 
@@ -618,7 +628,20 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
     hasn't traded yet. Deliberately today-only, not a running average
     since VWAP Scalp went live -- a multi-week backfill would need
     real historical data pulled and reconciled first; today's own
-    figures are already fully available from the existing journal."""
+    figures are already fully available from the existing journal.
+
+    Skips any bucket that falls entirely outside the current
+    WATCH_START_HOUR-WATCH_END_HOUR window (user request, 2026-09-22):
+    the watch window was widened to 04:00-24:00 UTC on 2026-09-08 then
+    reverted back to 07:00-20:00 on 2026-09-16, but VWAP_SCALP_TIME_BUCKETS_UTC
+    itself was never shrunk back -- its own comment explains why (the
+    per-bucket cap's denominator has to stay stable for anyone who
+    already tuned vwap_scalp_max_trades_per_day around it). Left as-is,
+    the two edge buckets (04:00-07:00 and 20:00-24:00 UTC) can now never
+    hold a trade and only ever showed "0/N" in the digest -- dead rows
+    that no longer mean anything since the revert. per_bucket_cap is
+    still computed against the FULL bucket list below (real gating
+    logic elsewhere does the same), only the display list is filtered."""
     from dashboard_state import load_state
 
     now = now or datetime.now(timezone.utc)
@@ -629,6 +652,8 @@ def vwap_scalp_bucket_summary(now: datetime = None) -> list:
 
     summary = []
     for start_h, end_h, session_label in VWAP_SCALP_TIME_BUCKETS_UTC:
+        if end_h <= WATCH_START_HOUR or start_h >= WATCH_END_HOUR:
+            continue  # entirely outside today's active watch window -- never fires, don't show it
         bucket_start = today_start + timedelta(hours=start_h)
         bucket_end = today_start + timedelta(hours=end_h)
         bucket_entries = _vwap_scalp_entries_between(entries, bucket_start, bucket_end)

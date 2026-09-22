@@ -799,20 +799,24 @@ def test_vwap_scalp_bucket_summary_reports_per_bucket_counts_and_cap(tmp_path, m
 
     summary = vs.vwap_scalp_bucket_summary(FIXED_NOW)
 
+    # "Asian late / pre-London" (04:00-07:00) and "NY late / early Asian"
+    # (20:00-24:00) fall entirely outside the current 07:00-20:00 UTC
+    # watch window (reverted 2026-09-16) -- they can never hold a trade,
+    # so they're dropped from the digest rather than shown stuck at 0/N.
     assert [b["session"] for b in summary] == [
-        "Asian late / pre-London", "London morning", "London/NY overlap", "NY afternoon", "NY late / early Asian",
+        "London morning", "London/NY overlap", "NY afternoon",
     ]
     assert [b["label_sgt"] for b in summary] == [
-        "12:00-15:00 SGT", "15:00-20:00 SGT", "20:00-00:00 SGT", "00:00-04:00 SGT", "04:00-08:00 SGT",
+        "15:00-20:00 SGT", "20:00-00:00 SGT", "00:00-04:00 SGT",
     ]
-    assert [b["count"] for b in summary] == [0, 2, 1, 0, 0]
-    assert all(b["cap"] == 2 for b in summary)  # ceil(6/5)
-    # All 3 seeded trades default to a loss (_seed_closed_vwap_trades'
-    # own default pnl) -- the 2 buckets with trades must show 0% win,
-    # the 3 empty buckets must show None (no closed trades yet), not 0%.
-    assert [b["win_rate_pct"] for b in summary] == [None, 0.0, 0.0, None, None]
-    assert [b["wins"] for b in summary] == [0, 0, 0, 0, 0]
-    assert [b["losses"] for b in summary] == [0, 2, 1, 0, 0]
+    assert [b["count"] for b in summary] == [2, 1, 0]
+    assert all(b["cap"] == 2 for b in summary)  # ceil(6/5) -- still divided by the FULL bucket count
+    # Both seeded trades default to a loss (_seed_closed_vwap_trades'
+    # own default pnl) -- the bucket with trades must show 0% win, the
+    # empty bucket must show None (no closed trades yet), not 0%.
+    assert [b["win_rate_pct"] for b in summary] == [0.0, 0.0, None]
+    assert [b["wins"] for b in summary] == [0, 0, 0]
+    assert [b["losses"] for b in summary] == [2, 1, 0]
 
 
 def test_vwap_scalp_bucket_summary_computes_win_rate_pct_from_real_pnl_sign(tmp_path, monkeypatch):

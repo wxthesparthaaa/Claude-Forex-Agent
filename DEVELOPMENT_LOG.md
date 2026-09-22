@@ -9246,3 +9246,18 @@ flushed every 5s and immediately when a disconnect is detected, so at most ~5s c
 prices during an outage are unrecoverable (OANDA's stream has no replay) and are recorded in gaps.csv instead.
 `--test-telegram` verifies alerts; RECORDER_ALERTS=off disables them. A dead-man's-switch on the always-on Render app
 (alert when heartbeats stop) is a possible add-on; not built.
+
+## 2026-09-22 -- VWAP Scalp: refit REALIZED_LOSS_INFLATION; drop dead watch-window buckets from the digest
+Recalibrated `REALIZED_LOSS_INFLATION` (`src/vwap_scalp_addon.py`) from 1.29 to 1.39. The original figure was
+fit on 22 losing trades (2026-09-01/02); with 184 closed VWAP Scalp losses since the compensation itself went
+live, the same realized_pnl/risk_amount ratio now averages 1.39x (median 1.35x), not 1.29x -- winners corroborate
+with the same-direction drift (n=82, mean 1.30x), consistent with the original conversion-rate-staleness theory
+rather than something stop-specific. Root cause still unconfirmed; this only refits the compensation.
+
+`vwap_scalp_bucket_summary()` now skips any of the 5 time buckets that falls entirely outside the current
+WATCH_START_HOUR-WATCH_END_HOUR window before rendering into the periodic scan Telegram digest. The watch window
+was widened to 04:00-24:00 UTC on 2026-09-08 then reverted to 07:00-20:00 on 2026-09-16, but
+VWAP_SCALP_TIME_BUCKETS_UTC itself (and the per-bucket cap's denominator, which real gating still depends on)
+was deliberately left at 5 buckets -- so the two edge buckets (04:00-07:00 and 20:00-24:00 UTC, i.e. 12:00-15:00
+and 04:00-08:00 SGT) can never hold a trade anymore and only ever showed a dead "0/N" row. Display-only change;
+per_bucket_cap is still computed against the full 5-bucket list.
