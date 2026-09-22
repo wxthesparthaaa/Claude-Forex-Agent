@@ -2367,5 +2367,25 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-22T14:18:26.574286+00:00",
+    "opened": "XAG_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "EUR_USD",
+      "GBP_USD",
+      "AUD_USD",
+      "USD_CAD",
+      "NZD_USD",
+      "USD_CHF",
+      "AUD_JPY",
+      "NZD_JPY",
+      "GBP_JPY",
+      "EUR_JPY",
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
