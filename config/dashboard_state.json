@@ -36,7 +36,7 @@
   "week_start_timestamp": "2026-09-18T21:03:37.471099+00:00",
   "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 31,
+  "interval_scan_count_since_digest": 32,
   "interval_scanned_instruments_since_digest": [
     "XAU_USD",
     "XAG_USD",
