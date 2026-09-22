@@ -36,7 +36,7 @@
   "week_start_timestamp": "2026-09-18T21:03:37.471099+00:00",
   "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 25,
+  "interval_scan_count_since_digest": 26,
   "interval_scanned_instruments_since_digest": [
     "XAU_USD",
     "XAG_USD",
@@ -99,5 +99,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-09-22T09:03:10.723041+00:00"
+  "last_process_heartbeat_at": "2026-09-22T09:08:10.723181+00:00"
 }
