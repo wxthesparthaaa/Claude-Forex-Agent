@@ -56,7 +56,9 @@
     "CAD_JPY",
     "CHF_JPY"
   ],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 0 min ago, needs 40"
+  ],
   "last_scan_digest_sent_at": "2026-09-22T06:48:10.722516+00:00",
   "last_review_date": "2026-09-22",
   "last_health_check_date": "2026-09-21",
