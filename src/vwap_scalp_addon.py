@@ -755,6 +755,18 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     price = fetch_mid_price(client, instrument)
     if price is None:
         return False
+    # Real investigation (2026-09-18): decision_entry_price alone proved
+    # slippage was systematic (near every live fill worse than this
+    # estimate) but couldn't say how much is OUR OWN code's latency --
+    # get_account_summary/resolve_conversion_rate/instrument_already_open
+    # all run as separate sequential OANDA calls between this fetch and
+    # the actual order below -- versus broker-side execution cost.
+    # opened_at can't answer that (record_open_trade stamps it well
+    # after the fill), so this captures the instant right after the
+    # decision price itself, to diff against the real OANDA fill time
+    # (trade_journal.JournalEntry.filled_at) once both sides of enough
+    # trades have it.
+    decision_at = datetime.now(timezone.utc).isoformat()
 
     stop_distance = (Z_ENTRY + STOP_Z_BUFFER) * std_at_signal
     if direction == "LONG":
@@ -825,6 +837,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
                       f"back toward session VWAP"],
         "account_currency": account_currency, "risk_amount": risk_amount,
         "experiment_tag": VWAP_SCALP_TAG, "parent_trade_id": None,
+        "decision_at": decision_at,
     }
 
     try:
