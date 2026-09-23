@@ -48,7 +48,7 @@ def _m1_candle(dt, close, volume=10):
             "mid": {"c": str(close)}, "volume": volume}
 
 
-def _extended_session_candles(n_flat=30, extension_price=105.0, confirmation_price=104.0, end_time=None):
+def _extended_session_candles(n_flat=30, extension_price=100.13, confirmation_price=100.12, end_time=None):
     """Oscillating baseline (a real, nonzero stdev -- a perfectly flat
     baseline has zero variance, which the detection deliberately treats
     as "no signal"), then an extension bar, then a CONFIRMATION bar that
@@ -57,10 +57,18 @@ def _extended_session_candles(n_flat=30, extension_price=105.0, confirmation_pri
     tests use. Confirmation-gated detection (mirrors the backtest's
     find_scalp_signals_confirmed) requires evidence the reversal has
     started before firing -- a fixture with no follow-up tick-back would
-    never produce a signal at all."""
+    never produce a signal at all. Baseline oscillation widened to +-0.05
+    (was +-0.002) and defaults land the CONFIRMED z at ~2.14 --
+    comfortably inside [Z_ENTRY, MAX_Z_ENTRY) so this fixture still fires
+    after the 2026-09-23 MAX_Z_ENTRY filter, using round, legible prices
+    instead of the 4-decimal-place precision the old tiny oscillation
+    would have needed to land in that same narrow window. Tests that
+    specifically need a confirmed signal REJECTED for being too extreme
+    pass a far larger extension_price/confirmation_price explicitly
+    (e.g. the original 105.0/104.0)."""
     end_time = end_time or FIXED_NOW
     day_start = end_time - timedelta(minutes=n_flat + 1)
-    bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (0.002 if i % 2 == 0 else -0.002))
+    bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (0.05 if i % 2 == 0 else -0.05))
             for i in range(n_flat)]
     bars.append(_m1_candle(day_start + timedelta(minutes=n_flat), extension_price))
     bars.append(_m1_candle(end_time, confirmation_price))
@@ -179,7 +187,7 @@ def test_find_confirmed_signal_none_on_flat_session():
 
 
 def test_find_confirmed_signal_fires_short_on_upward_extension_with_confirmation():
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
     signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
     assert direction == "SHORT"
@@ -187,7 +195,7 @@ def test_find_confirmed_signal_fires_short_on_upward_extension_with_confirmation
 
 
 def test_find_confirmed_signal_fires_long_on_downward_extension_with_confirmation():
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    candles = _extended_session_candles(extension_price=99.87, confirmation_price=99.88)
     times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
     signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
     assert direction == "LONG"
@@ -200,8 +208,29 @@ def test_find_confirmed_signal_none_without_confirmation():
     assert direction is None, "a raw extreme with no follow-up tick-back must never fire"
 
 
-def test_find_confirmed_signal_ignores_stale_confirmation():
+def test_find_confirmed_signal_rejects_a_confirmation_at_or_past_max_z_entry():
+    # 2026-09-23: real-data sweep of 292 closed live trades found |z| at
+    # entry correlates negatively with realized R (worse the more
+    # extreme), split-half confirmed. A signal can still tick back and
+    # "confirm" while its own z is still miles beyond Z_ENTRY -- that's
+    # what this guards against.
     candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    assert abs(z[-1]) >= vs.MAX_Z_ENTRY, "fixture must actually exercise the rejection path"
+    signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction is None
+
+
+def test_find_confirmed_signal_fires_just_under_max_z_entry():
+    candles = _extended_session_candles()  # defaults land confirmed z at ~2.14, inside [Z_ENTRY, MAX_Z_ENTRY)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    assert vs.Z_ENTRY <= abs(z[-1]) < vs.MAX_Z_ENTRY, "fixture must actually exercise the allowed range"
+    signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction is not None
+
+
+def test_find_confirmed_signal_ignores_stale_confirmation():
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
     stale_now = times[-1] + timedelta(minutes=vs.SIGNAL_RECENCY_MINUTES + 5)
     signal_index, direction = vs._find_confirmed_signal(times, z, stale_now)
@@ -247,7 +276,7 @@ def test_opens_fade_position_on_upward_extension(mock_send, tmp_path, monkeypatc
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -274,7 +303,7 @@ def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send,
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     vs.check_vwap_scalp_opportunities(client)
@@ -291,7 +320,7 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=95.0, confirmation_price=96.0)
+    candles = _extended_session_candles(extension_price=99.87, confirmation_price=99.88)
     client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -312,7 +341,7 @@ def test_skips_entry_when_fresh_price_has_crossed_frozen_stop_or_target(mock_sen
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     # FakeClient's default price (1.1000) is nowhere near this fixture's
     # ~100-105 VWAP scale -- exactly the drifted-price scenario.
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
@@ -365,7 +394,7 @@ def test_outside_watch_window_skips_fresh_entries(mock_send, tmp_path, monkeypat
         # negative and deliberately left dark, unlike every other hour of the day)
 
     monkeypatch.setattr(vs, "datetime", _OutsideWindow)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12,
                                          end_time=_OutsideWindow._frozen)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
@@ -392,7 +421,7 @@ def test_cooldown_skips_reentry_despite_fresh_signal(mock_send, tmp_path, monkey
     tj.save_journal(entries)
 
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -493,7 +522,7 @@ def test_own_daily_cap_blocks_new_entries_once_reached(mock_send, tmp_path, monk
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(hours=1))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -508,7 +537,7 @@ def test_own_daily_cap_records_one_risk_skip_per_tick_not_per_pair(mock_send, tm
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(hours=1))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={p: candles for p in vs.VWAP_SCALP_PAIRS})
 
     vs.check_vwap_scalp_opportunities(client)
@@ -562,7 +591,7 @@ def test_below_own_daily_cap_still_opens_normally(mock_send, tmp_path, monkeypat
     # future relative to a freshly-computed now -- see _pacing_cap_reason's
     # own comment on the 2026-09-09 fix).
     _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY - 1, FIXED_NOW.replace(hour=6))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -588,7 +617,7 @@ def test_own_daily_cap_respects_a_user_adjusted_settings_value(mock_send, tmp_pa
     # per-bucket one (raised cap=10 -> per-bucket cap ceil(10/5)=2, which
     # 6 trades in the SAME bucket would still trip).
     _seed_closed_vwap_trades(6, FIXED_NOW.replace(hour=6))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -612,7 +641,7 @@ def test_daily_cap_disabled_allows_trading_past_the_normal_cap(mock_send, tmp_pa
     # 18 real losing trades would trip the unrelated account-wide daily
     # loss limit gate, which isn't what this test is isolating.
     _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY * 3, FIXED_NOW - timedelta(hours=1), pnl=0.01)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -631,7 +660,7 @@ def test_daily_cap_disabled_still_respects_the_global_cooldown(mock_send, tmp_pa
     ds.save_state(state)
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=10))  # well inside the 20-min default cooldown
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -652,7 +681,7 @@ def test_time_bucket_cap_blocks_a_burst_within_one_session_even_below_the_daily_
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=8))  # same bucket as FIXED_NOW
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -678,7 +707,7 @@ def test_time_bucket_cap_does_not_block_a_fresh_session(mock_send, tmp_path, mon
     # cooldown instead -- see test_below_own_daily_cap_still_opens_
     # normally's own comment).
     _seed_closed_vwap_trades(2, FIXED_NOW.replace(hour=6))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -704,7 +733,7 @@ def test_weak_hour_pair_exclusion_blocks_a_listed_pair_in_its_excluded_bucket(mo
         _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12,
                                          end_time=_WeakBucket._frozen)
     client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -728,7 +757,7 @@ def test_weak_hour_pair_exclusion_does_not_block_the_same_pair_in_a_different_bu
         _frozen = FIXED_NOW.replace(hour=16)  # inside the watch window, but NOT the excluded 12:00-16:00 bucket
 
     monkeypatch.setattr(vs, "datetime", _StrongBucket)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12,
                                          end_time=_StrongBucket._frozen)
     client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -751,7 +780,7 @@ def test_weak_hour_pair_exclusions_empty_by_default_so_cad_jpy_trades_normally(m
         _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12,
                                          end_time=_WeakBucket._frozen)
     client = FakeClient(candles_by_instrument={"CAD_JPY": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -772,7 +801,7 @@ def test_weak_hour_pair_exclusion_does_not_block_an_unlisted_pair_in_the_same_bu
         _frozen = FIXED_NOW.replace(hour=13)  # inside 12:00-16:00 UTC (the "London/NY overlap" bucket), and inside the 07:00-20:00 watch window
 
     monkeypatch.setattr(vs, "datetime", _WeakBucket)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0,
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12,
                                          end_time=_WeakBucket._frozen)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
@@ -895,7 +924,7 @@ def test_global_cooldown_blocks_a_different_instrument_within_the_window(mock_se
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=10))  # a DIFFERENT instrument (USD_CHF), 10 min ago
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -928,7 +957,7 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
     # since_last` guard would (correctly, for a real clock anomaly) treat
     # it as not-cooling-down, silently defeating this exact test.
     monkeypatch.setattr(tj, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     three_pairs = ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
     client = FakeClient(candles_by_instrument={p: candles for p in three_pairs},
                          price=_valid_entry_price(candles, "SHORT"))
@@ -961,7 +990,7 @@ def test_records_a_tie_when_multiple_instruments_confirm_within_the_same_tick(
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     monkeypatch.setattr(tj, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     three_pairs = ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
     client = FakeClient(candles_by_instrument={p: candles for p in three_pairs},
                          price=_valid_entry_price(candles, "SHORT"))
@@ -980,7 +1009,7 @@ def test_no_tie_recorded_when_only_one_instrument_confirms(mock_send, tmp_path, 
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -1007,7 +1036,7 @@ def test_global_cooldown_does_not_block_once_it_elapses(mock_send, tmp_path, mon
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=25))  # past the default 20-minute cooldown
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -1091,8 +1120,8 @@ def test_global_cooldown_blocks_a_second_pair_confirming_moments_after_the_first
 
     monkeypatch.setattr(vs, "datetime", _TickingDatetime)
     monkeypatch.setattr(tj, "datetime", _TickingDatetime)
-    candles_a = _extended_session_candles(extension_price=105.0, confirmation_price=104.0, end_time=FIXED_NOW)
-    candles_b = _extended_session_candles(extension_price=105.0, confirmation_price=104.0, end_time=FIXED_NOW)
+    candles_a = _extended_session_candles(extension_price=100.13, confirmation_price=100.12, end_time=FIXED_NOW)
+    candles_b = _extended_session_candles(extension_price=100.13, confirmation_price=100.12, end_time=FIXED_NOW)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles_a, "GBP_USD": candles_b},
                          price=_valid_entry_price(candles_a, "SHORT"))
 
@@ -1110,7 +1139,7 @@ def test_global_cooldown_respects_a_user_adjusted_settings_value(mock_send, tmp_
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     # 25 min ago -- would clear the DEFAULT 20-min cooldown but not a raised 40-min one.
     _seed_closed_vwap_trades(1, FIXED_NOW - timedelta(minutes=25))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)
@@ -1139,7 +1168,7 @@ def test_own_daily_cap_resets_on_a_new_utc_day(mock_send, tmp_path, monkeypatch)
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
     # All seeded trades opened yesterday (UTC) -- must not count toward today's cap.
     _seed_closed_vwap_trades(vs.VWAP_SCALP_MAX_TRADES_PER_DAY, FIXED_NOW - timedelta(days=1))
-    candles = _extended_session_candles(extension_price=105.0, confirmation_price=104.0)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
     client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
 
     opened = vs.check_vwap_scalp_opportunities(client)

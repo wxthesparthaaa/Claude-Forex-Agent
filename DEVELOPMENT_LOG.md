@@ -9276,3 +9276,28 @@ the 10th (AUD_JPY, -1%). The commission is large enough, charged twice, to outwe
 on every pair that matters here. Commodities (XAU/XAG/WTICO/BCO_USD) weren't in OANDA's public per-pair table
 and weren't separately checked -- low priority given the FX-pair result already rules the switch out for the
 bulk of VWAP Scalp's volume. No account or code change made; spread-only remains the right account type.
+
+## 2026-09-23 -- VWAP Scalp: reject confirmed signals too far from VWAP (MAX_Z_ENTRY)
+Re-derived the real VWAP z-score at entry for all 292 resolvable closed VWAP Scalp trades since the
+live-detection fix, using this module's own `_compute_vwap_series` against real OANDA M1 candles for
+each trade's actual day -- not a backtest with simulated execution, `realized_pnl`/`risk_amount` are the
+real, already-happened outcomes. |z| at entry correlates NEGATIVELY with realized R (Pearson r=-0.225,
+n=292, p=0.00009): the more extreme the confirmed reversal, the worse it performed. Split-half confirms
+it's real, not a fluke carried by one half (first half r=-0.186, second half r=-0.257, same sign, same
+order of magnitude -- unlike the NFP result, which failed exactly this check). The 3.0+ bucket went
+0-for-19.
+
+Added `MAX_Z_ENTRY = 2.25` (`src/vwap_scalp_addon.py`), rejecting a confirmation whose own z is already
+at or past it -- confirmation only means z ticked back from its running extreme, not that it's back to a
+level this strategy's mean-reversion thesis actually applies to. Stable across cutoffs 2.1-2.4 (not one
+lucky bin edge); rejecting |z| >= 2.25 retroactively on the same 292 trades roughly halves total realized
+loss (-2206.85 -> -967.29 SGD) while keeping 69% of trade volume. Still net negative after the cutoff
+(mean R -0.291 on 201 trades) -- this narrows the strategy's known cost/edge gap, it does not close it.
+
+Idea traced back to a Reddit r/algotrading thread on beating spread costs, which mostly restated things
+already tested here (wider stops, ATR-relative spread, maker orders -- all previously ruled out or
+already built in) -- but two comments pointed at trade selectivity by signal strength, untested until
+now. Notably the finding runs OPPOSITE to what was suggested ("only take the highest-conviction
+signals") -- extreme z performed worse, not better, consistent with an extreme deviation being more
+likely a real directional move (news, momentum, breakout) than the noise-driven overextension the
+strategy's fade thesis assumes.

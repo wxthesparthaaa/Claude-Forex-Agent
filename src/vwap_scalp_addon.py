@@ -223,6 +223,30 @@ ROLLING_WINDOW_MINUTES = 30
 MIN_SESSION_SAMPLES = 20
 Z_ENTRY = 2.0                   # the single validated threshold -- not swept live
 STOP_Z_BUFFER = 1.0             # strongest t-stat of the three backtested, confirmed-signal scenario
+
+# Added 2026-09-23 from a real-data sweep, not a backtest: re-derived the
+# actual z-score at entry for all 292 resolvable closed VWAP_SCALP trades
+# since the live-detection fix, using this module's own _compute_vwap_series
+# against real OANDA M1 candles for each trade's actual day -- no simulated
+# execution assumptions, realized_pnl/risk_amount are the real, already-
+# happened outcomes. |z| at entry correlates NEGATIVELY with realized R
+# (Pearson r=-0.225, n=292, p=0.00009) -- the more extreme the confirmed
+# reversal, the WORSE it performed, opposite of "only take the highest-
+# conviction signals". Split-half confirms it's real, not a fluke carried
+# by one half: first half r=-0.186, second half r=-0.257, same sign, same
+# order of magnitude (unlike the NFP result, which failed exactly this
+# check). The 3.0+ bucket went 0-for-19. Reads as: a confirmed reversal
+# still very far from VWAP is more likely a real directional move (news,
+# momentum, breakout) than the noise-driven overextension this strategy's
+# mean-reversion thesis assumes -- fading it is the "falling knife"
+# mistake, not the edge case. Rejecting |z| >= 2.25 at confirmation
+# (retroactively, on the same 292 trades) roughly halves total realized
+# loss (-2206.85 -> -967.29 SGD) while keeping 69% of trade volume, and
+# was stable across cutoffs 2.1-2.4, not one lucky bin edge. Still net
+# negative after the cutoff (mean R -0.291, not proven at that magnitude
+# with 201 trades) -- this narrows the strategy's own known cost/edge gap,
+# it does not close it.
+MAX_Z_ENTRY = 2.25              # reject a confirmed signal this far or further from VWAP; see comment above
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -408,8 +432,12 @@ def _find_confirmed_signal(times: list, z: list, now: datetime):
     exactly (see that function's own docstring for why confirmation
     matters) -- among signals confirmed within the last
     SIGNAL_RECENCY_MINUTES of `now`. A signal confirmed longer ago than
-    that is stale and ignored, not chased. Returns (signal_index,
-    direction), or (None, None) if nothing qualifies."""
+    that is stale and ignored, not chased. Also rejects a confirmation
+    whose OWN z is already at or past MAX_Z_ENTRY (see that constant's
+    comment) -- confirmation only means z ticked back from its running
+    extreme, not that it's back to a level this strategy's mean-reversion
+    thesis actually applies to. Returns (signal_index, direction), or
+    (None, None) if nothing qualifies."""
     n = len(times)
     recency_cutoff = now - timedelta(minutes=SIGNAL_RECENCY_MINUTES)
     i = 0
@@ -436,7 +464,7 @@ def _find_confirmed_signal(times: list, z: list, now: datetime):
                 confirmed_at = j  # z[j] ticked back toward zero from the running extreme -- reversal confirmed
                 break
             if confirmed_at is not None:
-                if times[confirmed_at] >= recency_cutoff:
+                if times[confirmed_at] >= recency_cutoff and abs(z[confirmed_at]) < MAX_Z_ENTRY:
                     latest = (confirmed_at, direction)
                 i = confirmed_at + 1
                 continue
