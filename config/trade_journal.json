@@ -11570,5 +11570,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": false,
     "decision_entry_price": 93.473
+  },
+  {
+    "trade_id": "5501",
+    "instrument": "NZD_USD",
+    "direction": "LONG",
+    "units": 54807,
+    "entry_price": 0.57021,
+    "stop_loss": 0.57009,
+    "take_profit": 0.57062,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-23T10:27:53.550272+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.902079316546763,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": false,
+    "decision_entry_price": 0.57016
   }
 ]
