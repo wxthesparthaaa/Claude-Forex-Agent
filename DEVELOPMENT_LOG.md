@@ -9261,3 +9261,18 @@ VWAP_SCALP_TIME_BUCKETS_UTC itself (and the per-bucket cap's denominator, which 
 was deliberately left at 5 buckets -- so the two edge buckets (04:00-07:00 and 20:00-24:00 UTC, i.e. 12:00-15:00
 and 04:00-08:00 SGT) can never hold a trade anymore and only ever showed a dead "0/N" row. Display-only change;
 per_bucket_cap is still computed against the full 5-bucket list.
+
+## 2026-09-23 -- Cost lever RULED OUT: OANDA Core Pricing (commission) account
+Investigated whether switching from the current spread-only account to OANDA Asia Pacific's Core Pricing +
+commission account (Standard tier, no minimum deposit, API access included) would lower VWAP Scalp's real
+per-trade cost. Confirmed directly with OANDA support (live chat) that the quoted US$50/million-equivalent
+commission is billed PER SIDE (opened AND closed, ~4.40 SGD per 100,000 units each way on the pair checked),
+not once per round trip -- this is the detail that decides the outcome, and it went the wrong way.
+
+Recomputed round-trip cost (core spread + 2x commission, in pips) against the current spread-only cost for
+every FX pair VWAP Scalp trades with a published core spread: WORSE on 9 of 10 (EUR_USD +35%, USD_JPY +150%,
+EUR_GBP +21%, GBP_USD/USD_CAD/EUR_JPY +25%, USD_CHF +18%, GBP_JPY +18%, AUD_USD +10%), roughly breakeven on
+the 10th (AUD_JPY, -1%). The commission is large enough, charged twice, to outweigh the tighter core spread
+on every pair that matters here. Commodities (XAU/XAG/WTICO/BCO_USD) weren't in OANDA's public per-pair table
+and weren't separately checked -- low priority given the FX-pair result already rules the switch out for the
+bulk of VWAP Scalp's volume. No account or code change made; spread-only remains the right account type.
