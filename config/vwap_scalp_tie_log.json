@@ -2833,5 +2833,12 @@
       "AUD_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T07:28:10.651525+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "AUD_USD"
+    ]
   }
 ]
