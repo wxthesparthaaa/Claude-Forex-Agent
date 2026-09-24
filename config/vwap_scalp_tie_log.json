@@ -2825,5 +2825,13 @@
       "USD_CHF",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T07:03:03.750724+00:00",
+    "opened": "EUR_USD",
+    "also_signaled": [
+      "AUD_USD",
+      "USD_CHF"
+    ]
   }
 ]
