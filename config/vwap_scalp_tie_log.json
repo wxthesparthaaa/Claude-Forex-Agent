@@ -2871,5 +2871,12 @@
     "also_signaled": [
       "USD_CAD"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T10:48:02.254557+00:00",
+    "opened": "XAG_USD",
+    "also_signaled": [
+      "BCO_USD"
+    ]
   }
 ]
