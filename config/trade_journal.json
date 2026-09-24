@@ -12490,5 +12490,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": null,
     "decision_entry_price": 89.859
+  },
+  {
+    "trade_id": "5739",
+    "instrument": "WTICO_USD",
+    "direction": "SHORT",
+    "units": -8,
+    "entry_price": 97.774,
+    "stop_loss": 98.199,
+    "take_profit": 97.292,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-24T16:17:52.006484+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.640859712230215,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 97.779
   }
 ]
