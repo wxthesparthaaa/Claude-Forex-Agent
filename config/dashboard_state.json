@@ -109,5 +109,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-09-24T16:37:47.642215+00:00"
+  "last_process_heartbeat_at": "2026-09-24T16:42:47.640716+00:00"
 }
