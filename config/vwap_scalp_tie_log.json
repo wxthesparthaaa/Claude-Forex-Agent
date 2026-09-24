@@ -2899,5 +2899,15 @@
     "also_signaled": [
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T16:18:04.860847+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "BCO_USD",
+      "AUD_USD",
+      "NZD_USD",
+      "CAD_JPY"
+    ]
   }
 ]
