@@ -11988,5 +11988,32 @@
     "parent_trade_id": null,
     "in_liquidity_window": true,
     "decision_entry_price": 1.13848
+  },
+  {
+    "trade_id": "5627",
+    "instrument": "BCO_USD",
+    "direction": "SHORT",
+    "units": -14,
+    "entry_price": 102.87,
+    "stop_loss": 103.143,
+    "take_profit": 102.473,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-09-24T07:27:54.496958+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.640859712230215,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": false,
+    "decision_entry_price": 102.891
   }
 ]
