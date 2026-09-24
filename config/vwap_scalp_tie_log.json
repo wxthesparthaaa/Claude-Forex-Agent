@@ -2878,5 +2878,12 @@
     "also_signaled": [
       "BCO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T13:33:09.354697+00:00",
+    "opened": "AUD_USD",
+    "also_signaled": [
+      "CHF_JPY"
+    ]
   }
 ]
