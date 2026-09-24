@@ -2909,5 +2909,14 @@
       "NZD_USD",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-24T17:08:04.757572+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "AUD_USD",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
