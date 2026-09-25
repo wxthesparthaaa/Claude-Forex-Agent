@@ -3089,5 +3089,12 @@
       "NZD_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T17:18:05.548426+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "EUR_USD"
+    ]
   }
 ]
