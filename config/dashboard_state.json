@@ -33,7 +33,7 @@
   "strategy_starting_capital": 2000.0,
   "strategy_realized_pnl": -1265.8313,
   "last_review_timestamp": "2026-09-25T17:02:47.647810+00:00",
-  "week_start_timestamp": "2026-09-18T21:03:37.471099+00:00",
+  "week_start_timestamp": "2026-09-25T21:02:51.583728+00:00",
   "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
