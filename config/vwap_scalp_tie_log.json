@@ -3028,5 +3028,14 @@
     "also_signaled": [
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T12:53:05.437027+00:00",
+    "opened": "AUD_USD",
+    "also_signaled": [
+      "USD_CAD",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
