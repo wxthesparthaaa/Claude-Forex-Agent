@@ -3014,5 +3014,12 @@
       "GBP_JPY",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T09:43:03.890522+00:00",
+    "opened": "AUD_JPY",
+    "also_signaled": [
+      "NZD_JPY"
+    ]
   }
 ]
