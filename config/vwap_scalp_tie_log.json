@@ -3096,5 +3096,12 @@
     "also_signaled": [
       "EUR_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T18:43:04.849968+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "USD_CHF"
+    ]
   }
 ]
