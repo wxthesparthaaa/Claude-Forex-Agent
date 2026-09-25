@@ -3005,5 +3005,14 @@
     "also_signaled": [
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T09:18:04.748848+00:00",
+    "opened": "USD_CAD",
+    "also_signaled": [
+      "AUD_JPY",
+      "GBP_JPY",
+      "EUR_JPY"
+    ]
   }
 ]
