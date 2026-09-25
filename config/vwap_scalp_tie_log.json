@@ -3079,5 +3079,15 @@
       "NZD_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T16:03:06.170906+00:00",
+    "opened": "XAG_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
