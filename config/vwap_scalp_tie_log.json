@@ -3046,5 +3046,12 @@
       "USD_CAD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-25T14:08:09.974974+00:00",
+    "opened": "GBP_USD",
+    "also_signaled": [
+      "AUD_USD"
+    ]
   }
 ]
