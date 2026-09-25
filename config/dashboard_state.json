@@ -57,6 +57,7 @@
     "CHF_JPY"
   ],
   "risk_limit_skips_since_digest": [
+    "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 10/10",
     "VWAP Scalp: VWAP Scalp's London morning (15:00-20:00 SGT) time-bucket cap reached: 10/10"
   ],
   "last_scan_digest_sent_at": "2026-09-25T11:02:47.645217+00:00",
