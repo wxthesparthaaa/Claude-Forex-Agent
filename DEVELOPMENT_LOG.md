@@ -9301,3 +9301,30 @@ now. Notably the finding runs OPPOSITE to what was suggested ("only take the hig
 signals") -- extreme z performed worse, not better, consistent with an extreme deviation being more
 likely a real directional move (news, momentum, breakout) than the noise-driven overextension the
 strategy's fade thesis assumes.
+
+## 2026-09-27 -- Tested a same-day M15 (15-minute) version of VWAP Scalp: ruled out
+User's proposal: since VWAP already resets daily, "confine the strategy to one day" isn't a new
+constraint -- so test the same fade mechanism at a slower, still same-day cadence (M15 candles instead
+of M1) rather than true multi-day swing trading, which VWAP's own daily reset makes conceptually
+awkward anyway. H1 was considered and rejected first: a 13-hour session only gives ~13 H1 bars, too few
+to ever clear MIN_SESSION_SAMPLES=20 within a single day. M15 gives ~52 bars/session, enough headroom.
+
+Built `scripts/backtest_vwap_m15_intraday.py`, reusing `vwap_scalp_addon._compute_vwap_series`
+UNMODIFIED (imported, not reimplemented) via monkeypatched module constants -- deliberately closing off
+the exact failure mode from the 2026-09-12 investigation, where an independently-maintained backtest
+reimplementation had quietly drifted from live's real logic. Every time-based constant scaled x15 (the
+M15/M1 bar-size ratio) to preserve its BAR-COUNT meaning: rolling window 30->450min, confirmation wait
+10->150min, per-pair cooldown 30->450min, max hold 30->450min. Z_ENTRY=2.0, STOP_Z_BUFFER=1.0, and the
+2026-09-23 MAX_Z_ENTRY=2.25 filter carried over unscaled (dimensionless). The cross-pair global cooldown
+(40min) was deliberately left UNSCALED -- it's a wall-clock burst-risk throttle, not tied to signal
+timescale. Same 7 FX majors as the original VWAP Scalp validation, real bid/ask fills
+(spread_aware_trade_simulator), 1-bar realistic entry delay, day-pooled t-test (avoiding
+pseudo-replication). Pre-registered discovery/holdout split: 2026-01-01/05-31 vs 2026-06-01/09-25, fixed
+before running either.
+
+**Result: significantly negative in BOTH halves, not just one.** Discovery: 513 trades/106 days,
+43.1% win rate, mean R -0.119/day (t=-2.39, p=0.017). Holdout: 393 trades/85 days, 36.4% win rate, mean R
+-0.187/day (t=-3.77, p=0.0002) -- slightly WORSE out-of-sample, not better. Unlike the earlier
+slower-bars result on a different (Bollinger) family, which landed at "not statistically distinguishable
+from zero," this is a clean, decisive negative on both sides of the split -- the same-day M15 version
+doesn't just fail to prove itself, it loses with real statistical confidence. Ruled out.
