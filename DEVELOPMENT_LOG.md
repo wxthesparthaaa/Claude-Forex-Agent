@@ -9502,3 +9502,14 @@ The SAME groups in the independent holdout half: top -0.524R vs bottom -0.470R -
 if anything the "good" group was marginally worse. The pooled spread was noise that happened to land on
 particular instruments in this specific sample, not a stable per-instrument effect. Ruled out -- no
 instrument restriction implemented.
+
+## 2026-09-28 (continued) -- Day-of-week effect for VWAP Scalp's own live trades: does not replicate
+Different question from the earlier (also-failed) day-of-week test, which was on the old base strategy's
+daily bars. Ranked weekdays by discovery-half (first 185 trades) meanR, checked the same ranking against
+the independent holdout half (last 186 trades).
+
+Discovery: Tuesday looked much the worst (n=50, meanR -0.904), Wednesday/Monday looked best (-0.281/
+-0.306). Holdout: Tuesday reversed to one of the BETTER days (-0.292), Wednesday reversed to one of the
+WORST (-0.785). Only Monday stayed stable (-0.306 -> -0.282), but one stable day out of five with no
+consistent ranking around it isn't a real, actionable pattern. Ruled out -- consistent with this
+project's other calendar-effect results (JPY Monday effect, NFP) all failing the same replication check.
