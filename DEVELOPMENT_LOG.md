@@ -9561,3 +9561,15 @@ enough NEW live data to know whether the near-breakeven pooled number holds up, 
 reflective of an already-thin historical sample. Recommendation: let the now-much-more-selective live
 system run for a while before layering on a 4th filter -- further slicing an already-thin 53-trade
 surviving sample has a real risk of chasing noise rather than finding anything new.
+
+## 2026-09-28 (continued) -- Tested real-time spread widening at entry: no signal
+Genuinely different dimension from every filter tested today (all looked at price/VWAP behavior; this
+looked at the spread itself): does an unusually wide spread relative to this pair's own trailing 60-minute
+median, right at signal confirmation, predict a worse outcome? Time-of-day effects already normalized out
+by comparing against the same pair's own recent window, not a fixed threshold.
+
+Real-data test (371 closed VWAP_SCALP trades since the fix, real OANDA bid/ask M1 candles at each trade's
+actual entry): Pearson r(spread_ratio, R)=0.016, p=0.76 -- no relationship. Split-half doesn't even agree
+on sign (-0.009 / +0.063, both near zero). Cutoff sweep barely moves mean R at any threshold (-0.52 to
+-0.54 across the whole range). Ruled out -- spread widening carries no information here, distinct from
+(and not a substitute for) the SESSION_DRIFT_MAX_Z price-drift signal, which does.
