@@ -9684,3 +9684,17 @@ No equivalent bug found in MAX_Z_ENTRY, SESSION_DRIFT_MAX_Z, or MIN_VOL_RATIO.
 
 All 475 tests pass, including a new test isolating this filter specifically (confirmed z in the normal
 range, session drift well under its own cutoff, only vol_ratio triggers).
+
+## 2026-09-28 (continued) -- Partial profit-taking: also doesn't help, closes out the exit-management thread
+Mechanically distinct from the already-ruled-out trailing stop (which moved the STOP to breakeven and
+failed due to premature triggers from normal backing-and-filling): this closes HALF the position at 50%
+of the distance to target, leaving the other half with its ORIGINAL, untouched stop and target -- never
+moves the stop, so it can't be prematurely triggered the same way.
+
+Real bid/ask replay (371 trades, same methodology as the trailing-stop test): win rate up slightly
+(30.2% -> 32.3%) but mean R flat-to-worse (-0.285 -> -0.305 pooled), consistent in both halves
+(-0.371->-0.381 / -0.199->-0.230). Mechanism: banking half the position early gives up upside on trades
+that reach full target, without protecting downside at all (full losers still cost the same on the
+still-open half) -- a pure downside with no offsetting benefit. Ruled out -- not implemented. Closes out
+exit-management as a productive direction for this strategy; both variants tried (trailing stop, partial
+close) made things worse, not better.
