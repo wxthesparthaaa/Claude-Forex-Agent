@@ -9437,3 +9437,27 @@ Combined with the earlier RR1.0-4.0 extension, this completes the sweep across t
 Strong, comprehensive evidence the problem is the signal's own predictive power, not the ratio chosen
 around it -- no stop/target placement rescues an entry that doesn't predict anything real. Triangle
 breakout combination fully closed out.
+
+## 2026-09-28 -- VWAP Scalp: skip new entries once the session has already drifted too far (SESSION_DRIFT_MAX_Z)
+User's own diagnosis of "the biggest problem with VWAP Scalp" (2026-09-28): MAX_Z_ENTRY only rejects a
+signal that is ITSELF extreme, not a session that has been grinding one direction all day in small,
+individually-unremarkable steps -- exactly the mechanism behind the 2026-09-23 USD_CAD/EUR_USD losses,
+where z_at_entry was only 1.48-2.67 (comfortably under MAX_Z_ENTRY) but the session had already moved a
+long way from its own open. Traced this directly against 4 candidate directions (a session-level regime
+pause, partial profit-taking, a trailing stop, and portfolio diversification with carry trade) and this
+one was the only one actually aimed at the diagnosed mechanism rather than a downstream refinement.
+
+Added `SESSION_DRIFT_MAX_Z = 3.0`: session_drift_z = (current price - session open) / dev_stdev(current),
+reusing the SAME rolling stdev `_compute_vwap_series` already computes, applied to the day's cumulative
+move instead of one bar's deviation from its own recent VWAP. Wired into `_detect_confirmed_signal` --
+rejects an otherwise-confirmed signal (either direction) once the session itself has drifted this far.
+
+Real-data validation (all 371 closed VWAP_SCALP trades since the fix, same methodology as MAX_Z_ENTRY):
+pooled Pearson r(|session_drift_z|, R) = -0.067, p=0.20 -- NOT significant alone, diluted by a heavy-
+tailed distribution (0.05 to 66.86). But unlike the efficiency-ratio idea (which failed this exact check),
+the retroactive cutoff effect at 3.0 holds up INDEPENDENTLY in both halves of history: first half meanR
+-0.574 -> -0.359 (n=62/185), second half -0.484 -> -0.235 (n=53/186) -- a real per-trade improvement in
+both halves, not just reduced volume (which earlier this session was shown to make per-trade R WORSE
+through selection bias, not better). Keeps only ~31% of trade volume at this cutoff -- a real tradeoff,
+not a free win. All 473 tests pass, including 2 new tests covering the rejection and the still-allowed
+case.

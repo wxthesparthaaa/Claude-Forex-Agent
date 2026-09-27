@@ -195,7 +195,7 @@ def test_find_confirmed_signal_fires_short_on_upward_extension_with_confirmation
 
 
 def test_find_confirmed_signal_fires_long_on_downward_extension_with_confirmation():
-    candles = _extended_session_candles(extension_price=99.87, confirmation_price=99.88)
+    candles = _extended_session_candles(extension_price=98.62, confirmation_price=99.45)
     times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
     signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
     assert direction == "LONG"
@@ -226,6 +226,37 @@ def test_find_confirmed_signal_fires_just_under_max_z_entry():
     times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
     assert vs.Z_ENTRY <= abs(z[-1]) < vs.MAX_Z_ENTRY, "fixture must actually exercise the allowed range"
     signal_index, direction = vs._find_confirmed_signal(times, z, times[-1])
+    assert direction is not None
+
+
+def test_detect_confirmed_signal_rejects_a_session_that_has_already_drifted_too_far():
+    # 2026-09-28: real-data validated separately from MAX_Z_ENTRY -- this
+    # signal's OWN z is unremarkable (inside [Z_ENTRY, MAX_Z_ENTRY)) but the
+    # SESSION as a whole has already moved SESSION_DRIFT_MAX_Z+ standard
+    # deviations from its own open by the time it confirms.
+    candles = _extended_session_candles(extension_price=99.68, confirmation_price=99.83)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    mids = [float(c["mid"]["c"]) for c in candles]
+    assert abs(z[-1]) < vs.MAX_Z_ENTRY, "fixture's own signal must NOT be caught by MAX_Z_ENTRY"
+    session_drift_z = (mids[-1] - mids[0]) / dev_stdev[-1]
+    assert abs(session_drift_z) >= vs.SESSION_DRIFT_MAX_Z, "fixture must actually exercise session-drift rejection"
+
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+        client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
+    assert (signal_index, direction) == (None, None)
+
+
+def test_detect_confirmed_signal_allows_a_normal_session_drift():
+    candles = _extended_session_candles()  # defaults: z~2.14, session_drift_z well under SESSION_DRIFT_MAX_Z
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    mids = [float(c["mid"]["c"]) for c in candles]
+    session_drift_z = (mids[-1] - mids[0]) / dev_stdev[-1]
+    assert abs(session_drift_z) < vs.SESSION_DRIFT_MAX_Z, "fixture must stay under the session-drift cutoff"
+
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+        client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert direction is not None
 
 
@@ -320,7 +351,7 @@ def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypa
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
-    candles = _extended_session_candles(extension_price=99.87, confirmation_price=99.88)
+    candles = _extended_session_candles(extension_price=98.62, confirmation_price=99.45)
     client = FakeClient(candles_by_instrument={"GBP_USD": candles}, price=_valid_entry_price(candles, "LONG"))
 
     opened = vs.check_vwap_scalp_opportunities(client)

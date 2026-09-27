@@ -247,6 +247,29 @@ STOP_Z_BUFFER = 1.0             # strongest t-stat of the three backtested, conf
 # with 201 trades) -- this narrows the strategy's own known cost/edge gap,
 # it does not close it.
 MAX_Z_ENTRY = 2.25              # reject a confirmed signal this far or further from VWAP; see comment above
+
+# Added 2026-09-28, same real-data methodology as MAX_Z_ENTRY: MAX_Z_ENTRY
+# only rejects a signal that is ITSELF already extreme at confirmation. It
+# doesn't catch a session that has been grinding one direction all day in
+# small, individually-unremarkable steps -- exactly what happened to the
+# 2026-09-23 USD_CAD/EUR_USD losses, where z_at_entry was 1.48-2.67 (well
+# under MAX_Z_ENTRY) but the SESSION had already drifted a long way from
+# its own open by then. Session drift is a genuinely different, slower-
+# moving quantity than any single signal's own z.
+#
+# session_drift_z = (current price - session open) / dev_stdev(current) --
+# reuses the exact same rolling stdev _compute_vwap_series already computes
+# (so no new estimation, just applied to the day's cumulative move instead
+# of one bar's deviation from its recent VWAP). Re-derived from all 371
+# closed VWAP_SCALP trades since the fix: pooled Pearson r(|session_drift_z|,
+# R)=-0.067, p=0.20 -- NOT significant on its own, diluted by a heavy-tailed
+# distribution (values ranged 0.05 to 66.86). But the retroactive cutoff
+# effect is real and independently confirmed in BOTH halves of history
+# (first half baseline meanR -0.574 -> -0.359 at this cutoff; second half
+# -0.484 -> -0.235), unlike a same-shape-looking illusion (see the NFP
+# result) which fails exactly this check. Keeps only ~31% of trade volume
+# at this cutoff -- a real tradeoff, not a free win.
+SESSION_DRIFT_MAX_Z = 3.0       # skip a new signal (either direction) once today has drifted this far from its own open
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -1056,13 +1079,27 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     (signal_index, direction, vwap, dev_stdev) if a confirmed signal is
     present, else (None, None, None, None). Factored out of the main
     per-pair loop above so _record_ties_if_any's follow-up pass can
-    reuse the identical signal-detection step without duplicating it."""
+    reuse the identical signal-detection step without duplicating it.
+
+    Also rejects a signal that is otherwise confirmed if the SESSION has
+    already drifted SESSION_DRIFT_MAX_Z or more standard deviations from
+    its own open -- see that constant's own comment. This is a real-data-
+    validated addition on top of MAX_Z_ENTRY, not a duplicate of it: a
+    signal can pass MAX_Z_ENTRY (not itself extreme) while the day it's
+    firing into already is."""
     candles = client.get_candles(instrument, "M1",
                                   from_time=today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                   to_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     candles = [c for c in candles if c.get("complete", True)]
     times, vwap, dev_stdev, z = _compute_vwap_series(candles)
     signal_index, direction = _find_confirmed_signal(times, z, now)
+    if signal_index is not None:
+        mids = [float(c["mid"]["c"]) for c in candles]
+        stdev_at_signal = dev_stdev[signal_index]
+        if stdev_at_signal and stdev_at_signal > 0:
+            session_drift_z = (mids[signal_index] - mids[0]) / stdev_at_signal
+            if abs(session_drift_z) >= SESSION_DRIFT_MAX_Z:
+                return None, None, None, None
     return signal_index, direction, vwap, dev_stdev
 
 
