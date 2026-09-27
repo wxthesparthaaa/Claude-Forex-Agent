@@ -9633,3 +9633,8 @@ This does NOT close the main FX-side mystery (why non-commodity losses still run
 after slippage is ruled out) -- narrows it further by removing a real, separate, understood confound
 (commodity unit rounding) that was previously blended into the single pooled calibration. All 474 tests
 pass, including a new test covering the commodity-specific divisor.
+
+## 2026-09-28 (continued) -- LONG vs SHORT directional bias: no stable effect
+Cheap check (journal data only): does fading an upward extension (SHORT) differ systematically from
+fading a downward extension (LONG)? Discovery half: LONG worse (-0.651 vs -0.486). Holdout half: SHORT
+worse (-0.626 vs -0.359) -- a clean sign flip, no stable bias. Ruled out.
