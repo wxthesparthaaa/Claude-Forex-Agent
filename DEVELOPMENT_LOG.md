@@ -9536,3 +9536,28 @@ surfaced to the periodic digest via record_risk_limit_skip, same visibility ever
 
 Rewrote 3 tests whose assertions encoded the old "exactly one wins" behavior to the new "cluster of 2+
 opens none" behavior; all 473 tests pass.
+
+## 2026-09-28 (continued) -- Combined effect of all 3 filters shipped today: encouraging, but on a razor-thin sample
+Analysis only, no new code -- MAX_Z_ENTRY, SESSION_DRIFT_MAX_Z, and the signal-clustering filter are all
+now live simultaneously, so this checks what they do TOGETHER on the same 371 real trades already used
+to validate each individually.
+
+**Pooled result looks striking**: baseline meanR -0.529 -> all three combined meanR -0.032, essentially
+breakeven, keeping 53/371 trades (14% of volume). Individually: MAX_Z_ENTRY alone -0.318 (71% kept),
+SESSION_DRIFT alone -0.302 (31% kept), clustering alone -0.437 (59% kept) -- the combination clearly
+compounds rather than just overlapping (only 38 of 318 total rejections come from all three agreeing;
+each filter also rejects a meaningful number of trades the others don't).
+
+**Split-half check, and the real caveat**: first half baseline -0.574 -> combined +0.122 (n=34, genuinely
+positive); second half baseline -0.484 -> combined -0.309 (n=19, still negative, smaller improvement).
+Both halves improve substantially over their own baseline -- no sign flip -- but the MAGNITUDE differs
+enormously (one half crosses into positive, the other doesn't), and n=19-34 per half is too thin to treat
+either number as reliable on its own. This is encouraging, not proven.
+
+**Operational consequence worth flagging plainly**: all three filters combined cut trade volume by ~86%
+(53/371 kept). Going forward VWAP Scalp will trade far less often than the account is used to seeing --
+which is the direct cost of this improvement, and also means it will take a long time to accumulate
+enough NEW live data to know whether the near-breakeven pooled number holds up, rather than being
+reflective of an already-thin historical sample. Recommendation: let the now-much-more-selective live
+system run for a while before layering on a 4th filter -- further slicing an already-thin 53-trade
+surviving sample has a real risk of chasing noise rather than finding anything new.
