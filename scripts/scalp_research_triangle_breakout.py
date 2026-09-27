@@ -140,8 +140,16 @@ def run_config(instruments, make_signals, max_hold, delay=DELAY_MIN):
     return trades
 
 
-CONFIGS = [(f"Triangle breakout RR{rr}", rr) for rr in (1.0, 1.5, 2.0)]
-BONFERRONI = len(CONFIGS)
+# 2026-09-28 follow-up: does widening RR further (toward the ~2.33:1 breakeven
+# the observed ~35-43% win rate needs) actually help? Same 120-min hold cap as
+# the original 1.0/1.5/2.0 configs -- deliberately NOT scaled up for the wider
+# targets, so this stays directly comparable rather than quietly tilting the
+# test in a favorable direction. A wider target within the same time window
+# will naturally time out more often; that's a real result, not an artifact
+# to correct for.
+CONFIGS = [(f"Triangle breakout RR{rr}", rr) for rr in (1.0, 1.5, 2.0, 2.5, 3.0, 4.0)]
+BONFERRONI = 3  # only the 3 NEW configs (2.5/3.0/4.0) are a fresh pre-registered test;
+                 # 1.0/1.5/2.0 already have their own result on record from 2026-09-28 earlier
 
 if __name__ == "__main__":
     _rsi_selftest()

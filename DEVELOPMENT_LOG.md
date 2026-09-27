@@ -9406,3 +9406,20 @@ halves of a split-half check.** RR1.0: 42.8%/40.6% win (disc/hold), mean R -0.16
 RR2.0: 37.8%/35.4% win, mean R -0.16/-0.23. No config survived. Spread/risk ratios (0.15-0.17) were
 sane this time, unlike the tf=1 breakout test -- this isn't an execution-speed artifact, it's a genuine
 rejection of the pattern itself, at the exact timeframe and instrument the user actually trades it on.
+
+## 2026-09-28 (continued) -- Widened RR up to 4:1 on the triangle breakout: expectancy stays flat, doesn't help
+Direct test of the user's own question: "does 30% win rate work if the winner/loser gap is wide enough?"
+Extended the triangle-breakout RR sweep from 1.0/1.5/2.0 to include 2.5/3.0/4.0, same 17 pairs, same
+120-minute hold cap (deliberately NOT widened alongside RR, to avoid quietly tilting the test in a
+favorable direction -- a wider target within an unchanged time window timing out more often is a real
+result, not an artifact to correct for).
+
+**Result: mean R is flat across the entire 1.0-4.0 range** (discovery -0.156 to -0.164, holdout -0.207 to
+-0.229) -- win rate erodes from 42.8% to 37.1% almost exactly in proportion to the wider target, and
+timeout rate climbs from 38% to 62% as the target increasingly falls outside what the hold window can
+reach. Widening the reward:risk ratio doesn't rescue this signal -- the market gives back what it grants,
+and beyond RR~2 the wider target mostly just goes uncollected before time runs out. Confirms directly
+(not just by general argument) that the earlier reasoning holds: win rate and reward size aren't free
+knobs, adjusting one erodes the other, and this signal's real expectancy is essentially insensitive to
+where the target is set -- a strong sign the underlying issue is the signal's predictive power itself,
+not the specific R:R chosen around it.
