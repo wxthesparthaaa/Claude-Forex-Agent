@@ -9638,3 +9638,20 @@ pass, including a new test covering the commodity-specific divisor.
 Cheap check (journal data only): does fading an upward extension (SHORT) differ systematically from
 fading a downward extension (LONG)? Discovery half: LONG worse (-0.651 vs -0.486). Holdout half: SHORT
 worse (-0.626 vs -0.359) -- a clean sign flip, no stable bias. Ruled out.
+
+## 2026-09-28 (continued) -- Intended R:R at fill: a real but noisy signal, not shippable yet
+New angle: unlike a fixed-target strategy, VWAP Scalp's reward (distance from real fill to frozen VWAP
+target) varies trade to trade depending on how far price moved between signal confirmation and actual
+fill. Tested whether a SMALLER intended RR at fill (entry landed close to target already -- the reversal
+had effectively already happened by execution time) predicts a better outcome.
+
+Direction is real and consistent: Pearson r(RR, realizedR) = -0.067 discovery / -0.111 holdout, same
+sign. At the tightest cutoff (RR<1.0), both halves improve substantially (discovery -0.574->-0.416 n=28,
+holdout -0.484->-0.366 n=79). But the cutoff sweep is NOT clean or monotonic like MAX_Z_ENTRY/
+SESSION_DRIFT_MAX_Z were -- at cutoff 1.2 discovery barely improves (-0.557) while holdout improves a
+lot (-0.324), and sample sizes at the cleanest cutoff are small and lopsided between halves (28 vs 79,
+suggesting the frequency of these near-instant fills has grown over time -- itself unexplained).
+
+**Not implemented.** Real enough to track, not clean enough to trust as a hard filter yet -- unlike the
+two filters shipped today, this one doesn't clear the same robustness bar. Logged as a watch item;
+worth revisiting once more live data accumulates rather than shipping on a noisy pattern.
