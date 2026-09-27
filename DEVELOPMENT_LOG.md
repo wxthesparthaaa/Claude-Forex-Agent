@@ -9748,3 +9748,62 @@ since that's the only window the live bot has ever fired in since
 2026-08-31) hold up in the quieter off-window hours the strategy doesn't
 currently trade -- no backtest has tested this yet. Not attempted this
 entry; flagged to the user as a separate, unanswered question.
+
+## 2026-09-29 (continued) -- Do the 4 filters generalize to the dark hours? No -- they're worse there, not better
+
+**User question**: has the strategy (all 4 filters: MAX_Z_ENTRY,
+SESSION_DRIFT_MAX_Z, MIN_VOL_RATIO, signal clustering) been backtested
+on the quieter hours before 3pm SGT (== before 07:00 UTC, the start of
+the current live watch window)? It hadn't -- all 4 were calibrated
+exclusively on real trades inside 07:00-20:00 UTC, since that's the only
+window the live bot has ever fired in.
+
+**Built** `scripts/backtest_vwap_scalp_offwindow_hours.py`: imports
+signal-detection primitives directly from vwap_scalp_addon.py rather
+than reimplementing them (this session's own lesson from the ATR-window
+and RSI-selftest bugs -- a parallel reimplementation can drift silently).
+The one necessary addition, `find_all_confirmed_signals`, mirrors
+`_find_confirmed_signal`'s scanning loop line-for-line but collects
+every confirmation across a full day instead of only the latest as-of
+`now` -- parity-checked against the live function in a self-test before
+trusting any real result. Applies SESSION_DRIFT_MAX_Z/MIN_VOL_RATIO/
+per-pair COOLDOWN_MINUTES exactly as live, then signal clustering across
+ALL 17 pairs (any (day, confirmation-minute) shared by 2+ pairs drops
+every signal in that group). Surviving signals simulated with
+spread_aware_trade_simulator (real bid/ask fills).
+
+**Real bug caught before trusting the first run's numbers**: a single
+transient OANDA failure trips oanda_client's module-level, 20-second
+circuit breaker; the rejected-call path is instant (no network round
+trip), so this script's tight loop burned through 11 of 17 pairs' ENTIRE
+data (2200+ calls, all within that one 20s window) before the cooldown
+could ever naturally elapse. First run's results were commodities+EUR_USD
+(+partial GBP_USD) only -- not thrown away silently, caught and named
+before being treated as real. Fixed: detect the breaker-open error
+specifically, sleep past its own stated open-until time, retry (up to 3
+times) instead of permanently skipping. Re-run: zero warnings, all 17
+pairs' full 102 trading days each.
+
+**Result** (4472 signals cleared the 3 value filters; 942 dropped to
+clustering; 3530 final survivors):
+- LIVE WINDOW (07:00-20:00 UTC, currently traded): n=1888, win%=31.5,
+  meanR=-0.347 (split-half: -0.345 / -0.349 -- tight)
+- ALL DARK (20:00-07:00 UTC, not currently traded): n=1642, win%=27.7,
+  meanR=-0.437 (split-half: -0.418 / -0.455 -- consistent)
+
+**Answer: no, the dark hours don't generalize as an improvement -- they
+underperform the already-losing live window, not outperform it**, and
+this holds up in both halves of history independently. Diagnostic-only
+per-bucket breakdown: every dark sub-bucket (00-04 -0.421, 04-07 -0.390,
+20-24 -0.602) is worse than every live sub-bucket (07-12 -0.370, 12-16
+-0.341, 16-20 -0.279) except one near-tie (04-07 vs 07-12). 20:00-24:00
+UTC (thinnest global liquidity, between NY close and Asia opening) is
+the single worst bucket by a clear margin, split-half consistent
+(-0.674 / -0.530). Note both windows are net negative -- consistent
+with every other real-data result this session; this doesn't newly
+indict the live window, it confirms extending hours isn't a fix for the
+already-known problem.
+
+Script committed (research tool, run-it-yourself convention matching
+every other real-data script this session); raw log/JSON output not
+committed (regenerable, not source).
