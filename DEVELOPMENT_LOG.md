@@ -9484,3 +9484,21 @@ Mechanism: VWAP Scalp's target is often reached with some normal backing-and-fil
 stop to breakeven early converts trades that would have eventually reached the full target into
 breakeven trades (R=0, no longer counted as a win) once ordinary noise briefly pulls price back through
 breakeven before the real move continues. Ruled out -- not implemented.
+
+## 2026-09-28 (continued) -- Per-instrument performance spread: looked real, doesn't survive split-half
+Pooled per-instrument breakdown of all 371 closed VWAP_SCALP trades since the fix showed a striking
+spread: commodities/gold/oil clustered near breakeven (BCO_USD +0.52R... wait, meanR -0.047 pooled,
+best of all instruments), GBP/CHF-heavy pairs were catastrophic (GBP_JPY -1.29R, USD_CHF -1.08R pooled).
+Tempting to read as "drop the bad pairs, keep the good ones" -- exactly the kind of after-the-fact
+slicing this project's discipline exists to catch, so tested it the honest way instead of shipping on
+the pooled numbers.
+
+Ranked instruments by meanR using ONLY the discovery half (first 185 trades, n>=5 per instrument),
+split into a top and bottom group from THAT ranking alone, then checked both groups' performance on the
+independent holdout half (last 186 trades) -- never re-ranking on the holdout data.
+
+**Result: does not replicate.** Discovery-half groups looked dramatic (top -0.164R vs bottom -0.956R).
+The SAME groups in the independent holdout half: top -0.524R vs bottom -0.470R -- nearly identical, and
+if anything the "good" group was marginally worse. The pooled spread was noise that happened to land on
+particular instruments in this specific sample, not a stable per-instrument effect. Ruled out -- no
+instrument restriction implemented.
