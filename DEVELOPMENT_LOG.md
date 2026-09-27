@@ -9513,3 +9513,26 @@ Discovery: Tuesday looked much the worst (n=50, meanR -0.904), Wednesday/Monday 
 WORST (-0.785). Only Monday stayed stable (-0.306 -> -0.282), but one stable day out of five with no
 consistent ranking around it isn't a real, actionable pattern. Ruled out -- consistent with this
 project's other calendar-effect results (JPY Monday effect, NFP) all failing the same replication check.
+
+## 2026-09-28 (continued) -- VWAP Scalp: signal clustering skips the whole tick, doesn't pick a winner
+Real-data validated addition (all 371 closed trades since the fix, same methodology as MAX_Z_ENTRY/
+SESSION_DRIFT_MAX_Z): a signal that fires ALONE performs meaningfully better than one firing alongside
+other pairs at the same tick -- confirmed independently in both halves of history (first half meanR
+-0.574 baseline -> -0.454 isolated-only; second half -0.484 -> -0.405). Many pairs moving together reads
+as a real, correlated market move, worse odds for a fade, not pair-specific noise.
+
+Restructured `_check_vwap_scalp_opportunities_unsafe` into two passes: pass 1 evaluates every pair's
+eligibility and signal without opening anything; pass 2 opens only when EXACTLY ONE pair signaled that
+tick. A cluster of 2+ now opens NONE of them, a real behavior change from the prior "first pair in
+VWAP_SCALP_PAIRS priority order wins, others cooldown-blocked" design (which still opened exactly one
+trade per cluster). Since nothing opens during the scan pass, entries no longer need per-iteration
+reloading to catch a same-tick open from an earlier pair -- there isn't one anymore, by construction.
+
+`vwap_scalp_tie_log.record_tie`'s `opened` param now accepts None (a cluster that opened nothing) instead
+of always naming a winner; old entries with a real winner stay readable, no schema migration. Removed
+`_record_ties_if_any` (the old post-hoc follow-up pass, checking only pairs listed after the winner) --
+pass 1 already collects the complete, more accurate candidate list directly. Cluster skips are also
+surfaced to the periodic digest via record_risk_limit_skip, same visibility every other skip reason gets.
+
+Rewrote 3 tests whose assertions encoded the old "exactly one wins" behavior to the new "cluster of 2+
+opens none" behavior; all 473 tests pass.

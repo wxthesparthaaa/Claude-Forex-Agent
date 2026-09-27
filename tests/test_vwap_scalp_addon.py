@@ -977,7 +977,10 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
     # in the SAME tick never saw an earlier instrument's own fresh open
     # from moments before in that same loop. Three different instruments
     # all confirm a signal in the SAME tick here, with NO pre-existing
-    # seeded trade at all -- exactly one may open, not all three.
+    # seeded trade at all. Through 2026-09-28 exactly one still opened
+    # (whichever pair came first in priority order); from 2026-09-28 the
+    # signal-clustering filter means a cluster this size opens NONE of
+    # them (see vwap_scalp_addon.py's own comment on that pass).
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
@@ -995,28 +998,25 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert len(opened) == 1
-    assert client.orders_placed == opened
+    assert opened == []
+    assert client.orders_placed == []
     state = ds.load_state()
-    # De-duplicated notification (2026-09-08): gating is per-instrument
-    # and correct, but recording every one of the (up to 16) blocked
-    # instruments separately would flood the digest -- only the first
-    # blocked instrument's skip is recorded per tick per reason.
-    skips = [s for s in state.risk_limit_skips_since_digest if "global cooldown" in s]
+    # De-duplicated notification: one signal-cluster skip recorded per
+    # tick, not one per involved pair.
+    skips = [s for s in state.risk_limit_skips_since_digest if "signal cluster" in s]
     assert len(skips) == 1
 
 
 @patch("vwap_scalp_addon.send_message")
 def test_records_a_tie_when_multiple_instruments_confirm_within_the_same_tick(
         mock_send, tmp_path, monkeypatch):
-    # Same real incident/fixture as the cooldown-clustering test above,
-    # but checking the OTHER side of the fix (2026-09-11): trade_journal
-    # only ever records the winner, so there was previously no way to
-    # measure which pair actually won these races -- exactly the data
-    # needed to verify VWAP_SCALP_PAIRS' 2026-09-10 commodities-first
-    # reorder is doing anything. AUD_JPY is checked before EUR_JPY and
-    # CHF_JPY in VWAP_SCALP_PAIRS, so it should win and the other two
-    # should be recorded as having also signaled.
+    # Same fixture as the cooldown-clustering test above, checking the
+    # tie log itself. Through 2026-09-28, AUD_JPY (checked first in
+    # VWAP_SCALP_PAIRS) would have won and the log recorded it as
+    # `opened` with the other two as `also_signaled`. From 2026-09-28
+    # the signal-clustering filter opens none of them -- `opened` is
+    # None, `also_signaled` lists all 3 in VWAP_SCALP_PAIRS order (not
+    # just the ones after a winner, since there is no winner anymore).
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
@@ -1028,11 +1028,11 @@ def test_records_a_tie_when_multiple_instruments_confirm_within_the_same_tick(
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == ["AUD_JPY"]
+    assert opened == []
     entries = tie_log.load_tie_log()
     assert len(entries) == 1
-    assert entries[0]["opened"] == "AUD_JPY"
-    assert entries[0]["also_signaled"] == ["EUR_JPY", "CHF_JPY"]
+    assert entries[0]["opened"] is None
+    assert entries[0]["also_signaled"] == ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -1124,19 +1124,17 @@ def test_pacing_cap_reason_daily_cap_enabled_false_skips_daily_and_bucket_but_no
 @patch("vwap_scalp_addon.send_message")
 def test_global_cooldown_blocks_a_second_pair_confirming_moments_after_the_first_within_one_tick(
         mock_send, tmp_path, monkeypatch):
-    # Integration-level regression for the same bug (real incident,
-    # 2026-09-08 22:10 UTC: AUD_JPY then NZD_JPY opened 5 seconds apart
-    # despite a 40-minute cooldown), reproduced end-to-end through
-    # check_vwap_scalp_opportunities rather than just the unit-level
-    # clamp above. `now` is refreshed every loop iteration (the actual
-    # fix) using a clock that ticks forward a few real seconds on each
-    # call -- close enough together that both pairs' candle fixtures
-    # (anchored to the same FIXED_NOW) still read as fresh signals, but
-    # far enough that the first pair's real opened_at (stamped by
-    # trade_journal.record_open_trade's OWN datetime.now() call, also
-    # patched to the same ticking clock) lands after the SECOND pair's
-    # own `now` snapshot was taken moments earlier in the same tick --
-    # exactly the ordering that exposed the bug live.
+    # Originally an integration-level regression for a real incident
+    # (2026-09-08 22:10 UTC: AUD_JPY then NZD_JPY opened 5 seconds apart
+    # despite a 40-minute cooldown) -- fixed at the time by refreshing
+    # `now`/`entries` every loop iteration so a same-tick open from an
+    # earlier pair was visible to a later one's cooldown check. The
+    # 2026-09-28 signal-clustering filter makes this whole race
+    # structurally impossible a different way: nothing opens during the
+    # scan pass at all, so there's no "first pair's opened_at" for a
+    # later pair to race against -- a same-tick cluster of 2 opens
+    # neither, full stop. Kept as a regression test with the ticking
+    # clock still in place (it should no longer matter) to confirm that.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
 
@@ -1158,7 +1156,7 @@ def test_global_cooldown_blocks_a_second_pair_confirming_moments_after_the_first
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == ["EUR_USD"]  # only the first pair -- GBP_USD must be cooldown-blocked, not a second open
+    assert opened == []  # both pairs signaled the same tick -- the clustering filter opens neither
 
 
 @patch("vwap_scalp_addon.send_message")

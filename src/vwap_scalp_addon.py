@@ -985,20 +985,30 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     # tick_not_per_pair and its two siblings).
     notified_categories = set()
 
+    # PASS 1 (2026-09-28, signal-clustering filter): evaluate every pair's
+    # eligibility and signal WITHOUT opening anything yet. Real-data
+    # validated separately from MAX_Z_ENTRY/SESSION_DRIFT_MAX_Z: a signal
+    # that fires ALONE performs meaningfully better than one that fires
+    # alongside other pairs at the same tick (n=371 closed trades since
+    # the fix, real per-trade improvement confirmed independently in both
+    # halves of history -- first half meanR -0.574 -> -0.454 isolated-
+    # only, second half -0.484 -> -0.405; see DEVELOPMENT_LOG.md). Many
+    # pairs moving together at once reads as a real, correlated market
+    # move rather than pair-specific noise -- worse odds for a fade.
+    #
+    # This replaces the old "first pair in priority order wins, others
+    # cooldown-blocked" behavior: under the old design a same-tick
+    # cluster still opened exactly one trade (whichever pair came first
+    # in VWAP_SCALP_PAIRS); now a cluster of 2+ opens NONE of them. Since
+    # nothing opens during this pass, `entries` doesn't need reloading
+    # per-iteration to see same-tick opens the way it used to -- nothing
+    # can have opened yet.
+    candidates = []  # (instrument, direction, vwap, dev_stdev, signal_index)
+    entries = load_journal()
     for instrument in VWAP_SCALP_PAIRS:
         try:
-            # Refreshed every iteration (2026-09-09), same rationale as
-            # `entries` reloading below -- the tick-start `now` captured
-            # above the loop goes stale by real seconds/minutes once
-            # several pairs' own OANDA calls (candles, price, order
-            # placement) have run, which is exactly what let the cooldown
-            # guard in _pacing_cap_reason miscompute a same-tick open as
-            # "in the future." Using the real current time on every
-            # iteration is the primary fix; the clamp in
-            # _pacing_cap_reason is the defense-in-depth backstop.
             now = datetime.now(timezone.utc)
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            entries = load_journal()
             open_for_pair = [e for e in open_entries(entries)
                               if e["instrument"] == instrument and e.get("experiment_tag") == VWAP_SCALP_TAG]
             if open_for_pair:
@@ -1012,18 +1022,6 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             # event-day pause that used to gate here is removed -- see
             # this module's top-of-file note.
 
-            # Re-checked fresh EVERY iteration, from `entries` reloaded
-            # THIS iteration -- not a value computed once before the loop
-            # started. Real incident (2026-09-08): 3 live trades (AUD_USD,
-            # EUR_JPY, CHF_JPY) opened in the same minute despite the
-            # 20-minute global cooldown, because the old single pre-loop
-            # `capped` check never saw the EARLIER instruments' own opens
-            # from moments before in that same tick -- exactly the
-            # clustering this cap was built to prevent (2026-09-04
-            # incident). `entries` here already reflects any instrument
-            # opened earlier this tick, since each iteration reloads it
-            # fresh and the loop is sequential (no concurrency within one
-            # tick), so this genuinely can't miss a same-tick open.
             cap_result = _pacing_cap_reason(entries, now, today_start, max_trades_per_day,
                                              per_bucket_cap, global_cooldown_minutes, daily_cap_enabled)
             if cap_result is not None:
@@ -1060,17 +1058,39 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             # filter that used to gate here is removed -- see this
             # module's top-of-file note.
 
+            candidates.append((instrument, direction, vwap, dev_stdev, signal_index))
+        except Exception as e:
+            print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
+            continue
+
+    # PASS 2: open only when exactly one pair signaled this tick. A
+    # cluster of 2+ is logged (for the same after-the-fact visibility the
+    # old tie log gave VWAP_SCALP_PAIRS' priority order) but deliberately
+    # opens nothing.
+    if len(candidates) == 1:
+        instrument, direction, vwap, dev_stdev, signal_index = candidates[0]
+        try:
+            entries = load_journal()  # reload fresh right before the real order
             account = account_state_from_tracked_capital(state, entries)
             if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
                                risk_config, account):
                 opened.append(instrument)
         except Exception as e:
             print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
-            continue
+    elif len(candidates) > 1:
+        signaled = [c[0] for c in candidates]
+        print(f"INFO: VWAP Scalp signal cluster ({', '.join(signaled)}) -- skipping, none opened", flush=True)
+        try:
+            from vwap_scalp_tie_log import record_tie
+            record_tie(datetime.now(timezone.utc).isoformat(), None, signaled)
+        except Exception as e:
+            print(f"WARNING: could not record VWAP Scalp signal cluster: {e}", flush=True)
+        if "signal_cluster" not in notified_categories:
+            notified_categories.add("signal_cluster")
+            from dashboard_state import record_risk_limit_skip
+            record_risk_limit_skip("VWAP Scalp", f"signal cluster ({len(signaled)} pairs) -- none opened")
 
     print(f"INFO: VWAP Scalp tick finished -- {len(opened)} opened", flush=True)
-    if opened:
-        _record_ties_if_any(client, opened[-1], today_start)
     return opened
 
 
@@ -1078,8 +1098,9 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     """Fetches this tick's M1 candles for `instrument` and returns
     (signal_index, direction, vwap, dev_stdev) if a confirmed signal is
     present, else (None, None, None, None). Factored out of the main
-    per-pair loop above so _record_ties_if_any's follow-up pass can
-    reuse the identical signal-detection step without duplicating it.
+    per-pair loop above so its own pass-1 scan (every pair, before any
+    of them opens) can reuse the identical signal-detection step across
+    all of VWAP_SCALP_PAIRS without duplicating it.
 
     Also rejects a signal that is otherwise confirmed if the SESSION has
     already drifted SESSION_DRIFT_MAX_Z or more standard deviations from
@@ -1103,45 +1124,3 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     return signal_index, direction, vwap, dev_stdev
 
 
-def _record_ties_if_any(client, winner: str, today_start) -> None:
-    """Called once, only on a tick that opened a position -- checks
-    whether any pair listed AFTER `winner` in VWAP_SCALP_PAIRS also had
-    a confirmed signal this same tick. Those pairs never get their own
-    signal checked in the main loop above: the pacing-cap check
-    short-circuits them (`continue`, before signal detection) the
-    instant the winner's own open makes `_pacing_cap_reason` see an
-    active cooldown. Without this follow-up pass there was no way to
-    tell "lost the tie to a higher-priority pair" apart from "never had
-    a signal at all" -- both looked identical (silently skipped) in
-    trade_journal.json, which only records pairs that actually open.
-    Records a tie (vwap_scalp_tie_log.record_tie) only when at least
-    one such pair is found -- makes VWAP_SCALP_PAIRS' priority order
-    (see its own comment) measurable after the fact: which pair
-    actually wins these same-tick races, and whether the 2026-09-10
-    commodities-first reorder changed that.
-
-    Bounded, rare extra cost: only runs on ticks that already opened a
-    position (a handful of times a day at VWAP Scalp's real observed
-    frequency, not every 5-minute tick), and only re-checks pairs after
-    the winner, not the whole universe. Best-effort -- a failure here
-    must never affect the trade that already opened."""
-    try:
-        winner_idx = VWAP_SCALP_PAIRS.index(winner)
-    except ValueError:
-        return
-    also_signaled = []
-    for instrument in VWAP_SCALP_PAIRS[winner_idx + 1:]:
-        try:
-            now = datetime.now(timezone.utc)
-            _, direction, _, _ = _detect_confirmed_signal(client, instrument, today_start, now)
-            if direction is not None:
-                also_signaled.append(instrument)
-        except Exception as e:
-            print(f"WARNING: VWAP Scalp tie-check failed for {instrument}: {e}", flush=True)
-            continue
-    if also_signaled:
-        try:
-            from vwap_scalp_tie_log import record_tie
-            record_tie(datetime.now(timezone.utc).isoformat(), winner, also_signaled)
-        except Exception as e:
-            print(f"WARNING: could not record VWAP Scalp tie: {e}", flush=True)
