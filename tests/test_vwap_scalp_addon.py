@@ -347,6 +347,29 @@ def test_risk_amount_compensates_for_observed_realized_loss_inflation(mock_send,
 
 
 @patch("vwap_scalp_addon.send_message")
+def test_commodity_risk_amount_uses_the_commodity_specific_inflation_divisor(mock_send, tmp_path, monkeypatch):
+    # 2026-09-28: split from the single blanket REALIZED_LOSS_INFLATION --
+    # commodities (tiny integer unit counts, unlike FX's hundreds of
+    # thousands) get their own, separately-calibrated divisor rather than
+    # the FX-calibrated one.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
+    client = FakeClient(candles_by_instrument={"XAU_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    vs.check_vwap_scalp_opportunities(client)
+
+    entries = tj.load_journal()
+    scalp_entries = [e for e in entries if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    assert len(scalp_entries) == 1
+    expected = 2000.0 * 2.0 / 100.0 / vs.COMMODITY_REALIZED_LOSS_INFLATION
+    assert scalp_entries[0]["risk_amount"] == pytest.approx(expected, rel=1e-6)
+    assert vs.COMMODITY_REALIZED_LOSS_INFLATION != vs.REALIZED_LOSS_INFLATION, \
+        "fixture must actually exercise a DIFFERENT divisor, not coincidentally the same value"
+
+
+@patch("vwap_scalp_addon.send_message")
 def test_opens_fade_position_on_downward_extension(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()

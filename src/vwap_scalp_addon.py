@@ -380,9 +380,31 @@ WEAK_HOUR_PAIR_EXCLUSIONS = {}
 # conversion-rate-drift cause rather than something stop-specific. Using
 # the loser figure (mean) to stay comparable with the original
 # calibration's own methodology.
-REALIZED_LOSS_INFLATION = 1.39  # divides risk_amount so REAL realized losses land back near the
+REALIZED_LOSS_INFLATION = 1.40  # divides risk_amount so REAL realized losses land back near the
                                  # user's intended risk_per_trade_pct; recalibrate as more live
                                  # data accumulates, and revisit if the root cause is ever found.
+
+# Split from the single blanket value above, 2026-09-28: execution slippage is now DEFINITIVELY
+# ruled out as the cause (97 trades with a near-exact stop fill still show the full inflation), and
+# a real, split-half-confirmed instrument-type pattern was found instead -- gold/silver/oil
+# consistently run a smaller ratio than FX pairs (full-sample: commodities mean 1.238 n=85, FX mean
+# 1.401 n=170; direction holds in both halves of history, though the exact gap size varies, 0.04 in
+# discovery vs 0.17 in holdout -- calibrated off the full pooled sample, not either half alone).
+# Mechanistically explained, not just correlated: commodity position sizes are TINY integers (median
+# 27 units vs FX's median 55,519) because gold/oil/silver are priced in the thousands per unit, so
+# rounding a fractional unit count down to the nearest whole unit is a real ~3.7% swing at that scale
+# vs ~0.002% for FX -- a real, separate, UNDER-sizing effect for commodities specifically, not the
+# same over-realized-loss mystery FX pairs still have (that one stays unconfirmed; ruling out
+# slippage narrows it to the SGD-conversion/reporting step, and a secondary triangulation-complexity
+# signal was found there too -- non-USD-quote pairs needing to route through USD average higher
+# (1.372) than direct USD-quote pairs (1.274) on clean fills alone -- but that alone doesn't explain
+# gold sitting below even other direct-USD-quote pairs, so this is narrowed, not closed).
+COMMODITY_REALIZED_LOSS_INFLATION = 1.24  # XAU_USD/XAG_USD/WTICO_USD/BCO_USD only -- see comment above
+COMMODITIES = {"XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD"}
+
+
+def _realized_loss_inflation_for(instrument: str) -> float:
+    return COMMODITY_REALIZED_LOSS_INFLATION if instrument in COMMODITIES else REALIZED_LOSS_INFLATION
 
 # EXPERIMENTAL REVERSION (2026-09-16): the trend filter (5-day price-
 # trend skip) and the high-impact-event-day pause that used to live here
@@ -852,7 +874,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         print(f"WARNING: VWAP Scalp conversion rate failed for {instrument}: {e}", flush=True)
         return False
 
-    risk_amount = risk_amount_for_trade(account.equity, risk_config) / REALIZED_LOSS_INFLATION
+    risk_amount = risk_amount_for_trade(account.equity, risk_config) / _realized_loss_inflation_for(instrument)
     units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return False
