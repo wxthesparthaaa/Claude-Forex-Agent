@@ -840,7 +840,7 @@ def _force_close(client, entry: dict) -> None:
 
 
 def _open_position(client, instrument: str, direction: str, target: float, std_at_signal: float,
-                    risk_config: RiskConfig, account: AccountState) -> bool:
+                    risk_config: RiskConfig, account: AccountState, diagnostics: dict | None = None) -> bool:
     meta_map = fetch_instrument_metadata(client, [instrument])
     meta = meta_map.get(instrument)
     if meta is None:
@@ -920,6 +920,10 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         "account_currency": account_currency, "risk_amount": risk_amount,
         "experiment_tag": VWAP_SCALP_TAG, "parent_trade_id": None,
     }
+    if diagnostics:
+        candidate["entry_z"] = diagnostics.get("entry_z")
+        candidate["session_drift_z"] = diagnostics.get("session_drift_z")
+        candidate["vol_ratio"] = diagnostics.get("vol_ratio")
 
     try:
         result = place_and_record(client, candidate)
@@ -1092,8 +1096,8 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             if _recently_signaled(entries, instrument, now):
                 continue  # a signal fired on this pair within the last COOLDOWN_MINUTES already
 
-            signal_index, direction, vwap, dev_stdev = _detect_confirmed_signal(client, instrument,
-                                                                                  today_start, now)
+            signal_index, direction, vwap, dev_stdev, diagnostics = _detect_confirmed_signal(
+                client, instrument, today_start, now)
             if direction is None:
                 continue
 
@@ -1101,7 +1105,7 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             # filter that used to gate here is removed -- see this
             # module's top-of-file note.
 
-            candidates.append((instrument, direction, vwap, dev_stdev, signal_index))
+            candidates.append((instrument, direction, vwap, dev_stdev, signal_index, diagnostics))
         except Exception as e:
             print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
             continue
@@ -1111,12 +1115,12 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     # old tie log gave VWAP_SCALP_PAIRS' priority order) but deliberately
     # opens nothing.
     if len(candidates) == 1:
-        instrument, direction, vwap, dev_stdev, signal_index = candidates[0]
+        instrument, direction, vwap, dev_stdev, signal_index, diagnostics = candidates[0]
         try:
             entries = load_journal()  # reload fresh right before the real order
             account = account_state_from_tracked_capital(state, entries)
             if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
-                               risk_config, account):
+                               risk_config, account, diagnostics):
                 opened.append(instrument)
         except Exception as e:
             print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
@@ -1139,11 +1143,21 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
 
 def _detect_confirmed_signal(client, instrument, today_start, now):
     """Fetches this tick's M1 candles for `instrument` and returns
-    (signal_index, direction, vwap, dev_stdev) if a confirmed signal is
-    present, else (None, None, None, None). Factored out of the main
-    per-pair loop above so its own pass-1 scan (every pair, before any
-    of them opens) can reuse the identical signal-detection step across
-    all of VWAP_SCALP_PAIRS without duplicating it.
+    (signal_index, direction, vwap, dev_stdev, diagnostics) if a
+    confirmed signal is present, else (None, None, None, None,
+    diagnostics). Factored out of the main per-pair loop above so its
+    own pass-1 scan (every pair, before any of them opens) can reuse the
+    identical signal-detection step across all of VWAP_SCALP_PAIRS
+    without duplicating it.
+
+    `diagnostics` (2026-09-29) is {"entry_z", "session_drift_z",
+    "vol_ratio"} -- the same numbers this function already computes to
+    gate MAX_Z_ENTRY/SESSION_DRIFT_MAX_Z/MIN_VOL_RATIO, now surfaced
+    instead of discarded, so a real trade's journal entry can carry its
+    own signal-time dimensions (see trade_journal.JournalEntry's own
+    comment) rather than a future check having to replay raw OANDA
+    candles to reconstruct them. All three are None if no signal was
+    confirmed at all, or if stdev_at_signal was zero/unavailable.
 
     Also rejects a signal that is otherwise confirmed if the SESSION has
     already drifted SESSION_DRIFT_MAX_Z or more standard deviations from
@@ -1153,22 +1167,34 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     firing into already is. Also rejects a signal whose recent volatility
     (relative to price) is below MIN_VOL_RATIO -- see that constant's own
     comment for why unusually CALM conditions predict a worse outcome,
-    not a better one."""
+    not a better one. Either rejection is persisted via
+    vwap_scalp_filter_reject_log.record_filter_reject (2026-09-29) -- see
+    that module's own docstring for why: before this, a rejection here
+    left no trace at all, not even a print."""
     candles = client.get_candles(instrument, "M1",
                                   from_time=today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                   to_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     candles = [c for c in candles if c.get("complete", True)]
     times, vwap, dev_stdev, z = _compute_vwap_series(candles)
     signal_index, direction = _find_confirmed_signal(times, z, now)
+    diagnostics = {"entry_z": None, "session_drift_z": None, "vol_ratio": None}
     if signal_index is not None:
         mids = [float(c["mid"]["c"]) for c in candles]
         stdev_at_signal = dev_stdev[signal_index]
+        diagnostics["entry_z"] = z[signal_index]
         if stdev_at_signal and stdev_at_signal > 0:
             session_drift_z = (mids[signal_index] - mids[0]) / stdev_at_signal
+            vol_ratio = stdev_at_signal / mids[signal_index] if mids[signal_index] > 0 else None
+            diagnostics["session_drift_z"] = session_drift_z
+            diagnostics["vol_ratio"] = vol_ratio
             if abs(session_drift_z) >= SESSION_DRIFT_MAX_Z:
-                return None, None, None, None
-            if mids[signal_index] > 0 and stdev_at_signal / mids[signal_index] < MIN_VOL_RATIO:
-                return None, None, None, None
-    return signal_index, direction, vwap, dev_stdev
+                from vwap_scalp_filter_reject_log import record_filter_reject
+                record_filter_reject(now.isoformat(), instrument, "session_drift_z", session_drift_z)
+                return None, None, None, None, diagnostics
+            if vol_ratio is not None and vol_ratio < MIN_VOL_RATIO:
+                from vwap_scalp_filter_reject_log import record_filter_reject
+                record_filter_reject(now.isoformat(), instrument, "vol_ratio", vol_ratio)
+                return None, None, None, None, diagnostics
+    return signal_index, direction, vwap, dev_stdev, diagnostics
 
 

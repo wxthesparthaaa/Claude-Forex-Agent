@@ -13,6 +13,7 @@ import dashboard_state as ds
 import trade_journal as tj
 import vwap_scalp_addon as vs
 import vwap_scalp_tie_log as tie_log
+import vwap_scalp_filter_reject_log as reject_log
 from autopilot import PhaseState
 
 FIXED_NOW = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)  # inside the 07:00-20:00 UTC watch window
@@ -33,6 +34,8 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(ds, "STATE_PATH", str(tmp_path / "dashboard_state.json"))
     monkeypatch.setattr(tie_log, "STATE_DIR", str(tmp_path))
     monkeypatch.setattr(tie_log, "TIE_LOG_PATH", str(tmp_path / "vwap_scalp_tie_log.json"))
+    monkeypatch.setattr(reject_log, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(reject_log, "FILTER_REJECT_LOG_PATH", str(tmp_path / "vwap_scalp_filter_reject_log.json"))
 
 
 def _autopilot_state(vwap_scalp_enabled=True, kill_switch_engaged=False):
@@ -246,9 +249,10 @@ def test_detect_confirmed_signal_rejects_a_session_that_has_already_drifted_too_
     assert abs(session_drift_z) >= vs.SESSION_DRIFT_MAX_Z, "fixture must actually exercise session-drift rejection"
 
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
-    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+    signal_index, direction, out_vwap, out_dev_stdev, diagnostics = vs._detect_confirmed_signal(
         client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert (signal_index, direction) == (None, None)
+    assert diagnostics["session_drift_z"] is not None and abs(diagnostics["session_drift_z"]) >= vs.SESSION_DRIFT_MAX_Z
 
 
 def test_detect_confirmed_signal_allows_a_normal_session_drift():
@@ -259,9 +263,12 @@ def test_detect_confirmed_signal_allows_a_normal_session_drift():
     assert abs(session_drift_z) < vs.SESSION_DRIFT_MAX_Z, "fixture must stay under the session-drift cutoff"
 
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
-    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+    signal_index, direction, out_vwap, out_dev_stdev, diagnostics = vs._detect_confirmed_signal(
         client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert direction is not None
+    assert diagnostics["entry_z"] is not None
+    assert diagnostics["session_drift_z"] is not None
+    assert diagnostics["vol_ratio"] is not None
 
 
 def test_detect_confirmed_signal_rejects_unusually_calm_conditions():
@@ -282,9 +289,10 @@ def test_detect_confirmed_signal_rejects_unusually_calm_conditions():
     assert vol_ratio < vs.MIN_VOL_RATIO, "fixture must actually exercise the low-volatility rejection"
 
     client = FakeClient(candles_by_instrument={"EUR_USD": candles})
-    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+    signal_index, direction, out_vwap, out_dev_stdev, diagnostics = vs._detect_confirmed_signal(
         client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert (signal_index, direction) == (None, None)
+    assert diagnostics["vol_ratio"] is not None and diagnostics["vol_ratio"] < vs.MIN_VOL_RATIO
 
 
 def test_find_confirmed_signal_ignores_stale_confirmation():
@@ -1097,6 +1105,63 @@ def test_no_tie_recorded_when_only_one_instrument_confirms(mock_send, tmp_path, 
 
     assert opened == ["EUR_USD"]
     assert tie_log.load_tie_log() == []
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_opened_trade_journals_its_own_signal_diagnostics(mock_send, tmp_path, monkeypatch):
+    # 2026-09-29: entry_z/session_drift_z/vol_ratio used to be computed
+    # at signal time then discarded -- every real-data check of these
+    # filters had to reconstruct them after the fact from raw candles.
+    # Confirms a real opened trade now carries them directly.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == ["EUR_USD"]
+    entry = tj.load_journal()[0]
+    assert entry["entry_z"] is not None and vs.Z_ENTRY <= abs(entry["entry_z"]) < vs.MAX_Z_ENTRY
+    assert entry["session_drift_z"] is not None and abs(entry["session_drift_z"]) < vs.SESSION_DRIFT_MAX_Z
+    assert entry["vol_ratio"] is not None and entry["vol_ratio"] >= vs.MIN_VOL_RATIO
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_session_drift_rejection_is_recorded_in_the_filter_reject_log(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=99.68, confirmation_price=99.83)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    entries = reject_log.load_filter_reject_log()
+    assert len(entries) == 1
+    assert entries[0]["instrument"] == "EUR_USD"
+    assert entries[0]["filter"] == "session_drift_z"
+    assert abs(entries[0]["value"]) >= vs.SESSION_DRIFT_MAX_Z
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_low_volatility_rejection_is_recorded_in_the_filter_reject_log(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.013, confirmation_price=100.012, osc=0.005)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    assert opened == []
+    entries = reject_log.load_filter_reject_log()
+    assert len(entries) == 1
+    assert entries[0]["instrument"] == "EUR_USD"
+    assert entries[0]["filter"] == "vol_ratio"
+    assert entries[0]["value"] < vs.MIN_VOL_RATIO
 
 
 @patch("vwap_scalp_addon.send_message")

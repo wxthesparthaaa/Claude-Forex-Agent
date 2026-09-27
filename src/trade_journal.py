@@ -150,6 +150,24 @@ class JournalEntry:
     # real fill price wasn't available (falls back to the estimate for
     # entry_price too in that case -- see record_open_trade).
     decision_entry_price: float | None = None
+    # entry_z/session_drift_z/vol_ratio (2026-09-29): VWAP Scalp's own
+    # signal-time diagnostics -- the confirmed bar's z-score, how far the
+    # SESSION had already drifted from its own open in stdevs, and recent
+    # volatility relative to price. All three were computed at signal
+    # time (to gate MAX_Z_ENTRY/SESSION_DRIFT_MAX_Z/MIN_VOL_RATIO -- see
+    # vwap_scalp_addon.py) then discarded before this fix, meaning every
+    # real-data check of those filters this far had to reconstruct them
+    # after the fact by replaying raw OANDA candles per trade -- the same
+    # reconstruction confidence_components was added to avoid for the
+    # base strategy's own signal breakdown. None for every trade opened
+    # before this field existed, and for every non-VWAP-Scalp strategy
+    # (these are VWAP Scalp-specific; a shared name was chosen anyway,
+    # rather than an experiment-prefixed one, since any future addon
+    # gating on its own session-relative z/vol metric can reuse the same
+    # three fields instead of inventing its own).
+    entry_z: float | None = None
+    session_drift_z: float | None = None
+    vol_ratio: float | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -275,6 +293,8 @@ def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | 
             experiment_tag=candidate.get("experiment_tag"), parent_trade_id=candidate.get("parent_trade_id"),
             in_liquidity_window=_in_liquidity_window_now(candidate["instrument"], now_utc),
             decision_entry_price=candidate["entry_price"],
+            entry_z=candidate.get("entry_z"), session_drift_z=candidate.get("session_drift_z"),
+            vol_ratio=candidate.get("vol_ratio"),
         )
         entries.append(asdict(entry))
         save_journal(entries)

@@ -9698,3 +9698,53 @@ that reach full target, without protecting downside at all (full losers still co
 still-open half) -- a pure downside with no offsetting benefit. Ruled out -- not implemented. Closes out
 exit-management as a productive direction for this strategy; both variants tried (trailing stop, partial
 close) made things worse, not better.
+
+## 2026-09-29 -- VWAP Scalp's filter dimensions were computed then discarded; now journaled and logged
+
+**Gap found, not a bug**: user asked whether the journal was prepped to
+support the 4 filters shipped since 2026-08-31 (MAX_Z_ENTRY,
+SESSION_DRIFT_MAX_Z, signal clustering, MIN_VOL_RATIO). It wasn't. Every
+real-data validation of SESSION_DRIFT_MAX_Z/MIN_VOL_RATIO this session
+had to reconstruct entry_z/session_drift_z/vol_ratio after the fact by
+replaying raw OANDA M1 candles per historical trade -- `_open_position`
+never received them, and `record_open_trade` only ever wrote the fixed
+JournalEntry fields, dropping any extra key silently. Worse: a
+SESSION_DRIFT_MAX_Z or MIN_VOL_RATIO rejection inside
+`_detect_confirmed_signal` left NO trace at all -- not a print, not a
+dashboard skip, nothing -- unlike signal clustering, which vwap_scalp_
+tie_log.py already records. There was no way to see how often either
+filter fires live, or how close a rejected signal came to its cutoff,
+without redoing the same expensive reconstruction every time.
+
+**Shipped**:
+- `trade_journal.JournalEntry` gains `entry_z`/`session_drift_z`/
+  `vol_ratio` (all `None` by default, for every non-VWAP-Scalp strategy
+  and every trade journaled before this field existed).
+  `record_open_trade` reads them from `candidate.get(...)`, same pattern
+  as `confidence_components`.
+- `vwap_scalp_addon._detect_confirmed_signal` now returns a 5th value,
+  `diagnostics` (a dict of the same three numbers it already computed to
+  gate the filters, previously discarded), threaded through the pass-1
+  candidates tuple into `_open_position`, which stamps them onto the
+  candidate dict a real opened trade journals.
+- New `src/vwap_scalp_filter_reject_log.py` (mirrors vwap_scalp_tie_
+  log.py exactly): `record_filter_reject(tick_time, instrument,
+  filter_name, value)`, called from both rejection points inside
+  `_detect_confirmed_signal`. Append-only, 500-entry bound, same
+  best-effort try/except-and-print-a-warning discipline as the tie log.
+
+**Verification**: 3 existing `_detect_confirmed_signal` tests updated
+for the new 5-tuple return (2 gained assertions on the diagnostics dict
+itself). 3 new tests: an opened trade's journal entry carries all 3
+non-None diagnostics inside their expected ranges; a session-drift
+rejection and a low-volatility rejection each land exactly one entry in
+the new reject log with the right instrument/filter/value. Full suite
+(478 tests, up from 475) passes; `py_compile` + real `import app`
+verified.
+
+**Separately asked, still open**: whether the 4 filters (calibrated
+entirely on real trades from the current 07:00-20:00 UTC watch window,
+since that's the only window the live bot has ever fired in since
+2026-08-31) hold up in the quieter off-window hours the strategy doesn't
+currently trade -- no backtest has tested this yet. Not attempted this
+entry; flagged to the user as a separate, unanswered question.
