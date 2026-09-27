@@ -9423,3 +9423,17 @@ and beyond RR~2 the wider target mostly just goes uncollected before time runs o
 knobs, adjusting one erodes the other, and this signal's real expectancy is essentially insensitive to
 where the target is set -- a strong sign the underlying issue is the signal's predictive power itself,
 not the specific R:R chosen around it.
+
+## 2026-09-28 (continued) -- Extended RR down to 0.25:1: median trade turns positive, mean stays negative
+Completed the RR sweep in the other direction: 0.75/0.5/0.33/0.25 (tighter target than stop), same 120-min
+hold, same everything else. Win rate climbs sharply as the target gets closer (42.8% at RR1.0 -> 63.4% at
+RR0.25) and MEDIAN R turns positive below RR1.0 (+0.07 to +0.08) -- most individual trades win. Mean R
+stays negative and essentially flat across the whole range (-0.149 to -0.164 discovery), and gets MORE
+statistically significant as a loser, not less (t=-14 at RR1.0 -> t=-23 at RR0.25), because the breakeven
+win rate needed rises even faster than the actual win rate does (80% needed at RR0.25 vs 63.4% achieved).
+
+Combined with the earlier RR1.0-4.0 extension, this completes the sweep across the full reasonable
+0.25-4.0 range: 10 different reward:risk ratios, all landing on negative mean R, all in a narrow band.
+Strong, comprehensive evidence the problem is the signal's own predictive power, not the ratio chosen
+around it -- no stop/target placement rescues an entry that doesn't predict anything real. Triangle
+breakout combination fully closed out.

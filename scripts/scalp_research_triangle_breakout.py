@@ -140,16 +140,19 @@ def run_config(instruments, make_signals, max_hold, delay=DELAY_MIN):
     return trades
 
 
-# 2026-09-28 follow-up: does widening RR further (toward the ~2.33:1 breakeven
-# the observed ~35-43% win rate needs) actually help? Same 120-min hold cap as
-# the original 1.0/1.5/2.0 configs -- deliberately NOT scaled up for the wider
-# targets, so this stays directly comparable rather than quietly tilting the
-# test in a favorable direction. A wider target within the same time window
-# will naturally time out more often; that's a real result, not an artifact
-# to correct for.
-CONFIGS = [(f"Triangle breakout RR{rr}", rr) for rr in (1.0, 1.5, 2.0, 2.5, 3.0, 4.0)]
-BONFERRONI = 3  # only the 3 NEW configs (2.5/3.0/4.0) are a fresh pre-registered test;
-                 # 1.0/1.5/2.0 already have their own result on record from 2026-09-28 earlier
+# 2026-09-28 follow-up #2: the other direction -- a TIGHTER target than stop
+# (RR<1), easier to hit but smaller when it lands. Hypothesis stated before
+# running: given expectancy was essentially flat from RR1.0-4.0 (win rate
+# erosion cancelled out the wider target every time), the same signal-has-no-
+# real-edge diagnosis predicts flat/negative expectancy below 1.0 too -- but
+# there's a real reason it could behave differently and is worth checking
+# rather than assuming: a much closer target is more exposed to pure spread/
+# noise bounce inflating apparent win rate without real predictive content,
+# AND the fixed spread cost becomes a LARGER fraction of a SMALLER reward,
+# so cost drag should be proportionally worse here, not better. Same 120-min
+# hold cap, same everything else, for direct comparability.
+CONFIGS = [(f"Triangle breakout RR{rr}", rr) for rr in (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 0.75, 0.5, 0.33, 0.25)]
+BONFERRONI = 4  # only the 4 newest configs (0.75/0.5/0.33/0.25) are this fresh pre-registered test
 
 if __name__ == "__main__":
     _rsi_selftest()
