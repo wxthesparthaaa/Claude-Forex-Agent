@@ -9350,3 +9350,29 @@ that sank the NFP result. Cutoff sweep confirms it in practical terms: win rate 
 (31.2-32.0% / -0.52 to -0.53R) across every ER cutoff tried -- filtering on it changes nothing. Ruled
 out: the shape of the run-up, at least measured this way, carries no information MAX_Z_ENTRY doesn't
 already capture.
+
+## 2026-09-27 -- Filled the last untested breakout speed (1-minute bars): fails, and traced to why
+Prior breakout-following tests only went as fast as 5-minute bars (round 1 Donchian, -0.46R holdout) down
+to 60-minute (round 2 E3, -0.25R) -- all already ruled out. True 1-minute bars, matching VWAP Scalp's own
+granularity, had never been tested. Built `scripts/scalp_research_breakout_m1.py`, reusing
+scalp_research.py's validated harness (Instrument/simulate/stats, same discovery/holdout split,
+Bonferroni over the same 4 pre-specified n/RR configs already used at tf=5, not a fresh sweep).
+
+**Caught a real methodology bug before trusting the first run**: Instrument.atr uses a fixed 14-bar
+window: 70 minutes of coverage at tf=5, but only 14 minutes at tf=1. Median ATR(14) at tf=1 measured
+0.00011 (1.1 pips) -- BELOW the ~1.6-pip typical spread -- so the ATR-based stop collapsed to something
+tighter than the spread itself (first run: 14-19% win rate, spread/risk ratios in the hundreds of
+millions). Fixed with a separately-computed ATR(70) at tf=1 (70 bars, same 70-minute coverage as the
+tf=5 baseline), same principle VWAP Scalp's own live code already uses for its rolling window.
+
+**Result barely changed after the fix (16-19% win, mean R -0.72 to -0.80, all 4 configs, both discovery
+and holdout, same sign both halves)** -- ruling out the ATR window as the explanation and pointing at
+something real. Traced it directly: sampled 15 real signals and replayed simulate()'s own fill logic.
+Over half were `None` (price already moved past stop or target during the realistic 5-minute entry
+delay, before an order could even be placed) and nearly every trade that DID open showed `hold=0min`
+(stopped out in the same minute it entered). **Conclusion: not a bug, a real structural finding** -- the
+system's real ~5-minute execution delay, a small fraction of a slower signal's own timescale, is FATAL
+to a 1-minute-bar breakout's own tight, fast-moving setup. By the time a real order could be placed, the
+move has usually already reversed or blown through its own stop. Ruled out -- and unlike every prior
+"no edge" result, this one has an identified mechanical cause (execution speed), not just an absence of
+signal.
