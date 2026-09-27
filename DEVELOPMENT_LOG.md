@@ -9655,3 +9655,32 @@ suggesting the frequency of these near-instant fills has grown over time -- itse
 **Not implemented.** Real enough to track, not clean enough to trust as a hard filter yet -- unlike the
 two filters shipped today, this one doesn't clear the same robustness bar. Logged as a watch item;
 worth revisiting once more live data accumulates rather than shipping on a noisy pattern.
+
+## 2026-09-28 (continued) -- VWAP Scalp: reject signals during unusually calm conditions (MIN_VOL_RATIO)
+Fourth filter shipped today. Tests the magnitude of recent volatility (the rolling stdev VWAP Scalp
+already computes for its own z-score, normalized by price), distinct from SESSION_DRIFT_MAX_Z's
+directional focus. Pre-registered hypothesis stated before running: calm conditions should favor a
+mean-reversion fade, choppy conditions should hurt it. **The data said the opposite.**
+
+Real-data test (371 closed trades since the fix): pooled Pearson r(vol_ratio, R) = +0.180, p=0.00043 --
+one of the strongest, cleanest correlations found this whole session, not a borderline one. Cutoff effect
+confirmed independently in both halves, clean and monotonic-or-near-monotonic in each (first half meanR
+-0.574 -> -0.354 rejecting the calmest 30%; second half -0.484 -> -0.371) -- clearing the same bar as
+MAX_Z_ENTRY/SESSION_DRIFT_MAX_Z, unlike the weaker same-day intended-RR finding that was left unshipped.
+
+Added `MIN_VOL_RATIO = 0.000211` (30th percentile of the pooled sample), wired into
+`_detect_confirmed_signal` alongside the other two filters. Plausible mechanism: a confirmed 2+ stdev
+move against an unusually SUPPRESSED recent baseline more likely marks the START of a genuine new
+directional move (the classic low-volatility-before-a-real-break signature) than an overextension within
+already-noisy, already-mean-reverting conditions -- fading the former is the same "falling knife" mistake
+this project keeps re-discovering in different forms.
+
+Also did a direct self-audit against today's earlier discovery that trend_addon.py's entire backtested
+edge was a look-ahead artifact (its 200-day SMA included the same day's own close, then scored that same
+day's return): confirmed _compute_vwap_series's rolling stdev baseline explicitly self-excludes the
+current bar (existing test), and the cumulative VWAP legitimately includes the current bar only because
+that's the correct definition of "VWAP as of now" at a real decision point -- not the same failure mode.
+No equivalent bug found in MAX_Z_ENTRY, SESSION_DRIFT_MAX_Z, or MIN_VOL_RATIO.
+
+All 475 tests pass, including a new test isolating this filter specifically (confirmed z in the normal
+range, session drift well under its own cutoff, only vol_ratio triggers).

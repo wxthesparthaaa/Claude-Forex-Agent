@@ -270,6 +270,27 @@ MAX_Z_ENTRY = 2.25              # reject a confirmed signal this far or further 
 # result) which fails exactly this check. Keeps only ~31% of trade volume
 # at this cutoff -- a real tradeoff, not a free win.
 SESSION_DRIFT_MAX_Z = 3.0       # skip a new signal (either direction) once today has drifted this far from its own open
+
+# Added 2026-09-28, same real-data methodology: not direction (SESSION_DRIFT_MAX_Z), MAGNITUDE --
+# is the market unusually calm relative to its own recent volatility right now? Counterintuitive
+# result, stated honestly: the pre-registered hypothesis was that calm conditions should favor a
+# mean-reversion fade and choppy ones should hurt it. The data says the opposite -- LOW recent
+# volatility predicts WORSE outcomes. Pooled Pearson r(vol_ratio, R)=+0.180, p=0.0004 -- among the
+# strongest, cleanest correlations found this session, not a borderline one. Cutoff effect is
+# clean and monotonic-or-near-monotonic in BOTH halves independently (first half meanR -0.574 ->
+# -0.354 rejecting the calmest 30%; second half -0.484 -> -0.371), unlike weaker same-day findings
+# (e.g. intended-RR-at-fill) that were left unshipped for exactly this kind of inconsistency.
+# Plausible mechanism: a 2+ stdev move against an unusually SUPPRESSED recent baseline is more
+# likely the START of a genuine new directional move (the classic low-volatility-before-a-real-
+# break signature) than an overextension within already-noisy, already-mean-reverting conditions --
+# fading the former is the "catching a falling knife" mistake this project keeps re-discovering in
+# different forms; the latter is closer to what the fade thesis actually assumes.
+# vol_ratio = dev_stdev(current) / price(current) -- the SAME rolling stdev _compute_vwap_series
+# already computes for the entry z, normalized by price so it's comparable across JPY pairs,
+# majors, and gold on one scale. Cutoff is the 30th percentile of the full pooled sample (371
+# trades) -- calibrated off the pooled sample per this project's own convention when the exact gap
+# size varies across halves.
+MIN_VOL_RATIO = 0.000211        # skip a new signal if the market's recent volatility (relative to price) is below this
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -1129,7 +1150,10 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
     its own open -- see that constant's own comment. This is a real-data-
     validated addition on top of MAX_Z_ENTRY, not a duplicate of it: a
     signal can pass MAX_Z_ENTRY (not itself extreme) while the day it's
-    firing into already is."""
+    firing into already is. Also rejects a signal whose recent volatility
+    (relative to price) is below MIN_VOL_RATIO -- see that constant's own
+    comment for why unusually CALM conditions predict a worse outcome,
+    not a better one."""
     candles = client.get_candles(instrument, "M1",
                                   from_time=today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                   to_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -1142,6 +1166,8 @@ def _detect_confirmed_signal(client, instrument, today_start, now):
         if stdev_at_signal and stdev_at_signal > 0:
             session_drift_z = (mids[signal_index] - mids[0]) / stdev_at_signal
             if abs(session_drift_z) >= SESSION_DRIFT_MAX_Z:
+                return None, None, None, None
+            if mids[signal_index] > 0 and stdev_at_signal / mids[signal_index] < MIN_VOL_RATIO:
                 return None, None, None, None
     return signal_index, direction, vwap, dev_stdev
 

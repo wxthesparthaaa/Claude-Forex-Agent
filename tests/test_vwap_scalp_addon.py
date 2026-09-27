@@ -48,7 +48,8 @@ def _m1_candle(dt, close, volume=10):
             "mid": {"c": str(close)}, "volume": volume}
 
 
-def _extended_session_candles(n_flat=30, extension_price=100.13, confirmation_price=100.12, end_time=None):
+def _extended_session_candles(n_flat=30, extension_price=100.13, confirmation_price=100.12, end_time=None,
+                               osc=0.05):
     """Oscillating baseline (a real, nonzero stdev -- a perfectly flat
     baseline has zero variance, which the detection deliberately treats
     as "no signal"), then an extension bar, then a CONFIRMATION bar that
@@ -65,10 +66,13 @@ def _extended_session_candles(n_flat=30, extension_price=100.13, confirmation_pr
     would have needed to land in that same narrow window. Tests that
     specifically need a confirmed signal REJECTED for being too extreme
     pass a far larger extension_price/confirmation_price explicitly
-    (e.g. the original 105.0/104.0)."""
+    (e.g. the original 105.0/104.0). `osc` (2026-09-28) lets a test
+    additionally shrink the baseline oscillation to exercise
+    MIN_VOL_RATIO -- pass a proportionally scaled extension/confirmation
+    too, or the confirmed z drifts out of the normally-allowed range."""
     end_time = end_time or FIXED_NOW
     day_start = end_time - timedelta(minutes=n_flat + 1)
-    bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (0.05 if i % 2 == 0 else -0.05))
+    bars = [_m1_candle(day_start + timedelta(minutes=i), 100.0 + (osc if i % 2 == 0 else -osc))
             for i in range(n_flat)]
     bars.append(_m1_candle(day_start + timedelta(minutes=n_flat), extension_price))
     bars.append(_m1_candle(end_time, confirmation_price))
@@ -258,6 +262,29 @@ def test_detect_confirmed_signal_allows_a_normal_session_drift():
     signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
         client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert direction is not None
+
+
+def test_detect_confirmed_signal_rejects_unusually_calm_conditions():
+    # 2026-09-28: real-data validated -- LOW recent volatility (relative
+    # to price) predicts a WORSE outcome, not a better one (opposite of
+    # the pre-registered hypothesis; see MIN_VOL_RATIO's own comment).
+    # A tight oscillation (osc=0.005, vs the default fixture's 0.05)
+    # keeps the SAME confirmed z (~2.14, still inside [Z_ENTRY,
+    # MAX_Z_ENTRY)) and a session drift well under SESSION_DRIFT_MAX_Z,
+    # isolating this filter specifically.
+    candles = _extended_session_candles(extension_price=100.013, confirmation_price=100.012, osc=0.005)
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    mids = [float(c["mid"]["c"]) for c in candles]
+    assert vs.Z_ENTRY <= abs(z[-1]) < vs.MAX_Z_ENTRY, "fixture must stay in the normally-allowed z range"
+    session_drift_z = (mids[-1] - mids[0]) / dev_stdev[-1]
+    assert abs(session_drift_z) < vs.SESSION_DRIFT_MAX_Z, "fixture must not ALSO trip session drift"
+    vol_ratio = dev_stdev[-1] / mids[-1]
+    assert vol_ratio < vs.MIN_VOL_RATIO, "fixture must actually exercise the low-volatility rejection"
+
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    signal_index, direction, out_vwap, out_dev_stdev = vs._detect_confirmed_signal(
+        client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
+    assert (signal_index, direction) == (None, None)
 
 
 def test_find_confirmed_signal_ignores_stale_confirmation():
