@@ -9376,3 +9376,33 @@ to a 1-minute-bar breakout's own tight, fast-moving setup. By the time a real or
 move has usually already reversed or blown through its own stop. Ruled out -- and unlike every prior
 "no edge" result, this one has an identified mechanical cause (execution speed), not just an absence of
 signal.
+
+## 2026-09-28 -- Tested the user's own discretionary chart strategy (triangle breakout + S/R + HTF trend + RSI): ruled out
+User shared a real chart (CHF/JPY 5m, OANDA) showing their own manual trading approach: an ascending-
+triangle trendline breakout, support/resistance zones for stop/target, a higher-timeframe direction
+filter, and RSI as an exhaustion check. Asked whether this combination had been tested and whether it
+could be backtested.
+
+Translated each visual element into a precise, causal rule (stated before running, no look-ahead) in
+`scripts/scalp_research_triangle_breakout.py`, reusing scalp_research.py's validated harness:
+- Breakout level: rolling 20-bar high/low.
+- "Trendline": the 20-bar window split into an early/late 10-bar half; late-half low > early-half low
+  (LONG) or late-half high < early-half high (SHORT) as the causal proxy for a converging pattern,
+  avoiding full swing-pivot fitting, which is much easier to make look-ahead-unsafe.
+- S/R zone stop: the most recent 10-bar low/high itself (not a separate ATR estimate).
+- HTF direction: SMA(100) on the same 5-minute closes (~8h+ context); only trade with it.
+- RSI filter: RSI(14), causal Wilder smoothing; interpreted as "don't chase an already-exhausted move"
+  (LONG requires RSI<70, SHORT requires RSI>30) -- stated explicitly as the assumption being tested,
+  since the user's own phrasing was ambiguous on this point.
+- 5-minute bars (matching the user's own chart, and avoiding the just-discovered 1-minute execution-
+  delay failure mode), all 17 pairs (includes CHF_JPY), RR swept 1.0/1.5/2.0, Bonferroni 0.05/3.
+
+Caught and fixed a real bug in the new RSI implementation before trusting any result: a flat (zero
+movement) synthetic series was scoring as RSI=100 ("maximally overbought") instead of the correct 50
+(neutral) -- an edge case in the avg_loss==0 branch. Self-test caught it immediately.
+
+**Result: significantly negative at every RR level, both discovery and holdout, same sign in both
+halves of a split-half check.** RR1.0: 42.8%/40.6% win (disc/hold), mean R -0.16/-0.21, both p<0.0001.
+RR2.0: 37.8%/35.4% win, mean R -0.16/-0.23. No config survived. Spread/risk ratios (0.15-0.17) were
+sane this time, unlike the tf=1 breakout test -- this isn't an execution-speed artifact, it's a genuine
+rejection of the pattern itself, at the exact timeframe and instrument the user actually trades it on.
