@@ -9328,3 +9328,25 @@ before running either.
 slower-bars result on a different (Bollinger) family, which landed at "not statistically distinguishable
 from zero," this is a clean, decisive negative on both sides of the split -- the same-day M15 version
 doesn't just fail to prove itself, it loses with real statistical confidence. Ruled out.
+
+## 2026-09-27 -- Tested run-up "shape" (efficiency ratio) as a fade filter: no signal found
+User's proposal, distinct from the already-rejected HTF-trend-agreement filter (2026-09-01): rather than
+comparing price to a slower average (which failed because it's confounded with the entry signal itself),
+measure the SHAPE of the run-up leading into the signal -- a smooth, monotonic climb (more trend-like)
+vs. a choppy back-and-forth that nets out to the same distance (more noise-like) -- independent of how
+extreme the deviation is, which MAX_Z_ENTRY already covers.
+
+Metric: Kaufman-style Efficiency Ratio over the same 30-minute window the live stdev calc already uses,
+ending at the real entry bar: |net price move| / (sum of |bar-to-bar moves|), range 0 (pure chop) to 1
+(perfectly smooth). Hypothesis stated before running: higher ER (smoother) predicts WORSE realized R.
+
+Tested the same way MAX_Z_ENTRY was -- real realized_pnl/risk_amount from all 371 closed VWAP_SCALP
+trades since the live-detection fix, ER recomputed from real OANDA M1 candles at each trade's actual
+entry, no simulated execution.
+
+**Result: no signal.** Pearson r(ER, R) = 0.042, p = 0.42 -- not distinguishable from zero. Split-half
+doesn't even agree in sign (first half +0.116, second half -0.026), the same "doesn't replicate" pattern
+that sank the NFP result. Cutoff sweep confirms it in practical terms: win rate and mean R are flat
+(31.2-32.0% / -0.52 to -0.53R) across every ER cutoff tried -- filtering on it changes nothing. Ruled
+out: the shape of the run-up, at least measured this way, carries no information MAX_Z_ENTRY doesn't
+already capture.
