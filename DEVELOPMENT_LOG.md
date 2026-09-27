@@ -9573,3 +9573,34 @@ actual entry): Pearson r(spread_ratio, R)=0.016, p=0.76 -- no relationship. Spli
 on sign (-0.009 / +0.063, both near zero). Cutoff sweep barely moves mean R at any threshold (-0.52 to
 -0.54 across the whole range). Ruled out -- spread widening carries no information here, distinct from
 (and not a substitute for) the SESSION_DRIFT_MAX_Z price-drift signal, which does.
+
+## 2026-09-28 (continued) -- REALIZED_LOSS_INFLATION root cause: slippage definitively ruled out, real instrument-dependent pattern found
+Switched from filter-hunting to investigating the still-unconfirmed root cause of REALIZED_LOSS_INFLATION
+itself (real losses running ~1.3-1.4x bigger than intended, currently only compensated for via a
+multiplier, never explained). Used data already in hand -- no new API calls needed.
+
+**Execution slippage definitively ruled out as the cause**, more rigorously than the original 22-trade
+check: across 255 real closed losses, 34.5% hit the stop at the EXACT price, and average slippage overall
+is only 0.32% of the stop distance -- two orders of magnitude too small to explain a 30-40% effect.
+Isolated to the 97 trades with near-exact (<0.5%) stop fills specifically: mean k (realized loss /
+intended risk) is STILL 1.317 -- the inflation is fully present even with a clean, precise fill. This
+conclusively places the cause in the SGD-conversion/reporting step, not price execution.
+
+**A real, structured instrument pattern, not noise**: k varies by conversion complexity in the expected
+direction -- pairs needing triangulation through USD (quote currency != USD, e.g. JPY crosses) average
+k=1.372 vs k=1.274 for quote-currency=USD pairs (direct-ish conversion), on clean stop hits only. But
+this doesn't fully explain the spread: XAU_USD (gold) sits well below every other instrument (mean
+k=0.856, even under 1.0) despite quoting in USD like the "1-hop" group -- something instrument-specific
+beyond triangulation complexity is also at play, plausibly how OANDA's synthetic demo account handles
+metals conversion differently from FX. Also found (separately, methodological note): k appeared to fall
+sharply with hold time in the raw data, but this is a MEASUREMENT ARTIFACT, not a real effect -- trades
+held close to MAX_HOLD_MINUTES=30 are closed by the time-based force-close, not an actual stop-order
+fill, and show NEGATIVE apparent "slippage" (exit price better than the nominal stop) simply because
+they're a different exit mechanism entirely, not evidence of anything time-dependent in the conversion
+itself.
+
+**Status**: narrowed, not closed. Real, converging evidence (slippage ruled out twice now, real per-
+instrument variance found, partial triangulation-complexity signal) but not yet a confirmed, fixable
+bug -- would need to read resolve_conversion_rate's actual implementation and ideally compare against
+real historical OANDA cross-rates to pin down the exact mechanism. Not attempted without explicit
+go-ahead, given it starts touching position-sizing code rather than pure signal research.
