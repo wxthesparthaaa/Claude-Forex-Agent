@@ -9461,3 +9461,26 @@ both halves, not just reduced volume (which earlier this session was shown to ma
 through selection bias, not better). Keeps only ~31% of trade volume at this cutoff -- a real tradeoff,
 not a free win. All 473 tests pass, including 2 new tests covering the rejection and the still-allowed
 case.
+
+## 2026-09-28 (continued) -- Tested a move-to-breakeven trailing stop on VWAP Scalp: makes it worse, not better
+The one exit-management idea not yet tried (every prior VWAP Scalp test uses one fixed stop, one fixed
+target): once a trade has moved partway to target, move the stop to breakeven, protecting against a full
+loss on a trade that was working. Replayed real bid/ask M1 price paths for all 371 closed VWAP_SCALP
+trades since the fix, using each trade's own real entry/stop/target from the journal, at 3 pre-specified
+triggers (0.3R/0.5R/0.75R), conservative same-bar tie-break throughout.
+
+**Methodology caveat, flagged before trusting the comparison**: the baseline replay (fixed stop, no
+trailing) reproduces the real win/loss OUTCOME for 96.8% of trades, but its mean R (-0.285) doesn't match
+the real journaled mean R (-0.529) -- consistent with the same REALIZED_LOSS_INFLATION effect already on
+record (real losses run ~1.3-1.4x bigger than a clean stop-hit, for a still-unconfirmed reason, likely
+conversion-rate staleness) which a plain bid/ask M1 price replay can't reproduce. This doesn't invalidate
+the comparison BETWEEN variants (all computed the same way, subject to the same blind spot), but the
+absolute R values here should not be read as real live P&L.
+
+**Result: every trailing variant performed WORSE than the fixed stop, not better** -- win rate dropped
+sharply (30.2% baseline -> 21.6-26.7% across the 3 triggers) and mean R was flat-to-slightly-worse
+(-0.285 baseline vs -0.290 to -0.295). Consistent in both halves of a split-half check (no sign flip).
+Mechanism: VWAP Scalp's target is often reached with some normal backing-and-filling first -- moving the
+stop to breakeven early converts trades that would have eventually reached the full target into
+breakeven trades (R=0, no longer counted as a win) once ordinary noise briefly pulls price back through
+breakeven before the real move continues. Ruled out -- not implemented.
