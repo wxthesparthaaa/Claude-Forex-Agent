@@ -100,7 +100,12 @@ def test_check_open_trades_classifies_successful_on_positive_pnl(mock_send, tmp_
     assert len(changed) == 1
     assert changed[0]["status"] == tj.SUCCESSFUL
     assert changed[0]["realized_pnl"] == 35.0
-    mock_send.assert_not_called()  # SL/TP closes don't need a Telegram ping here
+    # 2026-09-29: this used to be the one real gap that made a live SL/TP
+    # close invisible on Telegram until the once-daily 1am SGT nightly
+    # review -- see check_open_trades' own comment for the real incident.
+    mock_send.assert_called_once()
+    sent = mock_send.call_args[0][0]
+    assert "EUR_USD LONG" in sent and "WIN" in sent and "+35.00" in sent
     # A closed-reason marker distinguishing "OANDA's own SL/TP fired" from
     # a feature module's own deliberate close -- otherwise there's no
     # durable record of which one happened.
@@ -164,6 +169,51 @@ def test_check_open_trades_classifies_failed_on_negative_pnl(mock_send, tmp_path
 
     assert changed[0]["status"] == tj.FAILED
     assert changed[0]["realized_pnl"] == -20.0
+    sent = mock_send.call_args[0][0]
+    assert "LOSS" in sent and "-20.00" in sent
+
+
+@patch("trade_monitor.send_message")
+def test_check_open_trades_sends_one_close_notification_per_trade_closed_this_tick(
+        mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate(instrument="EUR_USD"))
+    tj.record_open_trade("102", candidate(instrument="GBP_USD"))
+
+    client = FakeClient(
+        open_trades=[],
+        closed_trades=[
+            {"id": "101", "state": "CLOSED", "realizedPL": "10.0",
+             "averageClosePrice": "1.11", "closeTime": "2026-08-16T05:11:57Z"},
+            {"id": "102", "state": "CLOSED", "realizedPL": "-5.0",
+             "averageClosePrice": "1.34", "closeTime": "2026-08-16T05:11:57Z"},
+        ],
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    assert len(changed) == 2
+    assert mock_send.call_count == 2  # one message per trade, not batched
+
+
+@patch("trade_monitor.send_message", side_effect=Exception("Telegram unreachable"))
+def test_check_open_trades_close_notification_failure_does_not_affect_the_real_reconciliation(
+        mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    tj.record_open_trade("101", candidate())
+
+    client = FakeClient(
+        open_trades=[],
+        closed_trades=[{"id": "101", "state": "CLOSED", "realizedPL": "35.0",
+                         "averageClosePrice": "1.11", "closeTime": "2026-08-16T05:11:57Z"}],
+    )
+    changed = trade_monitor.check_open_trades(client)
+
+    # The journal write already succeeded before the notification is
+    # attempted -- a failed Telegram send must never cast doubt on it.
+    assert len(changed) == 1
+    assert changed[0]["status"] == tj.SUCCESSFUL
+    entries = tj.load_journal()
+    assert entries[0]["status"] == tj.SUCCESSFUL
 
 
 @patch("trade_monitor.send_message")

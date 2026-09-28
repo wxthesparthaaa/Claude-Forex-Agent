@@ -9807,3 +9807,55 @@ already-known problem.
 Script committed (research tool, run-it-yourself convention matching
 every other real-data script this session); raw log/JSON output not
 committed (regenerable, not source).
+
+## 2026-09-29 -- Real incident: SL/TP closes never notified Telegram at all; fixed
+
+**User report, mid-trading-day**: Telegram's trade counts don't match
+OANDA's real activity ("actions are not being detected by tele"), wins
+are under $1 against $4+ losses, "basically no wins at all" today.
+
+**Investigated against real, live data** (today's journal pulled from
+origin/state-sync, cross-checked directly against OANDA's own
+`/openTrades`): 6 VWAP_SCALP trades opened today, 1 still open --
+journal and OANDA agree exactly (trade 6015, BCO_USD, matches on id/
+price/open time). No orphaned or untracked positions. All 6 trades'
+entry_z/session_drift_z/vol_ratio (now journaled per the 2026-09-29
+diagnostics work) sit correctly inside the 4 filters' bounds -- the
+filters are demonstrably working as designed on their first real live
+day. 1W/4L closed (20% today) with the win a $0.268 near-breakeven
+35-minute timeout close, not a real target hit. This matches the
+already-known, never-resolved negative-expectancy problem this entire
+session has found everywhere tested -- not a new regression, and not
+statistically abnormal on its own at n=5 closed trades.
+
+**The real, separate bug**: `trade_monitor._check_open_trades_unsafe` --
+the function that reconciles OANDA's own stop-loss/take-profit firing
+into the journal -- never sent a Telegram message for this AT ALL.
+`notification_formats.format_trade_closed_message` has existed with its
+own passing unit test since before this session, but was never wired to
+any real call site; the ONLY place a closed trade's outcome ever reached
+Telegram was the once-daily 1am SGT nightly review, hours after the
+fact. A test at this exact call site asserted `mock_send.assert_not_
+called()  # SL/TP closes don't need a Telegram ping here` -- reads as a
+post-hoc rationalization of an omission, not a considered decision,
+especially given notification_formats.py's own module docstring lists
+"execution/close notices" as one of the four agreed Telegram touchpoints.
+Checking Telegram mid-day showed VWAP Scalp's own opens (vwap_scalp_
+addon._open_position already sends those) with no resolution ever
+following -- exactly the reported symptom, even though the journal and
+OANDA agreed the whole time.
+
+**Fixed**: wired `format_trade_closed_message` into `check_open_trades`
+-- one Telegram message per trade closed this tick (not batched,
+matching the existing one-open-message-per-trade convention), sent
+outside `JOURNAL_LOCK`, best-effort (a failed send can never cast doubt
+on the journal write, which already succeeded first). Updated the one
+test that encoded the old gap as expected behavior; added 2 new tests
+(multiple closes in one tick each get their own message; a notification
+failure doesn't affect the real reconciliation). Full suite (480 tests,
+up from 478) passes; `py_compile` + real `import app` verified.
+
+**Not the cause of today's specific run of losses** -- that's the
+strategy's own long-standing, unresolved expectancy problem, unchanged
+by this fix. This fix closes the VISIBILITY gap that made today's
+losses look invisible/undetected on Telegram, not the losses themselves.

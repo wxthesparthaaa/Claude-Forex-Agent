@@ -276,6 +276,37 @@ def _check_open_trades_unsafe(client: OandaClient = None) -> list:
         if changed:
             save_journal(entries)
 
+    # Real gap found live (2026-09-29): this is the single most common
+    # close path -- OANDA's own stop-loss/take-profit firing -- and it
+    # reconciled the journal correctly but never notified Telegram AT
+    # ALL. format_trade_closed_message has existed since this module's
+    # own test suite (test_trade_closed_message_win_vs_loss_emoji) but
+    # was never actually wired to a real call site -- the only place a
+    # closed trade's outcome ever reached Telegram before this was the
+    # once-daily 1am SGT nightly review, hours after the fact. User-
+    # visible symptom: checking Telegram mid-day showed opens (from
+    # vwap_scalp_addon._open_position's own send_message) with no
+    # corresponding resolution, reading as "trades aren't being
+    # detected" even though the journal and OANDA agreed the whole time.
+    # One message per trade (not batched) -- mirrors the existing
+    # one-open-message-per-trade convention. Sent OUTSIDE JOURNAL_LOCK
+    # (a network call) and best-effort: a failed notification must never
+    # cast doubt on the journal write that already succeeded above.
+    if changed:
+        from notification_formats import format_trade_closed_message
+        for entry in changed:
+            pnl = entry.get("realized_pnl") or 0.0
+            outcome = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
+            try:
+                send_message(format_trade_closed_message({
+                    "instrument": entry["instrument"], "direction": entry["direction"],
+                    "outcome": outcome, "exit_price": entry.get("exit_price"),
+                    "pnl": pnl, "currency": entry.get("account_currency", ""),
+                }))
+            except Exception as e:
+                print(f"WARNING: close notification failed for trade {entry.get('trade_id')} "
+                      f"(already journaled correctly): {e}", flush=True)
+
     return changed
 
 
