@@ -3103,5 +3103,13 @@
     "also_signaled": [
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-09-28T07:01:59.059570+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD"
+    ]
   }
 ]
