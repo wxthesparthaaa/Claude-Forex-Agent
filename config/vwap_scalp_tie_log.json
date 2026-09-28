@@ -3127,5 +3127,13 @@
       "BCO_USD",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-28T14:50:21.002640+00:00",
+    "opened": null,
+    "also_signaled": [
+      "AUD_USD",
+      "AUD_JPY"
+    ]
   }
 ]
