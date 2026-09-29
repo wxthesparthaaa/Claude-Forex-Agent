@@ -3184,5 +3184,13 @@
       "GBP_JPY",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-29T10:10:07.199861+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "USD_JPY"
+    ]
   }
 ]
