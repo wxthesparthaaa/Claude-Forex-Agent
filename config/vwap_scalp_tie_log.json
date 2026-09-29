@@ -3143,5 +3143,14 @@
       "AUD_USD",
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-29T07:05:07.097337+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "NZD_JPY",
+      "CAD_JPY"
+    ]
   }
 ]
