@@ -3200,5 +3200,13 @@
       "USD_CAD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-29T12:15:06.407882+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "GBP_USD"
+    ]
   }
 ]
