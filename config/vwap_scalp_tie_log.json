@@ -3208,5 +3208,13 @@
       "XAG_USD",
       "GBP_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-29T12:20:08.500652+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "GBP_USD"
+    ]
   }
 ]
