@@ -3168,5 +3168,13 @@
       "USD_JPY",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-09-29T07:50:06.655766+00:00",
+    "opened": null,
+    "also_signaled": [
+      "USD_JPY",
+      "CAD_JPY"
+    ]
   }
 ]
