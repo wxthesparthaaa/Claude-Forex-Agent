@@ -38,7 +38,9 @@
   "scan_digest_interval_minutes": 180,
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
-  "risk_limit_skips_since_digest": [],
+  "risk_limit_skips_since_digest": [
+    "VWAP Scalp: signal cluster (3 pairs) -- none opened"
+  ],
   "last_scan_digest_sent_at": "2026-09-30T07:04:59.393631+00:00",
   "last_review_date": "2026-09-30",
   "last_health_check_date": "2026-09-29",
