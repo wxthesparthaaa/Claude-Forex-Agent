@@ -3242,5 +3242,13 @@
       "WTICO_USD",
       "BCO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-09-30T15:15:15.203673+00:00",
+    "opened": null,
+    "also_signaled": [
+      "NZD_USD",
+      "NZD_JPY"
+    ]
   }
 ]
