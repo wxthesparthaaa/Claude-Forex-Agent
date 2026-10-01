@@ -14876,5 +14876,35 @@
     "entry_z": 2.0325160520147088,
     "session_drift_z": 1.4528906041198,
     "vol_ratio": 0.0003565515064142433
+  },
+  {
+    "trade_id": "6261",
+    "instrument": "USD_CHF",
+    "direction": "LONG",
+    "units": 5297,
+    "entry_price": 0.83553,
+    "stop_loss": 0.83499,
+    "take_profit": 0.83575,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-10-01T12:40:12.936284+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.814589464285713,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 0.83546,
+    "entry_z": -1.3092788170942244,
+    "session_drift_z": -1.1860998755326038,
+    "vol_ratio": 0.0003027576504942678
   }
 ]
