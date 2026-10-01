@@ -3319,5 +3319,13 @@
       "AUD_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-10-01T09:10:06.896904+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "AUD_USD"
+    ]
   }
 ]
