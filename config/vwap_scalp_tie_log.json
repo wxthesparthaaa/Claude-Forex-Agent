@@ -3335,5 +3335,13 @@
       "XAU_USD",
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-01T10:15:10.259507+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "AUD_USD"
+    ]
   }
 ]
