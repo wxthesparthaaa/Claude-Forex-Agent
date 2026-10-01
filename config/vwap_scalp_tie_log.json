@@ -3269,5 +3269,14 @@
       "AUD_USD",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-01T07:15:07.573673+00:00",
+    "opened": null,
+    "also_signaled": [
+      "EUR_USD",
+      "AUD_USD",
+      "USD_CAD"
+    ]
   }
 ]
