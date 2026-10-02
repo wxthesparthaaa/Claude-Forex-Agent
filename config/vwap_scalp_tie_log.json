@@ -3571,5 +3571,15 @@
       "GBP_USD",
       "USD_CAD"
     ]
+  },
+  {
+    "tick_time": "2026-10-02T12:40:10.173059+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "XAG_USD",
+      "GBP_USD",
+      "USD_CAD"
+    ]
   }
 ]
