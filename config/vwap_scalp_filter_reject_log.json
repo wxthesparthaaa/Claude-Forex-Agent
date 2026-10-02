@@ -370,5 +370,11 @@
     "instrument": "AUD_USD",
     "filter": "session_drift_z",
     "value": 28.526014353643305
+  },
+  {
+    "tick_time": "2026-10-02T17:30:52.114716+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "session_drift_z",
+    "value": 7.195237601503968
   }
 ]
