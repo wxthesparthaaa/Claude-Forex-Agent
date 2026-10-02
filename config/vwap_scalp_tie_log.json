@@ -3440,5 +3440,13 @@
       "GBP_JPY",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-02T07:35:08.681647+00:00",
+    "opened": null,
+    "also_signaled": [
+      "GBP_JPY",
+      "EUR_JPY"
+    ]
   }
 ]
