@@ -9908,3 +9908,61 @@ a setting change is warranted it says so in its Telegram message for the user to
 dashboard. Every run now sends ONE plain-language Telegram "Weekly review" after the weekly
 summary (the idea under test with status and credence, the week's results, ideas tested, what
 was changed on the live bot with an undo hash, what's next), whether or not anything changed.
+
+## 2026-10-02 -- Weekly research (first run of the routine)
+
+Ran Friday 14:49 UTC (manual trigger, market still open; pushed mid-session, the same as earlier
+mid-week pushes). The user asked that the new strategy shipped last week be the focus: that is the
+4-filter VWAP Scalp system (MAX_Z_ENTRY, SESSION_DRIFT_MAX_Z, clustering, MIN_VOL_RATIO), live since
+2026-09-27 15:31 UTC. Every trade below is from it.
+
+**Week / cumulative live (same thing, since this is the system's first week)**: 58 closed trades, 25
+wins (43%), journal mean R -0.282, sd 1.27, 95% CI [-0.608, +0.045], -64.69 SGD (demo). Price-based
+R (relative to the actual fill) -0.216. Exits: 31 stop, 19 target, 8 timeout (timeouts not counted
+as target hits). Backtest predicted about -0.35, so consistent with "still losing". Near-cutoff
+survivors: |drift| >= 2.5 gave -0.44 (n=14) vs -0.23; nothing else stood out (all small n).
+Credence that the 4-filter system breaks even: from about 25% down to about 10% (5-15%). LEANING NO.
+
+**Bug: the filter-reject log never synced** -- `vwap_scalp_filter_reject_log.json` was missing from
+`state_paths.STATE_FILES`, so every push raised "not a known state file" (caught as a warning). It
+never reached state-sync and was lost on each restart, which is why there was no reject data this
+week. Fixed: e36d58f59.
+
+**REALIZED_LOSS_INFLATION root cause found** -- not conversion or slippage. `_open_position` sized
+units off the MID stop distance d0, while orders fill on ask/bid, so the real distance is d1 = d0 +
+half a spread + slippage. On 181 clean live losses since 2026-09-13, journal_R / price_R vs d1/d0:
+correlation 1.00, residual 1.01 (FX, n=105) / 0.98 (commodities, n=76), the same in both halves.
+The 2026-09-28 "commodity unit rounding" explanation was wrong. The effect was uneven (a 0.4-pip
+EUR_USD stop lost 2.27x its risk on 2026-10-02) and loaded the most money onto the worst trades
+(live win rate by d1/d0 tercile 45/32/22%). Fix: size off the fill-side quote (new
+`pricing.fetch_bid_ask`); both divisors now 1.0. Equal-risk vs mid sizing at equal average risk:
+live -0.367 vs -0.407 (both halves agree); backtest -0.375 vs -0.395 / -0.370 vs -0.391 / -0.278 vs
+-0.300. Commit 4937b0e24. Journal R from now on is approximately price-R, so compare future weeks
+on price-R, not raw journal R, against this week.
+
+**H1 shipped: MAX_SPREAD_TO_STOP = 0.25** (`scripts/research_vwap_scalp_spread_to_stop.py`,
+pre-registered). One year of cached M1 bid/ask (2025-09-09..2026-09-09) plus three fresh weeks
+from OANDA (one fresh day, USD_CAD 2026-09-21, lost to a 504). Full 4-filter pipeline using the
+live code, 1-minute entry delay, bid/ask fills, valid-bracket check. 8779 signals, 7320 after
+clustering. Unfiltered baseline -0.375 / -0.370 / -0.278 (discovery / holdout / fresh), which
+matches the off-window script's -0.347, so the harness agrees with earlier results. Variants
+C = 0.15/0.25/0.35/0.50 (K = 5 including the sizing comparison). C* = 0.25 on discovery. Holdout:
+kept -0.209 (n=816 of 3123) vs rejected -0.428, p = 2e-8. Monotone at every cutoff. Robustness:
+holdout halves +0.196 / +0.122; spreads +20% gives +0.220; 3-minute delay +0.224; without USD_CAD
++0.157; fresh -0.278 -> -0.062 (n=116, p=0.002). Within FX and within commodities separately in
+all three periods, and in 10 of 13 pairs with n >= 10. Part of the gain is composition (about 78%
+of kept trades are commodities) but not all of it. On the live 4-filter trades the filter would
+have kept 32 trades at -0.07 and rejected 26 at -0.39 (in-sample, motivation only). It cuts volume
+to about 26%. Still net negative in backtest. Commit 80fd3fd05.
+
+**Now under test**: the 5-filter system (above plus MAX_SPREAD_TO_STOP) with fill-side sizing, live
+from this push. Expectation from past data is about -0.06 to -0.21 per trade. Chance it truly
+breaks even: about 15-25%. At about 15 trades a week, 100 trades takes about 6-7 weeks. Judge on
+price-R. Falsified if the 95% upper bound drops below 0, or if the mean is still at or below -0.2
+after about 60 trades.
+
+**Queue for next week**: (1) check the live spread_to_stop reject rate against the backtest's ~74%
+and that kept trades' losses now land near -1.0 R; (2) target-distance-to-spread (is the reward eaten
+by the spread too?), only on top of C=0.25; (3) the drift-near-cutoff hint (2.5-3.0) on the
+backtest's large sample, not live n=14; (4) now that the reject log syncs, check the near-cutoff
+rejected signals.
