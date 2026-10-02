@@ -16,5 +16,11 @@
     "instrument": "BCO_USD",
     "filter": "session_drift_z",
     "value": -9.408562503386529
+  },
+  {
+    "tick_time": "2026-10-02T15:45:46.480765+00:00",
+    "instrument": "EUR_USD",
+    "filter": "session_drift_z",
+    "value": 3.757754709436272
   }
 ]
