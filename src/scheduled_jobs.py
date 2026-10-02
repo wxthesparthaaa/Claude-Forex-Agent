@@ -28,7 +28,7 @@ from market_hours import (SGT, NY, is_forex_market_open,
 from trade_journal import load_journal, closed_entries, LOST
 from trade_monitor import live_trades_view, cancel_all_open_trades
 from notification_formats import (
-    format_nightly_review_message, format_friday_reflection_message,
+    format_nightly_review_message, format_weekly_summary_message,
     format_market_closed_message, format_market_open_message, format_scan_digest_message,
 )
 from github_state_sync import get_github_config, pull_state_from_github
@@ -69,7 +69,7 @@ def _closed_trades_since(since_iso: str | None, limit: int | None = None) -> lis
             outcome = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
         result.append({
             "instrument": e["instrument"], "direction": e["direction"], "outcome": outcome,
-            "pnl": pnl, "close_time": closed_at,
+            "pnl": pnl, "close_time": closed_at, "currency": e.get("account_currency", ""),
         })
     result.sort(key=lambda t: t["close_time"])
     if limit is not None:
@@ -274,31 +274,34 @@ def run_nightly_review(client: OandaClient = None) -> list:
     return closed
 
 
-def run_friday_reflection(client: OandaClient = None) -> dict:
-    """After Friday's session: week P&L (against tracked capital) + which
-    pairs performed best/worst, to inform focus going into Monday. Also
-    client is accepted (unused) for signature symmetry -- see
-    run_nightly_review."""
+def run_weekly_summary(client: OandaClient = None) -> dict:
+    """After the forex week closes (and the Friday pre-close cancel-all
+    has already flattened everything): trades, win rate and absolute
+    profit/loss for the week. This used to be the "Friday self-reflection"
+    (strongest/weakest pair commentary, P&L percentage) -- dropped
+    2026-10-02, user request; the weekly analysis is now Claude's own
+    scheduled research routine instead.
+
+    Still the thing that resets state.week_start_timestamp each weekend:
+    the dashboard's "GAIN (THIS WEEK)" tile and daily chart both read it,
+    so that bump is load-bearing and must stay even though the message
+    itself is just a summary. Also client is accepted (unused) for
+    signature symmetry -- see run_nightly_review."""
     state = load_state()
 
     closed = _closed_trades_since(state.week_start_timestamp)
     week_pnl = sum(t["pnl"] for t in closed)
 
-    ending_equity = tracked_equity(state)
-    starting_equity = ending_equity - week_pnl
-    pnl_pct = 100 * week_pnl / starting_equity if starting_equity else 0.0
-
     wins = sum(1 for t in closed if t["outcome"] == "WIN")
     losses = sum(1 for t in closed if t["outcome"] == "LOSS")
-    by_instrument = {}
-    for t in closed:
-        by_instrument.setdefault(t["instrument"], 0.0)
-        by_instrument[t["instrument"]] += t["pnl"]
-    strongest = max(by_instrument, key=by_instrument.get) if by_instrument else None
-    weakest = min(by_instrument, key=by_instrument.get) if by_instrument else None
+    gross_profit = sum(t["pnl"] for t in closed if t["outcome"] == "WIN")
+    gross_loss = sum(t["pnl"] for t in closed if t["outcome"] == "LOSS")
+    currency = next((t["currency"] for t in closed if t.get("currency")), "")
 
     stats = {
-        "pnl": week_pnl, "pnl_pct": pnl_pct, "total_trades": len(closed),
+        "pnl": week_pnl, "total_trades": len(closed),
+        "wins": wins, "losses": losses,
+        "gross_profit": gross_profit, "gross_loss": gross_loss, "currency": currency,
         # wins / (wins + losses), matching trade_journal.win_loss_counts
         # and the dashboard's own win-rate tile -- both deliberately
         # exclude BREAKEVEN entries (real breakevens and LOST-placeholder
@@ -308,7 +311,6 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
         # win rate relative to what the dashboard reports for the same
         # week -- worse the more placeholder/breakeven trades occur.
         "win_rate_pct": round(100 * wins / (wins + losses), 1) if (wins + losses) else None,
-        "strongest_pair": strongest, "weakest_pair": weakest,
     }
 
     # Persisted BEFORE the network call to Telegram, same reasoning as
@@ -317,7 +319,7 @@ def run_friday_reflection(client: OandaClient = None) -> dict:
     state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
     save_state(state)
 
-    send_message(format_friday_reflection_message(stats))
+    send_message(format_weekly_summary_message(stats))
     return stats
 
 
@@ -517,7 +519,7 @@ def check_friday_preclose_cancel(now: datetime = None, client: OandaClient = Non
 def run_daily_dispatcher(client: OandaClient = None) -> None:
     """Ticks every 5 min (see app.py's scheduler) -- catches up on any of
     the day's fixed-time touchpoints (21:00 health check, nightly review
-    01:00, Friday reflection Sat 01:00)
+    01:00, weekly summary once the forex week closes)
     that are already due but haven't fired yet today.
 
     Replaces three plain CronTriggers that fired only at an exact
@@ -630,7 +632,7 @@ def run_daily_dispatcher(client: OandaClient = None) -> None:
             if state.last_reflection_sent_at else None
         )
         if last_sent is None or last_sent < previous_forex_close(now):
-            run_friday_reflection(client)
+            run_weekly_summary(client)
             state = load_state()
             state.last_reflection_sent_at = datetime.now(timezone.utc).isoformat()
             save_state(state)

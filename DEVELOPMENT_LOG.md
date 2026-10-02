@@ -9859,3 +9859,37 @@ up from 478) passes; `py_compile` + real `import app` verified.
 strategy's own long-standing, unresolved expectancy problem, unchanged
 by this fix. This fix closes the VISIBILITY gap that made today's
 losses look invisible/undetected on Telegram, not the losses themselves.
+
+## 2026-10-02 -- Weekly "reflection" replaced by a plain summary; weekly research moves to a Claude routine
+
+**Verified first** (user asked): the end-of-week flow is (a) `check_friday_preclose_cancel`
+cancels every open trade 10 minutes before forex's Friday 5pm New York close (05:00 SGT while
+US daylight time lasts, 06:00 SGT after Nov 1) -- on, per live state -- and (b) once the market
+is closed, the dispatcher ran `run_friday_reflection`, a Telegram "Friday self-reflection"
+(week P&L %, win rate, strongest/weakest pair). The nightly 1am review is a different, daily
+job and was left alone: it folds each night's P&L into `strategy_realized_pnl` (tracked
+equity), so it is load-bearing, not just a message.
+
+**Changed**: `run_friday_reflection` -> `run_weekly_summary`, `format_friday_reflection_message`
+-> `format_weekly_summary_message`. The message is now trades, W/L, win rate, and ABSOLUTE
+profit / loss / net in account currency (no percentage, no pair commentary). Kept untouched on
+purpose: the persisted-before-send `week_start_timestamp` reset (the dashboard's "GAIN (THIS
+WEEK)" tile and daily chart read it, so the bump is load-bearing), the
+`last_reflection_sent_at` dedupe, and its field name (renaming persisted state fields risks
+the live state-sync load for no gain). The pre-close cancel-all is unchanged; it must stay
+BEFORE the close, since a closed market cannot close positions. `_closed_trades_since` now also
+carries `account_currency`. Tests: reflection tests renamed; strongest/weakest-pair test replaced
+by an absolute profit/loss/net test; 3 new formatter tests. 482 tests pass.
+
+**New routine** (local scheduled task `weekly-strategy-research`, Saturdays 06:30 SGT, after
+the close under both US DST regimes and after the summary has gone out; catches up on next
+launch if the desktop app was closed): Claude reviews the week's live trades, reflects against
+the hypothesis under test (the 4-filter VWAP Scalp system live since 2026-09-27 15:31 UTC),
+then researches autonomously with the project's rigor rules (pre-registration, causal-only,
+bid/ask fills, holdout + split-half + multiple-comparison correction). It may add research
+scripts/log entries and push them, but may NOT change live trading code, constants, settings
+or orders. It alerts via Telegram only if a candidate clears a strict bar (holdout >= 300
+trades with mean R > 0, Bonferroni p < 0.05, both halves positive, survives +20% spread and a
+5-minute entry delay, >= +0.25R over the live system's backtested expectancy). It ran as a
+local task rather than a cloud routine because the backtesting needs the local OANDA
+credentials, venv, candle cache and Telegram config.

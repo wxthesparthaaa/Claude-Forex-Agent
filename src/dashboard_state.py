@@ -34,7 +34,7 @@ class DashboardState:
     mode: str = "demo"  # "demo" | "actual" -- Actual requires a separate, explicit later step
     trades_per_day_override: int = 5
     last_nightly_equity: float | None = None  # for computing tonight's P&L at the 1am review
-    week_start_equity: float | None = None    # for the Friday self-reflection summary
+    week_start_equity: float | None = None    # legacy -- was for the old Friday self-reflection summary (replaced by the weekly summary 2026-10-02)
     # The strategy's OWN tracked capital -- separate from OANDA's demo
     # account NAV, which is the broker's default demo funding (verified
     # against the real account: 119,336.26 SGD, nowhere near the $2,000
@@ -44,7 +44,7 @@ class DashboardState:
     strategy_starting_capital: float = 2000.0
     strategy_realized_pnl: float = 0.0
     last_review_timestamp: str | None = None  # filters our own journal to "since last night's review"
-    week_start_timestamp: str | None = None   # filters to "since Monday" for the Friday reflection
+    week_start_timestamp: str | None = None   # filters to "since the last weekly close" -- reset by scheduled_jobs.run_weekly_summary; also drives the dashboard's weekly-gain tile
     # Set by /settings whenever strategy capital is reset or explicitly
     # overridden (both branches -- see app.py) -- lets the dashboard's
     # weekly-gain history chart start fresh from the reset point instead

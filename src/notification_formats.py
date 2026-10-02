@@ -3,7 +3,7 @@ Pure message-formatting functions for the four Telegram touchpoints
 agreed on: the 9:30pm SGT potential-trades list, execution/close
 notices, the 1am SGT nightly review (a review checkpoint, NOT a forced
 close -- trades can carry across sessions once broker-protected), and
-the Friday self-reflection summary. Kept separate from telegram_notifier.py
+the weekly summary. Kept separate from telegram_notifier.py
 so message content is testable without any network call.
 """
 from __future__ import annotations
@@ -196,15 +196,32 @@ def format_nightly_review_message(closed_trades: list, starting_equity: float, e
     return "\n".join(lines)
 
 
-def format_friday_reflection_message(week_stats: dict) -> str:
-    lines = [
-        "<b>Friday self-reflection</b>",
-        f"Week P&L: {week_stats['pnl']:+.2f} ({week_stats['pnl_pct']:+.2f}%)",
-        f"Trades: {week_stats['total_trades']} ({week_stats.get('win_rate_pct', 'n/a')}% win rate)",
-    ]
-    if week_stats.get("weakest_pair"):
-        lines.append(f"Weakest pair this week: {week_stats['weakest_pair']}")
-    if week_stats.get("strongest_pair"):
-        lines.append(f"Strongest pair this week: {week_stats['strongest_pair']}")
-    lines.append("\nPreparing for Monday.")
-    return "\n".join(lines)
+def format_weekly_summary_message(week_stats: dict) -> str:
+    """Sent once the forex week has closed (after the Friday pre-close
+    cancel-all). Replaces the old "Friday self-reflection" (2026-10-02,
+    user request: the pair-by-pair commentary wasn't relevant anymore --
+    the weekly analysis is now Claude's own scheduled research routine,
+    not a Telegram blurb). Absolute amounts only, not percentages:
+    profit, loss and net in account currency, plus the win rate."""
+    total = week_stats["total_trades"]
+    if total == 0:
+        return "<b>Weekly summary</b>\nNo trades closed this week."
+
+    currency = week_stats.get("currency") or ""
+    wins, losses = week_stats["wins"], week_stats["losses"]
+    win_rate = week_stats.get("win_rate_pct")
+    others = total - wins - losses  # breakeven / unrecoverable placeholders -- in neither W nor L
+
+    trades_line = f"Trades: {total} ({wins}W / {losses}L)"
+    if others:
+        trades_line += f" + {others} breakeven/unrecoverable"
+    if win_rate is not None:
+        trades_line += f" -- {win_rate:.1f}% win rate"
+
+    return "\n".join([
+        "<b>Weekly summary</b>",
+        trades_line,
+        f"Profit: {week_stats['gross_profit']:+.2f} {currency} ({wins} wins)",
+        f"Loss: {week_stats['gross_loss']:+.2f} {currency} ({losses} losses)",
+        f"Net P&L: {week_stats['pnl']:+.2f} {currency}",
+    ])

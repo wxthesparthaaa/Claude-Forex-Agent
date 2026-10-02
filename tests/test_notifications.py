@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from notification_formats import (
     format_trade_executed_message,
-    format_trade_closed_message, format_nightly_review_message, format_friday_reflection_message,
+    format_trade_closed_message, format_nightly_review_message, format_weekly_summary_message,
     format_scan_digest_message,
 )
 from telegram_notifier import send_message, TelegramConfig, get_telegram_config
@@ -55,13 +55,27 @@ def test_nightly_review_message_no_trades_notes_open_positions_carry_over():
     assert "carries into tomorrow" in msg
 
 
-def test_friday_reflection_message_includes_weak_and_strong_pairs():
-    stats = {"pnl": 150.0, "pnl_pct": 7.5, "total_trades": 12, "win_rate_pct": 58.3,
-              "weakest_pair": "USD_CHF", "strongest_pair": "XAU_USD"}
-    msg = format_friday_reflection_message(stats)
-    assert "Weakest pair this week: USD_CHF" in msg
-    assert "XAU_USD" in msg
-    assert "Preparing for Monday." in msg
+def test_weekly_summary_message_shows_absolute_profit_loss_net_and_win_rate():
+    stats = {"pnl": -62.5, "total_trades": 20, "wins": 6, "losses": 14, "win_rate_pct": 30.0,
+              "gross_profit": 27.5, "gross_loss": -90.0, "currency": "SGD"}
+    msg = format_weekly_summary_message(stats)
+    assert "20 (6W / 14L)" in msg and "30.0% win rate" in msg
+    assert "Profit: +27.50 SGD (6 wins)" in msg
+    assert "Loss: -90.00 SGD (14 losses)" in msg
+    assert "Net P&L: -62.50 SGD" in msg
+    assert "%)" not in msg  # absolute amounts, not a P&L percentage
+
+
+def test_weekly_summary_message_counts_breakeven_trades_separately():
+    stats = {"pnl": 5.0, "total_trades": 4, "wins": 1, "losses": 1, "win_rate_pct": 50.0,
+              "gross_profit": 8.0, "gross_loss": -3.0, "currency": "SGD"}
+    assert "+ 2 breakeven/unrecoverable" in format_weekly_summary_message(stats)
+
+
+def test_weekly_summary_message_with_no_trades():
+    stats = {"pnl": 0.0, "total_trades": 0, "wins": 0, "losses": 0, "win_rate_pct": None,
+              "gross_profit": 0.0, "gross_loss": 0.0, "currency": ""}
+    assert "No trades closed this week" in format_weekly_summary_message(stats)
 
 
 def test_get_telegram_config_prefers_env_vars(monkeypatch):

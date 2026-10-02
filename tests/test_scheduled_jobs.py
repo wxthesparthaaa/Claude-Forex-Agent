@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import dashboard_state
 import trade_journal as tj
 import scheduled_jobs
-from scheduled_jobs import run_nightly_review, run_friday_reflection
+from scheduled_jobs import run_nightly_review, run_weekly_summary
 
 
 class FakeClient:
@@ -186,7 +186,7 @@ def test_run_nightly_review_does_not_double_count_previously_reviewed_trades(moc
 
 
 @patch("scheduled_jobs.send_message")
-def test_run_friday_reflection_persists_state_even_if_the_telegram_send_fails(mock_send, tmp_path, monkeypatch):
+def test_run_weekly_summary_persists_state_even_if_the_telegram_send_fails(mock_send, tmp_path, monkeypatch):
     # Regression test: a repeat run from a mid-flight kill wouldn't just
     # duplicate the Telegram message -- it would also double-count that
     # week's P&L into the trailing 3-week auto-pause history. Saving
@@ -197,35 +197,41 @@ def test_run_friday_reflection_persists_state_even_if_the_telegram_send_fails(mo
     mock_send.side_effect = Exception("Telegram unreachable")
 
     with pytest.raises(Exception, match="Telegram unreachable"):
-        run_friday_reflection()
+        run_weekly_summary()
 
     updated = dashboard_state.load_state()
     assert updated.week_start_timestamp is not None
 
 
 @patch("scheduled_jobs.send_message")
-def test_run_friday_reflection_identifies_strongest_and_weakest_pair(mock_send, tmp_path, monkeypatch):
+def test_run_weekly_summary_reports_absolute_profit_loss_and_net(mock_send, tmp_path, monkeypatch):
+    # 2026-10-02: replaced the old strongest/weakest-pair "reflection" --
+    # the message is now just trades, win rate and absolute amounts.
     _isolate_state(tmp_path, monkeypatch)
-    state = dashboard_state.default_state()
-    state.strategy_starting_capital = 2000.0
-    state.strategy_realized_pnl = 100.0  # week's cumulative result already tracked
-    dashboard_state.save_state(state)
+    dashboard_state.save_state(dashboard_state.default_state())
 
     tj.save_journal([
         _closed_entry(instrument="EUR_USD", realized_pnl=80.0, closed_at="2026-08-14T20:00:00Z"),
         _closed_entry(instrument="USD_CHF", direction="SHORT", realized_pnl=-20.0, closed_at="2026-08-14T21:00:00Z"),
+        _closed_entry(instrument="GBP_USD", realized_pnl=-5.0, closed_at="2026-08-14T22:00:00Z"),
     ])
 
-    stats = run_friday_reflection()
+    stats = run_weekly_summary()
 
-    assert stats["strongest_pair"] == "EUR_USD"
-    assert stats["weakest_pair"] == "USD_CHF"
-    assert stats["pnl"] == 60.0
+    assert stats["gross_profit"] == 80.0
+    assert stats["gross_loss"] == -25.0
+    assert stats["pnl"] == 55.0
+    assert (stats["wins"], stats["losses"]) == (1, 2)
+    assert "strongest_pair" not in stats and "weakest_pair" not in stats
     mock_send.assert_called_once()
+    sent = mock_send.call_args[0][0]
+    assert "Weekly summary" in sent
+    assert "+80.00" in sent and "-25.00" in sent and "+55.00" in sent
+    assert "self-reflection" not in sent and "pair this week" not in sent
 
 
 @patch("scheduled_jobs.send_message")
-def test_run_friday_reflection_win_rate_matches_the_dashboards_own_convention(mock_send, tmp_path, monkeypatch):
+def test_run_weekly_summary_win_rate_matches_the_dashboards_own_convention(mock_send, tmp_path, monkeypatch):
     # Regression test: this used to divide by len(closed) (every closed
     # trade, including BREAKEVEN/LOST-placeholder entries), while the
     # dashboard's own win-rate tile divides by (wins + losses),
@@ -245,7 +251,7 @@ def test_run_friday_reflection_win_rate_matches_the_dashboards_own_convention(mo
         entries.append(_closed_entry(instrument="USD_CHF", realized_pnl=0.0, closed_at=f"2026-08-14T{8+i:02d}:00:00Z"))
     tj.save_journal(entries)
 
-    stats = run_friday_reflection()
+    stats = run_weekly_summary()
 
     assert stats["total_trades"] == 10  # all 10 closed trades counted here
     assert stats["win_rate_pct"] == 75.0  # but the rate itself excludes the 2 breakeven/placeholder trades
@@ -629,7 +635,7 @@ def test_scan_digest_skips_send_when_a_fresh_github_pull_shows_another_process_a
     assert updated.last_scan_digest_sent_at == (now - timedelta(minutes=2)).isoformat()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_runs_nightly_review_once_due_any_day(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -648,7 +654,7 @@ def test_dispatcher_runs_nightly_review_once_due_any_day(
     assert updated.last_review_date == "2026-08-11"
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_does_not_run_nightly_review_before_1am(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -662,7 +668,7 @@ def test_dispatcher_does_not_run_nightly_review_before_1am(
     mock_review.assert_not_called()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_skips_nightly_review_on_sunday_when_market_is_closed(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -682,7 +688,7 @@ def test_dispatcher_skips_nightly_review_on_sunday_when_market_is_closed(
     assert updated.last_review_date is None
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_session(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -701,7 +707,7 @@ def test_dispatcher_runs_nightly_review_on_saturday_early_morning_for_fridays_se
     assert updated.last_review_date == "2026-08-15"
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_skips_nightly_review_right_at_monday_market_reopen(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -725,7 +731,7 @@ def test_dispatcher_skips_nightly_review_right_at_monday_market_reopen(
     assert updated.last_review_date is None
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_still_skips_nightly_review_later_in_the_monday_session(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -746,9 +752,9 @@ def test_dispatcher_still_skips_nightly_review_later_in_the_monday_session(
     mock_review.assert_not_called()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
-def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_weekend(
+def test_dispatcher_runs_weekly_summary_once_the_market_is_closed_for_the_weekend(
         mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=15))  # Saturday, market closed by now
@@ -763,9 +769,9 @@ def test_dispatcher_runs_friday_reflection_once_the_market_is_closed_for_the_wee
     assert updated.last_reflection_sent_at is not None
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
-def test_dispatcher_skips_friday_reflection_while_the_market_is_open(
+def test_dispatcher_skips_weekly_summary_while_the_market_is_open(
         mock_review, mock_reflection, tmp_path, monkeypatch):
     _isolate_state(tmp_path, monkeypatch)
     _freeze_at(monkeypatch, _sgt(10, 0, day=10))  # Monday, market open
@@ -777,7 +783,7 @@ def test_dispatcher_skips_friday_reflection_while_the_market_is_open(
     mock_reflection.assert_not_called()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_still_reflects_if_render_only_wakes_on_sunday(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -797,7 +803,7 @@ def test_dispatcher_still_reflects_if_render_only_wakes_on_sunday(
     mock_reflection.assert_called_once()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -816,7 +822,7 @@ def test_dispatcher_does_not_reflect_twice_across_saturday_and_sunday(
     mock_reflection.assert_not_called()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver(
         mock_review, mock_reflection, tmp_path, monkeypatch):
@@ -840,9 +846,9 @@ def test_dispatcher_does_not_reflect_twice_across_the_pre_reopen_monday_sliver(
     mock_reflection.assert_not_called()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
-def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_weekend(
+def test_dispatcher_catches_up_weekly_summary_monday_morning_after_a_missed_weekend(
         mock_review, mock_reflection, tmp_path, monkeypatch):
     # Regression test: if Render slept through the ENTIRE weekend, the
     # first tick back (early Monday, still closed before the market
@@ -860,7 +866,7 @@ def test_dispatcher_catches_up_friday_reflection_monday_morning_after_a_missed_w
     mock_reflection.assert_called_once()
 
 
-@patch("scheduled_jobs.run_friday_reflection")
+@patch("scheduled_jobs.run_weekly_summary")
 @patch("scheduled_jobs.run_nightly_review")
 def test_dispatcher_catches_up_after_a_long_sleep_gap(
         mock_review, mock_reflection, tmp_path, monkeypatch):
