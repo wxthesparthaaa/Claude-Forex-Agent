@@ -9893,3 +9893,18 @@ trades with mean R > 0, Bonferroni p < 0.05, both halves positive, survives +20%
 5-minute entry delay, >= +0.25R over the live system's backtested expectancy). It ran as a
 local task rather than a cloud routine because the backtesting needs the local OANDA
 credentials, venv, candle cache and Telegram config.
+
+## 2026-10-02 (later) -- Weekly research routine: authority widened by the user (supersedes the boundary above)
+
+The entry above said the routine "may NOT change live trading code, constants, settings or
+orders" and alerts only on a strict bar. **That is superseded**, at the user's explicit
+instruction: the routine may now change the live strategy code, filter values and tests,
+commit and push (a push redeploys the bot) whenever it judges a change worthwhile, with no
+fixed pass-mark and no required test run. Still off-limits: committing real keys
+(.env / config/*.properties) to GitHub, placing/cancelling OANDA orders by hand, force-pushing.
+Bot settings that live in config/dashboard_state.json (daily cap, cooldown, toggles) belong to
+the running app and sync via the state-sync branch, so the routine must not hand-edit them; if
+a setting change is warranted it says so in its Telegram message for the user to do in the
+dashboard. Every run now sends ONE plain-language Telegram "Weekly review" after the weekly
+summary (the idea under test with status and credence, the week's results, ideas tested, what
+was changed on the live bot with an undo hash, what's next), whether or not anything changed.
