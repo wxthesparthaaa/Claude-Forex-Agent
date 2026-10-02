@@ -3424,5 +3424,13 @@
       "CAD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-02T07:15:10.345514+00:00",
+    "opened": null,
+    "also_signaled": [
+      "CAD_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
