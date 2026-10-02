@@ -28,5 +28,11 @@
     "instrument": "CHF_JPY",
     "filter": "vol_ratio",
     "value": 0.00018344307292534728
+  },
+  {
+    "tick_time": "2026-10-02T15:50:46.503719+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": -9.408562503386529
   }
 ]
