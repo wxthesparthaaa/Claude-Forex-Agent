@@ -59,6 +59,7 @@
   "risk_limit_skips_since_digest": [
     "VWAP Scalp: signal cluster (2 pairs) -- none opened",
     "VWAP Scalp: signal cluster (2 pairs) -- none opened",
+    "VWAP Scalp: signal cluster (2 pairs) -- none opened",
     "VWAP Scalp: signal cluster (2 pairs) -- none opened"
   ],
   "last_scan_digest_sent_at": "2026-10-02T04:44:59.393016+00:00",
