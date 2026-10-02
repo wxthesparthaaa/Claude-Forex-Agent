@@ -1,0 +1,8 @@
+[
+  {
+    "tick_time": "2026-10-02T15:35:47.512730+00:00",
+    "instrument": "USD_JPY",
+    "filter": "session_drift_z",
+    "value": -8.559256380339113
+  }
+]
