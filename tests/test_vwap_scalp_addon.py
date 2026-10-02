@@ -400,8 +400,41 @@ def test_commodity_risk_amount_uses_the_commodity_specific_inflation_divisor(moc
     assert len(scalp_entries) == 1
     expected = 2000.0 * 2.0 / 100.0 / vs.COMMODITY_REALIZED_LOSS_INFLATION
     assert scalp_entries[0]["risk_amount"] == pytest.approx(expected, rel=1e-6)
-    assert vs.COMMODITY_REALIZED_LOSS_INFLATION != vs.REALIZED_LOSS_INFLATION, \
-        "fixture must actually exercise a DIFFERENT divisor, not coincidentally the same value"
+
+
+def test_loss_inflation_divisors_are_neutral_now_that_sizing_uses_the_fill_side():
+    # 2026-10-02: the inflation was half a spread missing from the sizing
+    # distance; with fill-side sizing there is nothing left to compensate.
+    assert vs.REALIZED_LOSS_INFLATION == 1.0
+    assert vs.COMMODITY_REALIZED_LOSS_INFLATION == 1.0
+
+
+@pytest.mark.parametrize("direction,extension,confirmation", [("SHORT", 100.13, 100.12), ("LONG", 98.62, 99.45)])
+@patch("vwap_scalp_addon.send_message")
+def test_units_are_sized_off_the_fill_side_not_the_mid(mock_send, tmp_path, monkeypatch, direction, extension,
+                                                        confirmation):
+    # A SHORT fills on the bid and a LONG on the ask; sizing off the mid
+    # understated the stop distance by half a spread.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=extension, confirmation_price=confirmation)
+    price = _valid_entry_price(candles, direction)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=price)
+    sized_at = []
+    real_calculate_units = vs.calculate_units
+
+    def _spy(meta, d, entry, stop_loss, risk_amount, conversion_rate):
+        sized_at.append(entry)
+        return real_calculate_units(meta, d, entry, stop_loss, risk_amount, conversion_rate)
+    monkeypatch.setattr(vs, "calculate_units", _spy)
+
+    vs.check_vwap_scalp_opportunities(client)
+
+    expected_fill = price - 0.0001 if direction == "SHORT" else price + 0.0001  # FakeClient's bid / ask
+    assert sized_at == [pytest.approx(expected_fill)]
+    entries = [e for e in tj.load_journal() if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    assert len(entries) == 1 and entries[0]["direction"] == direction
 
 
 @patch("vwap_scalp_addon.send_message")

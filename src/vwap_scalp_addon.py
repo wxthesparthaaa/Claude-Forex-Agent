@@ -157,7 +157,7 @@ from autopilot import PhaseState, is_auto_execute_mode
 from currency_exposure import currency_deltas_for_trade
 from instrument_metadata import fetch_instrument_metadata, round_price
 from market_hours import is_forex_market_open
-from pricing import fetch_mid_price
+from pricing import fetch_bid_ask, fetch_mid_price
 from oanda_client import OandaClient
 from position_sizing import calculate_units, resolve_conversion_rate
 from risk_engine import AccountState, ProposedTrade, RiskConfig, RiskViolation, validate_trade, risk_amount_for_trade
@@ -401,9 +401,20 @@ WEAK_HOUR_PAIR_EXCLUSIONS = {}
 # conversion-rate-drift cause rather than something stop-specific. Using
 # the loser figure (mean) to stay comparable with the original
 # calibration's own methodology.
-REALIZED_LOSS_INFLATION = 1.40  # divides risk_amount so REAL realized losses land back near the
-                                 # user's intended risk_per_trade_pct; recalibrate as more live
-                                 # data accumulates, and revisit if the root cause is ever found.
+#
+# ROOT CAUSE FOUND 2026-10-02 (weekly research run): it was never conversion
+# or exit slippage. Units were sized off the MID-price stop distance
+# d0 = |mid - stop|, but the order fills on the ask (LONG) / bid (SHORT), so
+# the real stop distance is d1 = d0 + half a spread (+ a little slippage).
+# On 181 clean live losses since 2026-09-13, journal_R / price_R correlates
+# 1.00 with d1/d0, and dividing it out leaves 1.01 (FX, n=105) / 0.98
+# (commodities, n=76), stable in both halves. It was also uneven: a tight
+# stop could lose 2.3x its intended risk (EUR_USD, 2026-10-02, a 0.4-pip mid
+# stop) while a wide one lost ~0.7x after this divisor -- i.e. the biggest
+# positions went to the trades with the worst odds (live win rate 45% / 32% /
+# 22% by d1/d0 tercile). _open_position now sizes off the fill side, so both
+# divisors return to 1.0 (the leftover ~1% is within noise).
+REALIZED_LOSS_INFLATION = 1.0   # was 1.40 (2026-09-22..2026-10-02); see ROOT CAUSE above
 
 # Split from the single blanket value above, 2026-09-28: execution slippage is now DEFINITIVELY
 # ruled out as the cause (97 trades with a near-exact stop fill still show the full inflation), and
@@ -420,7 +431,8 @@ REALIZED_LOSS_INFLATION = 1.40  # divides risk_amount so REAL realized losses la
 # signal was found there too -- non-USD-quote pairs needing to route through USD average higher
 # (1.372) than direct USD-quote pairs (1.274) on clean fills alone -- but that alone doesn't explain
 # gold sitting below even other direct-USD-quote pairs, so this is narrowed, not closed).
-COMMODITY_REALIZED_LOSS_INFLATION = 1.24  # XAU_USD/XAG_USD/WTICO_USD/BCO_USD only -- see comment above
+COMMODITY_REALIZED_LOSS_INFLATION = 1.0  # was 1.24 (2026-09-28..2026-10-02); the unit-rounding story above
+                                          # was not the cause either -- see ROOT CAUSE above
 COMMODITIES = {"XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD"}
 
 
@@ -846,9 +858,11 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     if meta is None:
         return False
 
-    price = fetch_mid_price(client, instrument)
-    if price is None:
+    quote = fetch_bid_ask(client, instrument)
+    if quote is None:
         return False
+    bid, ask = quote
+    price = (bid + ask) / 2
 
     stop_distance = (Z_ENTRY + STOP_Z_BUFFER) * std_at_signal
     if direction == "LONG":
@@ -896,7 +910,10 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
         return False
 
     risk_amount = risk_amount_for_trade(account.equity, risk_config) / _realized_loss_inflation_for(instrument)
-    units = calculate_units(meta, direction, entry_price, stop_loss, risk_amount, conversion_rate)
+    # Sized off the side the order actually fills on (ask for a LONG, bid
+    # for a SHORT), not the mid -- see REALIZED_LOSS_INFLATION's comment.
+    fill_price = ask if direction == "LONG" else bid
+    units = calculate_units(meta, direction, fill_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return False
 
