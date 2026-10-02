@@ -24,6 +24,10 @@ STATE_FILES = {
     "config/dashboard_state.json": os.path.join(STATE_DIR, "dashboard_state.json"),
     "config/trade_journal.json": os.path.join(STATE_DIR, "trade_journal.json"),
     "config/vwap_scalp_tie_log.json": os.path.join(STATE_DIR, "vwap_scalp_tie_log.json"),
+    # Missing until 2026-10-02: every push of this log raised "not a known
+    # state file" (caught, so only a warning), so it never reached state-sync
+    # and was lost on every Render restart.
+    "config/vwap_scalp_filter_reject_log.json": os.path.join(STATE_DIR, "vwap_scalp_filter_reject_log.json"),
 }
 
 
