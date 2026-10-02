@@ -291,6 +291,16 @@ SESSION_DRIFT_MAX_Z = 3.0       # skip a new signal (either direction) once toda
 # trades) -- calibrated off the pooled sample per this project's own convention when the exact gap
 # size varies across halves.
 MIN_VOL_RATIO = 0.000211        # skip a new signal if the market's recent volatility (relative to price) is below this
+# Added 2026-10-02 (weekly research run, scripts/research_vwap_scalp_spread_to_stop.py, pre-registered):
+# skip a signal whose stop is small relative to the live spread. The spread is a fixed price cost, so
+# it eats a bigger share of a small stop while the edge doesn't grow with it. Measured at order time
+# as (ask - bid) / |mid - stop|. One-year bid/ask backtest of the full 4-filter system (7320 trades):
+# cutoff chosen on the first half (0.25 best of 0.15/0.25/0.35/0.50), then on the untouched second
+# half mean R -0.370 -> -0.209 (kept 816 of 3123, p=2e-8 vs rejected; K=5 variants), and on three
+# never-seen weeks (2026-09-10..10-01) -0.278 -> -0.062. Monotone across cutoffs, holds in both halves
+# of the holdout, with spreads +20%, a 3-minute entry delay, without the best pair, and within FX and
+# commodities separately. Still negative overall: this narrows the loss, it does not make a profit.
+MAX_SPREAD_TO_STOP = 0.25       # skip a new signal if the spread is more than this fraction of the stop distance
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -898,6 +908,14 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
 
     # EXPERIMENTAL REVERSION (2026-09-16): the reward:risk floor that
     # used to gate here is removed -- see this module's top-of-file note.
+
+    spread_to_stop = (ask - bid) / abs(entry_price - stop_loss)
+    if spread_to_stop > MAX_SPREAD_TO_STOP:
+        print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- spread is {spread_to_stop:.2f} of the stop "
+              f"distance (max {MAX_SPREAD_TO_STOP})", flush=True)
+        from vwap_scalp_filter_reject_log import record_filter_reject
+        record_filter_reject(datetime.now(timezone.utc).isoformat(), instrument, "spread_to_stop", spread_to_stop)
+        return False
 
     summary = client.get_account_summary()
     account_currency = summary.get("currency", "USD")

@@ -48,7 +48,8 @@ def save_filter_reject_log(entries: list) -> None:
 
 
 def record_filter_reject(tick_time: str, instrument: str, filter_name: str, value: float) -> None:
-    """`filter_name` is "session_drift_z" or "vol_ratio" -- which gate
+    """`filter_name` is "session_drift_z", "vol_ratio" or (from
+    _open_position, 2026-10-02) "spread_to_stop" -- which gate
     tripped -- and `value` is that metric's own computed number at the
     moment of rejection, so a future check can see how close a rejected
     signal actually came to the cutoff, not just that it was rejected.

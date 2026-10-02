@@ -1197,6 +1197,45 @@ def test_low_volatility_rejection_is_recorded_in_the_filter_reject_log(mock_send
     assert entries[0]["value"] < vs.MIN_VOL_RATIO
 
 
+class _WideSpreadClient(FakeClient):
+    def __init__(self, *args, half_spread=0.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._half_spread = half_spread
+
+    def get_pricing(self, instruments):
+        return [{"bids": [{"price": str(self._price - self._half_spread)}],
+                 "asks": [{"price": str(self._price + self._half_spread)}]} for _ in instruments]
+
+
+@pytest.mark.parametrize("spread_fraction,should_open", [(0.40, False), (0.10, True)])
+@patch("vwap_scalp_addon.send_message")
+def test_spread_too_large_for_the_stop_skips_the_trade(mock_send, tmp_path, monkeypatch, spread_fraction,
+                                                        should_open):
+    # 2026-10-02: MAX_SPREAD_TO_STOP -- a spread that is a large fraction of
+    # the stop distance is skipped (and logged); a small one still opens.
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
+    price = _valid_entry_price(candles, "SHORT")
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, _ = vs._find_confirmed_signal(times, z, times[-1])
+    stop_loss = vwap[signal_index] + (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * dev_stdev[signal_index]
+    half_spread = spread_fraction * abs(stop_loss - price) / 2
+    client = _WideSpreadClient(candles_by_instrument={"EUR_USD": candles}, price=price, half_spread=half_spread)
+
+    opened = vs.check_vwap_scalp_opportunities(client)
+
+    entries = reject_log.load_filter_reject_log()
+    if should_open:
+        assert opened == ["EUR_USD"]
+        assert entries == []
+    else:
+        assert opened == []
+        assert len(entries) == 1 and entries[0]["filter"] == "spread_to_stop"
+        assert entries[0]["value"] > vs.MAX_SPREAD_TO_STOP
+
+
 @patch("vwap_scalp_addon.send_message")
 def test_no_tie_recorded_when_nothing_opens(mock_send, tmp_path, monkeypatch):
     _isolate(tmp_path, monkeypatch)
