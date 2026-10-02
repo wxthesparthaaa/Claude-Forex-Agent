@@ -3687,5 +3687,13 @@
       "EUR_USD",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-02T14:05:10.737151+00:00",
+    "opened": null,
+    "also_signaled": [
+      "EUR_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
