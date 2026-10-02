@@ -88,5 +88,11 @@
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -6.195499428532232
+  },
+  {
+    "tick_time": "2026-10-02T16:05:48.714231+00:00",
+    "instrument": "EUR_USD",
+    "filter": "session_drift_z",
+    "value": 3.307822890232632
   }
 ]
