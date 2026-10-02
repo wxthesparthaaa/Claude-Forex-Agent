@@ -3457,5 +3457,13 @@
       "XAG_USD",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-02T10:15:08.991423+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "NZD_JPY"
+    ]
   }
 ]
