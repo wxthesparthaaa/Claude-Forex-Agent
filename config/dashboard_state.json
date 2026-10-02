@@ -74,6 +74,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20",
     "VWAP Scalp: signal cluster (3 pairs) -- none opened",
+    "VWAP Scalp: signal cluster (2 pairs) -- none opened",
     "VWAP Scalp: signal cluster (2 pairs) -- none opened"
   ],
   "last_scan_digest_sent_at": "2026-10-02T07:49:59.393003+00:00",
