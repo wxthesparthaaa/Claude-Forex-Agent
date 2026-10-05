@@ -3752,5 +3752,13 @@
       "NZD_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-05T11:35:56.032017+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "CHF_JPY"
+    ]
   }
 ]
