@@ -1414,5 +1414,11 @@
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
     "value": 3.7743328949732096
+  },
+  {
+    "tick_time": "2026-10-05T11:55:43.905942+00:00",
+    "instrument": "XAG_USD",
+    "filter": "session_drift_z",
+    "value": 7.823247395132372
   }
 ]
