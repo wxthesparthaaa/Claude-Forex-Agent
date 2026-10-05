@@ -1294,5 +1294,11 @@
     "instrument": "USD_CHF",
     "filter": "session_drift_z",
     "value": 14.817630508855844
+  },
+  {
+    "tick_time": "2026-10-05T11:10:55.081006+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "session_drift_z",
+    "value": -19.206160121189033
   }
 ]
