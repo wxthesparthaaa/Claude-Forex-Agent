@@ -3727,5 +3727,13 @@
       "GBP_JPY",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-05T08:40:52.713063+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "GBP_JPY"
+    ]
   }
 ]
