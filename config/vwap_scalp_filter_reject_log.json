@@ -664,5 +664,11 @@
     "instrument": "USD_JPY",
     "filter": "spread_to_stop",
     "value": 2.999999999981052
+  },
+  {
+    "tick_time": "2026-10-05T07:10:45.213998+00:00",
+    "instrument": "XAU_USD",
+    "filter": "session_drift_z",
+    "value": 3.060749562716036
   }
 ]
