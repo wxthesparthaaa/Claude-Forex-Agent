@@ -694,5 +694,11 @@
     "instrument": "GBP_USD",
     "filter": "session_drift_z",
     "value": -14.49655411475404
+  },
+  {
+    "tick_time": "2026-10-05T07:15:48.703396+00:00",
+    "instrument": "AUD_USD",
+    "filter": "session_drift_z",
+    "value": -3.483495957060608
   }
 ]
