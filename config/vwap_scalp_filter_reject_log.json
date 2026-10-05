@@ -1198,5 +1198,11 @@
     "instrument": "CHF_JPY",
     "filter": "spread_to_stop",
     "value": 2.4000000000022736
+  },
+  {
+    "tick_time": "2026-10-05T10:30:49.303769+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": -10.879493571506554
   }
 ]
