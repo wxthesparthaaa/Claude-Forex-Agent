@@ -2020,5 +2020,11 @@
     "instrument": "GBP_USD",
     "filter": "session_drift_z",
     "value": -15.395618749228756
+  },
+  {
+    "tick_time": "2026-10-05T17:40:45.602728+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": -15.395618749228756
   }
 ]
