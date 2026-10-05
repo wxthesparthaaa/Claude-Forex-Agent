@@ -2290,5 +2290,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": 11.685898615364767
+  },
+  {
+    "tick_time": "2026-10-05T19:15:48.309904+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": -23.342721902831446
   }
 ]
