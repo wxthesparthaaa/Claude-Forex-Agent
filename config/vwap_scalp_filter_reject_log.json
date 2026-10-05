@@ -1516,5 +1516,11 @@
     "instrument": "GBP_USD",
     "filter": "session_drift_z",
     "value": -12.473169329818306
+  },
+  {
+    "tick_time": "2026-10-05T12:45:44.541262+00:00",
+    "instrument": "XAU_USD",
+    "filter": "session_drift_z",
+    "value": 4.420174889095274
   }
 ]
