@@ -646,5 +646,11 @@
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -11.037588430984194
+  },
+  {
+    "tick_time": "2026-10-05T07:05:49.950686+00:00",
+    "instrument": "AUD_USD",
+    "filter": "session_drift_z",
+    "value": -6.766473809940247
   }
 ]
