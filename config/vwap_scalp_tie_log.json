@@ -3784,5 +3784,13 @@
       "XAU_USD",
       "WTICO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-05T15:25:53.111959+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "GBP_JPY"
+    ]
   }
 ]
