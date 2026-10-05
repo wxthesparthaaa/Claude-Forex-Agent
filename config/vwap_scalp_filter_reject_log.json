@@ -2014,5 +2014,11 @@
     "instrument": "EUR_USD",
     "filter": "session_drift_z",
     "value": -23.004310070964983
+  },
+  {
+    "tick_time": "2026-10-05T17:35:48.768814+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": -15.395618749228756
   }
 ]
