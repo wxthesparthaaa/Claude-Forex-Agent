@@ -2512,5 +2512,11 @@
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
     "value": -7.733738371969967
+  },
+  {
+    "tick_time": "2026-10-06T07:15:46.990193+00:00",
+    "instrument": "EUR_USD",
+    "filter": "vol_ratio",
+    "value": 0.0001970961005658651
   }
 ]
