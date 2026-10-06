@@ -2794,5 +2794,11 @@
     "instrument": "AUD_JPY",
     "filter": "session_drift_z",
     "value": 5.556944848497561
+  },
+  {
+    "tick_time": "2026-10-06T09:20:51.138696+00:00",
+    "instrument": "NZD_USD",
+    "filter": "spread_to_stop",
+    "value": 3.9999999999888978
   }
 ]
