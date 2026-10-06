@@ -2596,5 +2596,11 @@
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
     "value": 3.045166768752544
+  },
+  {
+    "tick_time": "2026-10-06T08:00:50.300403+00:00",
+    "instrument": "USD_JPY",
+    "filter": "session_drift_z",
+    "value": 3.806268685442269
   }
 ]
