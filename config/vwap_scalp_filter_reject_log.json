@@ -2566,5 +2566,11 @@
     "instrument": "CAD_JPY",
     "filter": "session_drift_z",
     "value": 3.896272627854324
+  },
+  {
+    "tick_time": "2026-10-06T07:30:49.069456+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "session_drift_z",
+    "value": 4.077161516362057
   }
 ]
