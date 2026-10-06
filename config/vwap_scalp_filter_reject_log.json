@@ -2494,5 +2494,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": -8.068683643886818
+  },
+  {
+    "tick_time": "2026-10-06T07:10:49.842007+00:00",
+    "instrument": "AUD_JPY",
+    "filter": "session_drift_z",
+    "value": 4.662576803887265
   }
 ]
