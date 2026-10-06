@@ -2662,5 +2662,11 @@
     "instrument": "CHF_JPY",
     "filter": "session_drift_z",
     "value": 3.2085642952850697
+  },
+  {
+    "tick_time": "2026-10-06T08:25:44.111059+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "session_drift_z",
+    "value": -3.5870750519574948
   }
 ]
