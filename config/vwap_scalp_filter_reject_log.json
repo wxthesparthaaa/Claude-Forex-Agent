@@ -2902,5 +2902,11 @@
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
     "value": 4.212074037627741
+  },
+  {
+    "tick_time": "2026-10-06T10:25:49.056693+00:00",
+    "instrument": "USD_CHF",
+    "filter": "vol_ratio",
+    "value": 0.0001460852789168623
   }
 ]
