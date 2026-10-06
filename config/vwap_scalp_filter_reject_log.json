@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-02T16:55:49.332126+00:00",
-    "instrument": "NZD_JPY",
-    "filter": "session_drift_z",
-    "value": 5.94299190434547
-  },
-  {
     "tick_time": "2026-10-02T16:55:51.704748+00:00",
     "instrument": "CHF_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "CHF_JPY",
     "filter": "session_drift_z",
     "value": 4.197569999901856
+  },
+  {
+    "tick_time": "2026-10-06T15:10:51.941713+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 0.3691739732348958
   }
 ]
