@@ -2590,5 +2590,11 @@
     "instrument": "AUD_USD",
     "filter": "session_drift_z",
     "value": 3.1771335869841253
+  },
+  {
+    "tick_time": "2026-10-06T07:55:48.999839+00:00",
+    "instrument": "USD_CAD",
+    "filter": "session_drift_z",
+    "value": 3.045166768752544
   }
 ]
