@@ -2686,5 +2686,11 @@
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
     "value": 3.0265200087897703
+  },
+  {
+    "tick_time": "2026-10-06T08:35:45.014978+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "session_drift_z",
+    "value": -3.6153445428602398
   }
 ]
