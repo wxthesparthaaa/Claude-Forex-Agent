@@ -57,6 +57,7 @@
     "CHF_JPY"
   ],
   "risk_limit_skips_since_digest": [
+    "VWAP Scalp: signal cluster (5 pairs) -- none opened",
     "VWAP Scalp: signal cluster (5 pairs) -- none opened"
   ],
   "last_scan_digest_sent_at": "2026-10-06T06:25:42.280179+00:00",
