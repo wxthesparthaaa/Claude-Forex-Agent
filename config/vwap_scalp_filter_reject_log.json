@@ -1,17 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T09:30:51.705446+00:00",
-    "instrument": "USD_JPY",
-    "filter": "session_drift_z",
-    "value": 6.867859221865134
-  },
-  {
-    "tick_time": "2026-10-05T09:35:49.823654+00:00",
-    "instrument": "NZD_JPY",
-    "filter": "session_drift_z",
-    "value": -8.072427603119431
-  },
-  {
     "tick_time": "2026-10-05T09:40:59.419200+00:00",
     "instrument": "NZD_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2986,17 @@
     "instrument": "AUD_USD",
     "filter": "session_drift_z",
     "value": -13.486549476830856
+  },
+  {
+    "tick_time": "2026-10-07T16:55:44.333041+00:00",
+    "instrument": "EUR_USD",
+    "filter": "session_drift_z",
+    "value": -22.674349371953106
+  },
+  {
+    "tick_time": "2026-10-07T17:05:43.924519+00:00",
+    "instrument": "XAU_USD",
+    "filter": "session_drift_z",
+    "value": -40.17579234303695
   }
 ]
