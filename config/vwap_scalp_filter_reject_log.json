@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T08:25:52.702324+00:00",
-    "instrument": "EUR_JPY",
-    "filter": "session_drift_z",
-    "value": -15.690566956567006
-  },
-  {
     "tick_time": "2026-10-05T08:25:54.419457+00:00",
     "instrument": "CHF_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": -14.745645840848995
+  },
+  {
+    "tick_time": "2026-10-07T15:40:51.012762+00:00",
+    "instrument": "USD_CHF",
+    "filter": "session_drift_z",
+    "value": 3.899715744182293
   }
 ]
