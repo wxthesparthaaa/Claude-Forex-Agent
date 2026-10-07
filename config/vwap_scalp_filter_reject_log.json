@@ -1,35 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T08:05:53.033679+00:00",
-    "instrument": "USD_CHF",
-    "filter": "spread_to_stop",
-    "value": 1.333333333332922
-  },
-  {
-    "tick_time": "2026-10-05T08:10:46.349193+00:00",
-    "instrument": "EUR_USD",
-    "filter": "session_drift_z",
-    "value": -21.240127142644763
-  },
-  {
-    "tick_time": "2026-10-05T08:10:50.566081+00:00",
-    "instrument": "USD_CHF",
-    "filter": "session_drift_z",
-    "value": 3.043900903798588
-  },
-  {
-    "tick_time": "2026-10-05T08:10:53.239023+00:00",
-    "instrument": "GBP_JPY",
-    "filter": "session_drift_z",
-    "value": -7.915324525035789
-  },
-  {
-    "tick_time": "2026-10-05T08:15:47.547904+00:00",
-    "instrument": "EUR_USD",
-    "filter": "session_drift_z",
-    "value": -21.240127142644763
-  },
-  {
     "tick_time": "2026-10-05T08:15:51.106794+00:00",
     "instrument": "USD_CHF",
     "filter": "session_drift_z",
@@ -2998,5 +2968,35 @@
     "instrument": "NZD_USD",
     "filter": "session_drift_z",
     "value": -12.128477784823309
+  },
+  {
+    "tick_time": "2026-10-07T15:15:44.298080+00:00",
+    "instrument": "EUR_USD",
+    "filter": "session_drift_z",
+    "value": -24.464398679544576
+  },
+  {
+    "tick_time": "2026-10-07T15:15:46.315226+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": -11.10550898837796
+  },
+  {
+    "tick_time": "2026-10-07T15:15:49.706868+00:00",
+    "instrument": "NZD_USD",
+    "filter": "session_drift_z",
+    "value": -19.293112972083335
+  },
+  {
+    "tick_time": "2026-10-07T15:15:54.458462+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "session_drift_z",
+    "value": -4.364125155892178
+  },
+  {
+    "tick_time": "2026-10-07T15:20:45.103539+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": 5.38831636570553
   }
 ]
