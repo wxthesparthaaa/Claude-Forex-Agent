@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T07:35:51.800417+00:00",
-    "instrument": "AUD_USD",
-    "filter": "session_drift_z",
-    "value": -5.7563155885458785
-  },
-  {
     "tick_time": "2026-10-05T07:35:55.014993+00:00",
     "instrument": "GBP_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "USD_JPY",
     "filter": "vol_ratio",
     "value": 0.00015828972146392312
+  },
+  {
+    "tick_time": "2026-10-07T11:31:01.665528+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.43010752688177134
   }
 ]
