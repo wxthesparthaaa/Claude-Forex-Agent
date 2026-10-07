@@ -31,12 +31,12 @@
   "last_nightly_equity": null,
   "week_start_equity": null,
   "strategy_starting_capital": 2000.0,
-  "strategy_realized_pnl": -1357.1598000000001,
-  "last_review_timestamp": "2026-10-06T17:00:42.293817+00:00",
+  "strategy_realized_pnl": -1357.4105000000002,
+  "last_review_timestamp": "2026-10-07T17:00:43.805983+00:00",
   "week_start_timestamp": "2026-10-02T21:00:46.341667+00:00",
   "capital_reset_at": "2026-09-09T23:43:01.897063+00:00",
   "scan_digest_interval_minutes": 180,
-  "interval_scan_count_since_digest": 12,
+  "interval_scan_count_since_digest": 15,
   "interval_scanned_instruments_since_digest": [
     "XAU_USD",
     "XAG_USD",
@@ -62,7 +62,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20"
   ],
   "last_scan_digest_sent_at": "2026-10-07T15:50:42.280495+00:00",
-  "last_review_date": "2026-10-07",
+  "last_review_date": "2026-10-08",
   "last_health_check_date": "2026-10-07",
   "last_reflection_sent_at": "2026-10-02T21:00:48.024950+00:00",
   "last_market_status": "open",
@@ -79,5 +79,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-10-07T16:50:42.283861+00:00"
+  "last_process_heartbeat_at": "2026-10-07T17:00:42.283507+00:00"
 }
