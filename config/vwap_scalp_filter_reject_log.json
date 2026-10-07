@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-02T19:10:45.512208+00:00",
-    "instrument": "EUR_USD",
-    "filter": "session_drift_z",
-    "value": 3.2756529015372617
-  },
-  {
     "tick_time": "2026-10-02T19:15:46.126664+00:00",
     "instrument": "EUR_USD",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "GBP_USD",
     "filter": "session_drift_z",
     "value": -5.589851298473329
+  },
+  {
+    "tick_time": "2026-10-07T07:30:48.162831+00:00",
+    "instrument": "USD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00017525572993483678
   }
 ]
