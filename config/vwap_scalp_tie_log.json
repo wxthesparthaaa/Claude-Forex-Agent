@@ -3925,5 +3925,14 @@
       "BCO_USD",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-07T08:20:50.213674+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "CHF_JPY"
+    ]
   }
 ]
