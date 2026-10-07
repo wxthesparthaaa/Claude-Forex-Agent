@@ -3893,5 +3893,13 @@
       "AUD_USD",
       "USD_CAD"
     ]
+  },
+  {
+    "tick_time": "2026-10-07T07:15:52.751662+00:00",
+    "opened": null,
+    "also_signaled": [
+      "USD_CHF",
+      "CHF_JPY"
+    ]
   }
 ]
