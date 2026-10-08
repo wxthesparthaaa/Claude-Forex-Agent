@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-06T07:15:49.541771+00:00",
-    "instrument": "AUD_USD",
-    "filter": "vol_ratio",
-    "value": 0.00016829141261881243
-  },
-  {
     "tick_time": "2026-10-06T07:15:51.899577+00:00",
     "instrument": "AUD_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
     "value": 7.021148124243827
+  },
+  {
+    "tick_time": "2026-10-08T13:55:46.500849+00:00",
+    "instrument": "XAG_USD",
+    "filter": "session_drift_z",
+    "value": -8.746450031421977
   }
 ]
