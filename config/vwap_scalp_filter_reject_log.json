@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-06T15:00:52.467561+00:00",
-    "instrument": "AUD_JPY",
-    "filter": "session_drift_z",
-    "value": 9.05393444922801
-  },
-  {
     "tick_time": "2026-10-06T15:05:47.903615+00:00",
     "instrument": "AUD_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": -22.354124295209385
+  },
+  {
+    "tick_time": "2026-10-08T19:40:48.011982+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": 34.836985610543856
   }
 ]
