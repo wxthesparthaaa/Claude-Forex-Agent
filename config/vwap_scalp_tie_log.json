@@ -4075,5 +4075,13 @@
       "GBP_USD",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T13:50:56.585055+00:00",
+    "opened": null,
+    "also_signaled": [
+      "EUR_USD",
+      "NZD_USD"
+    ]
   }
 ]
