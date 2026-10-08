@@ -4000,5 +4000,14 @@
       "EUR_USD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T08:55:48.643600+00:00",
+    "opened": null,
+    "also_signaled": [
+      "EUR_USD",
+      "NZD_USD",
+      "CHF_JPY"
+    ]
   }
 ]
