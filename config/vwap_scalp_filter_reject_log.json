@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T14:25:45.461547+00:00",
-    "instrument": "WTICO_USD",
-    "filter": "session_drift_z",
-    "value": -6.605799680897764
-  },
-  {
     "tick_time": "2026-10-05T14:25:51.353520+00:00",
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.00017907665139497005
+  },
+  {
+    "tick_time": "2026-10-08T08:45:55.739263+00:00",
+    "instrument": "EUR_USD",
+    "filter": "spread_to_stop",
+    "value": 0.2941176470587851
   }
 ]
