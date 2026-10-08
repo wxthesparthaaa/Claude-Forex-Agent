@@ -4042,5 +4042,13 @@
       "XAU_USD",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T11:25:53.628759+00:00",
+    "opened": null,
+    "also_signaled": [
+      "USD_CAD",
+      "CAD_JPY"
+    ]
   }
 ]
