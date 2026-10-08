@@ -9966,3 +9966,26 @@ and that kept trades' losses now land near -1.0 R; (2) target-distance-to-spread
 by the spread too?), only on top of C=0.25; (3) the drift-near-cutoff hint (2.5-3.0) on the
 backtest's large sample, not live n=14; (4) now that the reject log syncs, check the near-cutoff
 rejected signals.
+
+## 2026-10-08 -- Sizing by trade quality (incl. "size up the small-win trades"): RULED OUT
+
+**Question** (user): winners are all small vs losses -- would a bigger lot size on the small-win trades
+help? Pre-registered in `scripts/research_vwap_scalp_size_by_quality.py` before any result was seen.
+Sizing cannot change whether a trade wins; sized minus equal-risk result is mean((w-1)*r), so it pays
+only if the score predicts a better outcome. Population: the live system (4 filters + MAX_SPREAD_TO_STOP
+0.25), same pipeline/fills as the spread-to-stop study (parity-checked: identical signals on XAU_USD;
+8780 signals, 7321 after clustering, one more fresh day fetched than the routine's run). Discovery
+598 / holdout 816 / fresh 116 trades, equal-risk meanR -0.220 / -0.209 / -0.062. Five features
+(spread/stop, planned reward:risk, |z|, |session drift|, vol ratio) with terciles and direction fitted on
+discovery, weights 1.5/1.0/0.5; V6 = the user's idea, fixed in advance (smaller planned R:R -> bigger
+size). K = 6, alpha 0.0083.
+
+**Result: all six fail.** Holdout improvement was NEGATIVE for every variant (-0.009 to -0.031 R,
+one-sided p 0.75-0.97); V6: -0.209 -> -0.230 (p 0.92), fresh +0.004. Discovery correlations of every
+feature with R were tiny (|r| <= 0.05). Diagnostic: no tercile of any feature is positive on holdout;
+best group is the tightest-spread third at -0.134. The user's observation is real but not exploitable:
+smallest-planned-reward third wins MORE often (41.9% vs 33.9%) but averages worse (-0.321 vs -0.185),
+so the higher win rate does not pay for the smaller payoff. The spread feature's discovery-fitted sign
+was opposite to its holdout pattern, another sign these scores are unstable. Conclusion: with no
+positive-expectancy group, any sizing scheme only reshuffles losses. Do not retest sizing on these
+five features unless a subgroup first shows a positive mean on a large holdout. Nothing changed live.
