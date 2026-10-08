@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-05T18:50:49.329295+00:00",
-    "instrument": "NZD_JPY",
-    "filter": "session_drift_z",
-    "value": -15.62993946113089
-  },
-  {
     "tick_time": "2026-10-05T18:50:52.131805+00:00",
     "instrument": "CHF_JPY",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "EUR_JPY",
     "filter": "vol_ratio",
     "value": 0.00016470160501255612
+  },
+  {
+    "tick_time": "2026-10-08T11:45:55.442346+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00015097390296282362
   }
 ]
