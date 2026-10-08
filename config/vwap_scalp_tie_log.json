@@ -3968,5 +3968,13 @@
       "NZD_JPY",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T07:50:55.284972+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "NZD_JPY"
+    ]
   }
 ]
