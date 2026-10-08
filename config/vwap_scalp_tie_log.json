@@ -4157,5 +4157,14 @@
       "GBP_USD",
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T15:25:53.266480+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "EUR_USD",
+      "GBP_USD"
+    ]
   }
 ]
