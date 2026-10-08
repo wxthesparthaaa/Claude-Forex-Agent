@@ -4018,5 +4018,13 @@
       "GBP_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-08T10:45:53.103171+00:00",
+    "opened": null,
+    "also_signaled": [
+      "GBP_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
