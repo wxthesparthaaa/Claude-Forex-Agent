@@ -4317,5 +4317,13 @@
       "AUD_USD",
       "USD_CAD"
     ]
+  },
+  {
+    "tick_time": "2026-10-09T13:50:56.460796+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD"
+    ]
   }
 ]
