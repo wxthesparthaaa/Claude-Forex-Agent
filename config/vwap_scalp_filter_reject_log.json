@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-08T09:55:46.910041+00:00",
-    "instrument": "AUD_USD",
-    "filter": "session_drift_z",
-    "value": -4.090670252671834
-  },
-  {
     "tick_time": "2026-10-08T09:55:48.617500+00:00",
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
@@ -2998,5 +2992,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.00016190986566847168
+  },
+  {
+    "tick_time": "2026-10-09T15:15:48.707614+00:00",
+    "instrument": "AUD_USD",
+    "filter": "session_drift_z",
+    "value": 16.25455094874288
   }
 ]
