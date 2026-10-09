@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-08T11:25:44.622075+00:00",
-    "instrument": "XAU_USD",
-    "filter": "session_drift_z",
-    "value": 4.667700125908745
-  },
-  {
     "tick_time": "2026-10-08T11:25:49.909303+00:00",
     "instrument": "GBP_JPY",
     "filter": "vol_ratio",
@@ -2998,5 +2992,11 @@
     "instrument": "NZD_JPY",
     "filter": "session_drift_z",
     "value": 44.39387580561025
+  },
+  {
+    "tick_time": "2026-10-09T17:30:54.117163+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "session_drift_z",
+    "value": 25.98201795848042
   }
 ]
