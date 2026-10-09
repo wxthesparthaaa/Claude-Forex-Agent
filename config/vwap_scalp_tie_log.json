@@ -4300,5 +4300,13 @@
       "USD_CAD",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-09T12:55:51.349667+00:00",
+    "opened": null,
+    "also_signaled": [
+      "AUD_USD",
+      "USD_CAD"
+    ]
   }
 ]
