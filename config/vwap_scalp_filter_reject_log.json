@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-07T08:10:46.172401+00:00",
-    "instrument": "GBP_USD",
-    "filter": "session_drift_z",
-    "value": -6.236322969400782
-  },
-  {
     "tick_time": "2026-10-07T08:10:51.346094+00:00",
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
@@ -2998,5 +2992,11 @@
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -4.94783485152433
+  },
+  {
+    "tick_time": "2026-10-09T08:30:47.260428+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": -4.357298451963141
   }
 ]
