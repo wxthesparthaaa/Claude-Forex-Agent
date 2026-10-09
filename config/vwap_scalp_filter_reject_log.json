@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-06T17:10:48.006808+00:00",
-    "instrument": "USD_CHF",
-    "filter": "vol_ratio",
-    "value": 0.00010558820744733669
-  },
-  {
     "tick_time": "2026-10-06T17:15:47.563753+00:00",
     "instrument": "USD_CHF",
     "filter": "vol_ratio",
@@ -2998,5 +2992,11 @@
     "instrument": "BCO_USD",
     "filter": "session_drift_z",
     "value": -4.708986836701104
+  },
+  {
+    "tick_time": "2026-10-09T07:05:48.872190+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": 4.252062528195789
   }
 ]
