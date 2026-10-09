@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-07T16:05:47.969869+00:00",
-    "instrument": "AUD_USD",
-    "filter": "session_drift_z",
-    "value": -28.023735789210622
-  },
-  {
     "tick_time": "2026-10-07T16:10:43.601756+00:00",
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
@@ -2998,5 +2992,11 @@
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -11.52941742079541
+  },
+  {
+    "tick_time": "2026-10-09T10:35:46.919712+00:00",
+    "instrument": "GBP_USD",
+    "filter": "session_drift_z",
+    "value": 3.469970276751376
   }
 ]
