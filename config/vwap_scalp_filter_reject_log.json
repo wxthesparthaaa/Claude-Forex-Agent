@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-06T16:15:49.951339+00:00",
-    "instrument": "USD_CHF",
-    "filter": "spread_to_stop",
-    "value": 0.31578947368419513
-  },
-  {
     "tick_time": "2026-10-06T17:05:47.300342+00:00",
     "instrument": "USD_CHF",
     "filter": "vol_ratio",
@@ -2995,6 +2989,12 @@
   },
   {
     "tick_time": "2026-10-09T07:00:44.017992+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "session_drift_z",
+    "value": -5.136190110851391
+  },
+  {
+    "tick_time": "2026-10-09T07:05:44.852397+00:00",
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -5.136190110851391
