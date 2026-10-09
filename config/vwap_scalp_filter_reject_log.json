@@ -1,11 +1,5 @@
 [
   {
-    "tick_time": "2026-10-07T07:15:46.360205+00:00",
-    "instrument": "USD_JPY",
-    "filter": "vol_ratio",
-    "value": 0.00014730681403203963
-  },
-  {
     "tick_time": "2026-10-07T07:15:50.931498+00:00",
     "instrument": "CAD_JPY",
     "filter": "vol_ratio",
@@ -2998,5 +2992,11 @@
     "instrument": "WTICO_USD",
     "filter": "session_drift_z",
     "value": -6.3421534114417515
+  },
+  {
+    "tick_time": "2026-10-09T07:55:46.485533+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": -9.137330518606198
   }
 ]
