@@ -152,6 +152,7 @@ from __future__ import annotations
 import math
 import threading
 from datetime import datetime, timedelta, timezone
+from decimal import ROUND_FLOOR, Decimal
 
 from autopilot import PhaseState, is_auto_execute_mode
 from currency_exposure import currency_deltas_for_trade
@@ -444,6 +445,43 @@ REALIZED_LOSS_INFLATION = 1.0   # was 1.40 (2026-09-22..2026-10-02); see ROOT CA
 COMMODITY_REALIZED_LOSS_INFLATION = 1.0  # was 1.24 (2026-09-28..2026-10-02); the unit-rounding story above
                                           # was not the cause either -- see ROOT CAUSE above
 COMMODITIES = {"XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD"}
+
+# Found 2026-10-10 (weekly research run): calculate_units floors to whole
+# units and then clamps up to a minimum of 1, so a gold trade whose 1-unit
+# risk exceeded the budget still went out at 1 unit. Live: a 2026-10-06
+# XAU_USD short (8.2 USD stop, 1 unit) lost 2.17x its intended risk; 17 gold
+# trades since 2026-09-11 risked over 1.3x. OANDA trades XAU_USD in 0.1 units
+# (tradeUnitsPrecision 1, minimumTradeSize 0.1), so gold is now sized in that
+# step. Every other instrument here trades in whole units.
+FRACTIONAL_UNIT_STEP = {"XAU_USD": Decimal("0.1")}
+# Skip a trade whose smallest tradeable size would still risk more than this
+# multiple of the budget, rather than open it oversized.
+MAX_RISK_OVERSHOOT = 1.5
+
+
+def _size_units(instrument: str, meta, direction: str, fill_price: float, stop_loss: float,
+                risk_amount: float, conversion_rate: Decimal):
+    """Risk-based units (0 = do not trade), honouring each instrument's real
+    unit step and never risking more than MAX_RISK_OVERSHOOT x the budget."""
+    sl_distance = abs(Decimal(str(fill_price)) - Decimal(str(stop_loss)))
+    risk_per_unit = sl_distance * conversion_rate
+    step = FRACTIONAL_UNIT_STEP.get(instrument)
+    if step is None:
+        units = calculate_units(meta, direction, fill_price, stop_loss, risk_amount, conversion_rate)
+        size = Decimal(abs(units))
+    else:
+        if risk_per_unit <= 0:
+            return 0
+        size = max(step, (Decimal(str(risk_amount)) / risk_per_unit / step).to_integral_value(rounding=ROUND_FLOOR) * step)
+        units = float(size) if direction == "LONG" else -float(size)
+    if units == 0:
+        return 0
+    actual_risk = size * risk_per_unit
+    if actual_risk > Decimal(str(risk_amount)) * Decimal(str(MAX_RISK_OVERSHOOT)):
+        print(f"INFO: VWAP Scalp skipped {instrument} {direction} -- the smallest tradeable size risks "
+              f"{float(actual_risk):.2f}, over {MAX_RISK_OVERSHOOT}x the {risk_amount:.2f} budget", flush=True)
+        return 0
+    return units
 
 
 def _realized_loss_inflation_for(instrument: str) -> float:
@@ -931,7 +969,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
     # Sized off the side the order actually fills on (ask for a LONG, bid
     # for a SHORT), not the mid -- see REALIZED_LOSS_INFLATION's comment.
     fill_price = ask if direction == "LONG" else bid
-    units = calculate_units(meta, direction, fill_price, stop_loss, risk_amount, conversion_rate)
+    units = _size_units(instrument, meta, direction, fill_price, stop_loss, risk_amount, conversion_rate)
     if units == 0:
         return False
 

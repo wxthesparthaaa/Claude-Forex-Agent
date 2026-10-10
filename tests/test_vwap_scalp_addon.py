@@ -1480,3 +1480,30 @@ def test_scan_tally_waits_for_a_concurrent_digest_reset_and_builds_on_it(tmp_pat
     assert updated.interval_scan_count_since_digest == 1
     assert updated.last_scan_digest_sent_at == "2026-03-02T09:00:00+00:00"
     assert updated.interval_scanned_instruments_since_digest == ["EUR_USD"]
+
+
+def test_gold_is_sized_in_tenth_units_instead_of_rounding_up_to_one():
+    # 2026-10-10: an 8.2 USD gold stop at a ~4.9 budget went out at 1 unit
+    # (calculate_units clamps to 1) and lost 2.17x its risk. OANDA trades
+    # XAU_USD in 0.1 units, so size it there.
+    from decimal import Decimal
+    units = vs._size_units("XAU_USD", None, "SHORT", 4134.345, 4142.553, 4.9, Decimal("1.29"))
+    assert units == pytest.approx(-0.4)  # 4.9 / (8.208 * 1.29) = 0.46 -> 0.4
+    units = vs._size_units("XAU_USD", None, "LONG", 4000.0, 3999.0, 4.9, Decimal("1.29"))
+    assert units == pytest.approx(3.7)
+
+
+def test_gold_never_falls_below_its_minimum_size_but_skips_when_that_overshoots():
+    from decimal import Decimal
+    # 0.1 unit of a 30 USD stop is 3.87 SGD: under budget, so trade at the minimum.
+    assert vs._size_units("XAU_USD", None, "LONG", 4000.0, 3970.0, 4.9, Decimal("1.29")) == pytest.approx(0.1)
+    # 0.1 unit of a 80 USD stop is 10.3 SGD: over 1.5x the budget, so skip.
+    assert vs._size_units("XAU_USD", None, "LONG", 4000.0, 3920.0, 4.9, Decimal("1.29")) == 0
+
+
+def test_whole_unit_instruments_skip_when_one_unit_overshoots_the_budget():
+    from decimal import Decimal
+    # Oil at 1 unit with a 10 USD stop risks 12.9 SGD against a 4.9 budget.
+    assert vs._size_units("WTICO_USD", None, "SHORT", 90.0, 100.0, 4.9, Decimal("1.29")) == 0
+    # A normal oil stop sizes as before.
+    assert vs._size_units("WTICO_USD", None, "SHORT", 90.0, 90.25, 4.9, Decimal("1.29")) == -15
