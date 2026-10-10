@@ -168,6 +168,12 @@ class JournalEntry:
     entry_z: float | None = None
     session_drift_z: float | None = None
     vol_ratio: float | None = None
+    # spread_to_stop (2026-10-10): VWAP Scalp's live (ask - bid) / stop
+    # distance at order time, the number MAX_SPREAD_TO_STOP gates on. The
+    # backtest's version of it (from M1 candle-open quotes, 1 minute after
+    # the signal) runs about 2-3x the live one, so it is journaled to
+    # calibrate the two against each other.
+    spread_to_stop: float | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -294,7 +300,7 @@ def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | 
             in_liquidity_window=_in_liquidity_window_now(candidate["instrument"], now_utc),
             decision_entry_price=candidate["entry_price"],
             entry_z=candidate.get("entry_z"), session_drift_z=candidate.get("session_drift_z"),
-            vol_ratio=candidate.get("vol_ratio"),
+            vol_ratio=candidate.get("vol_ratio"), spread_to_stop=candidate.get("spread_to_stop"),
         )
         entries.append(asdict(entry))
         save_journal(entries)

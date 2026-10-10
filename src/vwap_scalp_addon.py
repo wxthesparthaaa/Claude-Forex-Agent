@@ -992,6 +992,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
                       f"back toward session VWAP"],
         "account_currency": account_currency, "risk_amount": risk_amount,
         "experiment_tag": VWAP_SCALP_TAG, "parent_trade_id": None,
+        "spread_to_stop": spread_to_stop,
     }
     if diagnostics:
         candidate["entry_z"] = diagnostics.get("entry_z")

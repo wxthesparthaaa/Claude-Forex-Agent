@@ -1522,3 +1522,16 @@ def test_filter_reject_log_drops_repeats_of_the_same_rejection(tmp_path, monkeyp
     logged = [(e["instrument"], e["filter"], e["value"]) for e in frl.load_filter_reject_log()]
     assert logged == [("XAU_USD", "session_drift_z", 9.5), ("XAU_USD", "vol_ratio", 0.0001),
                       ("EUR_USD", "session_drift_z", 3.4), ("XAU_USD", "session_drift_z", 9.7)]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_live_spread_to_stop_is_journaled(mock_send, tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _autopilot_state()
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=_valid_entry_price(candles, "SHORT"))
+    vs.check_vwap_scalp_opportunities(client)
+    entries = [e for e in tj.load_journal() if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
+    assert len(entries) == 1
+    assert 0 < entries[0]["spread_to_stop"] <= vs.MAX_SPREAD_TO_STOP
