@@ -9989,3 +9989,65 @@ so the higher win rate does not pay for the smaller payoff. The spread feature's
 was opposite to its holdout pattern, another sign these scores are unstable. Conclusion: with no
 positive-expectancy group, any sizing scheme only reshuffles losses. Do not retest sizing on these
 five features unless a subgroup first shows a positive mean on a large holdout. Nothing changed live.
+
+## 2026-10-10 -- Weekly research
+
+Weekly result: week ending 2026-10-09, net -40.00 SGD over 36 trades, NOT BREAKEVEN
+
+Saturday run (scheduled). Under test: the 5-filter VWAP Scalp system (4 filters + MAX_SPREAD_TO_STOP
+0.25, fill-side sizing), live since the 2026-10-02 ~15:10 UTC push. All 36 VWAP Scalp trades closed
+this week were opened under it, so week = cumulative sample.
+
+**Live numbers**: 36 closed, 18 wins (50%), journal mean R -0.228 (sd 0.81, 95% CI [-0.492, +0.035]),
+price-R -0.196, -40.00 SGD. Average win +0.45R, stop-outs -1.09R (-1.01 without the gold trade below).
+Exits ~14 stop / 15 target / 7 timeout. Halves of the week -0.216 / -0.241. Fill-side sizing works:
+per-trade sd fell from 1.27 to 0.81 and losses now land near -1.0R. Adverse entry cost (fill vs
+decision mid) averages 6.8% of the stop. For context the earlier 4-filter week was -0.308 (n=60);
+pooled 4f+5f n=96 -0.278, CI [-0.499, -0.056] (two different systems, so not the test statistic).
+
+**Credence** the 5-filter system breaks even: 15-25% -> about 8-15%. LEANING NO. With ~25 more trades
+(about one week at the live rate of ~36/week) the pre-registered falsification check (upper 95% bound
+below 0, or mean still <= -0.2 at ~60 trades) is decidable; EVIDENCE_BAR's n=100 is about two weeks.
+
+**Bug 1, gold oversizing (fixed, bd8de2261)**: calculate_units floors to whole units and clamps up to
+1, so a wide-stop XAU_USD trade went out at 1 unit: 2026-10-06 short, 8.2 USD stop, lost 2.17x its
+risk. OANDA trades XAU_USD in 0.1 units (tradeUnitsPrecision 1, minimumTradeSize 0.1); gold is now
+sized in 0.1 steps (`FRACTIONAL_UNIT_STEP`), and any trade whose smallest size would risk over 1.5x
+budget is skipped (`MAX_RISK_OVERSHOOT`). Since fill-side sizing, that gold trade was the only one
+over 1.3x planned risk, so this changes trade selection almost never; it only removes oversizing.
+
+**Bug 2, reject log only held ~1.5 days (fixed, 3486f3c07)**: a fresh rejected signal was re-logged
+and re-pushed to GitHub on every scan tick (500 raw entries = 205 distinct). Repeats of the same
+instrument+filter within 10 min are now dropped and the cap is 2500. In the 1.5 days visible (deduped):
+session_drift 161, vol_ratio 30, spread_to_stop 14.
+
+**Live vs backtest parity (new, important)**: rebuilt the backtest through 2026-10-09. Its volume
+matches live (fresh slice 38 trades/week vs live 36) and 31 of the 36 live trades match a backtest
+signal, BUT (a) live enters a median 6 minutes after the confirmation bar (5-minute scan cadence;
+range 2-15), not the 1 minute every backtest since 2026-10-02 assumed; (b) for 14 of those 31 the
+backtest's spread_to_stop was above 0.25 (would have been rejected), and an approximate live value
+(2 x fill slippage / stop) runs about 1/2-1/3 of the backtest's. So MAX_SPREAD_TO_STOP 0.25 live is a
+much looser gate than the 0.25 validated in the backtest. Backtest this week: -0.113 (n=38) vs live
+-0.196. Added the live value to the journal (`spread_to_stop`, ad6e921c5, diagnostic only) to
+calibrate next week.
+
+**Hypotheses tested** (`scripts/research_vwap_scalp_weekly_2026_10_10.py`, pre-registered, parity OK on
+XAU_USD; 8991 signals, 7510 after clustering; live-system population discovery 598 / holdout 816 /
+fresh 167, mean R -0.220 / -0.209 / -0.058). K = 7, alpha 0.0071.
+- A, skip when spread / reward > T (0.2/0.3/0.5): no discovery effect (best 0.3: -0.222 vs -0.220),
+  holdout -0.196 vs -0.209 (p 0.04, not significant after correction), fresh the wrong way. RULED OUT.
+- B, SESSION_DRIFT_MAX_Z 2.5 / 2.0: discovery better (2.0: -0.166 vs -0.301 rejected), holdout flat
+  (-0.202 vs -0.219, p 0.41), fresh reversed (kept -0.099 vs rejected +0.017). The live week-1 hint does
+  not hold. RULED OUT.
+- C, limit entry at the confirmation mid, 3 or 5 bars: worse everywhere (holdout -0.248 vs -0.209,
+  fresh -0.127 vs -0.058, +20% spread -0.287). Strong adverse selection: the 11% of signals a limit
+  never fills averaged +0.604 at market, the filled ones -0.304. RULED OUT.
+7 variants, 0 credible. Live changes: two bug fixes and one diagnostic field only.
+
+**Queue**: (1) next week: ~60 cumulative trades, apply the falsification rule; (2) rebuild the backtest
+to replay the live cadence (entry at the next 5-minute scan, spread from that quote), then recalibrate
+MAX_SPREAD_TO_STOP in live units using the journaled `spread_to_stop` (or move the bot to a 1-minute
+check for VWAP Scalp so live matches the validated backtest); (3) the limit-entry diagnostic says
+signals that move our way immediately are big winners -- any causal "follow-through" entry rule must
+avoid the delay/valid-bracket selection trap; (4) if the verdict is negative, write up what the
+strategy's lifetime evidence says and whether to stop it rather than keep adding filters.
