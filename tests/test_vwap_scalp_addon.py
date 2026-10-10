@@ -1507,3 +1507,18 @@ def test_whole_unit_instruments_skip_when_one_unit_overshoots_the_budget():
     assert vs._size_units("WTICO_USD", None, "SHORT", 90.0, 100.0, 4.9, Decimal("1.29")) == 0
     # A normal oil stop sizes as before.
     assert vs._size_units("WTICO_USD", None, "SHORT", 90.0, 90.25, 4.9, Decimal("1.29")) == -15
+
+
+def test_filter_reject_log_drops_repeats_of_the_same_rejection(tmp_path, monkeypatch):
+    import vwap_scalp_filter_reject_log as frl
+    monkeypatch.setattr(frl, "FILTER_REJECT_LOG_PATH", str(tmp_path / "rej.json"))
+    monkeypatch.setattr(frl, "save_filter_reject_log",
+                        lambda entries: frl.atomic_write_json(frl.FILTER_REJECT_LOG_PATH, entries))
+    frl.record_filter_reject("2026-10-08T12:00:00+00:00", "XAU_USD", "session_drift_z", 9.5)
+    frl.record_filter_reject("2026-10-08T12:05:00+00:00", "XAU_USD", "session_drift_z", 9.6)  # same signal
+    frl.record_filter_reject("2026-10-08T12:05:00+00:00", "XAU_USD", "vol_ratio", 0.0001)    # other filter
+    frl.record_filter_reject("2026-10-08T12:05:00+00:00", "EUR_USD", "session_drift_z", 3.4)  # other pair
+    frl.record_filter_reject("2026-10-08T12:20:00+00:00", "XAU_USD", "session_drift_z", 9.7)  # later, new
+    logged = [(e["instrument"], e["filter"], e["value"]) for e in frl.load_filter_reject_log()]
+    assert logged == [("XAU_USD", "session_drift_z", 9.5), ("XAU_USD", "vol_ratio", 0.0001),
+                      ("EUR_USD", "session_drift_z", 3.4), ("XAU_USD", "session_drift_z", 9.7)]
