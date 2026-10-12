@@ -3442,5 +3442,11 @@
     "instrument": "CAD_JPY",
     "filter": "session_drift_z",
     "value": 12.761237324040534
+  },
+  {
+    "tick_time": "2026-10-12T16:50:15.561543+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "session_drift_z",
+    "value": 34.32799522694872
   }
 ]
