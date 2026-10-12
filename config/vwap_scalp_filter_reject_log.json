@@ -3214,5 +3214,11 @@
     "instrument": "AUD_JPY",
     "filter": "session_drift_z",
     "value": 5.984122257459417
+  },
+  {
+    "tick_time": "2026-10-12T10:25:02.537236+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "vol_ratio",
+    "value": 6.878945633277313e-05
   }
 ]
