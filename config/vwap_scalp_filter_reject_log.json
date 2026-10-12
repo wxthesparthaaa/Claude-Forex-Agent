@@ -3166,5 +3166,11 @@
     "instrument": "EUR_JPY",
     "filter": "session_drift_z",
     "value": 8.832345482138546
+  },
+  {
+    "tick_time": "2026-10-12T09:05:01.661837+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "session_drift_z",
+    "value": 13.363059218396712
   }
 ]
