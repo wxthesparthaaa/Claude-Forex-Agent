@@ -4359,5 +4359,13 @@
       "XAG_USD",
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-12T07:45:08.778351+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD"
+    ]
   }
 ]
