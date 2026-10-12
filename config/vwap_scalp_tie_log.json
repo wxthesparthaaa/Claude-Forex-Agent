@@ -4351,5 +4351,13 @@
       "AUD_USD",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-12T07:20:05.303682+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "AUD_USD"
+    ]
   }
 ]
