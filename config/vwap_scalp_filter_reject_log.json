@@ -3196,5 +3196,11 @@
     "instrument": "EUR_JPY",
     "filter": "session_drift_z",
     "value": 8.307855329107426
+  },
+  {
+    "tick_time": "2026-10-12T09:45:05.250927+00:00",
+    "instrument": "AUD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.5121951219509321
   }
 ]
