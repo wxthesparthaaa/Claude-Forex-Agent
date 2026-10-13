@@ -3886,5 +3886,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": 3.301740966589871
+  },
+  {
+    "tick_time": "2026-10-13T11:25:05.428385+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "vol_ratio",
+    "value": 0.0001561543913545434
   }
 ]
