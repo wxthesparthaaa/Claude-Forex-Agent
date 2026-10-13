@@ -4018,5 +4018,11 @@
     "instrument": "USD_CHF",
     "filter": "session_drift_z",
     "value": -6.492880336310161
+  },
+  {
+    "tick_time": "2026-10-13T13:54:58.726960+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": -6.043009653892856
   }
 ]
