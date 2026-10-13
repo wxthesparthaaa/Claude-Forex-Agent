@@ -3976,5 +3976,11 @@
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
     "value": 6.370769576863509
+  },
+  {
+    "tick_time": "2026-10-13T13:00:00.070696+00:00",
+    "instrument": "BCO_USD",
+    "filter": "session_drift_z",
+    "value": -8.149392728681326
   }
 ]
