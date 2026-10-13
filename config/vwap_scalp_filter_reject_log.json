@@ -3838,5 +3838,11 @@
     "instrument": "EUR_JPY",
     "filter": "vol_ratio",
     "value": 0.00017871344259061972
+  },
+  {
+    "tick_time": "2026-10-13T10:59:57.244766+00:00",
+    "instrument": "XAU_USD",
+    "filter": "session_drift_z",
+    "value": 8.443901076519644
   }
 ]
