@@ -3790,5 +3790,11 @@
     "instrument": "EUR_USD",
     "filter": "session_drift_z",
     "value": 8.120499490456842
+  },
+  {
+    "tick_time": "2026-10-13T10:30:05.758118+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 0.8205494113452786
   }
 ]
