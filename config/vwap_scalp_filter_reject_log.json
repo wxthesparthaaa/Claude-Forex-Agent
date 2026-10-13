@@ -3802,5 +3802,11 @@
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
     "value": 6.888873921294747
+  },
+  {
+    "tick_time": "2026-10-13T10:34:59.153346+00:00",
+    "instrument": "XAG_USD",
+    "filter": "session_drift_z",
+    "value": 3.065720959076107
   }
 ]
