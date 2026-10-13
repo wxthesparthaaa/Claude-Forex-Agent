@@ -3934,5 +3934,11 @@
     "instrument": "BCO_USD",
     "filter": "session_drift_z",
     "value": -12.59495917866621
+  },
+  {
+    "tick_time": "2026-10-13T11:55:00.217799+00:00",
+    "instrument": "USD_JPY",
+    "filter": "session_drift_z",
+    "value": -17.47053997031278
   }
 ]
