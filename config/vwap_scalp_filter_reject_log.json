@@ -3922,5 +3922,11 @@
     "instrument": "EUR_JPY",
     "filter": "vol_ratio",
     "value": 0.00016830684916188698
+  },
+  {
+    "tick_time": "2026-10-13T11:49:57.904873+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "session_drift_z",
+    "value": -11.775680341327632
   }
 ]
