@@ -3892,5 +3892,11 @@
     "instrument": "GBP_JPY",
     "filter": "vol_ratio",
     "value": 0.0001561543913545434
+  },
+  {
+    "tick_time": "2026-10-13T11:30:03.298562+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "session_drift_z",
+    "value": -6.879174286541771
   }
 ]
