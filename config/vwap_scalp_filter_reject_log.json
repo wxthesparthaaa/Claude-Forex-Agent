@@ -3700,5 +3700,11 @@
     "instrument": "XAU_USD",
     "filter": "session_drift_z",
     "value": 6.36790642541488
+  },
+  {
+    "tick_time": "2026-10-13T09:39:59.007070+00:00",
+    "instrument": "USD_JPY",
+    "filter": "session_drift_z",
+    "value": -6.239414555465834
   }
 ]
