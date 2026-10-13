@@ -3808,5 +3808,11 @@
     "instrument": "XAG_USD",
     "filter": "session_drift_z",
     "value": 3.065720959076107
+  },
+  {
+    "tick_time": "2026-10-13T10:35:11.859393+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.5151515151513716
   }
 ]
