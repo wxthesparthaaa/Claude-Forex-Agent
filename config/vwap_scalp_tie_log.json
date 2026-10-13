@@ -4448,5 +4448,13 @@
       "BCO_USD",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-13T14:10:07.356612+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "CHF_JPY"
+    ]
   }
 ]
