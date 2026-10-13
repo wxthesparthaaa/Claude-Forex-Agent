@@ -4432,5 +4432,13 @@
       "XAG_USD",
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-13T14:00:10.841408+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "CHF_JPY"
+    ]
   }
 ]
