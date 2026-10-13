@@ -3520,5 +3520,11 @@
     "instrument": "BCO_USD",
     "filter": "session_drift_z",
     "value": -8.718960314778258
+  },
+  {
+    "tick_time": "2026-10-13T07:35:04.557847+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "spread_to_stop",
+    "value": 1.8124999999975575
   }
 ]
