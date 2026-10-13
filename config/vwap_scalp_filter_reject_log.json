@@ -3766,5 +3766,11 @@
     "instrument": "USD_CHF",
     "filter": "session_drift_z",
     "value": -6.7028228872667235
+  },
+  {
+    "tick_time": "2026-10-13T10:20:03.462304+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.4307692307691164
   }
 ]
