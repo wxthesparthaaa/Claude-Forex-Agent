@@ -4012,5 +4012,11 @@
     "instrument": "XAG_USD",
     "filter": "spread_to_stop",
     "value": 0.4163330664531799
+  },
+  {
+    "tick_time": "2026-10-13T13:50:01.330755+00:00",
+    "instrument": "USD_CHF",
+    "filter": "session_drift_z",
+    "value": -6.492880336310161
   }
 ]
