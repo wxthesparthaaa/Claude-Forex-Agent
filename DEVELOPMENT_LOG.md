@@ -10051,3 +10051,38 @@ check for VWAP Scalp so live matches the validated backtest); (3) the limit-entr
 signals that move our way immediately are big winners -- any causal "follow-through" entry rule must
 avoid the delay/valid-bracket selection trap; (4) if the verdict is negative, write up what the
 strategy's lifetime evidence says and whether to stop it rather than keep adding filters.
+
+## 2026-10-13 -- EMERGENCY: filters too restrictive (0 trades Monday); review-window bug
+
+**User report**: only one trade in two days, and a lost trade from the previous week appeared in
+the new week's review. Both confirmed against live state-sync data.
+
+**1. Review bug (fixed).** Saturday's 1am nightly review ran at 17:04 UTC (10-09); a stop-loss
+then closed WTICO at 17:11 UTC, still inside Friday's session. The weekly summary (21:00 UTC)
+counted it, but no nightly review had seen it; Sunday/Monday have no nightly review by design, so
+Tuesday's review reported it as "closed tonight" (-4.99) in a week with no trades. `run_weekly_summary`
+now folds anything the nightly review has not seen into `strategy_realized_pnl` and moves
+`last_review_timestamp` to the close, so the next review starts clean (skipped when there is no
+cursor yet, to avoid sweeping the whole history). 2 regression tests.
+
+**2. Volume (fixed by relaxing two filters).** Live: ~7 trades/day for 10-05..10-09, then 1 on 10-10,
+0 on Monday 10-12, 1 on 10-13. Reject log: session_drift_z 317 (10-09), 78 (10-13) vs vol_ratio
+12-36 and spread_to_stop 4-11 a day; tie log 7-8 clusters a day (each opened nothing).
+`scripts/research_vwap_scalp_relax_filters.py` (descriptive frontier, parity-checked against the
+routine's pipeline, 275 trading days x 17 pairs, bid/ask fills, global 20-minute cooldown and
+cluster rule simulated in time order): live config = 4.26 trades/day, -0.204 R/trade (holdout+fresh
+-0.179). Drift cap off: 8.27/day at -0.218. Drift off + "first pair that passes the spread cap
+opens" in a cluster: 9.56/day at -0.198 (holdout+fresh -0.171). Loosening MAX_SPREAD_TO_STOP buys
+volume far more expensively (0.35: 6.59/day at -0.225; 0.50: 9.76/day at -0.250) so it stays 0.25.
+**Shipped**: `SESSION_DRIFT_MAX_Z` = inf (was 3.0); a same-tick cluster opens the highest-priority
+pair that passes the spread cap again (reversing the 09-28 "open none" rule). Net: ~2.2x the
+trades per day at the same per-trade quality.
+**Honest cost**: every configuration is still negative on average, so more trades means
+proportionally more expected loss -- about -1.9 R/day (~-8 SGD/day demo) vs about -0.9 R/day at the
+old settings. This buys activity and data, not profit. The 09-28 cluster and 09-27 drift
+calibrations were in-sample on n=371 pre-spread-filter trades; the 275-day sample supersedes them.
+Tests: 5 tests that encoded the old behaviour updated, 1 added; 495 pass.
+
+**Now under test** (for the weekly routine): the filter set MAX_Z_ENTRY 2.25, MIN_VOL_RATIO,
+MAX_SPREAD_TO_STOP 0.25, first-pair-wins clustering, fill-side sizing; expected about 9-10
+trades/day at roughly -0.2 R/trade.

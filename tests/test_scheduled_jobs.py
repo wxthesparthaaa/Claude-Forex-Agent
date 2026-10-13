@@ -260,6 +260,53 @@ def test_run_weekly_summary_win_rate_matches_the_dashboards_own_convention(mock_
     assert updated.week_start_timestamp is not None
 
 
+@patch("scheduled_jobs.send_message")
+def test_weekly_summary_folds_in_trades_closed_after_the_last_nightly_review(mock_send, tmp_path, monkeypatch):
+    # Real incident (2026-10-13): a stop-loss closed 7 minutes AFTER Saturday's
+    # 1am review, inside Friday's session. The weekly summary counted it, but
+    # no nightly review ever saw it, so Tuesday's review reported it as "closed
+    # tonight" in a week with no trades. The weekly close must fold it into the
+    # ledger and move the nightly review's cursor so the next review starts clean.
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.strategy_realized_pnl = 100.0
+    state.last_review_timestamp = "2026-08-14T17:04:00+00:00"
+    state.week_start_timestamp = "2026-08-10T00:00:00+00:00"
+    dashboard_state.save_state(state)
+    tj.save_journal([
+        _closed_entry(instrument="WTICO_USD", direction="SHORT", realized_pnl=-5.0,
+                      closed_at="2026-08-14T17:11:45+00:00"),
+    ])
+
+    stats = run_weekly_summary()
+
+    assert stats["total_trades"] == 1 and stats["pnl"] == -5.0
+    updated = dashboard_state.load_state()
+    assert updated.strategy_realized_pnl == 95.0
+    assert updated.last_review_timestamp > "2026-08-14T17:11:45+00:00"
+
+    closed = run_nightly_review()  # the next week's first review
+    assert closed == []
+    assert dashboard_state.load_state().strategy_realized_pnl == 95.0  # not counted twice
+
+
+@patch("scheduled_jobs.send_message")
+def test_weekly_summary_does_not_sweep_the_whole_history_when_there_is_no_review_cursor(
+        mock_send, tmp_path, monkeypatch):
+    _isolate_state(tmp_path, monkeypatch)
+    state = dashboard_state.default_state()
+    state.strategy_realized_pnl = 0.0
+    state.last_review_timestamp = None
+    dashboard_state.save_state(state)
+    tj.save_journal([_closed_entry(realized_pnl=-5.0, closed_at="2026-08-14T17:11:45+00:00")])
+
+    run_weekly_summary()
+
+    updated = dashboard_state.load_state()
+    assert updated.strategy_realized_pnl == 0.0
+    assert updated.last_review_timestamp is None
+
+
 class ScanFakeClient(FakeClient):
     def get_pricing(self, instruments):
         return []

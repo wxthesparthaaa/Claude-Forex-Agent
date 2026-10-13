@@ -17,6 +17,12 @@ not just one. `opened` is None for every new entry; kept as a field
 and so a future change that reintroduces picking a winner doesn't need
 a schema migration.
 
+2026-10-13: that rule was REVERSED (see vwap_scalp_addon.py's own
+comment on the pass) -- a cluster opens the highest-priority pair that
+passes the spread cap again, so `opened` names the winner and
+`also_signaled` lists the pairs that lost the race. Entries written
+between 09-28 and 10-13 still have opened=None.
+
 Deliberately separate from trade_journal.json (these aren't trades,
 just observations) and from dashboard_state.risk_limit_skips_since_
 digest (digest-facing, already deduped/terse by design, and doesn't

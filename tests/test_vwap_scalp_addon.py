@@ -236,7 +236,10 @@ def test_find_confirmed_signal_fires_just_under_max_z_entry():
     assert direction is not None
 
 
-def test_detect_confirmed_signal_rejects_a_session_that_has_already_drifted_too_far():
+def test_detect_confirmed_signal_rejects_a_session_that_has_already_drifted_too_far(monkeypatch):
+    # The live cap was switched OFF 2026-10-13 (SESSION_DRIFT_MAX_Z = inf); this
+    # re-enables it at its old value to keep the mechanism itself covered.
+    monkeypatch.setattr(vs, "SESSION_DRIFT_MAX_Z", 3.0)
     # 2026-09-28: real-data validated separately from MAX_Z_ENTRY -- this
     # signal's OWN z is unremarkable (inside [Z_ENTRY, MAX_Z_ENTRY)) but the
     # SESSION as a whole has already moved SESSION_DRIFT_MAX_Z+ standard
@@ -1068,10 +1071,10 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
     # in the SAME tick never saw an earlier instrument's own fresh open
     # from moments before in that same loop. Three different instruments
     # all confirm a signal in the SAME tick here, with NO pre-existing
-    # seeded trade at all. Through 2026-09-28 exactly one still opened
-    # (whichever pair came first in priority order); from 2026-09-28 the
-    # signal-clustering filter means a cluster this size opens NONE of
-    # them (see vwap_scalp_addon.py's own comment on that pass).
+    # seeded trade at all. Exactly one opens (whichever pair comes first in
+    # VWAP_SCALP_PAIRS priority order). The 2026-09-28 "a cluster opens
+    # none" rule was reversed 2026-10-13 (see vwap_scalp_addon.py's own
+    # comment on that pass), restoring this original behaviour.
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
@@ -1089,13 +1092,8 @@ def test_global_cooldown_blocks_multiple_instruments_confirming_within_the_same_
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == []
-    assert client.orders_placed == []
-    state = ds.load_state()
-    # De-duplicated notification: one signal-cluster skip recorded per
-    # tick, not one per involved pair.
-    skips = [s for s in state.risk_limit_skips_since_digest if "signal cluster" in s]
-    assert len(skips) == 1
+    assert opened == ["AUD_JPY"]  # first of the three in priority order
+    assert len(client.orders_placed) == 1  # the other two never reach the broker
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -1119,11 +1117,11 @@ def test_records_a_tie_when_multiple_instruments_confirm_within_the_same_tick(
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == []
+    assert opened == ["AUD_JPY"]
     entries = tie_log.load_tie_log()
     assert len(entries) == 1
-    assert entries[0]["opened"] is None
-    assert entries[0]["also_signaled"] == ["AUD_JPY", "EUR_JPY", "CHF_JPY"]
+    assert entries[0]["opened"] == "AUD_JPY"
+    assert entries[0]["also_signaled"] == ["EUR_JPY", "CHF_JPY"]
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -1163,6 +1161,7 @@ def test_opened_trade_journals_its_own_signal_diagnostics(mock_send, tmp_path, m
 
 @patch("vwap_scalp_addon.send_message")
 def test_session_drift_rejection_is_recorded_in_the_filter_reject_log(mock_send, tmp_path, monkeypatch):
+    monkeypatch.setattr(vs, "SESSION_DRIFT_MAX_Z", 3.0)  # live cap is off since 2026-10-13
     _isolate(tmp_path, monkeypatch)
     _autopilot_state()
     monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
@@ -1343,7 +1342,7 @@ def test_global_cooldown_blocks_a_second_pair_confirming_moments_after_the_first
 
     opened = vs.check_vwap_scalp_opportunities(client)
 
-    assert opened == []  # both pairs signaled the same tick -- the clustering filter opens neither
+    assert opened == ["EUR_USD"]  # both signaled the same tick -- the first in priority order opens, once
 
 
 @patch("vwap_scalp_addon.send_message")
@@ -1535,3 +1534,15 @@ def test_live_spread_to_stop_is_journaled(mock_send, tmp_path, monkeypatch):
     entries = [e for e in tj.load_journal() if e.get("experiment_tag") == vs.VWAP_SCALP_TAG]
     assert len(entries) == 1
     assert 0 < entries[0]["spread_to_stop"] <= vs.MAX_SPREAD_TO_STOP
+
+
+def test_session_drift_cap_is_off_by_default_so_a_trending_session_still_signals():
+    # 2026-10-13: the cap was the dominant live blocker (317 rejections on 10-09) and bought
+    # almost nothing after the spread filter. A session that had drifted far must now pass.
+    assert vs.SESSION_DRIFT_MAX_Z == float("inf")
+    candles = _extended_session_candles(extension_price=99.68, confirmation_price=99.83)
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles})
+    signal_index, direction, _, _, diagnostics = vs._detect_confirmed_signal(
+        client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
+    assert direction is not None
+    assert abs(diagnostics["session_drift_z"]) >= 3.0  # drifted well past the old cap

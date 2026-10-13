@@ -313,10 +313,27 @@ def run_weekly_summary(client: OandaClient = None) -> dict:
         "win_rate_pct": round(100 * wins / (wins + losses), 1) if (wins + losses) else None,
     }
 
+    # Real incident (2026-10-13): the Saturday 1am nightly review ran at
+    # 17:04 UTC, a stop-loss then closed at 17:11 UTC -- still inside
+    # Friday's session, so this summary counted it correctly -- but no
+    # nightly review ever saw it. Sunday and Monday have no nightly review
+    # by design, so Tuesday's 1am review picked it up as "closed tonight"
+    # with no trade made that week. The weekly close is the last moment
+    # anything can close this week, so fold whatever the nightly review
+    # hasn't seen into the equity ledger here and move its cursor to now;
+    # Tuesday's review then starts clean. Skipped when there is no
+    # cursor yet (a brand-new state), where "everything ever closed"
+    # would be swept in -- the nightly review's own first-run baseline.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if state.last_review_timestamp is not None:
+        unreviewed = _closed_trades_since(state.last_review_timestamp)
+        state.strategy_realized_pnl += sum(t["pnl"] for t in unreviewed)
+        state.last_review_timestamp = now_iso
+
     # Persisted BEFORE the network call to Telegram, same reasoning as
     # run_nightly_review -- a repeat run from a mid-flight kill would
     # otherwise replay the same week, not just duplicate the message.
-    state.week_start_timestamp = datetime.now(timezone.utc).isoformat()
+    state.week_start_timestamp = now_iso
     save_state(state)
 
     send_message(format_weekly_summary_message(stats))

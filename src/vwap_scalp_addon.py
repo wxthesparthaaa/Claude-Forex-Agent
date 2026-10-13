@@ -270,7 +270,13 @@ MAX_Z_ENTRY = 2.25              # reject a confirmed signal this far or further 
 # -0.484 -> -0.235), unlike a same-shape-looking illusion (see the NFP
 # result) which fails exactly this check. Keeps only ~31% of trade volume
 # at this cutoff -- a real tradeoff, not a free win.
-SESSION_DRIFT_MAX_Z = 3.0       # skip a new signal (either direction) once today has drifted this far from its own open
+# 2026-10-13 EMERGENCY: switched OFF (infinity). After the 10-02 MAX_SPREAD_TO_STOP filter this one
+# bought almost nothing: in a 275-day bid/ask backtest of the live pacing chain
+# (scripts/research_vwap_scalp_relax_filters.py) cap 3.0 -> off moved the average trade only
+# -0.204 -> -0.218 R but took trades/day from 4.3 to 8.3. It was also the dominant blocker live:
+# 317 rejections on 10-09, 78 on 10-13, and zero trades on Monday 10-12. Rebuild the cap only on a
+# hypothesis that survives the 10-02 filter set, not the pre-spread-filter sample above.
+SESSION_DRIFT_MAX_Z = float("inf")  # was 3.0; skip a signal once today has drifted this far from its open
 
 # Added 2026-09-28, same real-data methodology: not direction (SESSION_DRIFT_MAX_Z), MAGNITUDE --
 # is the market unusually calm relative to its own recent volatility right now? Counterintuitive
@@ -1188,28 +1194,41 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
     # cluster of 2+ is logged (for the same after-the-fact visibility the
     # old tie log gave VWAP_SCALP_PAIRS' priority order) but deliberately
     # opens nothing.
-    if len(candidates) == 1:
-        instrument, direction, vwap, dev_stdev, signal_index, diagnostics = candidates[0]
+    # 2026-10-13 EMERGENCY REVERSAL of the 2026-09-28 "a cluster opens none" rule: with
+    # the drift cap and spread filter live, 7-8 clusters a day were erasing 15+ signals a
+    # day and the bot went a full Monday session with zero trades. A 275-day, 17-pair
+    # bid/ask backtest (scripts/research_vwap_scalp_relax_filters.py) of the live pacing
+    # chain: opening the highest-priority pair that passes the spread cap gave -0.198 R
+    # per trade (holdout+fresh -0.171) vs -0.218 (-0.210) for "open none" -- no worse
+    # per trade, about 15% more trades. `candidates` is already in VWAP_SCALP_PAIRS
+    # priority order; the first that actually opens wins and the global cooldown
+    # blocks the rest, exactly as before 09-28. Others in the cluster are logged.
+    if candidates:
+        winner = None
         try:
             entries = load_journal()  # reload fresh right before the real order
             account = account_state_from_tracked_capital(state, entries)
-            if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
-                               risk_config, account, diagnostics):
-                opened.append(instrument)
         except Exception as e:
-            print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
-    elif len(candidates) > 1:
-        signaled = [c[0] for c in candidates]
-        print(f"INFO: VWAP Scalp signal cluster ({', '.join(signaled)}) -- skipping, none opened", flush=True)
-        try:
-            from vwap_scalp_tie_log import record_tie
-            record_tie(datetime.now(timezone.utc).isoformat(), None, signaled)
-        except Exception as e:
-            print(f"WARNING: could not record VWAP Scalp signal cluster: {e}", flush=True)
-        if "signal_cluster" not in notified_categories:
-            notified_categories.add("signal_cluster")
-            from dashboard_state import record_risk_limit_skip
-            record_risk_limit_skip("VWAP Scalp", f"signal cluster ({len(signaled)} pairs) -- none opened")
+            print(f"WARNING: VWAP Scalp tick failed before opening: {e}", flush=True)
+            candidates = []
+        for instrument, direction, vwap, dev_stdev, signal_index, diagnostics in candidates:
+            try:
+                if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
+                                   risk_config, account, diagnostics):
+                    opened.append(instrument)
+                    winner = instrument
+                    break
+            except Exception as e:
+                print(f"WARNING: VWAP Scalp tick failed for {instrument}: {e}", flush=True)
+        if len(candidates) > 1:
+            signaled = [c[0] for c in candidates]
+            print(f"INFO: VWAP Scalp signal cluster ({', '.join(signaled)}) -- opened {winner or 'none'}", flush=True)
+            try:
+                from vwap_scalp_tie_log import record_tie
+                record_tie(datetime.now(timezone.utc).isoformat(), winner,
+                           [i for i in signaled if i != winner])
+            except Exception as e:
+                print(f"WARNING: could not record VWAP Scalp signal cluster: {e}", flush=True)
 
     print(f"INFO: VWAP Scalp tick finished -- {len(opened)} opened", flush=True)
     return opened
