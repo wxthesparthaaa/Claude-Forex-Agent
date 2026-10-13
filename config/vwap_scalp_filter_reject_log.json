@@ -3760,5 +3760,11 @@
     "instrument": "EUR_USD",
     "filter": "session_drift_z",
     "value": 11.281546558560732
+  },
+  {
+    "tick_time": "2026-10-13T10:15:02.835271+00:00",
+    "instrument": "USD_CHF",
+    "filter": "session_drift_z",
+    "value": -6.7028228872667235
   }
 ]
