@@ -3574,5 +3574,11 @@
     "instrument": "USD_CAD",
     "filter": "session_drift_z",
     "value": -5.325500509798758
+  },
+  {
+    "tick_time": "2026-10-13T08:20:01.950560+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.6511627906978128
   }
 ]
