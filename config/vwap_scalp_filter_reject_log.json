@@ -4126,5 +4126,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 6.982889270618791e-05
+  },
+  {
+    "tick_time": "2026-10-14T07:05:15.719164+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.7173913043482828
   }
 ]
