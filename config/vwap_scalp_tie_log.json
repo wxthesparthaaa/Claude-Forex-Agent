@@ -4492,5 +4492,15 @@
       "BCO_USD",
       "GBP_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-14T08:10:22.232003+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "XAG_USD",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
