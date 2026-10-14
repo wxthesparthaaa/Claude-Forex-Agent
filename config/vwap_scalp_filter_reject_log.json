@@ -4498,5 +4498,11 @@
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
     "value": 2.0000000000007105
+  },
+  {
+    "tick_time": "2026-10-14T16:15:17.416732+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.6799999999996816
   }
 ]
