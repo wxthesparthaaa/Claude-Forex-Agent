@@ -4444,5 +4444,11 @@
     "instrument": "NZD_JPY",
     "filter": "vol_ratio",
     "value": 0.00012681207975115549
+  },
+  {
+    "tick_time": "2026-10-14T11:10:07.182798+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00015003579741847912
   }
 ]
