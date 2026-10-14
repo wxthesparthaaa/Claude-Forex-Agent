@@ -4484,5 +4484,13 @@
       "GBP_JPY",
       "CHF_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-14T07:20:23.332209+00:00",
+    "opened": "EUR_USD",
+    "also_signaled": [
+      "BCO_USD",
+      "GBP_USD"
+    ]
   }
 ]
