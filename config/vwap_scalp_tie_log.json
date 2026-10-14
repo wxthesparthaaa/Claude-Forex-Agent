@@ -4510,5 +4510,12 @@
       "XAG_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-10-14T12:15:22.513144+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "XAG_USD"
+    ]
   }
 ]
