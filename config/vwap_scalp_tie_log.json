@@ -4517,5 +4517,12 @@
     "also_signaled": [
       "XAG_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-14T13:40:18.410681+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "AUD_JPY"
+    ]
   }
 ]
