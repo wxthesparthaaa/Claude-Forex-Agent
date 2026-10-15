@@ -4532,5 +4532,15 @@
       "USD_JPY",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T07:05:15.113781+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "WTICO_USD",
+      "EUR_USD",
+      "CHF_JPY"
+    ]
   }
 ]
