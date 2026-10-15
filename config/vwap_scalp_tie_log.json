@@ -4567,5 +4567,14 @@
       "NZD_USD",
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T08:10:15.452874+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "USD_CAD",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
