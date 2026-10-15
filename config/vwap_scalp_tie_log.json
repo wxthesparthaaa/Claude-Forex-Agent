@@ -4646,5 +4646,13 @@
     "also_signaled": [
       "USD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T12:20:18.574252+00:00",
+    "opened": null,
+    "also_signaled": [
+      "EUR_USD",
+      "EUR_JPY"
+    ]
   }
 ]
