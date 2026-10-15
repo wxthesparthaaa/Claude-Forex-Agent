@@ -4770,5 +4770,13 @@
     "also_signaled": [
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T16:30:28.772981+00:00",
+    "opened": null,
+    "also_signaled": [
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
