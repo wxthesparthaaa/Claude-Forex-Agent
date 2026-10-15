@@ -4662,5 +4662,12 @@
       "EUR_USD",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T12:35:17.312128+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "NZD_JPY"
+    ]
   }
 ]
