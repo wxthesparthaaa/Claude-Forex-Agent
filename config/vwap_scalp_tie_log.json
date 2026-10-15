@@ -4558,5 +4558,14 @@
     "also_signaled": [
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T08:05:12.067518+00:00",
+    "opened": null,
+    "also_signaled": [
+      "USD_JPY",
+      "NZD_USD",
+      "USD_CHF"
+    ]
   }
 ]
