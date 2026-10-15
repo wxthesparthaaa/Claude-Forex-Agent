@@ -4708,5 +4708,17 @@
     "also_signaled": [
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T14:15:23.007204+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "XAG_USD",
+      "USD_CAD",
+      "NZD_USD",
+      "USD_CHF",
+      "GBP_JPY",
+      "CAD_JPY"
+    ]
   }
 ]
