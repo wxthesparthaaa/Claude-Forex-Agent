@@ -4631,5 +4631,13 @@
       "NZD_USD",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T11:40:15.383056+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "USD_CHF"
+    ]
   }
 ]
