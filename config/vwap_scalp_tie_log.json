@@ -4693,5 +4693,13 @@
       "USD_CHF",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T13:45:14.166778+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "EUR_USD"
+    ]
   }
 ]
