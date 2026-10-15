@@ -4805,5 +4805,13 @@
       "GBP_USD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T17:45:13.091356+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "EUR_USD"
+    ]
   }
 ]
