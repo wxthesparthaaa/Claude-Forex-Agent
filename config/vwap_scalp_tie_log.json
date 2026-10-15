@@ -4598,5 +4598,13 @@
       "USD_CHF",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-15T10:05:17.520074+00:00",
+    "opened": "EUR_USD",
+    "also_signaled": [
+      "GBP_JPY",
+      "CHF_JPY"
+    ]
   }
 ]
