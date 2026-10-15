@@ -4882,5 +4882,11 @@
     "instrument": "NZD_USD",
     "filter": "spread_to_stop",
     "value": 2.6000000000017764
+  },
+  {
+    "tick_time": "2026-10-15T16:30:27.027773+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 0.3249999999998543
   }
 ]
