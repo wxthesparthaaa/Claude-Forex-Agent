@@ -4534,5 +4534,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.0001445551821840586
+  },
+  {
+    "tick_time": "2026-10-15T07:05:10.467632+00:00",
+    "instrument": "XAU_USD",
+    "filter": "spread_to_stop",
+    "value": 0.2965403624379653
   }
 ]
