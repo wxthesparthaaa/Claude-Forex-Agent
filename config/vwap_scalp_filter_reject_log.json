@@ -4864,5 +4864,11 @@
     "instrument": "USD_CHF",
     "filter": "spread_to_stop",
     "value": 0.37500000000004335
+  },
+  {
+    "tick_time": "2026-10-15T16:30:07.941010+00:00",
+    "instrument": "EUR_USD",
+    "filter": "vol_ratio",
+    "value": 0.00018035150968033056
   }
 ]
