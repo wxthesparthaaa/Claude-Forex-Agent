@@ -4690,5 +4690,11 @@
     "instrument": "GBP_JPY",
     "filter": "spread_to_stop",
     "value": 2.49999999999797
+  },
+  {
+    "tick_time": "2026-10-15T11:25:18.922991+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "spread_to_stop",
+    "value": 1.2
   }
 ]
