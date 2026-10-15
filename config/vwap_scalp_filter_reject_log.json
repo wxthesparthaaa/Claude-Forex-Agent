@@ -4918,5 +4918,11 @@
     "instrument": "EUR_USD",
     "filter": "vol_ratio",
     "value": 0.00011163075899511093
+  },
+  {
+    "tick_time": "2026-10-15T17:40:06.876712+00:00",
+    "instrument": "NZD_USD",
+    "filter": "vol_ratio",
+    "value": 0.00019656429661032174
   }
 ]
