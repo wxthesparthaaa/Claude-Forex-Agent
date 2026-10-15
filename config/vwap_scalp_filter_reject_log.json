@@ -4738,5 +4738,11 @@
     "instrument": "EUR_JPY",
     "filter": "vol_ratio",
     "value": 0.00020885085064841004
+  },
+  {
+    "tick_time": "2026-10-15T12:20:11.968712+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00017620523455076946
   }
 ]
