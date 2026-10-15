@@ -4870,5 +4870,11 @@
     "instrument": "EUR_USD",
     "filter": "vol_ratio",
     "value": 0.00018035150968033056
+  },
+  {
+    "tick_time": "2026-10-15T16:30:12.586429+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 0.00019621764427590552
   }
 ]
