@@ -4820,5 +4820,14 @@
     "also_signaled": [
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T07:05:17.515326+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "CAD_JPY"
+    ]
   }
 ]
