@@ -4921,5 +4921,13 @@
       "WTICO_USD",
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T14:35:21.530413+00:00",
+    "opened": "XAG_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD"
+    ]
   }
 ]
