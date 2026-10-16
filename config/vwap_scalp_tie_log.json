@@ -4874,5 +4874,12 @@
     "also_signaled": [
       "XAU_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T10:55:15.950775+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "WTICO_USD"
+    ]
   }
 ]
