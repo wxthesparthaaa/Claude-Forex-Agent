@@ -4867,5 +4867,12 @@
     "also_signaled": [
       "USD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T10:10:16.304631+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "XAU_USD"
+    ]
   }
 ]
