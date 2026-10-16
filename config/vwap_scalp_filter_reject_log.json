@@ -5044,5 +5044,11 @@
     "instrument": "XAU_USD",
     "filter": "spread_to_stop",
     "value": 0.5531295487629774
+  },
+  {
+    "tick_time": "2026-10-16T10:50:05.769762+00:00",
+    "instrument": "USD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00013787570150783498
   }
 ]
