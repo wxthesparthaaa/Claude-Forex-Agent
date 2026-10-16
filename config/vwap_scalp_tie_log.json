@@ -4974,5 +4974,13 @@
       "USD_CAD",
       "EUR_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T16:35:15.273837+00:00",
+    "opened": null,
+    "also_signaled": [
+      "AUD_USD",
+      "AUD_JPY"
+    ]
   }
 ]
