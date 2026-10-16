@@ -4896,5 +4896,12 @@
       "EUR_USD",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T13:25:23.267031+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "XAG_USD"
+    ]
   }
 ]
