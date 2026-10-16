@@ -5176,5 +5176,11 @@
     "instrument": "EUR_JPY",
     "filter": "vol_ratio",
     "value": 0.00014348081680347994
+  },
+  {
+    "tick_time": "2026-10-16T17:15:15.206815+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.5897435897434683
   }
 ]
