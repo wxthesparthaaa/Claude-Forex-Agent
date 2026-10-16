@@ -4990,5 +4990,12 @@
       "AUD_USD",
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T16:50:19.213472+00:00",
+    "opened": "USD_CHF",
+    "also_signaled": [
+      "AUD_USD"
+    ]
   }
 ]
