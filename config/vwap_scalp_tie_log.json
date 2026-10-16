@@ -4944,5 +4944,15 @@
     "also_signaled": [
       "USD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T15:35:21.974596+00:00",
+    "opened": "XAG_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "EUR_USD",
+      "USD_CHF",
+      "CHF_JPY"
+    ]
   }
 ]
