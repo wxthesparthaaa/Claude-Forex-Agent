@@ -4964,5 +4964,15 @@
       "USD_JPY",
       "USD_CAD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T16:10:17.944720+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "EUR_USD",
+      "USD_JPY",
+      "USD_CAD",
+      "EUR_JPY"
+    ]
   }
 ]
