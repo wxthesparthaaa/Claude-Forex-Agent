@@ -4982,5 +4982,13 @@
       "AUD_USD",
       "AUD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T16:40:13.517905+00:00",
+    "opened": null,
+    "also_signaled": [
+      "AUD_USD",
+      "AUD_JPY"
+    ]
   }
 ]
