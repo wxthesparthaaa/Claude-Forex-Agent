@@ -5098,5 +5098,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.0001650535006646112
+  },
+  {
+    "tick_time": "2026-10-16T13:25:14.567716+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 0.27184466019418724
   }
 ]
