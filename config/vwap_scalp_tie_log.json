@@ -4881,5 +4881,12 @@
     "also_signaled": [
       "WTICO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T12:25:20.089953+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "CAD_JPY"
+    ]
   }
 ]
