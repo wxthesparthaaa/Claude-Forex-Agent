@@ -5122,5 +5122,11 @@
     "instrument": "AUD_JPY",
     "filter": "spread_to_stop",
     "value": 0.6129032258060524
+  },
+  {
+    "tick_time": "2026-10-16T14:35:12.332725+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00012516023241919836
   }
 ]
