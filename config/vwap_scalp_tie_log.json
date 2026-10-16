@@ -4844,5 +4844,14 @@
       "XAG_USD",
       "BCO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T08:20:14.719978+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "BCO_USD",
+      "USD_JPY"
+    ]
   }
 ]
