@@ -4929,5 +4929,13 @@
       "WTICO_USD",
       "BCO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T15:05:13.232299+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "USD_JPY"
+    ]
   }
 ]
