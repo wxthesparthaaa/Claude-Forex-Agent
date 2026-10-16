@@ -4937,5 +4937,12 @@
       "BCO_USD",
       "USD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-16T15:10:21.614078+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "USD_JPY"
+    ]
   }
 ]
