@@ -10086,3 +10086,59 @@ Tests: 5 tests that encoded the old behaviour updated, 1 added; 495 pass.
 **Now under test** (for the weekly routine): the filter set MAX_Z_ENTRY 2.25, MIN_VOL_RATIO,
 MAX_SPREAD_TO_STOP 0.25, first-pair-wins clustering, fill-side sizing; expected about 9-10
 trades/day at roughly -0.2 R/trade.
+
+## 2026-10-17 -- Weekly research
+
+Weekly result: week ending 2026-10-16, net 18.61 SGD over 58 trades, BREAKEVEN
+
+Saturday run (scheduled). **Breakeven week 1 of 2** (previous recorded week, ending 2026-10-09, was NOT
+BREAKEVEN), so per the pause rule nothing on the live bot was changed this run; research only.
+Under test: the relaxed system shipped 2026-10-13 15:24 UTC (90f04d194): MAX_Z_ENTRY 2.25, MIN_VOL_RATIO,
+MAX_SPREAD_TO_STOP 0.25, no drift cap, first-pair-wins clusters, 20-min global cooldown, fill-side sizing.
+
+**Live numbers (week)**: 58 closed (all VWAP Scalp; 1 opened before the 10-13 push), 36 wins (62%),
+journal mean R +0.071 (sd 0.90, 95% CI [-0.161, +0.303]), +18.61 SGD. Cumulative under the current
+system (opened >= 10-13 15:24): n=57, +0.089, CI [-0.144, +0.323], halves +0.020 / +0.157. Exits 31
+target / 18 stop / 8 timeout (timeouts close at 32-35 min, not 30: the force-close runs on the 5-minute
+scan). Average win +0.66R, stop-outs -1.00R (fill-side sizing working). ~17-18 trades/day. Since drift is
+uncapped, 38 of 57 had |drift| >= 3 (+0.029) vs 19 below (+0.211), small n, consistent with the 10-10
+holdout result that the drift cap does not help. Reject log since the push: vol_ratio 151, spread_to_stop
+66, drift 0 (as intended). Clusters now open the first pair; 'opened none' clusters are ones where no
+candidate passed the spread cap. OANDA cross-check: 58 closed trades in the week, all journaled, P&L
+identical to the cent; no open trades. No bugs found.
+
+**New harness: live-cadence replay** (`scripts/research_vwap_scalp_weekly_2026_10_17.py`, pre-registered).
+Replays the live pacing exactly: 5-minute scans, complete bars only, latest signal confirmed within 9 min,
+30-min per-pair cooldown on OPENS (earlier backtests spaced SIGNALS), 20-min global cooldown, first
+passing pair in priority order, entry at bar s on the fill side; every signal pre-simulated at delays 1..10.
+286 trading days, 54,901 signals (fresh data through 2026-10-16, no fetch gaps). It reproduces live volume
+for the first time: 16.6 trades/day vs live ~17.7 (the 10-13 backtest said 9.6). Expectancy -0.161 overall
+(discovery -0.183 / holdout -0.152, halves -0.133/-0.171 / fresh -0.104); spreads +20% -0.182.
+**Per-trade fill parity**: matching all 94 live trades since 2026-10-02 to the same signal at the same delay,
+live -0.044 vs backtest +0.009, difference -0.053 (se 0.040), median 0.000, corr 0.91; excluding 9 outcome
+flips the difference is +0.012. So the backtest is not pessimistic about fills; the live sample was simply
+a run of better-than-average trades. Replay of the live week itself: -0.063 (n=63; 30 of 57 live trades
+reproduced exactly, the pacing chain diverges after any difference). Replay weekly means (58 weeks with
+>= 20 trades): sd 0.088, 0% of weeks reached +0.089 and 3% reached 0; the last 8 weeks ranged -0.24..-0.04.
+
+**Credence** the current system breaks even: about 10-20% (prior 8-15%; the good live week moved it a
+little, the calibrated replay and unbiased fills held it down). LEANING NO. EVIDENCE_BAR's n=100 arrives
+next week (~115 at the live rate). At n~115 (se ~0.084) success needs mean > +0.165; falsified if the
+upper bound falls below 0 (mean < -0.165). If the truth is about -0.15, expect falsification at ~125-150
+trades, i.e. within 2 weeks.
+
+**Hypotheses tested** (K = 3, alpha 0.0167):
+- H2, 1-minute scans instead of 5 (entry decay): worse, -0.168 vs -0.152 holdout (p 0.74), worse under
+  +20% spread; the delay profile is flat (-0.09..-0.21 with no trend over delays 1-9). RULED OUT; the
+  5-minute cadence costs nothing, so the 10-10 queue item "move to 1-minute checks" is closed.
+- H4, follow-through gate (price already moved toward target by >= 0 / 0.25 stdev at the scan): holdout
+  -0.148 / -0.153 vs -0.152 (p 0.44 / 0.52), fresh worse (-0.117 / -0.171 vs -0.104); discovery terciles
+  non-monotone. RULED OUT; the 10-10 limit-entry "immediate movers win" effect does not survive as a
+  causal market-entry rule.
+3 variants, 0 credible. Live changes: none (breakeven week 1 of 2).
+
+**Queue**: (1) next Saturday: n~115 -> apply EVIDENCE_BAR either way; if this week is breakeven again,
+pause per the rule; (2) use the live-cadence replay (not the 1-min-delay pipeline) for all future tests,
+and add the 32-35 min live timeout to it; (3) if the verdict is negative, write the lifetime summary and
+recommend stopping VWAP Scalp rather than adding more filters (11 filter/entry ideas ruled out since 10-02);
+(4) only if continuing: grep the log for moving-VWAP / target-at-fraction-of-VWAP exits before testing.
