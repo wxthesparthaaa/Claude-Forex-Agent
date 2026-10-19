@@ -5053,5 +5053,13 @@
     "also_signaled": [
       "XAG_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T09:47:37.615855+00:00",
+    "opened": null,
+    "also_signaled": [
+      "USD_CHF",
+      "EUR_JPY"
+    ]
   }
 ]
