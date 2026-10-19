@@ -5111,5 +5111,14 @@
       "GBP_USD",
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T12:47:36.917689+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "GBP_USD",
+      "AUD_USD",
+      "NZD_USD"
+    ]
   }
 ]
