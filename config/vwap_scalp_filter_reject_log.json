@@ -5434,5 +5434,11 @@
     "instrument": "USD_CHF",
     "filter": "vol_ratio",
     "value": 0.00019970416626844631
+  },
+  {
+    "tick_time": "2026-10-19T11:32:20.766748+00:00",
+    "instrument": "USD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00019017340201197614
   }
 ]
