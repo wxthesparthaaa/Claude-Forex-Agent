@@ -18617,5 +18617,36 @@
     "session_drift_z": -6.04789629914502,
     "vol_ratio": 0.0006296688225903075,
     "spread_to_stop": 0.19491066594511655
+  },
+  {
+    "trade_id": "7014",
+    "instrument": "XAG_USD",
+    "direction": "SHORT",
+    "units": -31,
+    "entry_price": 57.576,
+    "stop_loss": 57.69637,
+    "take_profit": 57.5444,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-10-19T12:17:25.525377+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.831788749999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 57.589,
+    "entry_z": 1.5120782667496497,
+    "session_drift_z": 4.70814985793188,
+    "vol_ratio": 0.0008791385304649316,
+    "spread_to_stop": 0.24215330166709048
   }
 ]
