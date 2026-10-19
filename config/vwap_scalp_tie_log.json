@@ -5046,5 +5046,12 @@
       "XAU_USD",
       "EUR_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T09:12:32.428564+00:00",
+    "opened": "BCO_USD",
+    "also_signaled": [
+      "XAG_USD"
+    ]
   }
 ]
