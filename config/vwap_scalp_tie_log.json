@@ -5174,5 +5174,13 @@
       "BCO_USD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T16:07:34.037525+00:00",
+    "opened": null,
+    "also_signaled": [
+      "AUD_USD",
+      "NZD_USD"
+    ]
   }
 ]
