@@ -5137,5 +5137,13 @@
       "EUR_USD",
       "GBP_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T14:32:25.963138+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "EUR_USD"
+    ]
   }
 ]
