@@ -5536,5 +5536,11 @@
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
     "value": 1.3793103448279749
+  },
+  {
+    "tick_time": "2026-10-19T15:42:29.362612+00:00",
+    "instrument": "NZD_USD",
+    "filter": "spread_to_stop",
+    "value": 0.8666666666672588
   }
 ]
