@@ -5071,5 +5071,13 @@
       "BCO_USD",
       "EUR_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T10:52:31.113411+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "XAG_USD",
+      "EUR_USD"
+    ]
   }
 ]
