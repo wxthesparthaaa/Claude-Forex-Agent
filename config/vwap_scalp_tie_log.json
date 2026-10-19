@@ -5154,5 +5154,15 @@
       "USD_CAD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T15:42:31.076497+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "WTICO_USD",
+      "BCO_USD",
+      "NZD_USD"
+    ]
   }
 ]
