@@ -5079,5 +5079,13 @@
       "XAG_USD",
       "EUR_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T11:37:27.611073+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "EUR_USD"
+    ]
   }
 ]
