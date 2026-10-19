@@ -5038,5 +5038,13 @@
       "USD_JPY",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T08:47:31.139361+00:00",
+    "opened": "WTICO_USD",
+    "also_signaled": [
+      "XAU_USD",
+      "EUR_USD"
+    ]
   }
 ]
