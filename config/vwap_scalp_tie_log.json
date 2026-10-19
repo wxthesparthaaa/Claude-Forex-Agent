@@ -5014,5 +5014,14 @@
     "also_signaled": [
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T07:02:38.233471+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "GBP_USD",
+      "USD_JPY",
+      "USD_CHF"
+    ]
   }
 ]
