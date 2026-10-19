@@ -18458,5 +18458,36 @@
     "session_drift_z": -1.7811200659539985,
     "vol_ratio": 0.0005054496383692891,
     "spread_to_stop": 0.0703555809088971
+  },
+  {
+    "trade_id": "6982",
+    "instrument": "CHF_JPY",
+    "direction": "SHORT",
+    "units": -3015,
+    "entry_price": 191.777,
+    "stop_loss": 191.975,
+    "take_profit": 191.722,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-10-19T08:22:24.335625+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.831788749999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 191.797,
+    "entry_z": 1.9419958071345578,
+    "session_drift_z": 4.158867720327949,
+    "vol_ratio": 0.00043983392045536524,
+    "spread_to_stop": 0.2247191011237139
   }
 ]
