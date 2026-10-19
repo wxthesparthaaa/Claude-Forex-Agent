@@ -5030,5 +5030,13 @@
     "also_signaled": [
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-19T07:52:29.136107+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "USD_JPY",
+      "NZD_JPY"
+    ]
   }
 ]
