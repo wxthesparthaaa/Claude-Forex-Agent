@@ -5255,5 +5255,13 @@
       "NZD_JPY",
       "GBP_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T10:37:33.252969+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "GBP_JPY"
+    ]
   }
 ]
