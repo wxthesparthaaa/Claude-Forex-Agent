@@ -5395,5 +5395,15 @@
       "NZD_USD",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T17:07:49.636205+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "BCO_USD",
+      "AUD_USD",
+      "NZD_JPY"
+    ]
   }
 ]
