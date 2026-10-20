@@ -5278,5 +5278,13 @@
     "also_signaled": [
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T12:22:34.347922+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "CAD_JPY"
+    ]
   }
 ]
