@@ -6064,5 +6064,11 @@
     "instrument": "XAG_USD",
     "filter": "spread_to_stop",
     "value": 0.48160277403209295
+  },
+  {
+    "tick_time": "2026-10-20T13:57:32.102869+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.3157894736842105
   }
 ]
