@@ -5329,5 +5329,13 @@
       "XAG_USD",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T14:12:35.746631+00:00",
+    "opened": "USD_JPY",
+    "also_signaled": [
+      "USD_CAD",
+      "CAD_JPY"
+    ]
   }
 ]
