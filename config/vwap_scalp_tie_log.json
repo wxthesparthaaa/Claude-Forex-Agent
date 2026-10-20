@@ -5321,5 +5321,13 @@
       "WTICO_USD",
       "CAD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T13:57:34.056460+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "CAD_JPY"
+    ]
   }
 ]
