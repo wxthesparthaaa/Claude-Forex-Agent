@@ -5371,5 +5371,13 @@
       "AUD_USD",
       "NZD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T16:27:33.546674+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "AUD_USD",
+      "NZD_USD"
+    ]
   }
 ]
