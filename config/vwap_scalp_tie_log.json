@@ -5313,5 +5313,13 @@
       "AUD_JPY",
       "NZD_JPY"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T13:52:27.496928+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "CAD_JPY"
+    ]
   }
 ]
