@@ -6238,5 +6238,11 @@
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
     "value": 0.3252032520324433
+  },
+  {
+    "tick_time": "2026-10-20T19:37:20.866049+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 3.9131197164540915e-05
   }
 ]
