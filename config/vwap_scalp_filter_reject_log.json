@@ -6178,5 +6178,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.0001369202231098917
+  },
+  {
+    "tick_time": "2026-10-20T17:42:23.992137+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 0.8461538461545031
   }
 ]
