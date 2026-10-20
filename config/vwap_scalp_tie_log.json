@@ -5413,5 +5413,13 @@
       "BCO_USD",
       "AUD_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-20T17:42:25.835971+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "USD_CHF"
+    ]
   }
 ]
