@@ -6760,5 +6760,11 @@
     "instrument": "CAD_JPY",
     "filter": "vol_ratio",
     "value": 0.00017156288402514282
+  },
+  {
+    "tick_time": "2026-10-21T16:37:24.790978+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00010035278401780813
   }
 ]
