@@ -6310,5 +6310,11 @@
     "instrument": "CHF_JPY",
     "filter": "spread_to_stop",
     "value": 0.34653465346531587
+  },
+  {
+    "tick_time": "2026-10-21T08:02:25.808530+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 19.58762886607355
   }
 ]
