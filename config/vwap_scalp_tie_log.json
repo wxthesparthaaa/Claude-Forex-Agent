@@ -5435,5 +5435,13 @@
     "also_signaled": [
       "USD_CHF"
     ]
+  },
+  {
+    "tick_time": "2026-10-21T07:27:35.563078+00:00",
+    "opened": null,
+    "also_signaled": [
+      "BCO_USD",
+      "CHF_JPY"
+    ]
   }
 ]
