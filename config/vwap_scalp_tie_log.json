@@ -5428,5 +5428,12 @@
     "also_signaled": [
       "WTICO_USD"
     ]
+  },
+  {
+    "tick_time": "2026-10-21T07:02:54.521868+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "USD_CHF"
+    ]
   }
 ]
