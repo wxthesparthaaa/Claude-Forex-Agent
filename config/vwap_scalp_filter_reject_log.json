@@ -6880,5 +6880,11 @@
     "instrument": "AUD_USD",
     "filter": "vol_ratio",
     "value": 0.00014000356754177262
+  },
+  {
+    "tick_time": "2026-10-22T08:12:18.365055+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 0.0001738656657514322
   }
 ]
