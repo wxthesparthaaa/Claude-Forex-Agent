@@ -7156,5 +7156,11 @@
     "instrument": "AUD_USD",
     "filter": "vol_ratio",
     "value": 0.00011607998679323077
+  },
+  {
+    "tick_time": "2026-10-22T19:22:22.069059+00:00",
+    "instrument": "EUR_USD",
+    "filter": "vol_ratio",
+    "value": 6.225477829550101e-05
   }
 ]
