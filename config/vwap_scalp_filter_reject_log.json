@@ -7354,5 +7354,11 @@
     "instrument": "XAG_USD",
     "filter": "spread_to_stop",
     "value": 0.31067033098333047
+  },
+  {
+    "tick_time": "2026-10-23T12:12:20.764341+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.0001876248170961732
   }
 ]
