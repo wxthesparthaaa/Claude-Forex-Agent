@@ -7348,5 +7348,11 @@
     "instrument": "AUD_USD",
     "filter": "vol_ratio",
     "value": 0.00015304305108992255
+  },
+  {
+    "tick_time": "2026-10-23T11:47:25.664309+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 0.31067033098333047
   }
 ]
