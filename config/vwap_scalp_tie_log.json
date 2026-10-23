@@ -1,17 +1,5 @@
 [
   {
-    "tick_time": "2026-09-15T15:17:04.126609+00:00",
-    "opened": "AUD_USD",
-    "also_signaled": [
-      "USD_CAD",
-      "USD_CHF",
-      "AUD_JPY",
-      "GBP_JPY",
-      "EUR_JPY",
-      "CAD_JPY"
-    ]
-  },
-  {
     "tick_time": "2026-09-15T15:42:02.726673+00:00",
     "opened": "GBP_USD",
     "also_signaled": [
@@ -5086,6 +5074,15 @@
     "opened": null,
     "also_signaled": [
       "XAG_USD",
+      "GBP_JPY"
+    ]
+  },
+  {
+    "tick_time": "2026-10-23T17:22:31.215354+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAG_USD",
+      "NZD_USD",
       "GBP_JPY"
     ]
   }
