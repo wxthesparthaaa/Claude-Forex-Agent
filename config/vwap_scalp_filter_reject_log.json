@@ -7216,5 +7216,11 @@
     "instrument": "NZD_USD",
     "filter": "vol_ratio",
     "value": 0.00013671758624349156
+  },
+  {
+    "tick_time": "2026-10-23T08:32:23.304932+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00014351281231362337
   }
 ]
