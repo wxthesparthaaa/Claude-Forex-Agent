@@ -7198,5 +7198,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.535714285714331
+  },
+  {
+    "tick_time": "2026-10-23T07:02:33.803741+00:00",
+    "instrument": "XAU_USD",
+    "filter": "spread_to_stop",
+    "value": 0.43062200956964086
   }
 ]
