@@ -7372,5 +7372,11 @@
     "instrument": "CAD_JPY",
     "filter": "spread_to_stop",
     "value": 0.47499999999987563
+  },
+  {
+    "tick_time": "2026-10-23T12:47:27.395720+00:00",
+    "instrument": "NZD_USD",
+    "filter": "spread_to_stop",
+    "value": 1.090909090908632
   }
 ]
