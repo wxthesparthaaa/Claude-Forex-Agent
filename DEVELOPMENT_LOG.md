@@ -10142,3 +10142,59 @@ pause per the rule; (2) use the live-cadence replay (not the 1-min-delay pipelin
 and add the 32-35 min live timeout to it; (3) if the verdict is negative, write the lifetime summary and
 recommend stopping VWAP Scalp rather than adding more filters (11 filter/entry ideas ruled out since 10-02);
 (4) only if continuing: grep the log for moving-VWAP / target-at-fraction-of-VWAP exits before testing.
+
+## 2026-10-24 -- Weekly research
+
+Weekly result: week ending 2026-10-23, net -64.61 SGD over 89 trades, NOT BREAKEVEN
+
+Saturday run (scheduled). The streak resets (last week was breakeven week 1 of 2; this one is not), so
+live changes were allowed; none were made because nothing tested was credible. Under test: the relaxed
+system shipped 2026-10-13 15:24 UTC (90f04d194), unchanged this week.
+
+**Live numbers (week)**: 89 closed (all VWAP Scalp), 50 wins (56%), journal mean R -0.155 (sd 0.79, 95%
+CI [-0.319, +0.009]), price-R -0.152, -64.61 SGD. Exits 33 target (+0.53R, ~8 min) / 32 stop (-1.00R,
+~12 min) / 24 timeout (+0.03R). Days: -8.88 / -23.39 / +7.92 / -29.94 / -10.32. 57 of 89 trades were
+commodities (XAU 22, WTICO 17, XAG 10, BCO 8). Worst loss -1.45R (BCO_USD 10-20 19:44, the stop
+filled 5 cents through on a 16-cent stop; slippage, not a sizing bug). Live spread_to_stop mean 0.15
+(max 0.246); adverse entry cost 7.7% of the stop. Reject log: vol_ratio 39-77/day, spread_to_stop
+18-34/day, drift 0. OANDA cross-check: 89 closed trades, all journaled, P&L identical to the cent (OANDA
+financing -0.13 SGD on top), no open trades. No bugs found.
+**Cumulative under the current system** (opened >= 10-13 15:24): n=146, 59% win, mean R -0.059, 95% CI
+[-0.196, +0.077], -41.36 SGD; halves +0.061 / -0.180. Near-cutoff hints (all small n): |drift| 3-4 gave
+-0.51 (n=17); top live vol_ratio band -0.13 (n=91) vs lowest +0.14 (n=24) -- the large-sample replay
+below says the opposite, so these are noise.
+
+**EVIDENCE_BAR verdict at n=146 (>= 100)**: FAILS -- net P&L negative and the 95% lower bound (-0.196) is
+below 0. The pre-registered falsification rule (upper bound below 0) is not yet met (+0.077). The
+live-cadence replay of the same week gave -0.140 (n=100) vs live -0.155, so live and backtest now agree,
+and the replay's 291-day expectancy is -0.160 (holdout -0.150, fresh -0.119). The good week of 10-13 was
+luck, as the replay's weekly distribution suggested. Credence the system breaks even: about 5-10% (prior
+10-20%). LEANING NO, close to settled. Falsified if the upper bound drops below 0: at the true -0.15
+that needs about 150-250 more trades (2-3 weeks at ~90/week).
+
+**Hypotheses tested** (`scripts/research_vwap_scalp_weekly_2026_10_24.py`, live-cadence replay imported
+from the 10-17 script, now with the live 33-minute timeout as baseline (queue item 2 done); 55,861
+signals, 291 trading days, fresh data through 2026-10-23, no fetch gaps). K = 6, alpha 0.0083.
+- H5, shorter hold cap 15 / 20 min: holdout -0.158 / -0.160 vs -0.150 (p 0.63 / 0.66), worse with +20%
+  spread. RULED OUT; the timeout is not where the loss is.
+- H6, per-instrument MAX vol ratio (skip above that pair's discovery p80 / p67): worse everywhere
+  (holdout -0.190 / -0.181). RULED OUT.
+- H7 (post-hoc, from H6's diagnostic: the top within-pair vol quintile of signals was least bad in all 3
+  periods, -0.08/-0.03/-0.03): per-instrument MIN vol floor p80 / p60. p80 holdout -0.120 vs -0.150
+  (p 0.18), both halves and fresh better, but discovery WORSE (-0.207 vs -0.182) and the gain is under
+  the +0.05 bar; p60 flat. The signal-level quintile effect mostly disappears once the pacing chain picks
+  the trades. RULED OUT (not credible; still negative even at its best).
+6 variants, 0 credible. Live changes: none.
+
+**Lifetime summary for the decision** (the 10-17 queue's item 3): VWAP Scalp has now been tested live
+across 5 configurations since September (262 trades at -0.58 unfiltered; 4-filter -0.28 to -0.31;
+5-filter -0.23; current -0.06 cumulative with the last week -0.155) and in backtest at about -0.15 to
+-0.35 under every realistic variant; 17 filter/entry/exit ideas have been ruled out since 10-02. Gross
+edge is about zero and the spread is the loss. Recommendation given to the user: stop adding filters;
+either switch VWAP Scalp off in the dashboard, or leave it running on demo purely to finish the
+falsification test. Their call (the toggle is a dashboard setting).
+
+**Queue**: (1) next Saturday: n~235 -> apply the falsification rule (upper bound below 0) and report it;
+(2) if the user keeps it running, the only family not yet tried is a structurally different exit target
+(moving VWAP instead of the frozen one at entry) -- grep first; (3) otherwise research a different idea
+altogether rather than another VWAP Scalp filter (EVIDENCE_BAR lists the scalp families already ruled out).
