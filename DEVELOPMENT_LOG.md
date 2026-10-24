@@ -10222,3 +10222,7 @@ costs, corrected p < 0.05, both halves and fresh data positive, survives +20% sp
 behind a dashboard toggle that defaults OFF so the user decides when a demo trial starts. It may not change
 VWAP Scalp's rules. The old pause-on-two-breakeven-weeks rule is retired. Each run logs
 `Research result: YYYY-MM-DD, N ideas tested, M credible`; after 8 empty runs in a row it suggests pausing.
+
+**Update 2 (later the same day):** the user changed their mind: PAUSE VWAP Scalp (dashboard toggle,
+done by the user) so it does not muddy the new research; it stays off until a replacement is ready. The
+routine prompt says so, and the first new-strategy research run was started manually the same day.
