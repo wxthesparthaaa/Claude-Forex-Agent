@@ -10244,7 +10244,7 @@ K = 4, alpha 0.0125.
   too few trades a year (~150 across 17 pairs) to ever reach the 300-trade holdout bar. RULED OUT.
 4 variants, 0 credible. No live change.
 
-Research result: 2026-10-24, 3 ideas tested, 0 credible (incl. the H4 momentum entry below)
+Research result: 2026-10-24, 4 ideas tested, 0 credible (incl. the H4 momentum and relative-value entries below)
 
 **Queue** (next runs): (1) DONE same day, see next entry; (2) relative value: gold vs silver ratio, and cointegrated FX pairs (e.g. AUD_USD vs NZD_USD)
 mean-reversion at H1-H4; (3) volatility-regime: does the fix's pre-move CONTINUE (post-hoc idea from A's
@@ -10270,3 +10270,30 @@ Running lesson across 2026-10-24's three ideas plus everything before: price-pat
 instruments (1-minute to daily, reversal or continuation) show no gross edge. Next ideas should bring
 information that is not in this instrument's own price history: relative value between related instruments,
 cross-market signals (rates, equity indices), or scheduled events.
+
+## 2026-10-24 -- New-strategy research, run 1c: relative value (pairs trading) RULED OUT; VWAP Scalp now OFF
+
+VWAP Scalp confirmed OFF by the user at 11:01:59 SGT (state-sync; held through the 11:04 and 11:09 heartbeats).
+The first attempt at 10:48:35 was silently undone by a Render redeploy overlap triggered by a log push: the old
+instance took the settings save, the new one kept pushing its own copy (vwap on). Fix offered as a separate task
+(build filters so docs/scripts pushes do not redeploy; cross-instance settings merge). Routine now pushes once per run.
+User instruction: never stop or suggest pausing the research because ideas keep failing (prompt updated).
+
+`scripts/research_relative_value_2026_10_24.py`, pre-registered. Pairs fixed in advance: AUD_USD/NZD_USD,
+XAU_USD/XAG_USD, BCO_USD/WTICO_USD, EUR_USD/GBP_USD. OANDA H4 bid/ask 2016-01..2026-10-23; at bar t's close a
+20-day rolling OLS of log A on log B gives the residual z; |z| >= Z -> trade both legs back toward the mean from
+bar t+1's open (fill sides), exit at z crossing 0 or 5 days; R = P&L / residual sd; 0.03 R/day financing.
+K = 2, alpha 0.025. Self-test on unrelated random walks: gross ~0 (low power, n=117/60, but a negative result
+cannot be a look-ahead inflation).
+- Z 2.0: holdout -0.437 R (n=499, 47% win, ~4 days held), fresh -0.542, every holdout year negative, all 4 pairs
+  negative in holdout; before financing still -0.258.
+- Z 2.5: holdout -0.418 (n=312), fresh -0.551; only EUR_USD/GBP_USD slightly positive in disc/holdout (+0.06/+0.09)
+  and then -0.86 fresh. Before financing -0.235.
+Losses exceed what costs explain, so a 20-day stretch in these relationships tends to KEEP stretching (the
+relationship itself drifts) rather than revert. 2 variants, 0 credible. No live change.
+
+**Queue** (ranked): (1) spread CONTINUATION on the same 4 pairs (post-hoc from this result; pre-register as its own
+test, check it is not just two single-instrument trends); (2) cross-market information: equity-index or bond-yield
+moves leading FX (needs those instruments' history from OANDA: SPX500_USD, USB10Y_USD etc. -- check availability);
+(3) scheduled events: behaviour after central-bank decisions / US CPI / NFP at H1 (needs an event calendar; check
+for a free historical source); (4) the 4pm-fix pre-move CONTINUATION (post-hoc from run 1's diagnostic).
