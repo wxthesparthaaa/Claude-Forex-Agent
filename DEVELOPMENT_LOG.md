@@ -10198,3 +10198,24 @@ falsification test. Their call (the toggle is a dashboard setting).
 (2) if the user keeps it running, the only family not yet tried is a structurally different exit target
 (moving VWAP instead of the frozen one at entry) -- grep first; (3) otherwise research a different idea
 altogether rather than another VWAP Scalp filter (EVIDENCE_BAR lists the scalp families already ruled out).
+
+## 2026-10-24 (later) -- VWAP Scalp CONCLUDED; weekly routine repointed to new-strategy research
+
+The user asked why wait for ~235 trades when nothing is changing and the evidence is in. Agreed: the
+235-trade figure only served to prove from live data alone that the mean is below zero; the decision does
+not need it. Live (n=146, fails EVIDENCE_BAR), the live-cadence backtest (~4,800 trades, about -0.16 R,
+stable across periods), live-vs-replay agreement on the latest week, every earlier live version negative
+and 17+ ruled-out refinements together settle it: VWAP Scalp does not make money after costs. **Concluded;
+no further VWAP Scalp research or tuning.** Recommended to the user: switch it off in the dashboard
+(vwap_scalp_enabled). It is the only strategy that places trades (the base strategy and the other add-ons
+were removed 2026-09-19), so switching it off stops all trading; the app, monitoring and reviews keep
+running, and the code stays in the repo if it is ever wanted again.
+
+**Weekly routine repointed** (scheduled task `weekly-strategy-research`, still Saturdays 06:30 SGT): a short
+bot health check, then research a NEW strategy (different mechanism; slower horizons, structural flows,
+relative value or volatility regimes are suggested, with the full ruled-out list in the prompt). It may
+build a new strategy only if a candidate clears a stated bar (holdout >= 300 trades with mean R > 0 after
+costs, corrected p < 0.05, both halves and fresh data positive, survives +20% spread and a delayed entry),
+behind a dashboard toggle that defaults OFF so the user decides when a demo trial starts. It may not change
+VWAP Scalp's rules. The old pause-on-two-breakeven-weeks rule is retired. Each run logs
+`Research result: YYYY-MM-DD, N ideas tested, M credible`; after 8 empty runs in a row it suggests pausing.
