@@ -17,7 +17,8 @@ the OPEN of bar t+1+H on the closing side (bid for LONG, ask for SHORT). Then de
 t+H (non-overlapping holds; a same-direction re-entry still pays a full round-trip spread, conservative).
 Unit of risk (causal): sigma = stdev of the previous 120 H-bar-spaced... simplified: stdev of the previous 120
 one-bar mid log returns ending at bar t, times sqrt(H), times entry price. R = net P&L / sigma.
-Financing: no historical rates, so charge a flat conservative 0.02 R per 24 hours held on every trade.
+Financing: no historical rates, so charge a conservative 2% a year of notional on every trade (corrected
+after the first run: a flat 0.02 R/day overcharged long holds because R grows with sqrt(H)).
 Look-ahead self-test (must pass before any result is read): a synthetic series that is flat and then jumps
 must score the jump bar's return as 0 for the lagged rule (it cannot see it coming).
 Variants (K = 3, alpha 0.05/3 = 0.0167): V1 L=6 (1 day), H=6; V2 L=30 (5 days), H=6; V3 L=120 (20 days), H=30.
@@ -50,7 +51,7 @@ VARIANTS = {"V1 L=6 H=6": (6, 6), "V2 L=30 H=6": (30, 6), "V3 L=120 H=30": (120,
 K = len(VARIANTS)
 ALPHA = 0.05 / K
 VOL_BARS = 120
-FIN_R_PER_DAY = 0.02
+FIN_ANNUAL = 0.02  # financing as 2%/yr of notional (bug fix 2026-10-24: was a flat 0.02 R/day, which overcharged long holds)
 
 
 def fetch(client, instrument, cache_dir):
@@ -89,7 +90,7 @@ def stressed(c, k=1.2):
     return out
 
 
-def trades(candles, L, H, delay=0, stress=False, fin=FIN_R_PER_DAY):
+def trades(candles, L, H, delay=0, stress=False, fin=FIN_ANNUAL):
     """Non-overlapping momentum trades. delay = extra bars between decision and entry."""
     closes = [float(c["mid"]["c"]) for c in candles]
     logret = [0.0] + [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
@@ -107,7 +108,7 @@ def trades(candles, L, H, delay=0, stress=False, fin=FIN_R_PER_DAY):
             exit_ = float(x["bid"]["o"]) if long_ else float(x["ask"]["o"])
             sigma = sd * math.sqrt(H) * entry
             hours = (datetime.fromisoformat(x["time"][:19]) - datetime.fromisoformat(e["time"][:19])).total_seconds() / 3600
-            r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - fin * hours / 24
+            r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - fin * entry * hours / 8760 / sigma
             out.append({"time": e["time"][:16], "r": r})
         t += H
     return out

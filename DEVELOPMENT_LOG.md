@@ -10244,7 +10244,7 @@ K = 4, alpha 0.0125.
   too few trades a year (~150 across 17 pairs) to ever reach the 300-trade holdout bar. RULED OUT.
 4 variants, 0 credible. No live change.
 
-Research result: 2026-10-24, 4 ideas tested, 0 credible (incl. the H4 momentum and relative-value entries below)
+Research result: 2026-10-24, 11 idea families / 27 variants tested, 0 credible (all entries dated 2026-10-24)
 
 **Queue** (next runs): (1) DONE same day, see next entry; (2) relative value: gold vs silver ratio, and cointegrated FX pairs (e.g. AUD_USD vs NZD_USD)
 mean-reversion at H1-H4; (3) volatility-regime: does the fix's pre-move CONTINUE (post-hoc idea from A's
@@ -10297,3 +10297,42 @@ test, check it is not just two single-instrument trends); (2) cross-market infor
 moves leading FX (needs those instruments' history from OANDA: SPX500_USD, USB10Y_USD etc. -- check availability);
 (3) scheduled events: behaviour after central-bank decisions / US CPI / NFP at H1 (needs an event calendar; check
 for a free historical source); (4) the 4pm-fix pre-move CONTINUATION (post-hoc from run 1's diagnostic).
+
+## 2026-10-24 -- New-strategy research, runs 1d-1l (user: keep testing until one works; do not stop to report failures)
+
+Running multiple-comparison count for the day: 27 variants (alpha for the last test 0.05/27). Every test was
+pre-registered in its script docstring, used real OANDA bid/ask fills, causal decisions, discovery/holdout/fresh splits,
+date-clustered inference, +20% spread and delayed-entry checks. New data sources: OANDA H4 2016+ for 28 G10 pairs plus
+indices/bonds/metals; M5 2016+ for SPX500/NAS100/US30; daily 2005+ for 10 indices, 28 G10 pairs, 15 USD pairs and 12
+commodities; OECD 3-month interbank rates via FRED (lagged 2 months for publication).
+
+**Cost-model bug found and fixed mid-run**: the H4 scripts charged financing as a flat 0.02-0.03 R per day, but R grows
+with sqrt(hold), so multi-day holds were badly overcharged (0.56 R on a 20-day hold). Now 2%/yr of notional (two legs:
+4%/yr). Re-ran H4 momentum and relative value with the fix: verdicts unchanged (H4 momentum holdout -0.054/-0.058/-0.062;
+relative value -0.46/-0.46; both were already about zero or negative before any costs).
+
+| run | idea (mechanism) | holdout mean R | fresh | verdict |
+|---|---|---|---|---|
+| 1d | cross-sectional G10 currency momentum, 20d/5d and 60d/20d; 1-week reversal | -0.078 / -0.096 / -0.080 | -0.24 / -0.29 / +0.16 | RULED OUT |
+| 1e | SPX500 first-half-hour -> last-half-hour (Gao et al.); with 15:00-15:30 agreement; pooled 3 US indices; overnight long | -0.032 / -0.013 / -0.048 / +0.007 | all <= 0 | RULED OUT (effect gone after 2016) |
+| 1f | relative-value spread CONTINUATION; 4pm fix pre-move continuation | -0.360 / -0.385 | +0.10 / -0.17 | RULED OUT (fade and follow both lose: no gross edge, only costs) |
+| 1g | turn of the month, 10 indices, 2005+ | -0.068 (control +0.029) | +0.29 | RULED OUT (SPX TOM 4-day return = any 4 days since 2005) |
+| 1h | honest G10 carry (lagged rates), top 3 v bottom 3 monthly | -0.086 (carry part +0.025) | +0.22 | RULED OUT (spot losses offset carry; 2008, 2013-15, 2020, 2025 drawdowns) |
+| 1i | broad carry incl. MXN ZAR PLN HUF CZK NOK SEK, top 4 / bottom 4 vs USD | -0.079 (financing +0.014) | +0.05 | RULED OUT (high-yielders depreciated by about their rate gap) |
+| 1j | buy sharp index drops (< -1.5 sd), hold 1 / 5 days | -0.095 / -0.112 (controls -0.035 / +0.001) | +0.26 / +0.14 | RULED OUT (worked 2005-15, not since) |
+| 1k | country index momentum 12-1, top 3 / bottom 3 | -0.064 | +0.08 | RULED OUT (short legs lose) |
+| 1l | commodity momentum 12-1, 12 CFDs | -0.066 | -0.11 | RULED OUT |
+
+**What the day says** (11 families, 27 variants): every idea was NEGATIVE on the 2016-2025 holdout, not merely
+insignificant, so the strict significance bar was never the binding constraint. Published effects that worked in
+older data (turn of month, dip buying, intraday momentum, carry) are absent since about 2016 on OANDA's CFDs after
+real costs. Price-only and calendar rules on liquid FX/indices/commodities look efficient at every horizon tested.
+A further point for later: with ~10 years of monthly holdout, a genuine strategy with Sharpe 0.5 could not clear
+p < 0.002 anyway (needs Sharpe about 0.9+), so for slow strategies the bar should be a pre-registered single primary
+hypothesis per family rather than a day-wide Bonferroni count.
+
+**Queue** (ranked, for the Saturday routine): (1) scheduled macro events (US CPI / NFP / FOMC: drift after the first
+15 minutes at M5 on USD pairs and indices; needs an event calendar -- the BLS/Fed publish historical release dates);
+(2) FX value (PPP deviation from FRED CPI, slow, single pre-registered hypothesis); (3) equity-bond cross-signals
+(bond CFD moves leading index moves at H4/daily); (4) volatility-regime timing of index exposure (lower exposure when
+realised vol is high), judged against always-long.

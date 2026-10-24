@@ -19,7 +19,7 @@ Rule, decided at the CLOSE of bar t from closes up to and including t only:
   sides) when z_j has crossed 0, or after 30 bars (5 days). One position per pair at a time; the next decision is
   made from the exit bar onward.
 P&L = log-return of the spread position using the actual fills on both legs; R = P&L / sd(e) (the spread's
-typical deviation, causal); financing charged at a flat 0.03 R per 24 hours held (two legs).
+typical deviation, causal); financing charged at 2% a year per leg of notional (corrected from a flat 0.03 R/day).
 Variants (K = 2, alpha 0.025): Z = 2.0, Z = 2.5; each pooled across the 4 pairs (per-pair results reported, not
 selected on).
 Periods: DISCOVERY < 2021-01-01 <= HOLDOUT < 2025-10-01 <= FRESH.
@@ -47,7 +47,7 @@ PAIRS = [("AUD_USD", "NZD_USD"), ("XAU_USD", "XAG_USD"), ("BCO_USD", "WTICO_USD"
 VARIANTS = {"Z 2.0": 2.0, "Z 2.5": 2.5}
 K = len(VARIANTS)
 ALPHA = 0.05 / K
-WIN, MAX_HOLD, FIN = 120, 30, 0.03
+WIN, MAX_HOLD, FIN = 120, 30, 0.04  # FIN = 2%/yr per leg, 4%/yr of notional for two legs
 HOLDOUT_START, FRESH_START = "2021-01-01", "2025-10-01"
 
 
@@ -103,7 +103,7 @@ def trades(A, B, Z, delay=0, stress=False, fin=FIN):
         pa = math.log(side(xa, s < 0) / side(ea, s > 0))
         pb = math.log(side(xb, s > 0) / side(eb, s < 0))
         hours = (datetime.fromisoformat(xa["time"][:19]) - datetime.fromisoformat(ea["time"][:19])).total_seconds() / 3600
-        r = s * (pa - beta * pb) / sd - fin * hours / 24
+        r = s * (pa - beta * pb) / sd - fin * (hours / 8760) / sd
         out.append({"time": ea["time"][:16], "r": r, "bars": xi - ei})
         t = xi
     return out
