@@ -10336,3 +10336,42 @@ hypothesis per family rather than a day-wide Bonferroni count.
 (2) FX value (PPP deviation from FRED CPI, slow, single pre-registered hypothesis); (3) equity-bond cross-signals
 (bond CFD moves leading index moves at H4/daily); (4) volatility-regime timing of index exposure (lower exposure when
 realised vol is high), judged against always-long.
+
+## 2026-10-24 -- daily research (scheduled routine, run 2): bond lead, FX session seasonality, US news shock -- all RULED OUT
+
+**Health check**: state-sync `vwap_scalp_enabled` false; last journaled trade opened 2026-10-23 17:57 UTC (before the
+switch-off), none since; `last_process_heartbeat_at` 04:14 UTC 10-24 (app alive); OANDA read-only: 0 open trades, 0 open
+positions, 0 pending orders. Nothing broken. Cloud env note: `pip install -r requirements.txt` fails on the Debian-owned
+blinker package; `python3 -m pip install --ignore-installed blinker` first, and pandas/numpy/scipy are not in
+requirements (the research scripts only need the stdlib).
+
+New fetcher `scripts/research_h1_fetch_2026_10_24.py` (H1 or M15, paged, circuit-breaker retry, raises on failure).
+OANDA H1 2016-01..2026-10-23 for 4 bond CFDs, 7 USD pairs, SPX500/NAS100; M15 for 6 instruments. No fetch gaps
+(UK10YB_GBP only trades ~08-16 UTC, 27k bars). Run count K = 6 pre-registered (alpha 0.0083); every script has a
+random-walk self-test and, for signal-based rules, a deliberately peeking rule that the test catches.
+
+| run | idea (mechanism) | trades/wk | holdout mean R | gross (mid) disc/hold/fresh | fresh | verdict |
+|---|---|---|---|---|---|---|
+| 2a A1 | 4h bond-CFD rate differential (UST vs Bund/Gilt; UST for JPY) leads EUR/GBP/JPY next 4h, abs z >= 1.5 | 10 | -0.082 (n=2547) | +0.008 / +0.011 / +0.025 | -0.087 | RULED OUT |
+| 2a A2 | same + indices, sign learned causally from trailing 2000-bar correlation | 12 | -0.045 (n=3004) | +0.003 / +0.019 / -0.062 | -0.140 | RULED OUT |
+| 2b B1 | Breedon-Ranaldo session rule: currency weakens in its own business hours (6 USD pairs, Asia/Europe/US windows) | 60 | -0.054 (n=14776) | +0.009 / +0.020 / -0.004 | -0.092 | RULED OUT |
+| 2b B2 | rolling per-pair/window seasonality (trade cells with abs t >= 2 over 500 days) | 2.4 | -0.169 (n=585) | +0.000 / -0.084 / n/a | n/a | RULED OUT (significant cells reverse) |
+| 2c C1 | 8:30 ET news-shock continuation: 8:30-8:45 move >= 2x usual, follow 4h (5 FX + gold) | 7 | -0.061 (n=1802) | -0.083 / +0.011 / -0.129 | -0.212 | RULED OUT |
+| 2c C2 | same, >= 3x usual | 4 | -0.096 (n=1022) | -0.132 / -0.025 / -0.167 | -0.247 | RULED OUT |
+
+Scripts: `scripts/research_bond_lead_2026_10_24.py`, `scripts/research_fx_session_seasonality_2026_10_24.py`,
+`scripts/research_us_news_shock_2026_10_24.py` (all pre-registered in the docstring; shared evaluator in the first).
+Every variant was negative on holdout, every year of A1/B1 holdout negative, all failed +20% spread and delayed entry.
+**Lesson, same as before but now for cross-market and news information too**: gross edge per trade is +0.00 to +0.02 R
+at 4-7 hour holds, while costs on majors are 0.06-0.09 R at those holds. The 8:30 ET shock, if anything, slightly
+REVERSES in discovery (gross -0.08), but not in holdout (+0.01): no stable sign. Frequent intraday rules need a gross
+edge of about 0.1 R per trade to pay the spread; nothing tested has come close. Costs in R fall roughly as 1/sqrt(hold),
+so multi-day holds on many instruments are the cheaper place to look for the frequency the user wants.
+New strategy module: none.
+
+**Queue** (ranked): (1) volatility-regime rules at daily horizon across many instruments (e.g. scale or skip trend/
+reversal exposure by causal realised-vol regime; judged against unconditional exposure); (2) FX value (PPP from FRED CPI)
+as a filter on a frequent daily rule; (3) post-8:30-ET-shock REVERSAL (post-hoc from C's discovery gross; must be its own
+pre-registered test and would need a new mechanism story); (4) macro events alone deprioritised (rare).
+
+Research result: 2026-10-24, 3 ideas tested, 0 credible
