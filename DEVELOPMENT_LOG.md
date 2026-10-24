@@ -10375,3 +10375,24 @@ as a filter on a frequent daily rule; (3) post-8:30-ET-shock REVERSAL (post-hoc 
 pre-registered test and would need a new mechanism story); (4) macro events alone deprioritised (rare).
 
 Research result: 2026-10-24, 3 ideas tested, 0 credible
+
+## 2026-10-24 (later) -- Research moved to a cloud routine; DEADLINE RULE for a practice-trial strategy
+
+**Where the research runs now**: cloud routine "Forex daily strategy research" (trig_01HfXSygZPVEMKpVEL1Lauqv,
+https://claude.ai/code/routines/trig_01HfXSygZPVEMKpVEL1Lauqv), weekdays 06:30 SGT, so it runs with the user's laptop
+off (they are overseas 6-16 Nov 2026). Credentials come from the cloud environment's variables (OANDA_*, TELEGRAM_*),
+set by the user. The local Saturday task `weekly-strategy-research` is DISABLED. First cloud run (manual, 2026-10-24)
+worked end to end: commit c330e5103 and a Telegram update (bond lead, FX session seasonality, US news shock: all
+ruled out).
+
+**Deadline rule (agreed with the user)**: the user wants a concrete strategy trading on the practice account by the
+end of November 2026. Until 2026-11-20 the routine searches under the strict shipping bar. If nothing has passed by
+the run on or after 20 Nov (SGT), it builds the best candidate that meets a lower PRACTICE-TRIAL bar: holdout mean R
+> 0 after realistic costs with >= 300 holdout trades; fresh data > 0; still > 0 with +20% spreads and a delayed entry;
+>= ~5 trades a week; a one-sentence mechanism. It does NOT need the multiple-comparison-corrected significance test.
+Built behind a dashboard toggle defaulting OFF and labelled an EXPERIMENT; the live trial is pre-registered (expected
+mean R and trades per week; judged at ~100 live trades; stopped early if after 40 trades it is more than 2 standard
+errors below expectation). Each run keeps a `Best practice-trial candidate so far:` line in its log entry so the
+20 Nov run can choose. Only one such strategy is built. The real-money bar in EVIDENCE_BAR.md is unchanged.
+Stated risk, accepted by the user: a candidate chosen this way is more likely than not a lucky-looking idea; the cost
+is practice money only, and the live trial is the real test.
