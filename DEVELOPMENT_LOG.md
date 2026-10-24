@@ -10210,6 +10210,9 @@ no further VWAP Scalp research or tuning.** Recommended to the user: switch it o
 (vwap_scalp_enabled). It is the only strategy that places trades (the base strategy and the other add-ons
 were removed 2026-09-19), so switching it off stops all trading; the app, monitoring and reviews keep
 running, and the code stays in the repo if it is ever wanted again.
+**Update, same day:** the user wants VWAP Scalp to KEEP TRADING on demo until a viable replacement is
+found. It stays on; the routine reports its weekly numbers only, and when a new strategy clears the bar it
+tells the user to switch the new one on and VWAP Scalp off together.
 
 **Weekly routine repointed** (scheduled task `weekly-strategy-research`, still Saturdays 06:30 SGT): a short
 bot health check, then research a NEW strategy (different mechanism; slower horizons, structural flows,
