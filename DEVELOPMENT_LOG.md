@@ -10244,11 +10244,29 @@ K = 4, alpha 0.0125.
   too few trades a year (~150 across 17 pairs) to ever reach the 300-trade holdout bar. RULED OUT.
 4 variants, 0 credible. No live change.
 
-Research result: 2026-10-24, 2 ideas tested, 0 credible
+Research result: 2026-10-24, 3 ideas tested, 0 credible (incl. the H4 momentum entry below)
 
-**Queue** (next runs): (1) slower horizon: H4/daily time-series momentum done strictly causally (the earlier
-trend result was a look-ahead artifact, so the honest version was never cleanly tested -- grep first), with
-financing costs; (2) relative value: gold vs silver ratio, and cointegrated FX pairs (e.g. AUD_USD vs NZD_USD)
+**Queue** (next runs): (1) DONE same day, see next entry; (2) relative value: gold vs silver ratio, and cointegrated FX pairs (e.g. AUD_USD vs NZD_USD)
 mean-reversion at H1-H4; (3) volatility-regime: does the fix's pre-move CONTINUE (post-hoc idea from A's
 diagnostic; must be pre-registered as its own test); (4) Asian-session range then London-open behaviour on
 JPY crosses at H1 (check it differs from the ruled-out opening-range breakout).
+
+## 2026-10-24 -- New-strategy research, run 1b: H4 time-series momentum RULED OUT
+
+Correction to the queue above: the daily trend idea WAS honestly tested (2026-08-30, lagged 200-day SMA: FX
+Sharpe -0.07, commodities 0.12), so it was not repeated. Tested instead the untested horizon: short/medium
+lookbacks on 4-hour bars (`scripts/research_h4_momentum_2026_10_24.py`, pre-registered). OANDA H4 bid/ask,
+UTC-aligned, 2016-01..2026-10-23, 17 instruments; decide on bar t's close, enter at bar t+1's open on the fill
+side, hold H bars, non-overlapping; R in units of the causal 120-bar volatility x sqrt(H); flat 0.02 R/day
+financing charge; date-clustered t-test. Look-ahead self-test on a gapped random walk passed (scores ~0).
+K = 3, alpha 0.0167.
+- V1 1-day lookback, 1-day hold: holdout -0.068 R (n=21,591), fresh -0.037, every holdout year negative.
+- V2 5-day lookback, 1-day hold: holdout -0.073, fresh -0.045, every year negative.
+- V3 20-day lookback, 5-day hold: holdout -0.170, fresh -0.262, every year negative.
+Gross of ALL costs (mid prices, no financing): V1 +0.008 / -0.001 / +0.036 (disc / hold / fresh), V2 +0.007 /
+-0.005 / +0.028, V3 -0.005 / -0.015 / -0.106. So the gross edge is about zero at 4-hour horizons too; costs
+alone make it a loss. 3 variants, 0 credible. No live change.
+Running lesson across 2026-10-24's three ideas plus everything before: price-pattern rules on these 17
+instruments (1-minute to daily, reversal or continuation) show no gross edge. Next ideas should bring
+information that is not in this instrument's own price history: relative value between related instruments,
+cross-market signals (rates, equity indices), or scheduled events.
