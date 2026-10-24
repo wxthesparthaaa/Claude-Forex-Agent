@@ -10225,4 +10225,30 @@ VWAP Scalp's rules. The old pause-on-two-breakeven-weeks rule is retired. Each r
 
 **Update 2 (later the same day):** the user changed their mind: PAUSE VWAP Scalp (dashboard toggle,
 done by the user) so it does not muddy the new research; it stays off until a replacement is ready. The
-routine prompt says so, and the first new-strategy research run was started manually the same day.
+routine prompt says so. (A scheduled run cannot be triggered from inside a scheduled-task session, so the
+first new-strategy research cycle was done directly in this session instead; see the next entry.)
+
+## 2026-10-24 -- New-strategy research, run 1 (London fix reversal, weekend gap fade): both RULED OUT
+
+`scripts/research_new_strategy_2026_10_24.py`, pre-registered. Structural-flow ideas, neither tried before (grepped).
+M1 bid/ask 2025-09-09..2026-10-23 (cache + fresh), fill-side entries, stop-first exits, causal 20-day baselines.
+K = 4, alpha 0.0125.
+- A, 4pm London fix reversal (13 FX pairs; if the hour before the fix moved >= theta x its 20-day median, fade
+  it from fix+3 min for 60 min, stop 1x median): A1 theta 0.5 holdout -0.219 (n=1221, 34% win), fresh -0.325;
+  A2 theta 1.0 -0.247 / -0.331; A3 month-end only: discovery +0.197 (n=98) but holdout -0.259 (n=138), fresh
+  -0.595. Negative at EVERY pre-move size (-0.15 to -0.26), so there is no reversal for the costs to eat; the
+  pre-fix push either continues or is noise at this horizon. RULED OUT.
+- D1, weekend gap fade (17 instruments; gap >= 0.25 x 20-day daily range, enter Sunday open + 15 min, target
+  Friday close, stop = gap): holdout +0.140 (n=118, p 0.032, not significant after correction), but discovery
+  -0.098 (n=26), holdout halves +0.426 / -0.147, fresh -0.079 (n=14). One good stretch, not a stable effect;
+  too few trades a year (~150 across 17 pairs) to ever reach the 300-trade holdout bar. RULED OUT.
+4 variants, 0 credible. No live change.
+
+Research result: 2026-10-24, 2 ideas tested, 0 credible
+
+**Queue** (next runs): (1) slower horizon: H4/daily time-series momentum done strictly causally (the earlier
+trend result was a look-ahead artifact, so the honest version was never cleanly tested -- grep first), with
+financing costs; (2) relative value: gold vs silver ratio, and cointegrated FX pairs (e.g. AUD_USD vs NZD_USD)
+mean-reversion at H1-H4; (3) volatility-regime: does the fix's pre-move CONTINUE (post-hoc idea from A's
+diagnostic; must be pre-registered as its own test); (4) Asian-session range then London-open behaviour on
+JPY crosses at H1 (check it differs from the ruled-out opening-range breakout).
