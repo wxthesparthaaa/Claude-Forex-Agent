@@ -10906,3 +10906,11 @@ NOT SUPPORTED. Running total: about 131 variants in 56 families; 0 pass the stri
 `scripts/research_opex_week_2026_10_25.py`, pre-registered, K = 2, daily engine, 10 index CFDs, PRE 2008-2015 / POST 2016-2026: O1 LONG the opex week (week ending on the third Friday): PRE +0.074 (n=960),
 POST -0.037 (n=1300), pooled p 0.42; quarterly-months-only PRE +0.213, POST -0.116. O2 SHORT the post-opex week: PRE -0.076, POST -0.119, pooled -0.101. The always-long control over every week: -0.016 / +0.011.
 Same fade as turn-of-month, dip buying, intraday momentum, variance risk premium. Running total: about 133 variants in 57 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (crypto implied volatility, Deribit DVOL): NOT SUPPORTED
+
+Free Deribit DVOL (options-implied 30-day volatility for BTC and ETH, daily since 2021-03), the crypto analogue of the VIX family. `scripts/research_crypto_dvol_2026_10_25.py`, pre-registered, K = 4, |z| 1.5 (levels) or
+1.0 (DVOL minus 21-day realised volatility), same crypto engine, all signals in the holdout/fresh periods (z needs 250 days, so signals begin 2021-07).
+DV1 DVOL spike -> LONG: holdout +0.067 (n=75), fresh +0.006, p 0.37, 0.1 trades/wk. DV2 complacency -> SHORT: +0.036 (n=166), fresh -0.178, p 0.36. DV3 rich protection (DVOL - realised) -> LONG: +0.146 (n=177),
+fresh +0.028, p 0.13, gross +0.27, 60% of years positive. DV4 cheap protection -> SHORT: -0.190, p 0.97. 0 of 4 credible; DV3 is the only one worth a footnote (positive, consistent in both holdout halves,
++20% spread +0.135, delayed +0.164) but p 0.13, only about 0.3 trades a week and a five-year sample. Running total: about 137 variants in 58 families; 0 pass the strict bar; 0 pass the practice-trial bar.
