@@ -10960,3 +10960,11 @@ Running total: about 141 variants in 61 families (plus about 9,500 scan cells); 
 The one other identity OANDA offers (the two Nikkei CFDs may reference different futures contracts). `scripts/research_nikkei_identity_2026_10_25.py`, pre-registered, K = 2, same three-leg machinery as the gold test:
 N1 (1-hour hold) holdout -0.092 (n=1585), N2 (4-hour hold) -0.094 (n=779); gross about zero in every period (-0.005 to +0.001 in discovery and holdout), win rate 10-24%: the deviation does not mean-revert beyond the three spreads.
 RULED OUT. Running total: about 143 variants in 62 families.
+
+## 2026-10-25 (pre-holiday effect and Halloween / "sell in May" on 10 index CFDs): pre-holiday NOT SUPPORTED, Halloween directionally right but untradeably rare and not significant
+
+`scripts/research_holiday_halloween_2026_10_25.py`, pre-registered, K = 2, daily engine, PRE 2008-2015 / POST 2016-2026.
+H1 PRE-HOLIDAY (long the day before a US market holiday, identified from the data; 179 events): PRE -0.085 (n=719), POST -0.010 (n=1030), +20% spread negative, pooled p 0.69; every-day control -0.04/-0.05. NOT SUPPORTED.
+H2 HALLOWEEN (long the 10 indices from the end of October to the end of April, once a year, 6.5% financing): WINTER leg PRE +0.372 (6 of 8 years positive), POST +0.223 (6 of 10); SUMMER leg PRE -0.420 (2 of 8), POST +0.044
+(6 of 10): winter beats summer in both periods (by +0.79 and +0.18 R), the textbook direction, but 12 of 18 winters positive is a sign-test p of about 0.12, the winter mean +0.28 R has a standard error near 0.25, and it is two
+trades a year per index (one decision a year across indices that move together). Reported as directionally consistent, not significant, and far too infrequent to matter. Running total: about 145 variants in 63 families.
