@@ -10424,3 +10424,43 @@ B1's gross edge was +0.10 R in discovery and gone out of sample (a decaying effe
 `scripts/research_retail_positioning_2026_10_25.py` (P1 crowd fade, P2 trapped crowd, P3 fade retail flow, P4 stop
 magnet; K = 4) and `scripts/research_order_book_2026_10_25.py` (O1 breakout pressure, O2 stop-run fade, O3 limit-wall
 repulsion, O4 cluster magnet; K = 4). **Routine: do not re-test these; read the entry that follows this one for results.**
+
+## 2026-10-25 (later) -- OANDA retail position book and order book: all 8 variants RULED OUT
+
+Both books downloaded in full (16 instruments x 2,450 weekdays, 2017-06-05..2026-10-23; 50 missing days per instrument
+in the position book, 29 + a few bad snapshots in the order book; OANDA occasionally returns a snapshot with an empty
+reference price, e.g. 2026-01-23, which the downloader now records as missing instead of retrying). Pre-registered in
+`scripts/research_retail_positioning_2026_10_25.py` and `scripts/research_order_book_2026_10_25.py`: 12:00 UTC snapshot,
+entry at the 13:00 UTC H1 open on the fill side, 48-bar hold, R in causal-volatility units, 2%/yr financing, +20% spread
+and one-bar-delay checks, date-clustered one-sided t-test, K = 4 per script (alpha 0.0125). Look-ahead self-test passes
+(random positioning ~0, a peeking rule +0.81 R). Evaluator imported from the bond-lead script. Discovery < 2021,
+holdout 2021-01..2025-09, fresh 2025-10..2026-10.
+
+| variant | holdout mean R (n) | fresh | gross (mid) disc / hold / fresh | verdict |
+|---|---|---|---|---|
+| P1 crowd fade, z(net long share) >= 1.5 | -0.051 (2245) | -0.049 | +0.063 / -0.005 / +0.009 | RULED OUT |
+| P2 lopsided AND underwater crowd, fade | -0.009 (1298) | -0.063 | +0.059 / +0.043 / +0.007 | RULED OUT |
+| P3 fade 5-day retail flow | -0.034 (1221) | -0.066 | +0.058 / +0.009 / -0.008 | RULED OUT |
+| P4 stop magnet (shorts above vs longs below price), follow | -0.017 (1554) | -0.012 | +0.064 / +0.032 / +0.052 | RULED OUT |
+| O1 order book breakout pressure, follow | -0.069 (1258) | -0.049 | +0.034 / -0.017 / +0.019 | RULED OUT |
+| O2 same, fade (stop-run) | -0.034 (1258) | -0.086 | -0.034 / +0.017 / -0.019 | RULED OUT |
+| O3 limit-wall repulsion | -0.009 (1318) | -0.130 | -0.008 / +0.042 / -0.064 | RULED OUT |
+| O4 cluster magnet | -0.067 (1261) | -0.198 | -0.061 / -0.017 / -0.140 | RULED OUT |
+Every variant is negative on the holdout and on fresh data; 0 of 8 credible, no practice-trial flag. The 2-day-hold cost
+is about 0.05-0.07 R per trade, so a gross edge of +0.03-0.06 R cannot pay it. P4 is the only rule whose gross edge is
+positive in all three periods (+0.064 / +0.032 / +0.052) but still loses after costs; its hold-24 and hold-120 diagnostics
+are not consistently positive, and the two instruments with positive discovery/holdout/fresh (EUR_USD, EUR_AUD) are what
+chance gives (about 2 of 16 cells at a 1-in-8 chance). Diagnostic: the contrarian crowd shape was real in the early
+years (discovery quintile of least-crowded-long +0.102 R mid vs -0.031 for most-crowded-long) and is flat in the holdout
+(Q1 0.000 ... Q5 +0.022): another published-style effect that has gone since about 2021.
+
+Research result: 2026-10-25, 12 ideas tested (volume climax x2, round numbers x2, position book x4, order book x4), 0 credible
+Best practice-trial candidate so far: none from this session (nothing positive on holdout after costs).
+Running total with the 2026-10-24 runs: about 45 variants in 25+ families, 0 positive on the holdout after costs.
+**Lesson, now for retail-flow information too**: gross edge per trade at 2-day holds is +0.00 to +0.06 R on every rule and
+regime tested; costs are 0.05-0.08 R. Information not in the price history (positions, pending orders, bonds, news) does not
+change that on these 16-17 liquid instruments. Untested directions that do not depend on beating the spread on liquid
+majors: (1) instruments with larger gross moves per unit of spread (exotics, NATGAS/grains/XCU, metals beyond XAU/XAG);
+(2) scheduled-event drift on indices (FOMC pre-announcement), rare by nature; (3) a beta/risk-premium strategy
+(diversified index exposure with a volatility-targeting rule), which may clear a practice-trial bar through market drift
+rather than skill; (4) OANDA-specific microstructure (spread regimes) as a cost filter on any of the above.

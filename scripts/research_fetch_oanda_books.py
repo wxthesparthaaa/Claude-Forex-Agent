@@ -97,15 +97,20 @@ def weekdays():
 
 def one(client, instrument, d):
     t = datetime(d.year, d.month, d.day, HOUR, tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    for attempt in range(8):
+    for attempt in range(16):  # ~10+ minutes of patience: an OANDA outage once outlasted 8 tries
         try:
             pb = client._request("GET", f"/v3/instruments/{instrument}/{BOOK}", params={"time": t})[BOOK]
-            return {"date": d.isoformat(), **(summarise_order(pb) if BOOK == "orderBook" else summarise(pb))}
+            try:
+                return {"date": d.isoformat(), **(summarise_order(pb) if BOOK == "orderBook" else summarise(pb))}
+            except (ValueError, KeyError, TypeError):
+                # OANDA sometimes returns a snapshot with an empty reference price (seen 2026-01-23): it is a bad
+                # snapshot, not a network failure -- record it as missing instead of retrying for minutes.
+                return {"date": d.isoformat(), "missing": True, "bad_snapshot": True}
         except Exception as e:
             msg = str(e)
             if "404" in msg or "400 Client Error" in msg:
                 return {"date": d.isoformat(), "missing": True}  # holiday / no snapshot: a fact, not a failure
-            time.sleep(22 if "circuit breaker" in msg else 3 * (attempt + 1))
+            time.sleep(25 if "circuit breaker" in msg else min(60, 5 * (attempt + 1)))
     raise RuntimeError(f"gave up {instrument} {d}")
 
 
