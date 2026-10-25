@@ -10810,3 +10810,29 @@ S2 is the only one positive in both periods with a majority of episodes positive
 z >= 3: +0.53 PRE, -0.13 POST), the pooled p is 0.25, and it fires on only 13-19 episodes in each period. S1 (short-end inversion) is positive before 2016 and negative
 after, with a worse result at stronger inversion in POST (-0.23). VT1 (the VIX / 3-month VIX term-structure inversion) therefore remains the only stress-rebound signal
 with support in both periods and a clean dose-response; the other gauges are not a way to add independent trades. Running total: about 109 variants in 48 families.
+
+## 2026-10-25 (crypto capital flows: stablecoin supply and DeFi TVL): SC1 promising at trade level, weak at event level, NOT a finding
+
+User: "keep going on the new ideas". New outside-OANDA data from DeFiLlama (free, no geo-block): total dollar-stablecoin supply (2017-11..) and DeFi total value locked.
+`scripts/research_crypto_capital_flows_2026_10_25.py`, pre-registered, K = 4, z of the 7-day log change, |z| >= 1.5, entered next day 01:00 UTC on BTC/ETH/LTC/BCH CFDs, 5-day hold.
+| variant | discovery (n) | holdout (n) | fresh (n) | holdout p | +20% spread | trades/wk |
+|---|---|---|---|---|---|---|
+| SC1 stablecoin supply FOLLOW | +0.735 (17) | **+0.345 (187)** | +0.152 (56) | 0.0246 | +0.338 | 0.8 |
+| SC2 stablecoin supply FADE | -1.049 | -0.501 | -0.335 | 1.00 | - | 0.8 |
+| TV1 DeFi TVL FOLLOW | +0.151 (58) | -0.001 (198) | +0.264 (40) | 0.58 | -0.008 | 0.8 |
+| TV2 DeFi TVL FADE | -0.382 | -0.149 | -0.445 | 0.89 | - | 0.8 |
+TV1/TV2/SC2 RULED OUT. SC1: positive in all three periods, both holdout halves positive (+0.336 / +0.355), delayed entry +0.320, 4 of 5 holdout years positive, without the best
+instrument +0.301, gross +0.43. Fails the corrected alpha (0.0246 > 0.0125), holdout n = 187 < 300, 0.8 trades a week.
+**Post-hoc diagnostics** (`research_stablecoin_diagnostics_2026_10_25.py`, `research_stablecoin_events_2026_10_25.py`; they test whether SC1 is REAL, not a new claim):
+- Q1 both sides earn in the holdout: LONG signals +0.284 (n=126), SHORT signals +0.460 (n=63); in the fresh period LONG -0.655 (n=12), SHORT +0.371 (n=44).
+- Q2 it is not just crypto trend-following: when the signal AGREES with the instrument's last 7 days of price +0.323 (holdout n=119), when it DISAGREES +0.385 (n=68).
+- Q3 block placebo (stablecoin z-series circularly shifted by a random number of days, 300 times): shifted-signal mean -0.085, sd 0.183, 95th percentile +0.240, max +0.415;
+  the real +0.345 gives an empirical one-sided p = 0.017.
+- Q4 dose-response in the holdout: |z| >= 1.0 +0.188 (n=382), >= 1.5 +0.345, >= 2.0 +0.463 (n=92), >= 2.5 +0.187 (n=62); the fresh period at >= 1.0 is -0.116 (n=88).
+- Q5 data integrity: DeFiLlama's early history has coverage artefacts (7-day changes of +74% and -138% in 2018, outside the holdout); from 2020 the changes are plausible
+  (2021 median +9%, the 2022-05 UST collapse -16%, 2023-26 within +-4%). No listing artefact is visible in the holdout. The history may still be revised or back-filled.
+- Independent events (runs of same-direction signal days; the true sample size): 38 holdout events, 22 positive (58%), mean of event means +0.247, sign-test p = 0.21, t-test p = 0.038;
+  the FRESH period has 10 events, 5 positive, mean -0.095. The headline trade-level +0.345 leans on a few large winning events (2024-06/07 shorts +2.4/+2.7, 2024-11 +1.0, 2022-05 +1.0).
+Reading: a consistent, price-independent sign and a clean dose-response up to |z| 2, but modest at the event level and flat to negative since October 2025. It is NOT significant after
+correction, NOT replicated on untouched data (no earlier crypto-CFD data exists), and trades 0.8 times a week on instruments Crypto Flow already trades. Candidate for a forward test only.
+Running total: about 113 variants in 49 families; 0 pass the strict bar; 0 pass the practice-trial bar.
