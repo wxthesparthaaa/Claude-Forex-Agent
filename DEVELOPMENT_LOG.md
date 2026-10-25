@@ -10981,3 +10981,17 @@ is a single currency in a single collapse and negative net of its -34%/+23% fina
 
 `scripts/research_quarter_end_usd_2026_10_25.py`, pre-registered, K = 2, daily engine, EUR_USD / USD_JPY / USD_CHF, 3-candle holds around the 80 quarter-ends 2007-2026. Q1 LONG USD into the quarter-end: PRE -0.034 (n=108), POST -0.008 (n=129), pooled p 0.60
 (by month: Mar -0.01, Jun -0.20, Sep +0.17, Dec -0.04). Q2 the give-back after quarter-end: -0.347 / -0.247. Every-5th-day long-USD control: -0.07 / -0.15. NOT SUPPORTED. Running total: about 151 variants in 65 families.
+
+## 2026-10-25 (drill-down of the Binance-vs-OANDA crypto gap by era, descriptive): the effect was real and NET profitable until 2022, then closed
+
+Post-hoc descriptive follow-up of F3 (gap CONVERGENCE, 2-hour hold, all four coins), by era and gap size (net / gross R per trade; the sample sizes are in the logs):
+| |z| threshold | 2019-20 | 2021-22 | 2023-24 | 2025- |
+|---|---|---|---|---|
+| >= 2 | net +0.178 / gross +0.705 (n=663) | +0.331 / +0.666 (856) | -0.388 / +0.012 (1618) | -0.423 / -0.042 (1563) |
+| >= 3 | +0.542 / +1.026 (220) | +0.522 / +0.948 (294) | -0.307 / +0.137 (425) | -0.426 / -0.045 (300) |
+| >= 4 | +0.547 / +1.062 (100) | +0.341 / +0.894 (159) | -0.224 / +0.304 (156) | -0.323 / +0.024 (98) |
+| >= 5 | +0.768 / +1.295 (61) | +0.595 / +1.225 (110) | -0.033 / +0.469 (79) | -0.442 / -0.033 (51) |
+Until the end of 2022 a Binance price more than 2 sigma above (below) OANDA's crypto CFD was followed, within two hours, by the CFD catching up, for a NET +0.2 to +0.8 R per trade after the real spread (+20% spread still positive), at 5-12 trades
+a week: exactly the profile this programme has been looking for, and the one unambiguous, mechanical, pricing-inefficiency edge found. From 2023 the gross edge disappears (+0.01 to +0.14) and in 2025 it is zero or negative: OANDA's feed
+evidently now tracks the market without the lag. A strategy built in 2021 would have worked for about two years and then stopped; it cannot be traded now. Lesson recorded: real edges in this setting are latency/feed artefacts and they get fixed.
+Running total: about 151 variants in 65 families.
