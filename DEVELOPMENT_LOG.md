@@ -10396,3 +10396,31 @@ errors below expectation). Each run keeps a `Best practice-trial candidate so fa
 20 Nov run can choose. Only one such strategy is built. The real-money bar in EVIDENCE_BAR.md is unchanged.
 Stated risk, accepted by the user: a candidate chosen this way is more likely than not a lucky-looking idea; the cost
 is practice money only, and the live trial is the real test.
+
+## 2026-10-25 -- New-strategy research (interactive session): a new information source found; volume climax and round numbers RULED OUT
+
+User asked for creative, genuinely new strategies. Read the 2026-10-24 log first: ~33 variants in 20+ families, every one
+negative on the holdout; its own conclusion is that price-only and calendar rules show no gross edge, so ideas must bring
+information that is NOT in the instrument's own price history. Grepped the log and code: **OANDA's retail position book and
+order book were never used.** Verified against the API (2026-10-25): `/v3/instruments/{i}/positionBook` and `/orderBook`
+return a snapshot for any past time on the :00/:20/:40 grid back to about 2017-06, for 16 instruments (EUR_USD, GBP_USD,
+USD_JPY, AUD_USD, USD_CAD, NZD_USD, USD_CHF, AUD_JPY, GBP_JPY, EUR_JPY, EUR_GBP, EUR_CHF, GBP_CHF, EUR_AUD, XAU_USD,
+XAG_USD); no book for WTICO/BCO/NZD_JPY/CAD_JPY/CHF_JPY, indices or the other crosses. ~1 s per call. Daily 12:00 UTC
+summaries are fetched by `scripts/research_fetch_oanda_books.py` (resumable, BOOK_TYPE=positionBook|orderBook,
+BOOK_WORKERS); hourly bid/ask 2016-2026 by `scripts/research_h1_fetch_2026_10_24.py`.
+
+**Tested and ruled out today** (`scripts/research_volume_and_levels_2026_10_25.py`, pre-registered, H1 2016-2026, 16
+instruments, same evaluator as the bond-lead run, random-walk and peeking self-tests pass, K = 4, alpha 0.0125):
+| idea | holdout mean R (n) | fresh | gross (mid) disc / hold / fresh | verdict |
+|---|---|---|---|---|
+| B1 volume-climax bar (vol >= 3x same-hour median, move >= 1.5 sd): FADE, 4h | -0.105 (2257) | -0.352 | +0.100 / +0.009 / -0.235 | RULED OUT |
+| B2 same, FOLLOW | -0.124 (2257) | +0.118 | -0.100 / -0.009 / +0.235 | RULED OUT |
+| C1 big-figure (0.01 / 1.00 / XAU 50 / XAG 1) rejection, FADE, 8h | -0.076 (15525) | -0.146 | +0.001 / +0.014 / -0.044 | RULED OUT |
+| C2 big-figure break, FOLLOW, 8h | -0.091 (13713) | -0.058 | -0.032 / -0.003 / +0.045 | RULED OUT |
+B1's gross edge was +0.10 R in discovery and gone out of sample (a decaying effect). Round numbers carry no gross edge.
+0 of 4 credible. No practice-trial candidate.
+
+**Pending (pre-registered in the scripts, not yet run when this entry was written; data still downloading):**
+`scripts/research_retail_positioning_2026_10_25.py` (P1 crowd fade, P2 trapped crowd, P3 fade retail flow, P4 stop
+magnet; K = 4) and `scripts/research_order_book_2026_10_25.py` (O1 breakout pressure, O2 stop-run fade, O3 limit-wall
+repulsion, O4 cluster magnet; K = 4). **Routine: do not re-test these; read the entry that follows this one for results.**
