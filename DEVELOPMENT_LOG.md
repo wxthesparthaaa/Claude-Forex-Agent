@@ -10606,3 +10606,31 @@ consistent positive gross edge is not a stable effect. RULED OUT.
 Research result: 2026-10-25, 7 more ideas tested (CS1-CS4, limit depth 0 and 1, dose-response), 0 credible; 34 today
 Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve, see the end-of-session entry; fresh -0.026, not replicated).
 Running total: about 67 variants in 34 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (FX value / purchasing-power parity): RULED OUT; volatility-timing item was already done
+
+User: "Yes, run those and keep going". Of the two queued items, volatility-regime timing of index exposure is exactly BETA1/BETA2
+(see the 2026-10-25 index-beta entry: holdout +0.006 / +0.007, fresh negative, index financing eats the premium), so it was not
+re-run. FX value was new.
+
+**FX value** (`scripts/research_fx_value_2026_10_25.py`, pre-registered, K = 1, alpha 0.05): real exchange rate against USD (spot and
+annual CPI, World Bank; FRED is not reachable from this machine; Germany stands in for the euro area) minus its own 5-year average; each
+month long the 3 cheapest currencies against the 3 dearest on the actual OANDA pairs; financing accrual at the real rate differential
+minus a 1.5% markup (OECD rates from the earlier cache). Signals exist from 2010; DISCOVERY < 2016 <= HOLDOUT < 2025-10 <= FRESH.
+Self-test passed (random value signal ~0, a peeking score +1.28 R).
+| variant | discovery | holdout (n=1053) | fresh | verdict |
+|---|---|---|---|---|
+| VALUE top 3 v bottom 3 (primary) | -0.144 | -0.040 (p 0.72; spot only +0.010, financing -0.050) | -0.198 | RULED OUT |
+| value top 2 v bottom 2 (descriptive) | -0.122 | +0.018 (p 0.42) | -0.233 | not credible |
+| value + carry rank sum (descriptive) | -0.176 | -0.092 | +0.011 | not credible |
+| carry only, same months (reference) | -0.154 | -0.086 | +0.223 | not credible |
+Holdout halves +0.003 / -0.082, +20% spread -0.052, one day later -0.056, years positive 30%. The cheap currencies tended to be the
+low-yielders, so the financing drag (-0.050 R) is the same size as the whole spot effect. 0 of 1 credible.
+
+Considered and not run, with the reason: hourly lead-lag scans (commodity or index leading an FX pair): the spread is about 0.2 of an
+hour's typical move for major FX, so a lead-lag correlation of 0.02 gives a gross edge of about 0.04 R against a cost of about 0.2 R.
+Month-end flows were covered inside the 4pm-fix test (A3).
+
+Research result: 2026-10-25, 3 more variants tested (value x3 forms), 0 credible; 37 today
+Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve; fresh -0.026, not replicated).
+Running total: about 70 variants in 35 families; 0 pass the strict bar; 0 pass the practice-trial bar.
