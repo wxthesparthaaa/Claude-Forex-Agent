@@ -10874,3 +10874,13 @@ PRE (2008-2015) and POST (2016-2026) plus the H1 engine. V1 (VRP z >= +1, protec
 of 58 episodes), pooled p 0.45; dose-response strong before 2016 (|z| >= 2: +0.81) and weak after (+0.12); H1 engine holdout -0.106, fresh +0.351 (n=49). V2 (VRP z <= -1, protection cheap -> SHORT):
 PRE -0.115, POST -0.098, 37-38% of episodes positive. 0 of 2 supported. A documented equity predictor that worked before 2016 and not after, the same fade as turn-of-month, dip buying and
 intraday momentum. Running total: about 123 variants in 53 families.
+
+## 2026-10-25 (OANDA bond CFDs traded on their own, 21 years of daily history): RULED OUT
+
+User: "keep going ... until there is something substantial". The six bond CFDs (USB02Y/05Y/10Y/30Y, DE10YB, UK10YB) had only ever been inputs. Premise checked 2026-10-25: spreads are cheap (1.2-4.7 bp of price) and daily history starts 2005,
+BUT financing is a flat 0.7-5.1%/yr that BOTH sides pay, which against a 2-year note's tiny daily volatility is large. `scripts/research_bond_cfds_2026_10_25.py`, pre-registered, K = 4 (12-1 trend 21-day hold, 1-month trend
+5-day hold, 200-day-average trend, weekly reversal), daily engine, financing 2%/3.5% (long/short, rounded up), PRE 2007-2015 and POST 2016-2026. Self-test passed.
+All four NOT SUPPORTED: mean net R PRE / POST: BM1 -0.319 / -0.173, BM2 -0.128 / -0.189, BM3 -0.167 / -0.141, BM4 -0.126 / -0.232; gross (before financing, mid price) -0.04..+0.14, i.e. no trend or reversal edge after 2007
+and none large enough to pay the financing; years positive 10-20%; always-long controls -0.09 / -0.20 (5-day) and -0.13 / -0.33 (21-day). The 2-year note is the worst (-0.5 to -1.0 R per trade: financing is several
+times its weekly volatility). Lesson recorded: measure financing against volatility before calling an instrument cheap; the bond CFDs are cheap to enter and expensive to hold.
+Running total: about 127 variants in 54 families; 0 pass the strict bar; 0 pass the practice-trial bar.

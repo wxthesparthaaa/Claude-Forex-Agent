@@ -39,7 +39,7 @@ def label(c):
     return (datetime.fromisoformat(c["time"][:19]) + timedelta(hours=6)).strftime("%Y-%m-%d")
 
 
-def trades(cs, decs, stress=False, delay=0, fin=True, peek=False, long_rate=0.065, hold=None):
+def trades(cs, decs, stress=False, delay=0, fin=True, peek=False, long_rate=0.065, hold=None, short_rate=0.02):
     labels = [label(c) for c in cs]
     cl = [float(c["mid"]["c"]) for c in cs]
     lr = [0.0] + [math.log(cl[i] / cl[i - 1]) for i in range(1, len(cl))]
@@ -66,7 +66,7 @@ def trades(cs, decs, stress=False, delay=0, fin=True, peek=False, long_rate=0.06
         entry = float(e["ask"]["o"]) if long_ else float(e["bid"]["o"])
         exit_ = float(x["bid"]["o"]) if long_ else float(x["ask"]["o"])
         days = (datetime.fromisoformat(x["time"][:19]) - datetime.fromisoformat(e["time"][:19])).total_seconds() / 86400
-        rate = (long_rate if long_ else 0.02) if fin else 0.0
+        rate = (long_rate if long_ else short_rate) if fin else 0.0
         sigma = sd * math.sqrt(xi - ei) * entry
         r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - rate * entry * days / 365 / sigma
         out.append({"time": labels[ei], "inst": "", "r": r})
