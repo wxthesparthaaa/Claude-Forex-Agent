@@ -10730,3 +10730,29 @@ mean z >= +1 long / <= -1 short on OANDA BTC/ETH/LTC/BCH CFDs, 24-hour hold. His
   `config/crypto_flow_log.json` registered in state_paths (the 2026-10-02 lesson).
 - Open risk: Binance's futures endpoint refuses some countries' IPs and Render's free instance is in the US by default. If it is refused the bot
   alerts and trades nothing; the fix would be a different funding source, which needs its own re-test first.
+
+## 2026-10-25 (CBOE volatility surface -> index CFDs): one signal positive in three samples, but NOT replicated at the pre-registered bar
+
+User: "keep going on the new ideas". New outside-OANDA source, current to this week: CBOE daily VIX, VIX3M, VVIX, SKEW (cdn.cboe.com; the CBOE put/call
+file stops in 2019 and was dropped). `scripts/research_vol_surface_2026_10_25.py`, pre-registered, K = 4, 7 index CFDs (US2000, SPX500, NAS100, US30,
+DE30, UK100, JP225), signal known after the US close, entry next day 01:00 UTC, 5-day hold, financing 6.5% long / 2% short.
+| variant | discovery | holdout (n) | fresh | holdout p (date-clustered) | trades/wk |
+|---|---|---|---|---|---|
+| CONTROL always long | +0.050 | +0.011 (1318) | -0.087 | 0.55 | 5.3 |
+| VT1 VIX/VIX3M >= 1 (stress) -> LONG | +0.062 | +0.259 (119) | +0.193 | 0.129 | 0.5 |
+| VT2 z(VVIX) >= 1.5 -> LONG | +0.031 | +0.158 (187) | +0.320 | 0.100 | 0.8 |
+| VT3 steep contango -> SHORT | -0.156 | +0.200 (89) | +0.575 | 0.134 | 0.4 |
+| VT4 SKEW high -> SHORT | -0.169 | -0.153 (342) | +0.130 | 0.79 | 1.4 |
+VT1/VT2 were positive in every period, every index agreed in the holdout (except UK100 for VT1 and JP225 for VT2), +20% spread and a one-bar delay left
+them unchanged; they fail only on significance (stress episodes cluster, so the effective sample is a handful of episodes) and frequency.
+
+**Pre-registered replication on untouched data** (`research_vol_surface_replication_2026_10_25.py`): OANDA DAILY candles of 10 indices over 2009-10..2015-12
+(never examined), same signals, replication rule fixed in advance (PRE mean > 0 with p < 0.0167, +20% spread > 0, beats the always-long control).
+- VT1: PRE +0.213 (n=431, p 0.19, +20% spread +0.210, one candle later +0.267, control -0.038; positive in 5 of 7 years) and POST (2016-2026, daily
+  implementation) +0.104 (p 0.17). Positive and similar in size in three samples; the date-clustered p is not below 0.0167. NOT REPLICATED.
+- VT2: PRE +0.156 (p 0.53), POST -0.109. NOT REPLICATED. VT3: PRE -0.102, POST -0.003. RULED OUT. VT4 RULED OUT.
+Reading: VT1 ("the options market pays more for next-month than 3-month protection -> buy indices for a week") is the economically largest and most
+consistent effect found in the whole programme (+0.1 to +0.26 R net, in three samples, with a recognised mechanism: panic mean-reverts), but it fires
+only in stress and the evidence is a few dozen distinct episodes. Fisher-combining the two independent p-values (0.19, 0.17) gives about 0.14. It is NOT
+a finding; it IS the only item worth a forward test, and it trades about 0.5 times a week (2-3 a month, in clusters), well short of the 5/week goal.
+Running total: about 97 variants in 45 families; 0 pass the strict bar; 0 pass the practice-trial bar (VT1 fails frequency and significance).
