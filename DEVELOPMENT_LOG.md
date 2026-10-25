@@ -10954,3 +10954,9 @@ reachable). Self-test passed.
 costs, and net +0.88 R in 2021 alone), and that edge has decayed with time (gross +0.19 R in 2021-2025, -0.02 R since October 2025; net -0.17 and -0.45 because the gap signal fires when the CFD spread is wide). It is a textbook
 example of the pattern seen all through this programme: a real, mechanical pricing inefficiency existed, was competed or engineered away, and is gone. Not tradable today.
 Running total: about 141 variants in 61 families (plus about 9,500 scan cells); 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (Nikkei dollar/yen identity: JP225_USD = JP225Y_JPY / USD_JPY): ruled out, the quotes are consistent
+
+The one other identity OANDA offers (the two Nikkei CFDs may reference different futures contracts). `scripts/research_nikkei_identity_2026_10_25.py`, pre-registered, K = 2, same three-leg machinery as the gold test:
+N1 (1-hour hold) holdout -0.092 (n=1585), N2 (4-hour hold) -0.094 (n=779); gross about zero in every period (-0.005 to +0.001 in discovery and holdout), win rate 10-24%: the deviation does not mean-revert beyond the three spreads.
+RULED OUT. Running total: about 143 variants in 62 families.

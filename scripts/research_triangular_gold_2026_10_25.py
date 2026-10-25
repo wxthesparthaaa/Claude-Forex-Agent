@@ -44,6 +44,8 @@ RELATIONS = {
     "XAU_CHF": [("XAU_USD", 1), ("USD_CHF", 1)],
     "XAU_XAG": [("XAU_USD", 1), ("XAG_USD", -1)],
 }
+# 2026-10-25 addition (separate hypothesis, pre-registered in research_nikkei_identity below): the Nikkei is quoted in dollars and in yen
+EXTRA = {"JP225_USD": [("JP225Y_JPY", 1), ("USD_JPY", -1)]}
 Z_ENTRY, SD_BARS, MIN_BARS = 2.0, 500, 250
 
 
