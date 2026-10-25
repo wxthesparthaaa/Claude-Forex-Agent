@@ -10836,3 +10836,19 @@ instrument +0.301, gross +0.43. Fails the corrected alpha (0.0246 > 0.0125), hol
 Reading: a consistent, price-independent sign and a clean dose-response up to |z| 2, but modest at the event level and flat to negative since October 2025. It is NOT significant after
 correction, NOT replicated on untouched data (no earlier crypto-CFD data exists), and trades 0.8 times a week on instruments Crypto Flow already trades. Candidate for a forward test only.
 Running total: about 113 variants in 49 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (crypto attention and on-chain activity): RULED OUT
+
+User: "keep going on the new ideas". Free outside-OANDA data: Wikipedia daily page views of each coin's article (since 2015-07) and Bitcoin's daily unique active addresses and
+hash rate (blockchain.com). `scripts/research_crypto_attention_onchain_2026_10_25.py`, pre-registered, K = 4, same crypto engine (next-day 01:00 UTC entry, 5-day hold, |z| >= 1.5).
+| variant | discovery | holdout (n) | fresh | holdout p | gross hold |
+|---|---|---|---|---|---|
+| A1 attention FOLLOW | -0.238 | +0.052 (252) | -0.008 | 0.33 | +0.148 |
+| A2 attention FADE | -0.051 | -0.239 | -0.205 | 1.00 | -0.148 |
+| B1 BTC active addresses FOLLOW | +0.112 | -0.177 (310) | -0.236 | 0.85 | -0.074 |
+| B2 BTC active addresses FADE | -0.394 | -0.022 | +0.024 | 0.62 | +0.074 |
+0 of 4 credible. A1 has a small positive holdout (+0.05, +20% spread +0.04) but is negative in discovery and fresh and has p 0.33. Descriptive hash-ribbon
+(miner capitulation recovery) BTC 30-day long: 20 trades since 2016, mean R -0.21, 9 positive. RULED OUT.
+Crypto outside-data summary: funding rate, Fear & Greed, taker flow, Coinbase premium, DeFi TVL, Wikipedia attention, on-chain addresses, hash ribbons all fail; the
+post-hoc composite and the stablecoin-supply follow signal are the only crypto items with any support, both weak at event level.
+Running total: about 117 variants in 51 families; 0 pass the strict bar; 0 pass the practice-trial bar.
