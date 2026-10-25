@@ -10540,3 +10540,32 @@ turn of month, dip buying, crowd contrarianism, FOMC drift, gaps) have faded sin
 machine-learning combination of all the features collected (price, volume, spread regime, position/order books, cross-asset);
 (2) cross-sectional versions (rank instruments each day) of the single-instrument rules; (3) lower-cost execution (limit orders
 only where adverse selection is measured, not assumed).
+
+## 2026-10-25 (final block) -- Walk-forward machine learning over every collected feature: RULED OUT
+
+`scripts/research_ml_walkforward_2026_10_25.py`, pre-registered. 35,417 samples (16 instruments x weekdays, 2018-01..2026-10),
+20 features known by 12:00 UTC (1/5/20-day return, volatility ratio, volume, spread, position-book and order-book z-scores, day
+of week, metal/JPY flags), target = sign of the 48-bar forward mid move, same 13:00 entry / 48-bar exit / costs as the book scripts.
+Retrained once a year on data before the test year minus a 5-day embargo; 2021-2026 is entirely out of sample. K = 2, margin 0.04
+fixed in advance. Self-tests passed (random labels ~50%, planted signal learned, random-walk pipeline ~0 gross, a leaked feature
++0.78 R).
+| model | out-of-sample direction accuracy (confident only) | holdout mean R (n) | fresh | gross hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| M1 logistic | 51.7% (52.2%) | -0.056 (1639) | -0.020 | -0.011 / +0.028 | 6.6 | RULED OUT |
+| M2 boosted stumps | 51.1% (53.1%) | -0.016 (1292) | -0.021 | +0.028 / +0.032 | 5.2 | RULED OUT |
+Always guessing "up" is right 51.3% of the time, so the models add essentially nothing beyond the base rate. M2 is the closest
+regular-frequency rule to breakeven found (holdout -0.016, +20% spread -0.020, delayed -0.022, gross +0.028 / +0.032, both halves
+mixed -0.082 / +0.051) but loses after costs. Combining weak features did not create an edge; interactions found nothing a single
+threshold missed.
+
+Research result: 2026-10-25, 2 more ideas tested (M1, M2); 0 credible; 27 today
+Running total: about 60 variants in 31 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+Closest to the practice-trial bar (holdout > 0 net, +20% spread > 0, delayed > 0, >= ~5 trades/week, fresh > 0):
+  - crypto X1 daily sleeve (BTC+ETH 20-day momentum, enter every trading day, hold 5 days): holdout +0.032 (n=2421), +20% spread
+    +0.027, delayed +0.029, 9.8 trades/week -- meets 4 of 5; fresh -0.026 (n=542, overlapping trades, not significantly below 0).
+    Caveats: run after seeing X1 (so not clean evidence), earned by longs only (crypto beta), and X1 did NOT replicate on LTC/BCH.
+  - walk-forward boosted stumps M2: holdout -0.016, fresh -0.021, 5.2/week (fails holdout > 0 and fresh > 0 by small margins).
+  - low-cost-universe volume-climax fade: holdout -0.027, fresh -0.016, 10.7/week.
+  - index beta BETA1/BETA2: holdout +0.006 / +0.007, 4.8 / 4.1 per week, fresh -0.17 / -0.15.
+Untried (still): cross-sectional ranking versions of the single-instrument rules; limit-order execution with MEASURED adverse
+selection (the 2026-09 test assumed it); live paper-trading of the crypto sleeve as a pre-registered experiment.
