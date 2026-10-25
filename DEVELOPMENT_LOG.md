@@ -10976,3 +10976,8 @@ on {SGD, CNH, THB} and on 8 EM pairs {TRY, ZAR, MXN, PLN, HUF, CZK, NOK, SEK}), 
 All four NOT SUPPORTED: managed 20d net -0.581 / -0.244 (spot-only -0.472 / -0.170); managed 60d -0.296 / -0.159 (spot-only -0.065 / -0.008); EM 20d -0.317 / -0.272; EM 60d -0.142 / -0.247. The managed pairs have tiny daily volatility
 against a 2-15 bp spread (THB 15 bp, SGD 4.6 bp), so even the spot-only result (spread included) is strongly negative; the hard pegs (HKD, DKK) have no trend at all. The one bright spot, TRY 60-day trend in POST (+0.90 spot-only),
 is a single currency in a single collapse and negative net of its -34%/+23% financing (-0.49). Running total: about 149 variants in 64 families.
+
+## 2026-10-25 (quarter-end US-dollar funding squeeze): NOT SUPPORTED
+
+`scripts/research_quarter_end_usd_2026_10_25.py`, pre-registered, K = 2, daily engine, EUR_USD / USD_JPY / USD_CHF, 3-candle holds around the 80 quarter-ends 2007-2026. Q1 LONG USD into the quarter-end: PRE -0.034 (n=108), POST -0.008 (n=129), pooled p 0.60
+(by month: Mar -0.01, Jun -0.20, Sep +0.17, Dec -0.04). Q2 the give-back after quarter-end: -0.347 / -0.247. Every-5th-day long-USD control: -0.07 / -0.15. NOT SUPPORTED. Running total: about 151 variants in 65 families.
