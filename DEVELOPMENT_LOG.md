@@ -11014,3 +11014,11 @@ The index ratios do not mean-revert on a daily scale beyond what the two spreads
 `scripts/research_index_pairs_hourly_2026_10_25.py`, pre-registered, K = 2: the two-leg version of the gold-quote engine on SPX500/US30, NAS100/SPX500, DE30/EU50, DE30/FR40, EU50/FR40, UK100/EU50 (log-ratio vs its trailing 500-bar mean, |z| >= 2, equal
 notional, financing ignored). 1-hour hold: net holdout -0.054 (n=7227), gross +0.004; 4-hour hold: -0.057 (n=3689), gross +0.003; 15-29 trades a week; years positive 0%. The indices price each other consistently at the hourly horizon; the net loss is the
 pair of spreads (about 0.06 R). RULED OUT. Running total: about 159 variants in 68 families.
+
+## 2026-10-25 (did OANDA switch its crypto reference from Binance to Coinbase? Coinbase-gap convergence): NO, the lag is simply gone
+
+Hypothesis: the Binance-vs-OANDA convergence edge (real until 2022) disappeared because OANDA switched which venue it tracks, so the same trade against Coinbase should still work. `scripts/research_crypto_coinbase_gap_2026_10_25.py`, pre-registered K = 1 primary
+(Coinbase-gap convergence, |z| >= 2, 2-hour hold, evaluated 2023-01..2025-09 and fresh), Coinbase hourly closes 2019-2026. By year, net / gross R per trade (n): Coinbase gap 2020 +0.355 / +0.869 (555), 2021 +0.901 / +0.998 (484), 2022 -0.508 / +0.299 (261), 2023 -0.462 / +0.092,
+2024 -0.297 / +0.012, 2025 -0.266 / -0.022, 2026 -0.502 / +0.009; the Binance gap is the same to within 0.05 R in every year (2021 +0.881 net), and requiring both venues to agree changes nothing after 2022. Primary result: post-2022 net -0.345 (n=1682), gross +0.021,
+p 1.00; fresh -0.452. REJECTED: the edge existed against EVERY venue in 2020-2021 (OANDA's crypto CFD simply lagged the whole market then, net +0.9 R per trade in 2021 on about 480 trades) and was already half gone in 2022 and entirely gone from 2023. Not a venue switch.
+Running total: about 160 variants in 69 families.
