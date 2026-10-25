@@ -10569,3 +10569,40 @@ Closest to the practice-trial bar (holdout > 0 net, +20% spread > 0, delayed > 0
   - index beta BETA1/BETA2: holdout +0.006 / +0.007, 4.8 / 4.1 per week, fresh -0.17 / -0.15.
 Untried (still): cross-sectional ranking versions of the single-instrument rules; limit-order execution with MEASURED adverse
 selection (the 2026-09 test assumed it); live paper-trading of the crypto sleeve as a pre-registered experiment.
+
+## 2026-10-25 (cross-sectional, limit orders, stop-magnet dose-response): all RULED OUT
+
+User: "keep going until something other than negative comes out". Standing condition written down first: with ~60+ tests a positive
+number will appear by chance, so only a result that also passes the pre-registered fresh-data and replication checks is called a
+finding.
+
+**Cross-sectional ranking** (`scripts/research_cross_sectional_2026_10_25.py`, pre-registered; 16 instruments; each day long the 3
+best / short the 3 worst by score; same execution and evaluator; K = 4, alpha 0.0125; rank-specific self-test: random scores ~0,
+a peeking score +0.81 R):
+| rule | holdout mean R (n) | fresh | gross disc / hold / fresh | trades/wk |
+|---|---|---|---|---|
+| CS1 crowd fade | -0.046 (3279) | -0.085 | +0.063 / +0.002 / -0.023 | 13.2 |
+| CS2 stop magnet | -0.021 (4041) | -0.054 | +0.029 / +0.028 / +0.008 | 16.3 |
+| CS3 20-day momentum | -0.073 (3081) | -0.085 | +0.026 / -0.023 / -0.023 | 12.4 |
+| CS4 5-day reversal | -0.020 (3590) | -0.141 | +0.051 / +0.029 / -0.078 | 14.5 |
+0 of 4 credible. Ranking against the other instruments did not create an edge that the single-instrument versions lacked.
+
+**Limit-order execution with MEASURED adverse selection** (`research_limit_orders_2026_10_25.py`; the 8 book signal sets, 11,413
+holdout signals; a resting limit at your own side of the quote, fills only if price trades THROUGH it during the entry bar; exit
+unchanged; the code's price-improvement identity is exact and a random walk gives the saved spread with no adverse selection):
+fill rate 0.89 (depth 0) / 0.80 (one spread deeper); among FILLED signals net R improves -0.068 -> -0.043 (the saved spread), but the
+11% that never fill average **+0.229 R at market** (the winners that run away); net per signal -0.0020 (p 0.87, depth 0) and +0.0056
+(p 0.48, depth 1) vs alpha 0.025. Chase (market at the next bar after a miss): -0.018 in holdout vs the +0.229 that includes the first
+hour's own un-tradeable move, so the run-away does NOT continue afterwards. No signal set becomes positive on both holdout and fresh.
+Adverse selection cancels the spread saving almost exactly. RULED OUT.
+
+**Stop-magnet dose-response** (`research_stop_magnet_dose_2026_10_25.py`, written after seeing that the P4 and CS2 signals have a
+positive GROSS edge in every period, so a follow-up not a discovery; theta chosen on discovery only): gross mean R by threshold,
+discovery / holdout / fresh: theta 1.5 +0.064 / +0.032 / +0.052 (n=951/1554/412); 2.0 +0.026 / -0.020 / +0.014; 2.5 +0.130 / -0.030
+/ -0.033 (n=62/118/62); 3.0 +0.172 / -0.036 / +0.187 (n=18/34/15). A real effect grows with signal strength; this one reverses out
+of sample (the strongest buckets are the worst in the holdout). theta* = 1.5, holdout net -0.017. NO dose-response: the small
+consistent positive gross edge is not a stable effect. RULED OUT.
+
+Research result: 2026-10-25, 7 more ideas tested (CS1-CS4, limit depth 0 and 1, dose-response), 0 credible; 34 today
+Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve, see the end-of-session entry; fresh -0.026, not replicated).
+Running total: about 67 variants in 34 families; 0 pass the strict bar; 0 pass the practice-trial bar.
