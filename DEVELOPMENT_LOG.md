@@ -10938,3 +10938,19 @@ Cells with |discovery t| >= 2.5: observed 24 vs 19.3 expected by chance; >= 3.0:
 of the |t| >= 2.5 cells: same sign 33%, mean sign-adjusted correlation -0.009 (se 0.011). The largest discovery cells (DVOL level -> BCH, yen ETF level -> BTC, biotech ETF level -> crypto) all vanish in the holdout.
 Note: the stablecoin-supply signal (SC1), which looked good in the holdout, is not prominent in the 2020-22 discovery here, i.e. its edge appears only in the later era -- consistent with it being a candidate for a forward test, not a
 robust effect. Running total: about 9,500 scanned cells plus about 137 hand-built variants in 60 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (hourly Binance order flow and Binance-vs-OANDA price gap on crypto CFDs): ruled out; a latency effect existed and has decayed to zero
+
+User: "keep going on the new ideas. DON'T STOP even if it's weak." First intraday outside data: Binance hourly spot bars (2019-08..2026-10: close, volume, taker-buy volume) against OANDA's H1 crypto CFDs.
+`scripts/research_crypto_hourly_2026_10_25.py`, pre-registered, K = 4, z over the previous 720 hours, |z| >= 2, next-bar entry, fill side, directional financing, +20% spread, one-bar delay; 11-16 trades a week (so the frequency bar is
+reachable). Self-test passed.
+| variant | gross disc / hold / fresh | net discovery | net holdout (n) | net fresh |
+|---|---|---|---|---|
+| F1 hourly taker-flow FOLLOW, 4 h | +0.088 / +0.031 / +0.002 | -0.357 | -0.248 (3834) | -0.349 |
+| F2 flow FADE | mirror | -0.533 | -0.310 | -0.353 |
+| F3 gap CONVERGENCE (Binance above the CFD -> long the CFD), 2 h | **+0.705 / +0.186 / -0.017** | **+0.178** | -0.171 (2914) | -0.452 |
+| F4 gap DIVERGENCE | mirror | -1.232 | -0.542 | -0.419 |
+0 of 4 credible. Flow carries no information (gross about zero). The cross-venue gap is the interesting one: the CFD really did converge toward Binance within two hours in 2019-2020 (gross +0.70 R per trade, net +0.18 R even after
+costs, and net +0.88 R in 2021 alone), and that edge has decayed with time (gross +0.19 R in 2021-2025, -0.02 R since October 2025; net -0.17 and -0.45 because the gap signal fires when the CFD spread is wide). It is a textbook
+example of the pattern seen all through this programme: a real, mechanical pricing inefficiency existed, was competed or engineered away, and is gone. Not tradable today.
+Running total: about 141 variants in 61 families (plus about 9,500 scan cells); 0 pass the strict bar; 0 pass the practice-trial bar.
