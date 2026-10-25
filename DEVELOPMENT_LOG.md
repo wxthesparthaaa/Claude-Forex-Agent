@@ -10914,3 +10914,18 @@ Free Deribit DVOL (options-implied 30-day volatility for BTC and ETH, daily sinc
 DV1 DVOL spike -> LONG: holdout +0.067 (n=75), fresh +0.006, p 0.37, 0.1 trades/wk. DV2 complacency -> SHORT: +0.036 (n=166), fresh -0.178, p 0.36. DV3 rich protection (DVOL - realised) -> LONG: +0.146 (n=177),
 fresh +0.028, p 0.13, gross +0.27, 60% of years positive. DV4 cheap protection -> SHORT: -0.190, p 0.97. 0 of 4 credible; DV3 is the only one worth a footnote (positive, consistent in both holdout halves,
 +20% spread +0.135, delayed +0.164) but p 0.13, only about 0.3 trades a week and a five-year sample. Running total: about 137 variants in 58 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (the exhaustive scan: 69 free outside series x 4 transforms x 28 instruments): NOTHING SELECTED, and the near-misses did not replicate
+
+To answer the standing question once instead of one hypothesis at a time: `scripts/research_signal_scan_2026_10_25.py`, pre-registered (selection rule, thresholds and judgement fixed before running; self-test: random series select nothing,
+a planted predictor is found at t = 40). 69 daily series (54 US ETFs: sectors, countries, commodities, bonds, currencies; GLD; VIX, VIX3M, VIX9D, VVIX, SKEW, VXN, MOVE, OVX, GVZ, dollar index, 10-year/3-month/30-year yields,
+S&P 500) x 4 transforms (1-, 5-, 20-day log change, level; each a causal 250-day z) = 7,728 cells against the next-5-day gross R of 28 instruments (10 indices, 12 FX pairs, 6 commodities).
+DISCOVERY 2012-03..2017-12 (t deflated by sqrt(5) for overlapping returns), HOLDOUT 2018-01..2025-09, fresh 2025-10..
+- Cells with |discovery t| >= 3.0: 32 observed vs 20.9 expected by chance (a mild excess, all of it VIX / VIX9D / VVIX LEVEL predicting NEXT-WEEK INDEX returns positively in 2012-2017); >= 3.5: 3 vs 3.6; >= 4.0: 0 vs 0.5;
+  >= 4.4 (the selection bar): 0 vs 0.1. NOTHING SELECTED.
+- Replication of the near-misses in the 2018-2025 holdout: cells with discovery |t| >= 2.5 (106): holdout same sign in only 39%, mean sign-adjusted holdout correlation -0.010 (se 0.004); >= 3.0 (32): 41%, -0.010;
+  >= 3.5 (3): 0%, -0.043. The discovery-period VIX-level effect on indices reversed (holdout r about -0.03 to -0.06 on the same cells).
+- The 15 largest cells are VIX-family LEVELS on indices (AU200, US2000, SPX500, FR40) plus a few commodity-ETF/FX changes; none has holdout |t| above 1.2.
+Conclusion: across the whole free daily outside-data universe, simple linear predictors of next-week returns are indistinguishable from chance after multiple-testing control, and the part that looked real in 2012-2017 (higher VIX
+-> higher next-week index returns, the broad cousin of VT1) disappeared after 2018 except in extreme stress. RULED OUT as a source of a frequent strategy.
+Running total: about 7,900 cells scanned in this one test plus about 137 hand-built variants in 59 families; 0 pass the strict bar; 0 pass the practice-trial bar.
