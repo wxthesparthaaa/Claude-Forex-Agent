@@ -10866,3 +10866,11 @@ enter at 10:45 ET, exit 4 hours later; OANDA M15 bid/ask, WTICO_USD + BCO_USD (W
 | N4 gas FADE | -0.343 | -0.312 | -0.287 | 0.99 | mirror |
 0 of 4 credible. Natural-gas FOLLOW has a consistent positive gross (+0.10 / +0.17 / +0.12 R) that the spread (about 0.17 R on that instrument) removes; oil FOLLOW has none. RULED OUT.
 Running total: about 121 variants in 52 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (variance risk premium: VIX minus realised S&P volatility): NOT SUPPORTED
+
+User: "keep going ... until there is something substantial worth stopping, then stop; if not keep going". `scripts/research_vrp_2026_10_25.py`, pre-registered, K = 2, daily engine on 10 indices judged in both
+PRE (2008-2015) and POST (2016-2026) plus the H1 engine. V1 (VRP z >= +1, protection rich -> LONG 5 days): PRE +0.157 (n=824, 65% of 48 episodes positive, sign p 0.03), POST -0.091 (n=939, 53%
+of 58 episodes), pooled p 0.45; dose-response strong before 2016 (|z| >= 2: +0.81) and weak after (+0.12); H1 engine holdout -0.106, fresh +0.351 (n=49). V2 (VRP z <= -1, protection cheap -> SHORT):
+PRE -0.115, POST -0.098, 37-38% of episodes positive. 0 of 2 supported. A documented equity predictor that worked before 2016 and not after, the same fade as turn-of-month, dip buying and
+intraday momentum. Running total: about 123 variants in 53 families.
