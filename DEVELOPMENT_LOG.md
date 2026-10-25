@@ -10968,3 +10968,11 @@ H1 PRE-HOLIDAY (long the day before a US market holiday, identified from the dat
 H2 HALLOWEEN (long the 10 indices from the end of October to the end of April, once a year, 6.5% financing): WINTER leg PRE +0.372 (6 of 8 years positive), POST +0.223 (6 of 10); SUMMER leg PRE -0.420 (2 of 8), POST +0.044
 (6 of 10): winter beats summer in both periods (by +0.79 and +0.18 R), the textbook direction, but 12 of 18 winters positive is a sign-test p of about 0.12, the winter mean +0.28 R has a standard error near 0.25, and it is two
 trades a year per index (one decision a year across indices that move together). Reported as directionally consistent, not significant, and far too infrequent to matter. Running total: about 145 variants in 63 families.
+
+## 2026-10-25 (trend-following on managed and emerging-market currencies): RULED OUT, costs dominate
+
+Premise: managed floats (SGD band, CNH fixing, THB) move gradually and in one direction, the autocorrelation trend rules need; EM currencies trend in crises. `scripts/research_managed_fx_trend_2026_10_25.py`, pre-registered, K = 4 (20-day trend hold 5, 60-day trend hold 20,
+on {SGD, CNH, THB} and on 8 EM pairs {TRY, ZAR, MXN, PLN, HUF, CZK, NOK, SEK}), daily engine, OANDA's current per-instrument financing applied to the whole history (an approximation, so spot-only is printed beside net), PRE 2007-2015 / POST 2016-2026.
+All four NOT SUPPORTED: managed 20d net -0.581 / -0.244 (spot-only -0.472 / -0.170); managed 60d -0.296 / -0.159 (spot-only -0.065 / -0.008); EM 20d -0.317 / -0.272; EM 60d -0.142 / -0.247. The managed pairs have tiny daily volatility
+against a 2-15 bp spread (THB 15 bp, SGD 4.6 bp), so even the spot-only result (spread included) is strongly negative; the hard pegs (HKD, DKK) have no trend at all. The one bright spot, TRY 60-day trend in POST (+0.90 spot-only),
+is a single currency in a single collapse and negative net of its -34%/+23% financing (-0.49). Running total: about 149 variants in 64 families.
