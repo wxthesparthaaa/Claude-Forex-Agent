@@ -10852,3 +10852,17 @@ hash rate (blockchain.com). `scripts/research_crypto_attention_onchain_2026_10_2
 Crypto outside-data summary: funding rate, Fear & Greed, taker flow, Coinbase premium, DeFi TVL, Wikipedia attention, on-chain addresses, hash ribbons all fail; the
 post-hoc composite and the stablecoin-supply follow signal are the only crypto items with any support, both weak at event level.
 Running total: about 117 variants in 51 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (weekly EIA inventory reports: oil Wednesdays, natural gas Thursdays, 10:30 ET): RULED OUT
+
+User: "keep going on the new ideas". A regular weekly event on instruments the earlier US news-shock test did not cover. `scripts/research_eia_reports_2026_10_25.py`, pre-registered, K = 4:
+the reaction is the first 15 minutes after the 10:30 ET release; trade in its direction (follow) or against it (fade) when it is at least as large as the median of the previous 52 releases;
+enter at 10:45 ET, exit 4 hours later; OANDA M15 bid/ask, WTICO_USD + BCO_USD (Wednesday) and NATGAS_USD (Thursday), 2016-2026. Self-test passed.
+| variant | discovery | holdout (n) | fresh | holdout p | gross disc / hold / fresh |
+|---|---|---|---|---|---|
+| N1 oil FOLLOW | -0.058 | +0.015 (225) | -0.104 | 0.45 | +0.016 / +0.067 / -0.063 |
+| N2 oil FADE | -0.090 | -0.119 | +0.023 | 0.83 | mirror |
+| N3 gas FOLLOW | -0.147 | +0.030 (123) | -0.028 | 0.41 | +0.100 / +0.171 / +0.125 |
+| N4 gas FADE | -0.343 | -0.312 | -0.287 | 0.99 | mirror |
+0 of 4 credible. Natural-gas FOLLOW has a consistent positive gross (+0.10 / +0.17 / +0.12 R) that the spread (about 0.17 R on that instrument) removes; oil FOLLOW has none. RULED OUT.
+Running total: about 121 variants in 52 families; 0 pass the strict bar; 0 pass the practice-trial bar.
