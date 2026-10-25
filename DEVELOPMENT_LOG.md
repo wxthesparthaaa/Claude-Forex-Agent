@@ -10893,3 +10893,10 @@ one-trading-day publication lag to 10 index CFDs for 5 days (daily engine, PRE 2
 opening balance; fixed and rerun before any conclusion was drawn.) L1 FOLLOW (injection long, drain short): PRE -0.053, POST -0.085, pooled -0.071 (p 0.97). L2 FADE: PRE -0.033, POST -0.035, pooled -0.034
 (p 0.68). Neither direction shows any information; the popular thesis does not show up at a weekly horizon in OANDA index CFDs after costs. 0 of 2 supported.
 Running total: about 129 variants in 55 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (currency policy-rate momentum): NOT SUPPORTED
+
+Cached OECD 3-month rates for the 8 G10 currencies (lagged 2 months for publication), monthly, ranking by the 3-month CHANGE in each currency's rate rather than its level (rising-rate currencies
+should strengthen); long top 3 / short bottom 3 on the actual OANDA pairs with real financing, via `scripts/research_fx_value_2026_10_25.py` with `RATEMOM=1`. K = 1 (descriptive top-2/bottom-2 beside it).
+Discovery 2010-15 +0.056 (n=621), HOLDOUT -0.089 (n=1053, p 0.95), fresh -0.101; halves -0.013 / -0.164; years positive 20%; spot-only -0.041 in the holdout. Top 2/bottom 2 holdout -0.110.
+NOT SUPPORTED. Running total: about 131 variants in 56 families; 0 pass the strict bar; 0 pass the practice-trial bar.

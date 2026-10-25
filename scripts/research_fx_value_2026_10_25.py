@@ -140,6 +140,11 @@ def run(pairs, rates, cpi, mode="value", delay=0, stress=False, markup=0.015, to
                 name = f"{c}_USD" if f"{c}_USD" in pairs else f"USD_{c}"
                 a, b = float(pairs[name][first_idx[name][M]]["mid"]["o"]), float(pairs[name][first_idx[name][M1]]["mid"]["o"])
                 sc[c] = math.log(b / a) * (-1 if name.startswith("USD_") else 1)
+        if mode == "ratemom":
+            prev = {c: cf.rate_at(rates[c], cf.month_add(M, -5)) for c in CCY}
+            if any(v is None for v in prev.values()):
+                continue
+            sc = {c: carry[c] - prev[c] for c in CCY}
         if mode == "carry":
             sc = dict(carry)
         elif mode == "both":
@@ -280,6 +285,9 @@ def main(d1_dir, fred_dir, cpi_path):
     report("descriptive: value top2 vs bottom2", pairs, rates, cpi, "value", 2, spot, ann, False)
     report("descriptive: value + carry (rank sum) top3 vs bottom3", pairs, rates, cpi, "both", 3, spot, ann, False)
     report("reference: carry only top3 vs bottom3, same months", pairs, rates, cpi, "carry", 3, spot, ann, False)
+    if os.environ.get("RATEMOM"):
+        report("RATE MOMENTUM (3-month change in the 3-month rate, lagged 2 months) top3 vs bottom3", pairs, rates, cpi, "ratemom", 3, spot, ann, True)
+        report("descriptive: rate momentum top2 vs bottom2", pairs, rates, cpi, "ratemom", 2, spot, ann, False)
 
 
 if __name__ == "__main__":
