@@ -39,7 +39,7 @@ def label(c):
     return (datetime.fromisoformat(c["time"][:19]) + timedelta(hours=6)).strftime("%Y-%m-%d")
 
 
-def trades(cs, decs, stress=False, delay=0, fin=True, peek=False):
+def trades(cs, decs, stress=False, delay=0, fin=True, peek=False, long_rate=0.065, hold=None):
     labels = [label(c) for c in cs]
     cl = [float(c["mid"]["c"]) for c in cs]
     lr = [0.0] + [math.log(cl[i] / cl[i - 1]) for i in range(1, len(cl))]
@@ -51,7 +51,7 @@ def trades(cs, decs, stress=False, delay=0, fin=True, peek=False):
         if labels[ei] > (datetime.strptime(d, "%Y-%m-%d") + timedelta(days=5)).strftime("%Y-%m-%d"):
             continue  # a gap in the data: the candle after d is not the next trading day
         ei += delay
-        xi = ei + HOLD
+        xi = ei + (hold or HOLD)
         if ei < VOL_N + 1 or xi >= len(cs) or ei <= busy:
             continue
         sd = statistics.pstdev(lr[ei - VOL_N:ei])
@@ -66,7 +66,7 @@ def trades(cs, decs, stress=False, delay=0, fin=True, peek=False):
         entry = float(e["ask"]["o"]) if long_ else float(e["bid"]["o"])
         exit_ = float(x["bid"]["o"]) if long_ else float(x["ask"]["o"])
         days = (datetime.fromisoformat(x["time"][:19]) - datetime.fromisoformat(e["time"][:19])).total_seconds() / 86400
-        rate = (0.065 if long_ else 0.02) if fin else 0.0
+        rate = (long_rate if long_ else 0.02) if fin else 0.0
         sigma = sd * math.sqrt(xi - ei) * entry
         r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - rate * entry * days / 365 / sigma
         out.append({"time": labels[ei], "inst": "", "r": r})

@@ -10776,3 +10776,21 @@ episodes positive, sign p 0.11-0.13); H1 engine holdout +0.179, fresh +0.295, bu
 Conclusion: VT1 is a rare, sparse, high-variance stress-rebound effect (about 3.4 episodes a year, 0.3-0.5 trades a week), with real support at the
 episode level, a clean dose-response cliff at 1.0, and large losses in prolonged crashes. It cannot be made into a 5-a-week strategy. Running total:
 about 103 variants in 46 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (walk-forward machine learning with outside-OANDA macro and stress data): RULED OUT
+
+User: "keep going on the new ideas". New data (all free, reachable; FRED is not): Yahoo Finance daily series 2005..2026-10 (MOVE bond vol, OVX oil vol, GVZ gold vol,
+VXN, VIX9D, HYG, LQD, the dollar index, 10-year yield, TLT, GLD) plus the CBOE VIX family. `scripts/research_ml_macro_2026_10_25.py`, pre-registered, K = 2: a pooled
+model over 28 OANDA instruments (10 indices, 12 FX pairs, 6 commodities), daily samples from 2011-03, 17 macro/stress features + the instrument's own 1/5/20-day
+returns and volatility ratio + class and weekday dummies, target = direction of the next 5 trading days, retrained every year (7-day embargo), 2013-2026 entirely out
+of sample, long if P(up) >= 0.54 / short if <= 0.46, daily bid/ask entry at the next candle open. Self-test passed (no-leak pipeline gross +0.056 R, se 0.034, accuracy
+0.512; a leaked feature scores +0.82 R).
+| model | out-of-sample accuracy (confident) | base rate of up | disc (2013-15) | holdout 2016-2025-09 (n) | fresh | gross hold / fresh | trades/wk |
+|---|---|---|---|---|---|---|---|
+| M1 logistic | 51.7% (52.9%) | 53.0% | -0.132 | -0.056 (6542) | -0.090 | +0.036 / +0.005 | 12.9 |
+| M2 boosted stumps | 51.5% (53.5%) | 53.0% | -0.139 | -0.066 (6123) | +0.168 | +0.023 / +0.260 | 12.0 |
+Both models are WORSE than always guessing "up" (53.0%) out of sample; holdout negative, +20% spread and delay both negative, 40% of years positive. Gross is
+about zero in the holdout (+0.02 to +0.04 R) against costs of about 0.09 R. The fresh-period M2 number (+0.168, n=571) is the usual small-sample noise: its gross +0.26 sits
+against a holdout gross of +0.02. Outside macro and stress information, fed to a flexible model across 28 instruments, adds nothing beyond the VT1 effect already found
+(which the models cannot exploit because it fires on about 1% of samples). RULED OUT.
+Running total: about 105 variants in 47 families; 0 pass the strict bar; 0 pass the practice-trial bar.
