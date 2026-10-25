@@ -10658,3 +10658,14 @@ A mid-price drift in the rollover hour is not tradeable at its spread. RULED OUT
 
 Lesson recorded: the 22:00-00:00 UTC window has the widest spreads of the day, so any pattern that lives there is a mid-price effect that
 cannot be harvested.
+
+## 2026-10-25 (triangular consistency of OANDA's gold quotes): RULED OUT, the gap is far inside the spreads
+
+New idea, pre-registered (`scripts/research_triangular_gold_2026_10_25.py`): XAU_EUR / GBP / AUD / JPY / CAD / CHF / XAG should equal XAU_USD
+combined with the matching FX rate; if the hourly-close gap (z >= 2 against its trailing 500 bars) closes within 1 or 4 hours by more than
+three spreads cost, there is a direction-free pricing-consistency trade. Self-test: a random-walk deviation scores ~0, a mean-reverting one
+scores +2.4 R before spreads and -18 R after a 20 bp spread (so the test is able to find a real dislocation and to see the cost).
+Real data (7 crosses, 2016-2026, 17.8 trades/week at 1 h): net R per trade about -80 to -230 (units of the typical deviation). Gross mid-price
+result +0.21 / +0.38 (holdout / fresh) at 1 h and +0.47 / +0.41 at 4 h, but the typical deviation is tiny: crossing three spreads costs on
+the order of 80 typical deviations. The quotes come from one price engine and are consistent to well inside their spread. RULED OUT.
+Running total: about 76 variants in 38 families; 0 pass the strict bar; 0 pass the practice-trial bar.
