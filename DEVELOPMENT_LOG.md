@@ -10900,3 +10900,9 @@ Cached OECD 3-month rates for the 8 G10 currencies (lagged 2 months for publicat
 should strengthen); long top 3 / short bottom 3 on the actual OANDA pairs with real financing, via `scripts/research_fx_value_2026_10_25.py` with `RATEMOM=1`. K = 1 (descriptive top-2/bottom-2 beside it).
 Discovery 2010-15 +0.056 (n=621), HOLDOUT -0.089 (n=1053, p 0.95), fresh -0.101; halves -0.013 / -0.164; years positive 20%; spot-only -0.041 in the holdout. Top 2/bottom 2 holdout -0.110.
 NOT SUPPORTED. Running total: about 131 variants in 56 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (monthly options-expiration week): NOT SUPPORTED (faded after 2016)
+
+`scripts/research_opex_week_2026_10_25.py`, pre-registered, K = 2, daily engine, 10 index CFDs, PRE 2008-2015 / POST 2016-2026: O1 LONG the opex week (week ending on the third Friday): PRE +0.074 (n=960),
+POST -0.037 (n=1300), pooled p 0.42; quarterly-months-only PRE +0.213, POST -0.116. O2 SHORT the post-opex week: PRE -0.076, POST -0.119, pooled -0.101. The always-long control over every week: -0.016 / +0.011.
+Same fade as turn-of-month, dip buying, intraday momentum, variance risk premium. Running total: about 133 variants in 57 families; 0 pass the strict bar; 0 pass the practice-trial bar.
