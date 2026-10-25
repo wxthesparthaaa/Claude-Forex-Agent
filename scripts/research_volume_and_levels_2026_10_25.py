@@ -118,7 +118,8 @@ def signals(inst, cs, family, peek_hold=None):
     return out
 
 
-def trades(inst, cs, sig, hold, delay=0, stress=False, fin=True):
+def trades(inst, cs, sig, hold, delay=0, stress=False, fin=True, rate=None):
+    """rate: optional callable(long_, inst) -> annual financing rate; default is rp.FIN for everything."""
     t = [bl.ts(c) for c in cs]
     cl = [float(c["mid"]["c"]) for c in cs]
     lr = [0.0] + [math.log(cl[i] / cl[i - 1]) for i in range(1, len(cl))]
@@ -140,7 +141,8 @@ def trades(inst, cs, sig, hold, delay=0, stress=False, fin=True):
             continue
         sigma = sd * math.sqrt(hold) * entry
         hours = (t[xi] - t[ei]).total_seconds() / 3600
-        r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - (rp.FIN if fin else 0.0) * entry * hours / 8760 / sigma
+        fr = (rate(long_, inst) if rate else rp.FIN) if fin else 0.0
+        r = ((exit_ - entry) if long_ else (entry - exit_)) / sigma - fr * entry * hours / 8760 / sigma
         out.append({"time": cs[ei]["time"][:13], "inst": inst, "r": r})
         busy = xi
     return out

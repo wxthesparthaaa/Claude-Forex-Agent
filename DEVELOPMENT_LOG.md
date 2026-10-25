@@ -10464,3 +10464,41 @@ majors: (1) instruments with larger gross moves per unit of spread (exotics, NAT
 (2) scheduled-event drift on indices (FOMC pre-announcement), rare by nature; (3) a beta/risk-premium strategy
 (diversified index exposure with a volatility-targeting rule), which may clear a practice-trial bar through market drift
 rather than skill; (4) OANDA-specific microstructure (spread regimes) as a cost filter on any of the above.
+
+## 2026-10-25 (later still) -- The four user-approved directions: low-cost universe, FOMC drift, index beta, spread regimes -- all RULED OUT
+
+User approved four follow-ups; all were pre-registered in their scripts and run on OANDA H1 bid/ask 2016-2026 (same evaluator
+and splits as the book tests; random-walk and peeking self-tests pass, and the beta rules were additionally checked across
+20 random-walk seeds: mean +0.02, se 0.014-0.022, so no leak).
+
+**(1) Where are the bigger moves per unit of spread?** A scan of all 127 OANDA instruments (spread / daily volatility, taken
+on a weekend, so FX spreads are inflated but the top of the ranking is robust): cheapest are SPX500 0.006, NAS100 0.011,
+JP225Y 0.011, WTICO 0.011, DE30 0.015, BCO 0.017, XAU 0.017, XCU 0.022, EUR_USD 0.029; every exotic currency, grain, natural gas
+and crypto is 0.08-0.4. So "bigger moves per spread" means indices, oil, gold and copper, NOT exotics. Tested the volume-climax
+and round-number rules on 12 of them (`scripts/research_low_cost_universe_2026_10_25.py`: SPX500 NAS100 US30 DE30 UK100
+JP225 FR40 EU50 US2000 WTICO BCO XCU; big-figure steps ~1% of price; 6.5%/yr financing on index longs):
+B1 fade holdout -0.027 (n=2662, fresh -0.016, gross +0.008/+0.024/+0.035, delayed +0.004 but +20% spread -0.036);
+B2 follow -0.073; C1 rejection -0.038; C2 break -0.051 (60+ trades/week, all negative). 0 of 4 credible; B1 is the closest
+regular-frequency rule (10.7 trades/week) and still loses after costs.
+
+**(2) Pre-FOMC drift** (`scripts/research_fomc_drift_2026_10_25.py`, K = 1, descriptive: 46 announcement days 2021-2026
+parsed from the Fed's own page, SPX500/NAS100/US30, long the 24 hours before 14:00 ET): mean R +0.129 (se 0.108, n=46) vs
++0.008 on 1,070 matched ordinary days; excess +0.121, permutation p = 0.21; by year -0.295, +0.582, +0.153, +0.389, +0.108,
+-0.261. A positive point estimate that cannot be told from chance and can never reach 300 trades. NOT CREDIBLE.
+
+**(3) Index beta / volatility-managed exposure** (`scripts/research_index_beta_2026_10_25.py`, 9 index CFDs, one trade per index
+per week, 6.5%/yr financing, K = 2): the ALWAYS-LONG control returned gross +0.062 / +0.073 / +0.023 R (disc / hold / fresh) but
+-0.031 / -0.002 / -0.051 net: **CFD financing eats the whole equity premium**. BETA1 (long only in calm markets) holdout +0.006
+(p 0.29, fresh -0.168), BETA2 (calm and above the 200-day average) +0.007 (p 0.39, fresh -0.151); 4.8 and 4.1 trades/week.
+Both fail fresh data and the 5/week bar; neither beats the control by anything distinguishable from zero. No practice-trial
+flag. Beta does NOT rescue the deadline rule on this broker.
+
+**(4) Spread regimes**: median spread at the bar open by UTC hour (last 12 months): FX majors and gold are flat (EUR_USD 1.4 bp,
+USD_JPY 1.0, XAU 1.4-1.8) except the 21:00-22:00 UTC rollover hour (2.5-8x wider: GBP_USD 8.0 bp, AUD_USD 5.9-7.7); index CFDs
+vary by session (NAS100 0.3 bp in the US afternoon vs 1.0 at night; DE30 0.8 at 12:00 vs 3.1 at 00:00). Every test here already
+enters and exits outside the rollover hour, so a spread-timing filter has nothing left to remove; no test was run.
+
+Research result: 2026-10-25, 7 more ideas tested in this block (4 low-cost-universe, 1 FOMC, 2 beta), 0 credible; 19 today
+Best practice-trial candidate so far: none. Nearest regular-frequency rule: volume-climax fade on the low-cost universe
+(holdout -0.027, fresh -0.016, ~10.7 trades/week); nearest overall by sign: BETA1/BETA2 (holdout +0.006/+0.007, fails fresh).
+Running total: about 52 variants in 28 families, 0 positive on the holdout after costs with a fresh-data confirmation.
