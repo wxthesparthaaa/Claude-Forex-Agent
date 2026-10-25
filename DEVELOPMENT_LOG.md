@@ -10502,3 +10502,41 @@ Research result: 2026-10-25, 7 more ideas tested in this block (4 low-cost-unive
 Best practice-trial candidate so far: none. Nearest regular-frequency rule: volume-climax fade on the low-cost universe
 (holdout -0.027, fresh -0.016, ~10.7 trades/week); nearest overall by sign: BETA1/BETA2 (holdout +0.006/+0.007, fails fresh).
 Running total: about 52 variants in 28 families, 0 positive on the holdout after costs with a fresh-data confirmation.
+
+## 2026-10-25 (end of session) -- Crypto CFDs (never tested before): the only partial hit of the day did not replicate; weekend gap ruled out
+
+Crypto was untested (grepped). OANDA has BTC_USD from 2016 and ETH/LTC/BCH from 2020; the data show the CFDs are NOT 24/7 (about
+6,000 hourly bars a year, closed at weekends), so "days" are trading days. Financing read from the API (2026-10-25) and applied as
+constants to the whole history (an approximation): BTC long -18.88%/yr, short +3.88%; ETH, LTC, BCH long -28.88%, short -21.12%.
+All pre-registered in the scripts, same evaluator/splits/self-tests as the other runs.
+
+**X1 / X2 / X3** (`scripts/research_crypto_2026_10_25.py`, BTC+ETH, K = 3, alpha 0.0167):
+| rule | holdout mean R (n) | fresh | gross disc / hold / fresh | verdict |
+|---|---|---|---|---|
+| CONTROL always long, 5-day holds | +0.042 (406), p 0.26 | -0.106 | +0.42 / +0.13 / -0.02 | benchmark |
+| **X1 20-day momentum, hold 5 days** | **+0.092 (406), p 0.10**, both halves +, +20% spread +0.087, delayed +0.087 | -0.028 (91) | +0.29 / +0.16 / +0.04 | fails p, fresh, 1.6 trades/week |
+| X2 5-day momentum, hold 1 day | -0.045 (1214) | -0.043 | +0.14 / +0.03 / +0.01 | RULED OUT |
+| X3 reversal after a 2-sigma day | -0.142 (129) | -0.686 | -0.08 / -0.08 / -0.64 | RULED OUT |
+X1 is the best result of ~58 variants (the first with a positive net holdout in both halves, under +20% spread and a delay).
+**Follow-up robustness** (`research_crypto_followup_2026_10_25.py`, run AFTER seeing X1, so a check, not a discovery): over
+L in {10,20,40,60} x H in {5,10} only 5 of 8 cells are positive in both discovery and holdout (rule required 6) -> NOT robust; the
+holdout of the 8 cells ranges -0.144..+0.092 with X1's own cell the best. Longs earn it (holdout +0.172), shorts lose (-0.136):
+mostly crypto beta. A daily sleeve (enter every day, hold 5, ~9.8 trades/week) is +0.032 in holdout, -0.026 fresh. Against 200
+random-sign runs X1's holdout sits above 98% of them (p ~ 0.02; random signs average -0.074, the cost drag). **Replication**
+(`research_crypto_replication_2026_10_25.py`, identical rule, never tuned, on LTC_USD + BCH_USD): holdout -0.096 (n=407), fresh
+-0.109, gross only +0.027: NOT REPLICATED.
+**Crypto weekend gap** (`research_crypto_weekend_gap_2026_10_25.py`, K = 2, 4 instruments, gaps >= median of the prior 52,
+hold 24 bars): G1 fade holdout -0.195 (n=475), G2 follow -0.031 (gross +0.083 holdout but -0.068 fresh): RULED OUT.
+
+Research result: 2026-10-25, 6 more ideas tested (crypto X1-X3, replication, G1, G2); 0 credible; 25 today
+Best practice-trial candidate so far: crypto X1 (BTC+ETH 20-day momentum, hold 5 days) is the nearest miss: holdout +0.092 net,
++20% spread and delay positive, but fresh -0.028, 1.6 trades/week (bar needs ~5), not robust across neighbouring parameters,
+mostly long beta, and not replicated on LTC/BCH. It does NOT meet the practice-trial bar and should not be built without the
+user choosing to lower it. Nearest regular-frequency rule: low-cost-universe volume-climax fade (holdout -0.027, ~10.7/week).
+Running total: about 58 variants in 30 families; 0 pass the strict bar and 0 pass the practice-trial bar.
+**Where this leaves the search**: every rule family on liquid CFDs shows a gross edge of -0.1..+0.16 R before costs of 0.03-0.08 R
+(more with crypto financing), the apparent edges flip sign between discovery and fresh data, and published effects (momentum,
+turn of month, dip buying, crowd contrarianism, FOMC drift, gaps) have faded since ~2016-2021. Untried: (1) a walk-forward
+machine-learning combination of all the features collected (price, volume, spread regime, position/order books, cross-asset);
+(2) cross-sectional versions (rank instruments each day) of the single-instrument rules; (3) lower-cost execution (limit orders
+only where adverse selection is measured, not assumed).
