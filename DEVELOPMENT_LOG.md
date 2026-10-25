@@ -10756,3 +10756,23 @@ consistent effect found in the whole programme (+0.1 to +0.26 R net, in three sa
 only in stress and the evidence is a few dozen distinct episodes. Fisher-combining the two independent p-values (0.19, 0.17) gives about 0.14. It is NOT
 a finding; it IS the only item worth a forward test, and it trades about 0.5 times a week (2-3 a month, in clusters), well short of the 5/week goal.
 Running total: about 97 variants in 45 families; 0 pass the strict bar; 0 pass the practice-trial bar (VT1 fails frequency and significance).
+
+## 2026-10-25 (can VT1 be made more frequent?): no, the edge is a cliff at ratio 1.0 and the signal is ~3.4 episodes a year
+
+User: "anyway VT1 can be a more frequent strategy?" Three scripts: `research_vt1_frequency_`, `research_vt1_episodes_`, `research_vt1_first_day_2026_10_25.py`.
+**Dose-response** (5-day long on 10 daily index CFDs, mean net R by VIX/VIX3M bucket, PRE 2009-10..2015 | POST 2016..2026):
+below 0.80: -0.141 | -0.122; 0.80-0.85: -0.228 | -0.046; 0.85-0.90: +0.046 | +0.002; 0.90-0.95: +0.092 | +0.018; 0.95-1.00: +0.045 | -0.090;
+**1.00-1.05: +0.218 | +0.209; 1.05 and above: +0.505 | +0.211.** The two stress buckets are strongly positive in BOTH independent periods with nearly equal size;
+everything below 1.0 is about zero or negative. Choosing the threshold on PRE alone picks 1.0 (PRE +0.213 vs +0.089 at 0.90 and +0.027 at 0.85; POST +0.104
+vs +0.018 and -0.005). So relaxing the threshold adds trades but not edge: VT1 cannot be made frequent that way.
+**Episodes** (a run of signal days separated by more than 10 days; 58 episodes since 2009-10): the independent unit. Equal-weighted by episode, 41 of 58
+were positive (71%), mean of episode means +0.40, sign test p = 0.001; PRE 17 of 24 (sign p 0.032), POST 24 of 34 (sign p 0.012). That is stronger
+than the trade-level date-clustered p (0.10-0.19) because short sharp spikes win big and are only a few trades each. BUT the trade-weighted mean is
++0.10 to +0.26 because the LOSING episodes are the long ones with many signal days: 2011-07..10 -0.47 (42 days), 2018-Q4 -0.30/-0.54, 2020-02..04 -0.85 (43
+days, 75 trades), 2025-03/04 -0.52/-0.33. Repeated 5-day buys in a sustained bear market lose.
+**POST-HOC first-day-only rule** (enter only on the first signal day of an episode): does NOT help. Daily engine PRE +0.169, POST -0.007 (62% of
+episodes positive, sign p 0.11-0.13); H1 engine holdout +0.179, fresh +0.295, but 0.3 trades a week and the worst first-day entries are the big crashes
+(2025-04-01 -4.5, 2018-02-05 -3.0, 2020-02-25 -2.8). RULED OUT as an improvement.
+Conclusion: VT1 is a rare, sparse, high-variance stress-rebound effect (about 3.4 episodes a year, 0.3-0.5 trades a week), with real support at the
+episode level, a clean dose-response cliff at 1.0, and large losses in prolonged crashes. It cannot be made into a 5-a-week strategy. Running total:
+about 103 variants in 46 families; 0 pass the strict bar; 0 pass the practice-trial bar.
