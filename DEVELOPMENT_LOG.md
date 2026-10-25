@@ -10710,3 +10710,23 @@ Research result: 2026-10-25, about 23 more variants tested since the last entry,
 Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve: holdout +0.032, fresh -0.026, not replicated). New watch item: the
 post-hoc composite crypto flow signal above (1.6 trades/week, fails frequency).
 Running total: about 90 variants in 43 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (Crypto Flow: the composite crypto signal built as a live practice-account EXPERIMENT)
+
+User: "can we not do a live test? ... if it's hypothetical it won't reflect the actual conditions of the trade", then "reduce the lot size so that the
+loss is not significant (same as vwap)". Built `src/crypto_flow_addon.py` (toggle `crypto_flow_enabled`, Settings, OFF by default, needs autopilot on).
+What it is, honestly: the post-hoc composite (CP-C1) of three public gauges (Binance funding rate, Binance taker-buy share, Coinbase-vs-Binance premium),
+mean z >= +1 long / <= -1 short on OANDA BTC/ETH/LTC/BCH CFDs, 24-hour hold. Historical holdout +0.057 R over 400 trades, fresh +0.059, NOT significant
+(clustered p 0.71), negative in 2020, vanishes without the best coin, about 1.6 trades a week. It is an experiment, not a validated strategy.
+- Pre-registered live trial (in the module docstring): expected mean R +0.05, about 1.6 trades/week, judged at about 100 trades, stop early if after 40
+  closed trades the mean R is more than 2 standard errors below +0.05. Early streaks are not evidence; do not enlarge size.
+- Size: 25% of the app's normal per-trade risk (RISK_FRACTION). Tracked capital is 2,000, risk 2% -> 39.5, so each trade risks about 9.9 at the stop
+  (3 typical daily moves); a typical day moves about a third of that. Verified against live OANDA metadata with the order stubbed: BTC 0.002, ETH 0.04,
+  LTC 1.35, BCH 0.26 units each risking 9.88. Every order carries a stop and a far take-profit (the app's invariant); the research had no stop.
+- Evaluated once per UTC day at 01:00-04:00 UTC for the previous completed day; position closed after 24 h when the market is open; the Friday
+  pre-close cancel-all still applies. A missing or unreachable gauge means NO trade that day plus one Telegram alert (never a partial signal).
+- Verified: the live signal code reproduces the research composite exactly (260 sampled instrument-days with only the 290-day history the server will
+  have: max difference 0, same direction 260/260); 17 new tests; full suite 513 passed; the dashboard renders. New state file
+  `config/crypto_flow_log.json` registered in state_paths (the 2026-10-02 lesson).
+- Open risk: Binance's futures endpoint refuses some countries' IPs and Render's free instance is in the US by default. If it is refused the bot
+  alerts and trades nothing; the fix would be a different funding source, which needs its own re-test first.

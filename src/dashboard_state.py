@@ -158,6 +158,9 @@ class DashboardState:
     # infrastructure needed). Off by default. See src/vwap_scalp_addon.py
     # and DEVELOPMENT_LOG.md 2026-08-30.
     vwap_scalp_enabled: bool = False
+    # Crypto Flow (2026-10-25): a small-size EXPERIMENT on BTC/ETH/LTC/BCH CFDs driven by public crypto-market buying-pressure
+    # gauges. Off by default; see src/crypto_flow_addon.py for the pre-registered trial and why it is only an experiment.
+    crypto_flow_enabled: bool = False
     # VWAP Scalp's OWN daily trade cap (2026-09-03) -- separate from and
     # tighter than the shared account-wide max_trades_per_day (real
     # incident: VWAP Scalp alone burned 18 of the account's 30-trade

@@ -507,6 +507,15 @@
         </div>
         <p class="hint">Demo only. Fades a 2-standard-deviation move from session VWAP; closes after 30 minutes.</p>
 
+        <div class="toggle-row">
+          <span>Crypto Flow (experiment)</span>
+          <label class="switch">
+            <input type="checkbox" name="crypto_flow_enabled" {{ 'checked' if crypto_flow_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p class="hint">Demo only, small size (a quarter of normal risk). Trades BTC/ETH/LTC/BCH for one day when crypto buying pressure is unusually strong or weak, about 1-2 trades a week. An unproven experiment, not a strategy.</p>
+
         <label>Account-wide trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
         <input type="range" name="max_trades_per_day"
                min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"

@@ -52,6 +52,7 @@ from trade_journal import (
 from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_trades, reconcile_orphan_trades
 from autopilot import PhaseState
 from journal_export import build_journal_workbook
+from crypto_flow_addon import check_crypto_flow, CRYPTO_FLOW_TAG
 from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
                               VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
 
@@ -518,6 +519,7 @@ def _win_rate_breakdown(journal: list) -> list:
         ("Overall", journal),
         ("Base Strategy", [e for e in journal if e.get("experiment_tag") is None]),
         ("VWAP Scalp", [e for e in journal if e.get("experiment_tag") == VWAP_SCALP_TAG]),
+        ("Crypto Flow", [e for e in journal if e.get("experiment_tag") == CRYPTO_FLOW_TAG]),
     ]
     breakdown = []
     for label, subset in groups:
@@ -665,6 +667,7 @@ def dashboard():
         overall_gain=overall_gain, overall_gain_pct=overall_gain_pct,
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
+        crypto_flow_enabled=state.crypto_flow_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
         vwap_scalp_max_trades_per_day_min=state.vwap_scalp_max_trades_per_day_min,
@@ -884,6 +887,8 @@ def settings():
         # DEVELOPMENT_LOG.md 2026-08-30 for the six rounds of scrutiny
         # this went through before shipping.
         state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
+        # Crypto Flow: an off-by-default small-size EXPERIMENT -- see src/crypto_flow_addon.py.
+        state.crypto_flow_enabled = request.form.get("crypto_flow_enabled") == "on"
         # 2026-09-17: toggle to disable the daily+bucket caps entirely,
         # rather than raising the number -- see DashboardState.vwap_
         # scalp_daily_cap_enabled's own comment. The slider below still
@@ -1027,6 +1032,9 @@ def start_scheduler():
     # module docstring), not a compromise made after the fact.
     scheduler.add_job(check_vwap_scalp_opportunities,
                        IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Crypto Flow (off by default): the same 5-minute cadence; it only does work inside its 01:00-04:00 UTC daily entry window
+    # (one evaluation per day) and to close a position held 24 hours, and returns immediately otherwise.
+    scheduler.add_job(check_crypto_flow, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 
