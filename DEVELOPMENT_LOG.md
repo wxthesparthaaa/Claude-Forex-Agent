@@ -11040,3 +11040,35 @@ For a one-sided 5% test with 80% power, n = ((1.645 + 0.842) x sd / mean)^2 trad
 The standard error of a live mean R (sd 1.2) is 0.19 after 40 trades, 0.12 after 100, 0.076 after 250. The pre-registered rules for Crypto Flow (judge at ~100 trades, stop if the mean is more than 2 SE below +0.05 after 40) can only catch a
 disaster, not confirm the edge: a +0.057 R true edge and a zero edge are statistically indistinguishable within any horizon that matters. Consequence for the decision about live experiments: they are a cheap sanity check and a way to catch operational
 or cost problems, NOT a way to prove a strategy before the end-of-November deadline.
+
+## 2026-10-26 -- daily research (scheduled routine): commodity and FX week-of-year seasonality, jobless-claims momentum, commodity-currency catch-up -- all RULED OUT
+
+**Health check** (state-sync read 2026-10-25 22:39 UTC): heartbeat current (app alive); `vwap_scalp_enabled` false, no VWAP trade since 2026-10-23 (last: #7523
+CAD_JPY closed 18:32 UTC that day); OANDA shows 0 open trades (read-only). `crypto_flow_enabled` is TRUE and phase is autopilot, so the Crypto Flow practice
+experiment is armed; it has not evaluated a day yet (no `crypto_flow_log.json` on state-sync; its first window is Monday 01:00-04:00 UTC with the market open),
+so 0 live trades so far. Test suite here (Python 3.11) had 1 failure: `test_record_open_trade_waits_for_a_concurrent_journal_write_instead_of_racing` called
+`RLock.locked()`, which only exists from Python 3.14 -- a test portability issue, not a bot bug; replaced with a non-blocking acquire probe; 513 passed.
+
+**Tested** (pre-registered in the script docstrings before running; daily OANDA bid/ask 2002-2026 fetched by the new `scripts/research_d1_fetch_2026_10_26.py`;
+VT1 daily engine; financing 2%/yr FX/commodities, 6.5% long / 2% short indices; K = 4 this run, alpha 0.0125; self-tests passed):
+| idea | holdout mean R (n) | halves | fresh | +20% / delay | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| S1 commodity week-of-year seasonality (12 commodities, expanding prior-years estimate, 5-day hold) | -0.000 (2393) p 0.41 | +0.003 / -0.004 | +0.044 | -0.010 / +0.003 | 5.9 | RULED OUT (gross ~0; early period -0.065) |
+| S2 FX week-of-year seasonality (7 USD majors) | -0.043 (1421) | -0.057 / -0.029 | -0.004 | -0.047 / -0.033 | 3.5 | RULED OUT |
+| S3 US jobless-claims momentum (FRED ICNSA, 4-wk yoy growth change) -> 10 indices | -0.067 (2018) | +0.014 / -0.148 | -0.095 | -0.070 / -0.077 | 5.0 | RULED OUT (below always-long control -0.007) |
+| C1 commodity-currency catch-up (CAD~WTI, NOK~Brent, AUD~copper, ZAR~gold, MXN~WTI; 20-day residual) | -0.117 (995) p 0.99 | -0.162 / -0.073 | -0.197 | -0.127 / -0.058 | 2.5 | RULED OUT (spot-only -0.087: the laggard does not catch up) |
+Scripts: `scripts/research_seasonal_claims_2026_10_26.py`, `scripts/research_commodity_fx_lag_2026_10_26.py`. Note: `rep.trades` refuses an entry at the same
+open as the previous exit, so always-in weekly rules trade every other week (the trades/wk column is about half the design rate); this does not bias the means.
+Lesson: physical/fiscal calendars, a slow macro series and terms-of-trade lags add nothing either; same picture as the price-only families.
+
+Best practice-trial candidate so far: none (nothing tested since 2026-10-24 has holdout > 0, fresh > 0, +20% spread > 0, delay > 0 and >= 5 trades/week at once;
+nearest misses: crypto X1 BTC+ETH 20-day momentum, holdout +0.032 / fresh -0.026; the Crypto Flow composite, holdout +0.057 / fresh +0.059 but 1.6 trades/week,
+already running as the user-requested live experiment). Deadline question for the 20 Nov run: Crypto Flow already exists in src/ as an experiment; whether it
+counts as "the" practice trial is the user's call.
+Running total: about 166 variants in 74 families (plus ~9,500 scan cells); 0 pass the strict bar; 0 pass the practice-trial bar.
+
+**Queue** (ranked): (1) Atlanta Fed GDPNow nowcast revisions (several updates a week) -> USD majors and indices, always-in weekly; (2) US 2-year Treasury yield
+weekly change (FRED DGS2, policy-expectations channel; the scan covered only 3-month and 10-year) -> USD majors; (3) Chicago Fed NFCI weekly with ALFRED
+vintages (real-time, no revision look-ahead) -> indices; (4) VT1 stress-rebound applied to risk FX crosses (AUD_JPY, NZD_JPY, CAD_JPY) to raise its frequency.
+
+Research result: 2026-10-26, 4 ideas tested, 0 credible

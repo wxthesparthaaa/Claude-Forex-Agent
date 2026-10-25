@@ -510,7 +510,11 @@ def test_record_open_trade_waits_for_a_concurrent_journal_write_instead_of_racin
     _time.sleep(0.05)  # let the holder thread actually acquire the lock first
 
     def _record_while_locked():
-        lock_was_held_when_record_started["locked"] = tj.JOURNAL_LOCK.locked()
+        # RLock.locked() only exists from Python 3.14; a non-blocking probe works on every version.
+        got_it = tj.JOURNAL_LOCK.acquire(blocking=False)
+        if got_it:
+            tj.JOURNAL_LOCK.release()
+        lock_was_held_when_record_started["locked"] = not got_it
         tj.record_open_trade("102", candidate(instrument="GBP_USD"))
 
     recorder = threading.Thread(target=_record_while_locked)
