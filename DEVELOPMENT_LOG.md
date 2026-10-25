@@ -10995,3 +10995,10 @@ Until the end of 2022 a Binance price more than 2 sigma above (below) OANDA's cr
 a week: exactly the profile this programme has been looking for, and the one unambiguous, mechanical, pricing-inefficiency edge found. From 2023 the gross edge disappears (+0.01 to +0.14) and in 2025 it is zero or negative: OANDA's feed
 evidently now tracks the market without the lag. A strategy built in 2021 would have worked for about two years and then stopped; it cannot be traded now. Lesson recorded: real edges in this setting are latency/feed artefacts and they get fixed.
 Running total: about 151 variants in 65 families.
+
+## 2026-10-25 (cross-venue test on gold and the euro, Binance PAXG and EURUSDT vs OANDA): ruled out
+
+After the crypto cross-venue lag was found (and found closed), the same test on Binance's 24/7 mirrors of OANDA's non-crypto markets: PAXGUSDT (gold-backed token) vs XAU_USD and EURUSDT vs EUR_USD, hourly gap convergence and the
+weekend residual (how much more the 24/7 price moved than the CFD at the Sunday reopen). `scripts/research_cross_venue_gold_fx_2026_10_25.py`, pre-registered, K = 4. G1 gold gap convergence (2 h): holdout -0.076 (n=889), gross -0.007,
+3.6 trades/wk; G2 euro gap convergence: -0.096 (n=786), gross +0.043; G3 gold weekend residual (4 h): -0.148 (n=97; fresh +0.60 on n=22, noise); G4 euro weekend residual: -0.093 (n=100), fresh -0.554. Gold and euro quotes at OANDA lead
+Binance's mirrors, not the other way round, and carry no lag to harvest. 0 of 4 credible. Running total: about 155 variants in 66 families.
