@@ -124,6 +124,17 @@ def build_cells(dates, series_arrays, targets):
 
 
 def selftest():
+    """Runs on its own synthetic calendar, so it pins the discovery/holdout windows for its duration (the crypto scan overrides them)."""
+    global DISC, HOLD_P
+    saved = (DISC, HOLD_P)
+    DISC, HOLD_P = ("2012-03-01", "2018-01-01"), ("2018-01-01", "2025-10-01")
+    try:
+        _selftest()
+    finally:
+        DISC, HOLD_P = saved
+
+
+def _selftest():
     rnd = np.random.RandomState(3)
     T = 3500
     dates = [(datetime(2011, 3, 1) + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(T)]

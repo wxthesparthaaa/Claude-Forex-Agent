@@ -10929,3 +10929,12 @@ DISCOVERY 2012-03..2017-12 (t deflated by sqrt(5) for overlapping returns), HOLD
 Conclusion: across the whole free daily outside-data universe, simple linear predictors of next-week returns are indistinguishable from chance after multiple-testing control, and the part that looked real in 2012-2017 (higher VIX
 -> higher next-week index returns, the broad cousin of VT1) disappeared after 2018 except in extreme stress. RULED OUT as a source of a frequent strategy.
 Running total: about 7,900 cells scanned in this one test plus about 137 hand-built variants in 59 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (the crypto twin of the exhaustive scan: 97 series x 4 transforms x 4 coins): NOTHING SELECTED, no excess over chance
+
+`scripts/research_crypto_signal_scan_2026_10_25.py`, pre-registered (selection bar |t| >= 4.0; a short discovery of 2020-06..2022-12 means low power, stated up front). 97 outside daily series (Binance funding / taker share / Coinbase
+premium per coin, Fear & Greed, stablecoin supply, DeFi TVL, Wikipedia views, Bitcoin on-chain x6, DVOL BTC/ETH, plus the 69 macro/stress series) x 4 transforms against the next-5-day R of BTC/ETH/LTC/BCH = 1,552 cells.
+Cells with |discovery t| >= 2.5: observed 24 vs 19.3 expected by chance; >= 3.0: 2 vs 4.2; >= 3.5: 0 vs 0.7; >= 4.0 (selection): 0 vs 0.1. There is no excess of strong cells over chance. Holdout 2023-01..2025-09 replication
+of the |t| >= 2.5 cells: same sign 33%, mean sign-adjusted correlation -0.009 (se 0.011). The largest discovery cells (DVOL level -> BCH, yen ETF level -> BTC, biotech ETF level -> crypto) all vanish in the holdout.
+Note: the stablecoin-supply signal (SC1), which looked good in the holdout, is not prominent in the 2020-22 discovery here, i.e. its edge appears only in the later era -- consistent with it being a candidate for a forward test, not a
+robust effect. Running total: about 9,500 scanned cells plus about 137 hand-built variants in 60 families; 0 pass the strict bar; 0 pass the practice-trial bar.
