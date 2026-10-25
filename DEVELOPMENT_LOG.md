@@ -11002,3 +11002,9 @@ After the crypto cross-venue lag was found (and found closed), the same test on 
 weekend residual (how much more the 24/7 price moved than the CFD at the Sunday reopen). `scripts/research_cross_venue_gold_fx_2026_10_25.py`, pre-registered, K = 4. G1 gold gap convergence (2 h): holdout -0.076 (n=889), gross -0.007,
 3.6 trades/wk; G2 euro gap convergence: -0.096 (n=786), gross +0.043; G3 gold weekend residual (4 h): -0.148 (n=97; fresh +0.60 on n=22, noise); G4 euro weekend residual: -0.093 (n=100), fresh -0.554. Gold and euro quotes at OANDA lead
 Binance's mirrors, not the other way round, and carry no lag to harvest. 0 of 4 credible. Running total: about 155 variants in 66 families.
+
+## 2026-10-25 (relative value between index CFDs: S&P vs Dow / Nasdaq / Russell, DAX vs Euro Stoxx / CAC): RULED OUT
+
+`scripts/research_index_pairs_2026_10_25.py` (the relative-value module of 2026-10-24 imported unchanged, run on daily candles: 120-day OLS window, trade at |z| >= 2.0 / 2.5, exit at z = 0 or 30 days; 6 fixed pairs; financing 8.5%/yr on the notional), K = 2.
+Z 2.0: discovery -1.320 (n=398), holdout -1.147 (n=112), fresh -0.394; gross of financing -0.274 / -0.219 / +0.489; years positive 0%. Z 2.5: holdout -0.765 (n=70), gross +0.198 on 70 trades, fresh +0.269 on 23. 0 of 2 credible.
+The index ratios do not mean-revert on a daily scale beyond what the two spreads and the 8.5% financing cost; the holds are long (about a month) so financing is the killer. Running total: about 157 variants in 67 families.
