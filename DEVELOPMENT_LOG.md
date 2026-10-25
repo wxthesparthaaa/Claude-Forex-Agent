@@ -10669,3 +10669,44 @@ Real data (7 crosses, 2016-2026, 17.8 trades/week at 1 h): net R per trade about
 result +0.21 / +0.38 (holdout / fresh) at 1 h and +0.47 / +0.41 at 4 h, but the typical deviation is tiny: crossing three spreads costs on
 the order of 80 typical deviations. The quotes come from one price engine and are consistent to well inside their spread. RULED OUT.
 Running total: about 76 variants in 38 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (information from OUTSIDE OANDA: crypto funding, sentiment, order flow, Coinbase premium): all RULED OUT; one weak post-hoc echo
+
+The first tests whose input is not OANDA's own price. Free public sources reachable from this machine (FRED and CFTC are not): Binance
+USD-M funding-rate history (from 2019-09), alternative.me Fear & Greed (from 2018-02), Binance spot daily klines with taker-buy volume (from
+2017-08), Coinbase daily candles (from 2017). Fetcher: `scripts/research_fetch_crypto_derivs_2026_10_25.py`. All traded on OANDA's BTC / ETH /
+LTC / BCH CFDs (weekdays only), entered the next day 01:00 UTC on the fill side, directional financing, same R unit, each family pre-registered
+(K = 4, alpha 0.0125), look-ahead self-tests passed (random signals ~0, a peeking rule +0.8 R).
+| family (scripts `research_crypto_sentiment_`, `_orderflow_`, `_premium_`) | variant | holdout net R (n) | fresh | gross disc / hold / fresh |
+|---|---|---|---|---|
+| funding rate | FD1 fade, 5 d | -0.123 (162) | -0.198 | -0.147 / -0.034 / -0.092 |
+| | FD2 follow, 5 d | -0.053 (162) | -0.005 | +0.147 / +0.034 / +0.092 |
+| Fear & Greed (<=20 / >=80) | FG1 contrarian | -0.052 (194) | -0.187 | -0.232 / +0.024 / -0.074 |
+| | FG2 follow | -0.093 (194) | -0.010 | +0.232 / -0.024 / +0.074 |
+| taker-buy share | TB1 follow, 1 d | -0.014 (569) | -0.058 | +0.041 / +0.117 / +0.092 |
+| | TB2 fade, 1 d | -0.249 | -0.238 | mirror |
+| | TB3 follow, 5 d | -0.125 (371) | -0.182 | +0.018 / -0.026 / -0.060 |
+| | TB4 fade, 5 d | -0.072 | -0.048 | mirror |
+| Coinbase premium | CP1 follow, 1 d | -0.028 (339) | +0.120 | +0.055 / +0.094 / +0.210 |
+| | CP2 fade, 1 d | -0.219 | -0.311 | mirror |
+| | CP3 follow, 5 d | -0.032 (209) | +0.200 | +0.283 / +0.051 / +0.278 |
+| | CP4 fade, 5 d | -0.143 | -0.377 | mirror |
+Controls: always-long 5-day crypto holdout +0.010, fresh -0.178; always-long 1-day -0.137. 0 of 12 credible; the best p-values are above 0.38.
+Funding and Fear & Greed carry no information. The FOLLOW direction of the taker-flow and Coinbase-premium signals has a small positive GROSS
+in discovery, holdout and fresh but loses 0.10-0.15 R to spread and financing.
+
+**Post-hoc composite** (`research_crypto_composite_2026_10_25.py`, written after seeing the above, so NOT a discovery; threshold 1.0 fixed before
+running): mean of the three z-scores (funding, taker share, premium) >= +1 long / <= -1 short. Hold 1 day: holdout +0.057 (n=400), fresh +0.059,
++20% spread +0.038, delayed +0.060, gross +0.17 / +0.17. Hold 5 days: +0.054 (n=260), fresh +0.140. But: 2020 (the only discovery year) is
+negative (-0.195 / -0.400, n=40 / 34), the date-clustered p is 0.71 / 0.57, it drops to +0.018 / -0.004 without the best instrument, and it
+trades 1.6 / 1.0 times a week, far below the 5 a week bar. It is the first thing in two days that is positive on holdout, fresh, +20% spread and
+delay at once, and it is exactly the kind of result a post-hoc choice among 14 variants produces. NOT a finding; the only way to learn more is a
+forward paper-track (a read-only logger that computes the composite daily and records the hypothetical trades), which costs nothing.
+
+## 2026-10-25 (gotobi, hour scan, gold triangular consistency)
+See the two entries above and below; counted here: gotobi 4 variants, hour scan 1, triangular 2, FX value 3.
+
+Research result: 2026-10-25, about 23 more variants tested since the last entry, 0 credible; 60 today
+Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve: holdout +0.032, fresh -0.026, not replicated). New watch item: the
+post-hoc composite crypto flow signal above (1.6 trades/week, fails frequency).
+Running total: about 90 variants in 43 families; 0 pass the strict bar; 0 pass the practice-trial bar.
