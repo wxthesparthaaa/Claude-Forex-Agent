@@ -10634,3 +10634,27 @@ Month-end flows were covered inside the 4pm-fix test (A3).
 Research result: 2026-10-25, 3 more variants tested (value x3 forms), 0 credible; 37 today
 Best practice-trial candidate so far: unchanged (crypto X1 daily sleeve; fresh -0.026, not replicated).
 Running total: about 70 variants in 35 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (gotobi settlement days, hour-of-day scan): RULED OUT
+
+User: "find more ideas, don't stop". Two new structural-flow families, pre-registered (`scripts/research_gotobi_and_hour_scan_2026_10_25.py`,
+follow-up `research_gotobi_followup_2026_10_25.py`). Self-tests passed (random walk ~0; a planted +0.2 sigma hour is found, t = 7.0).
+
+**Gotobi** (Japanese importers/corporates settle on the 5th, 10th, 15th, 20th, 25th and month end and buy USD in the Tokyo morning ahead
+of the 9:55 JST fix): long USD_JPY (G1) or the four JPY pairs (G2) from 23:00 to 01:00 UTC on those Tokyo weekdays, benchmarked against
+every other Tokyo weekday.
+| variant | gross (mid) disc / hold / fresh | net holdout (n) | net fresh | gotobi minus other days, holdout | verdict |
+|---|---|---|---|---|---|
+| G1 USD_JPY | +0.098 / +0.044 / -0.076 | -0.078 (243) | -0.204 | +0.025 (p 0.37) | RULED OUT |
+| G2 JPY pool | +0.089 / +0.073 / -0.069 | -0.085 (972) | -0.263 | +0.113 (p 0.039 vs alpha 0.025) | RULED OUT |
+The window starts in the hour after the New York rollover when spreads are widest: every other Tokyo weekday also loses 0.10-0.20 R net,
+so cost, not direction, decides. POST-HOC follow-up G3/G4 (entry moved to 00:00-01:00 UTC to avoid that hour; labelled post hoc, family
+K = 4): net holdout -0.212 / -0.208, gross turns NEGATIVE (-0.077 / -0.048), fresh -0.50 / -0.47. There is no gotobi effect to rescue.
+
+**Hour-of-day scan on 18 non-FX instruments** (432 cells; selected on discovery at |t| >= 3.8, about 0.06 false expected): ONE cell
+selected, XAU_USD 23:00 UTC long (t = +3.92), gross +0.088 / +0.042 / +0.096 but net -0.187 / -0.083 / +0.018: it is the rollover hour
+again (the cost there is about 0.13 R an hour). The descriptive cells (|t| >= 3.0) are the same rollover hour in silver and bitcoin.
+A mid-price drift in the rollover hour is not tradeable at its spread. RULED OUT.
+
+Lesson recorded: the 22:00-00:00 UTC window has the widest spreads of the day, so any pattern that lives there is a mid-price effect that
+cannot be harvested.
