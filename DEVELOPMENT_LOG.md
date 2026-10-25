@@ -11022,3 +11022,21 @@ Hypothesis: the Binance-vs-OANDA convergence edge (real until 2022) disappeared 
 2024 -0.297 / +0.012, 2025 -0.266 / -0.022, 2026 -0.502 / +0.009; the Binance gap is the same to within 0.05 R in every year (2021 +0.881 net), and requiring both venues to agree changes nothing after 2022. Primary result: post-2022 net -0.345 (n=1682), gross +0.021,
 p 1.00; fresh -0.452. REJECTED: the edge existed against EVERY venue in 2020-2021 (OANDA's crypto CFD simply lagged the whole market then, net +0.9 R per trade in 2021 on about 480 trades) and was already half gone in 2022 and entirely gone from 2023. Not a venue switch.
 Running total: about 160 variants in 69 families.
+
+## 2026-10-25 (internal crypto lead-lag: BTC leading ETH / LTC / BCH on OANDA's own prices): RULED OUT
+
+`scripts/research_crypto_lead_lag_2026_10_25.py`, pre-registered, K = 2: a >= 2-sigma hourly BTC move that an alt has not yet matched (z_b - z_a >= 1.5), trade the alt with (C1) or against (C2) the BTC move for 2 hours. C1 holdout -0.298 (n=1200), gross +0.065, fresh -0.499, 4.8 trades a week;
+C2 -0.428, gross -0.065. The alts do catch up a little (gross +0.07 R), but crypto alt CFDs cost about 0.37 R over a 2-hour hold. 0 of 2 credible. Running total: about 162 variants in 70 families.
+
+## 2026-10-25 (how long would a live test need to confirm the survivors? power calculation, no data): live forward tests cannot confirm edges this small within any useful time
+For a one-sided 5% test with 80% power, n = ((1.645 + 0.842) x sd / mean)^2 trades:
+| candidate | historical mean (R) | sd per trade (R) | trades needed | years at its frequency |
+|---|---|---|---|---|
+| Crypto Flow composite, hold 1 d | +0.057 | 1.2 | 2,740 | 33 years at 1.6/week |
+| Stablecoin follow SC1 | +0.345 | 1.9 | 188 | 4.5 years at 0.8/week |
+| VT1 stress rebound, H1 engine | +0.259 | 1.5 | 207 | 8 years at 0.5/week |
+| VT1, conservative daily-engine number | +0.104 | 1.5 | 1,286 | 50 years at 0.5/week |
+| (reference) a +0.10 R / 1.0 sd strategy | +0.100 | 1.0 | 618 | 2.4 years at 5/week |
+The standard error of a live mean R (sd 1.2) is 0.19 after 40 trades, 0.12 after 100, 0.076 after 250. The pre-registered rules for Crypto Flow (judge at ~100 trades, stop if the mean is more than 2 SE below +0.05 after 40) can only catch a
+disaster, not confirm the edge: a +0.057 R true edge and a zero edge are statistically indistinguishable within any horizon that matters. Consequence for the decision about live experiments: they are a cheap sanity check and a way to catch operational
+or cost problems, NOT a way to prove a strategy before the end-of-November deadline.
