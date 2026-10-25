@@ -10794,3 +10794,19 @@ about zero in the holdout (+0.02 to +0.04 R) against costs of about 0.09 R. The 
 against a holdout gross of +0.02. Outside macro and stress information, fed to a flexible model across 28 instruments, adds nothing beyond the VT1 effect already found
 (which the models cannot exploit because it fires on about 1% of samples). RULED OUT.
 Running total: about 105 variants in 47 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (does the VT1 stress-rebound pattern exist in other stress gauges?): NOT SUPPORTED
+
+User: "keep going on the new ideas". `scripts/research_stress_rebound_2026_10_25.py`, pre-registered, K = 4, daily-candle engine, each signal judged in BOTH independent periods
+(PRE 2008-2015, POST 2016-2026) with an evidence rule fixed in advance (mean > 0 and +20% spread > 0 and >= 60% of independent episodes positive in both periods, and
+pooled date-clustered p < 0.0125). Self-test passed.
+| signal | PRE mean (n; episodes positive) | POST mean (n; episodes positive) | pooled p | control PRE / POST | verdict |
+|---|---|---|---|---|---|
+| S1 VIX9D/VIX >= 1 -> long indices | +0.043 (1152; 64%) | -0.062 (1695; 65%) | 0.50 | -0.054 / -0.013 | NOT SUPPORTED |
+| S2 MOVE (bond vol) z >= 2 -> long indices | +0.188 (342; 77%) | +0.065 (538; 63%) | 0.25 | same | NOT SUPPORTED |
+| S3 credit selling z <= -2 -> long indices | -0.122 (292; 60%) | -0.008 (360; 64%) | 0.71 | same | NOT SUPPORTED |
+| S4 OVX z >= 2 -> long oil | -0.347 (105; 40%) | +0.084 (90; 58%) | 0.89 | -0.059 / +0.002 | NOT SUPPORTED |
+S2 is the only one positive in both periods with a majority of episodes positive (13 and 19 episodes), but its dose-response reverses in POST (z in 2.5-3: +0.42 PRE, -0.14 POST;
+z >= 3: +0.53 PRE, -0.13 POST), the pooled p is 0.25, and it fires on only 13-19 episodes in each period. S1 (short-end inversion) is positive before 2016 and negative
+after, with a worse result at stronger inversion in POST (-0.23). VT1 (the VIX / 3-month VIX term-structure inversion) therefore remains the only stress-rebound signal
+with support in both periods and a clean dose-response; the other gauges are not a way to add independent trades. Running total: about 109 variants in 48 families.
