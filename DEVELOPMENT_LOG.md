@@ -11008,3 +11008,9 @@ Binance's mirrors, not the other way round, and carry no lag to harvest. 0 of 4 
 `scripts/research_index_pairs_2026_10_25.py` (the relative-value module of 2026-10-24 imported unchanged, run on daily candles: 120-day OLS window, trade at |z| >= 2.0 / 2.5, exit at z = 0 or 30 days; 6 fixed pairs; financing 8.5%/yr on the notional), K = 2.
 Z 2.0: discovery -1.320 (n=398), holdout -1.147 (n=112), fresh -0.394; gross of financing -0.274 / -0.219 / +0.489; years positive 0%. Z 2.5: holdout -0.765 (n=70), gross +0.198 on 70 trades, fresh +0.269 on 23. 0 of 2 credible.
 The index ratios do not mean-revert on a daily scale beyond what the two spreads and the 8.5% financing cost; the holds are long (about a month) so financing is the killer. Running total: about 157 variants in 67 families.
+
+## 2026-10-25 (hourly consistency between related index CFDs: 6 pairs, hold 1 and 4 hours): RULED OUT
+
+`scripts/research_index_pairs_hourly_2026_10_25.py`, pre-registered, K = 2: the two-leg version of the gold-quote engine on SPX500/US30, NAS100/SPX500, DE30/EU50, DE30/FR40, EU50/FR40, UK100/EU50 (log-ratio vs its trailing 500-bar mean, |z| >= 2, equal
+notional, financing ignored). 1-hour hold: net holdout -0.054 (n=7227), gross +0.004; 4-hour hold: -0.057 (n=3689), gross +0.003; 15-29 trades a week; years positive 0%. The indices price each other consistently at the hourly horizon; the net loss is the
+pair of spreads (about 0.06 R). RULED OUT. Running total: about 159 variants in 68 families.
