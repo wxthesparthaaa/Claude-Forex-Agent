@@ -10884,3 +10884,12 @@ All four NOT SUPPORTED: mean net R PRE / POST: BM1 -0.319 / -0.173, BM2 -0.128 /
 and none large enough to pay the financing; years positive 10-20%; always-long controls -0.09 / -0.20 (5-day) and -0.13 / -0.33 (21-day). The 2-year note is the worst (-0.5 to -1.0 R per trade: financing is several
 times its weekly volatility). Lesson recorded: measure financing against volatility before calling an instrument cheap; the bond CFDs are cheap to enter and expensive to hold.
 Running total: about 127 variants in 54 families; 0 pass the strict bar; 0 pass the practice-trial bar.
+
+## 2026-10-25 (US dollar net liquidity: Treasury cash account + Fed reverse repo -> index CFDs): NOT SUPPORTED
+
+New free outside data: US Treasury FiscalData daily TGA balance (2005-2026) and New York Fed overnight reverse-repo operations (2013-2026); the Fed's own balance sheet (the third leg of "net
+liquidity") is not reachable, so this is a two-legged proxy. `scripts/research_net_liquidity_2026_10_25.py`, pre-registered, K = 2: z of the 7-day change in L = -(TGA + RRP); |z| >= 1; applied with a
+one-trading-day publication lag to 10 index CFDs for 5 days (daily engine, PRE 2008-2015 / POST 2016-2026). (First run used a TGA line that stopped in 2021-09 because the Treasury renamed the line to an
+opening balance; fixed and rerun before any conclusion was drawn.) L1 FOLLOW (injection long, drain short): PRE -0.053, POST -0.085, pooled -0.071 (p 0.97). L2 FADE: PRE -0.033, POST -0.035, pooled -0.034
+(p 0.68). Neither direction shows any information; the popular thesis does not show up at a weekly horizon in OANDA index CFDs after costs. 0 of 2 supported.
+Running total: about 129 variants in 55 families; 0 pass the strict bar; 0 pass the practice-trial bar.
