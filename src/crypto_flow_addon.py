@@ -165,10 +165,23 @@ def _get_json(url: str):
     return json.loads(urllib.request.urlopen(req, timeout=HTTP_TIMEOUT).read())
 
 
+# fapi.binance.com answers HTTP 451 from US IPs (Render's default region; first live evaluation 2026-10-26 failed this way).
+# www.binance.com serves the same endpoint and data (verified 2026-10-27: Sept 2026 settlements of all four symbols identical to
+# Binance's monthly archive on data.binance.vision), so it is tried when the primary host refuses.
+FUNDING_HOSTS = ("https://fapi.binance.com", "https://www.binance.com")
+
+
 def fetch_funding(symbol: str, now: datetime) -> list:
     start = int((now - timedelta(days=HISTORY_DAYS)).timestamp() * 1000)
-    rows = _get_json(f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={symbol}&startTime={start}&limit=1000")
-    return [(r["fundingTime"], float(r["fundingRate"])) for r in rows]
+    error = None
+    for host in FUNDING_HOSTS:
+        try:
+            rows = _get_json(f"{host}/fapi/v1/fundingRate?symbol={symbol}&startTime={start}&limit=1000")
+        except (OSError, ValueError) as exc:  # urllib's HTTPError/URLError are OSErrors; bad JSON is a ValueError
+            error = exc
+            continue
+        return [(r["fundingTime"], float(r["fundingRate"])) for r in rows]
+    raise error
 
 
 def fetch_klines(symbol: str, now: datetime) -> list:

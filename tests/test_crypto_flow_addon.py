@@ -1,3 +1,4 @@
+import pytest
 import os
 import sys
 from dataclasses import asdict
@@ -210,3 +211,25 @@ def test_position_held_24h_is_closed_when_market_open(tmp_path, monkeypatch):
          patch.object(cf, "_force_close") as fc:
         cf.check_crypto_flow(client=object(), now=TUESDAY_0130.replace(hour=9), fetchers=_fetchers(_synthetic_inputs()))
     fc.assert_called_once()
+
+
+def test_funding_falls_back_to_second_host_when_primary_refuses(monkeypatch):
+    calls = []
+
+    def fake_get(url):
+        calls.append(url)
+        if url.startswith("https://fapi.binance.com"):
+            raise OSError("HTTP Error 451")
+        return [{"fundingTime": 1793001600000, "fundingRate": "0.0001"}]
+    monkeypatch.setattr(cf, "_get_json", fake_get)
+    rows = cf.fetch_funding("BTCUSDT", TUESDAY_0130)
+    assert rows == [(1793001600000, 0.0001)]
+    assert [u.split("/fapi/v1")[0] for u in calls] == list(cf.FUNDING_HOSTS)
+
+
+def test_funding_raises_when_every_host_refuses(monkeypatch):
+    def fake_get(url):
+        raise OSError("HTTP Error 451")
+    monkeypatch.setattr(cf, "_get_json", fake_get)
+    with pytest.raises(OSError):
+        cf.fetch_funding("BTCUSDT", TUESDAY_0130)
