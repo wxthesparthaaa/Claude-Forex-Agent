@@ -11072,3 +11072,39 @@ weekly change (FRED DGS2, policy-expectations channel; the scan covered only 3-m
 vintages (real-time, no revision look-ahead) -> indices; (4) VT1 stress-rebound applied to risk FX crosses (AUD_JPY, NZD_JPY, CAD_JPY) to raise its frequency.
 
 Research result: 2026-10-26, 4 ideas tested, 0 credible
+
+## 2026-10-27 -- daily research (scheduled routine): Crypto Flow's data feed was geo-blocked (FIXED); 2-year yield and Hau-Rey rebalancing -- all RULED OUT
+
+**Health check** (state-sync read 2026-10-26 22:33 UTC): heartbeat current (app alive); `vwap_scalp_enabled` false, no VWAP trade since 2026-10-23; OANDA (read-only)
+0 open trades, 0 pending orders, NAV 116,957 SGD. `crypto_flow_enabled` true, autopilot. **Bug found and fixed:** the first Crypto Flow evaluation (2026-10-26
+01:02 UTC, for day 2026-10-25) logged `data_unavailable` for all four coins with `HTTP Error 451` -- the open risk recorded at build time: fapi.binance.com refuses
+US IPs (Render's region; the cloud sandbox gets the same 451). www.binance.com serves the same `/fapi/v1/fundingRate` endpoint from the US; verified its September
+2026 settlements for BTC/ETH/LTC/BCH are identical (max difference 0, 90/90 each) to Binance's own monthly archive on data.binance.vision, so the signal is unchanged
+and no re-test is needed. `fetch_funding` now tries fapi first and falls back to www.binance.com (commit 1761812f2; 2 new tests; full suite 515 passed). End-to-end
+live fetch from the sandbox now builds all four composites (290 days of each gauge). 0 live Crypto Flow trades so far; the next window is 01:00-04:00 UTC daily.
+Caveat: if Render's IP is also refused by www.binance.com the bot will still alert and trade nothing.
+
+**Tested** (pre-registered in `scripts/research_rates_rebalancing_2026_10_27.py` before running; daily OANDA bid/ask 2002-2026-10-23; VT1 daily engine, weekly Friday
+decision, Monday-open entry, 4-candle hold; financing 2%/yr FX, 6.5% long / 2% short indices; EARLY 2004-13, HOLDOUT 2014-01..2025-09, FRESH 2025-10..2026-10;
+K = 3, alpha 0.0167; both self-tests passed):
+| idea | holdout mean R (n) | halves | fresh | +20% / delay | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| Y1 US 2-year yield weekly change (FRED DGS2, Thursday value) -> 7 USD majors, follow the rate move | -0.066 (3913) p 0.97 | -0.070 / -0.063 | +0.009 | -0.071 / -0.067 | 6.4 | RULED OUT (gross -0.023) |
+| Y2 same signal -> 10 indices (rising 2-year -> short) | +0.025 (5397) p 0.32 | +0.066 / -0.017 | -0.023 | +0.021 / +0.004 | 8.8 | RULED OUT (barely above the always-long control +0.013; second half and fresh negative) |
+| H1 Hau-Rey rebalancing: 20-day local index minus S&P return -> sell the outperformer's currency (EUR, GBP, JPY, AUD, CHF, SGD) | -0.084 (3559) p 1.00 | -0.107 / -0.061 | -0.160 | -0.089 / -0.096 | 5.8 | RULED OUT |
+POST-HOC diagnostics (labelled; not hypotheses): H1 reversed ("currency follows its equity market") is gross +0.034 holdout / +0.108 fresh but net -0.016 / +0.056
+and early -0.006 -- the same tiny-gross-edge picture; Y1 reversed is net -0.020 holdout, -0.108 fresh. Neither is worth a follow-up.
+Considered and not run: (a) commodity term structure (backwardation -> long oil/gas): EIA's free NYMEX futures-curve series stop 2024-04-05, so no fresh data and
+no live feed -- dropped; (b) Treasury auction cycle (Lou-Yan-Zhang: yields rise into auctions) on bond CFDs: about 3 trades/week by construction (two auction
+clusters a month), below the frequency requirement unless widened to USD_JPY/indices; (c) Atlanta Fed GDPNow: the download returns an HTML bot-check page.
+
+Best practice-trial candidate so far: none (unchanged; nothing since 2026-10-24 has holdout > 0, fresh > 0, +20% > 0, delay > 0 and >= 5 trades/week at once;
+nearest misses remain crypto X1 BTC+ETH 20-day momentum, holdout +0.032 / fresh -0.026, and the Crypto Flow composite, holdout +0.057 / fresh +0.059 at
+1.6 trades/week, already running as the user-requested live experiment). Deadline question for the 20 Nov run unchanged.
+Running total: about 169 variants in 77 families (plus ~9,500 scan cells); 0 pass the strict bar; 0 pass the practice-trial bar.
+
+**Queue** (ranked): (1) Chicago Fed NFCI weekly with ALFRED real-time vintages -> 10 indices (~10/wk; financial-conditions shocks diffuse slowly);
+(2) Treasury auction cycle widened to USD_JPY + index CFDs + bond CFDs (~6/wk; dealer duration-inventory mechanism); (3) CBOE oil/gold implied volatility
+(OVX, GVZ) minus realised -> weekly WTI/BCO/XAU/XAG (~4-6/wk; commodity variance risk premium); (4) GDPNow revisions via ALFRED vintages of FRED GDPNOW.
+
+Research result: 2026-10-27, 3 ideas tested, 0 credible
