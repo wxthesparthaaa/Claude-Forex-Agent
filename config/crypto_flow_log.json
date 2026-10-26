@@ -1,0 +1,14 @@
+[
+  {
+    "day": "2026-10-25",
+    "instrument": "*",
+    "result": "data_unavailable",
+    "at": "2026-10-26T01:02:56.108270+00:00",
+    "problems": [
+      "BTC_USD: HTTP Error 451: ",
+      "ETH_USD: HTTP Error 451: ",
+      "LTC_USD: HTTP Error 451: ",
+      "BCH_USD: HTTP Error 451: "
+    ]
+  }
+]
