@@ -11108,3 +11108,38 @@ Running total: about 169 variants in 77 families (plus ~9,500 scan cells); 0 pas
 (OVX, GVZ) minus realised -> weekly WTI/BCO/XAU/XAG (~4-6/wk; commodity variance risk premium); (4) GDPNow revisions via ALFRED vintages of FRED GDPNOW.
 
 Research result: 2026-10-27, 3 ideas tested, 0 credible
+
+## 2026-10-28 -- daily research (scheduled routine): Treasury auction cycle, Chicago Fed NFCI (real-time vintages), commodity variance risk premium -- all RULED OUT
+
+**Health check** (state-sync read 2026-10-27 22:34 UTC): heartbeat current (app alive); `vwap_scalp_enabled` false, no VWAP trade since 2026-10-23; OANDA (read-only)
+0 open trades, 0 pending orders, NAV 116,957 SGD. Crypto Flow (`crypto_flow_enabled` true): yesterday's geo-block fix WORKS -- the 2026-10-27 01:05 UTC evaluation
+of day 2026-10-26 fetched all three gauges for all four coins (composites BTC +0.41, ETH -0.23, LTC -0.30, BCH -0.58, none beyond +/-1) -> `no_signal`, 0 trades.
+0 live Crypto Flow trades so far. Test suite 515 passed. Nothing broken.
+
+**Tested** (pre-registered in `scripts/research_auction_nfci_vrp_2026_10_28.py` before running; daily OANDA bid/ask to 2026-10-23; VT1 daily engine; EARLY 2005-13
+(NFCI 2011-06..13), HOLDOUT 2014-01..2025-09, FRESH 2025-10..2026-10; K = 3, alpha 0.0167; self-tests passed incl. a random-walk test with the real auction calendar):
+| idea | holdout mean R (n) | halves | fresh | +20% / delay | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| A1 Treasury auction cycle (Lou-Yan-Zhang; fiscaldata auction calendar, nominal coupons; short USB05Y/10Y/30Y + long USD_JPY 5 days into the cluster's first auction, reverse 5 days after the last) | -0.097 (2290) p 0.99 | -0.113 / -0.081 | -0.070 | -0.103 / -0.098 | 3.7 | RULED OUT |
+| N1 Chicago Fed NFCI weekly change, ALFRED real-time vintages (804 weeks, none missing) -> 10 indices, tightening short / easing long | -0.083 (4932) p 0.99 | -0.133 / -0.047 | -0.097 | -0.086 / -0.100 | 8.0 | RULED OUT (always-long control +0.029) |
+| V1 commodity variance risk premium (FRED GVZCLS/OVXCLS minus 20-day realised vs its 52-week median) -> XAU/XAG, WTI/Brent | -0.007 (2361) p 0.64 | -0.037 / +0.023 | -0.112 | -0.012 / +0.001 | 3.9 | RULED OUT |
+POST-HOC diagnostics (labelled): A1 by leg, gross of financing: pre-auction leg early +0.098 / holdout +0.017 / fresh +0.184, post leg +0.129 / -0.060 / -0.163 --
+the auction concession existed before 2014 and decayed (financing on bond CFDs then eats the rest). N1 reversed is ~0 (net -0.004, gross +0.019); the long-only
+half "buy all indices the week after NFCI rose" looked good (holdout +0.102 n 1913, halves +0.112 / +0.091, fresh +0.181, +20% +0.098, delay +0.032, 3.1/wk), so it got
+a PRE-REGISTERED REPLICATION (`scripts/research_nfci_rebound_replication_2026_10_28.py`) on untouched 2003-04..2011-05 with the current FRED NFCI: rule -0.114
+(n 1653) vs always-long +0.037 -> FAIL; and in the holdout most of it is "buy after an S&P down week" (+0.075). NOT REPLICATED; dropped.
+Data notes for later runs: ALFRED serves up to ~12 vintages per CSV request (`id=NFCI,NFCI,...&vintage_date=d1,d2,...`, use batches of 10, ~15 s each) -- this
+unlocks real-time vintages for any FRED series without an API key. fiscaldata auctions_query works without a key. CBOE CSVs now 307-redirect; FRED has GVZCLS/OVXCLS.
+Variants this run: 6 (3 pre-registered + 2 post-hoc diagnostics + 1 replication).
+
+Best practice-trial candidate so far: none (unchanged; nothing since 2026-10-24 has holdout > 0, fresh > 0, +20% > 0, delay > 0 and >= 5 trades/week at once;
+nearest misses remain crypto X1 BTC+ETH 20-day momentum, holdout +0.032 / fresh -0.026, and the Crypto Flow composite, holdout +0.057 / fresh +0.059 at
+1.6 trades/week, already running as the user-requested live experiment). Deadline question for the 20 Nov run unchanged.
+Running total: about 175 variants in 80 families (plus ~9,500 scan cells); 0 pass the strict bar; 0 pass the practice-trial bar.
+
+**Queue** (ranked): (1) Atlanta Fed GDPNow revisions via ALFRED vintages of FRED GDPNOW (now fetchable) -> 7 USD majors + 10 indices, weekly (~10/wk; growth news
+diffuses); (2) Cleveland Fed inflation nowcast / breakeven inflation (FRED T5YIE daily) weekly change -> USD majors and gold (~6/wk); (3) month-end
+equity-vs-bond pension rebalancing flow (month's S&P minus 10-year bond CFD return -> last 3 days of the month, indices + USD majors; ~4/wk, borderline);
+(4) Fed H.4.1 reserve balances (WRESBAL, weekly, real-time vintages) -> indices.
+
+Research result: 2026-10-28, 3 ideas tested, 0 credible
