@@ -142,9 +142,12 @@ def main(d1_dir, ext):
     series = {s: (yahoo(ext, s), "index") for s in YAHOO}
     for sid, usdbase in FX.items():
         if sid == "EURO":
-            dem = {d: 1.95583 / v for d, v in fred(ext, "DEXGEUS").items() if d < "1999-01-04"}
-            eur = fred(ext, "DEXUSEU")
-            closes = {**dem, **eur}
+            try:
+                dem = {d: 1.95583 / v for d, v in fred(ext, "DEXGEUS").items() if d < "1999-01-04"}
+            except Exception as e:  # FRED served a bot-check page for DEXGEUS on 2026-10-29: euro from 1999 only (data access, decided before results)
+                print(f"DEXGEUS unavailable ({type(e).__name__}); euro leg uses DEXUSEU from 1999 only")
+                dem = {}
+            closes = {**dem, **fred(ext, "DEXUSEU")}
         else:
             closes = fred(ext, sid)
         series[sid] = (closes, "usdbase" if usdbase else "usdquote")

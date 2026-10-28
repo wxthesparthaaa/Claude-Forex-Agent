@@ -1,7 +1,7 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-10-28. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-10-29. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
@@ -19,8 +19,10 @@ week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-o
 
 ## B. Scheduled events and news (RULED OUT)
 US 8:30 ET news-shock continuation; pre-FOMC drift (46 events, underpowered); weekly EIA oil (Wed) and natural-gas (Thu) report reactions; Treasury auction cycle; jobless claims momentum.
+Month-end equity-vs-bond pension rebalancing on 16 index CFDs + 7 USD majors (2026-10-29, M1): WEAK -- holdout +0.028 (n 6404, p 0.16), fresh +0.149, meets the practice-trial bar on paper, but a one-day delay is ~0, two days negative, and a pre-registered 1990-2002 replication FAILED (gross +0.014 vs about 0.057 cost).
 
 ## C. OANDA retail positioning data (RULED OUT)
+CFTC COT speculator crowding, contrarian, on 24 futures markets incl. commodities, platinum/palladium and equity indices (2026-10-29, P1: holdout -0.041, n 6067; the 2026-08-29 FX-only test was weak too).
 Position book and order book signals (crowd fade, stop magnet, breakout pressure; 8 variants), stop-magnet dose-response, limit-order adverse selection, walk-forward ML on all of it.
 
 ## D. Outside data, equities / FX / commodities (RULED OUT)
@@ -39,7 +41,7 @@ Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
 Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeven inflation (T5YIE); month-end pension rebalancing; central-bank meeting dates other than the Fed; weather vs natural gas; USDA/agriculture reports; Asian/European index CFDs
-not yet in any test (HK33, CN50, SG30, CH20, NL25, ESPIX); platinum/palladium; VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid); COT positioning (the CFTC site is unreachable locally; may work from the cloud).
+(HK33, CN50, SG30, CH20, NL25, ESPIX) and platinum/palladium have now been used only in M1 and P1 (2026-10-29); VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid). (COT done 2026-10-29: the Socrata API publicreporting.cftc.gov works from the cloud; the cftc.gov zip files return a Cloudflare 403.)
 
 ## Data access notes
 - Reachable from the local Windows machine: Binance (data-api.binance.vision, www.binance.com funding), Coinbase, DeFiLlama, Deribit, alternative.me, blockchain.com, Wikimedia, CBOE CSVs (follow 307 redirects), Yahoo Finance chart API, Treasury FiscalData, NY Fed, World Bank, ECB data API.

@@ -11178,3 +11178,38 @@ The crypto cross-venue lag was the programme's only strong edge, so the same tes
 | L4 FX (futures and spot) | -0.136 (1622) | -0.182 | +0.020 / +0.019 | 6.5 | RULED OUT |
 The only pattern: index CFDs trailed the futures in 2024 and the lag faded (gross by quarter +0.19 in 2024Q2, +0.13, +0.08, +0.03 in 2025Q1, then about zero and -0.23 in 2026Q1), the same decay seen in crypto but with a shorter window and smaller size; metals, oil and FX never lagged. Not tradable now.
 Running total: about 179 variants in 82 families.
+
+## 2026-10-29 -- daily research (scheduled routine): COT crowding on 24 futures markets RULED OUT; month-end pension rebalancing meets the practice-trial bar on paper but FAILED its 1990-2002 replication
+
+**Health check** (state-sync read 2026-10-28 22:35 UTC): heartbeat current (app alive); OANDA (read-only) 0 open trades. VWAP Scalp is ON (the user resumed it on 10-28):
+10 trades since the last run (12:21-19:41 UTC 10-28; 5 wins, 5 losses), net -16.82 SGD; strategy balance now 567.16 SGD (2,000 - 1,432.84). Crypto Flow (enabled): day
+2026-10-27 BTC LONG was `skipped` (the minimum-size problem; already reproduced and fixed by the interactive session on 10-28, commit 1cd438a, live since that deploy);
+day 2026-10-28 is evaluated at 01:00 UTC 10-29, after this run, so no entry is missing. 0 live Crypto Flow trades so far. Test suite 519 passed. Nothing new broken.
+
+**Tested** (pre-registered in `scripts/research_cot_monthend_2026_10_29.py`, committed before running; daily OANDA bid/ask to 2026-10-23; VT1 daily engine; EARLY 2005-13,
+HOLDOUT 2014-01..2025-09, FRESH 2025-10..2026-10; K = 2, alpha 0.025; self-tests passed incl. a random-walk test of the price-dependent month-end signal):
+| idea | holdout mean R (n) | halves | fresh | +20% / delay | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| P1 CFTC COT speculator crowding, contrarian (|z| >= 1 of non-commercial net / OI vs prior 156 reports; 8 FX, 5 metals incl. XPT/XPD, 2 energy, 4 ags, 5 index futures; entry Tuesday after release) | -0.041 (6067) p 0.97 | -0.019 / -0.064 | -0.010 | -0.048 / -0.027 | 9.9 | RULED OUT (old FX universe -0.006, new markets -0.055) |
+| M1 month-end pension rebalancing (month-to-date S&P minus 10y bond -> last 3 weekdays: indices against it, USD sold if equities won; first 3 days of the new month reversed; 16 indices incl. HK33/CN50/SG30/CH20/NL25/ESPIX + 7 USD majors) | +0.028 (6404) p 0.16 | +0.020 / +0.036 | +0.149 (575) | +0.023 / +0.001 | 10.4 | WEAK: practice-trial bar met on paper, not significant |
+POST-HOC breaking attempts on M1 (labelled; `scripts/research_monthend_posthoc_2026_10_29.py`): leg A (pre-month-end) alone early +0.129 / holdout +0.071 (p 0.023) / fresh +0.053
+but second half +0.004 and delay -0.019; leg B (rebound) holdout -0.015, so M1's fresh number comes mostly from the leg that failed the holdout; two-day delay holdout -0.023 /
+fresh -0.080; without the 6 new index CFDs +0.043 (they cost money). PRE-REGISTERED REPLICATION on untouched 1990-2002 (`scripts/research_monthend_replication_2026_10_29.py`;
+Yahoo index closes, FRED FX, DGS10 bond proxy, OANDA-holdout cost per trade 0.057 indices / 0.053 FX subtracted): gross +0.014, cost-adjusted -0.042 (n 5541, p 0.99), leg A
+-0.029 -> NOT REPLICATED. Data notes: CFTC Socrata API (publicreporting.cftc.gov, dataset 6dca-aqww) works from the cloud, the cftc.gov zip files hit a Cloudflare 403;
+FRED served a bot-check page for DEXGEUS (euro replication from 1999 only); Yahoo chart API works from the cloud.
+Variants this run: 9 (2 pre-registered + 1 replication + 6 post-hoc diagnostics).
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week. It meets the practice-trial bar only on paper: p 0.16, the one-day delay is about zero, and its
+1990-2002 replication failed after costs -- treat as the weakest possible pass. (Crypto Flow composite, holdout +0.057 / fresh +0.059 at 1.6 trades/week, still runs as the
+user's own experiment.) Deadline question for the 20 Nov run unchanged: ask the user whether Crypto Flow counts as the practice trial; if a build is wanted, M1 is the
+candidate unless something better appears.
+Running total: about 188 variants in 84 families (plus ~9,500 scan cells); 0 pass the strict bar; 1 passes the practice-trial bar on paper (M1).
+
+**Queue** (ranked; new structure, not slow macro): (1) commodity index-fund roll pressure (GSCI/BCOM roll on the 5th-9th business day; front-month selling in WTI, Brent,
+natural gas, ags, copper -> short into the roll, long after; ~4-6/wk across 10 commodity CFDs); (2) OANDA CFD roll-date cost structure (how OANDA adjusts index and commodity
+CFDs at futures rolls: price jump vs financing credit; a mispriced adjustment would be a cost edge); (3) non-Fed central-bank pre-meeting drift (ECB, BoE, BoJ, RBA, BoC, SNB,
+RBNZ, Norges, Riksbank -> currency + local index; ~3-5/wk); (4) VT1 on risk FX crosses (low frequency, kept for completeness).
+
+Research result: 2026-10-29, 2 ideas tested, 0 credible
