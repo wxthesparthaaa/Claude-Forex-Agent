@@ -7624,5 +7624,11 @@
     "instrument": "XAG_USD",
     "filter": "spread_to_stop",
     "value": 1.0577346848830473
+  },
+  {
+    "tick_time": "2026-10-28T11:41:04.800868+00:00",
+    "instrument": "GBP_USD",
+    "filter": "spread_to_stop",
+    "value": 0.3023255813953128
   }
 ]
