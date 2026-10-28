@@ -7834,5 +7834,11 @@
     "instrument": "XAU_USD",
     "filter": "spread_to_stop",
     "value": 0.8761329305131386
+  },
+  {
+    "tick_time": "2026-10-28T15:26:04.399661+00:00",
+    "instrument": "XAU_USD",
+    "filter": "spread_to_stop",
+    "value": 0.5523809523807874
   }
 ]
