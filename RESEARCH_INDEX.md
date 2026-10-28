@@ -34,8 +34,8 @@ WEAK: the post-hoc composite (funding + taker share + Coinbase premium; now the 
 REAL-BUT-GONE: **cross-venue gap convergence** (Binance or Coinbase price above the OANDA crypto CFD -> CFD catches up within 2 hours): net +0.2 to +0.9 R in 2019-2022, gross zero from 2023.
 Cross-venue on gold (PAXG) and the euro (EURUSDT): nothing (OANDA leads).
 
-## F. Pricing-consistency / arbitrage checks (RULED OUT: OANDA quotes are consistent)
-Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index hourly ratios.
+## F. Pricing-consistency / arbitrage / venue-lag checks (RULED OUT: OANDA quotes are consistent and no longer lag)
+Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index hourly ratios; hourly OANDA index / metal / oil / FX CFDs vs the CME futures and spot feeds on Yahoo (2024-06..2026-10 only): the index CFDs lagged ES/NQ/YM/RTY in 2024 (gross +0.19 R in 2024Q2, fading to 0 by 2025Q1, negative since); metals, oil and FX never did.
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
 Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeven inflation (T5YIE); month-end pension rebalancing; central-bank meeting dates other than the Fed; weather vs natural gas; USDA/agriculture reports; Asian/European index CFDs

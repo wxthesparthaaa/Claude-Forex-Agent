@@ -11166,3 +11166,15 @@ Read-only review of the routine's configuration, its 4 runs (10-24, 10-25, 10-26
 **Root causes of the overlap:** the prompt told it to read only the last ~500 lines of a 10,800-line log, and my 10-25 session's work is mostly further up; it cannot see my interactive results unless they are in the tail; its "already ruled out" list stopped at 2026-10-24; its queue (GDPNow, breakevens, pension rebalancing, H.4.1 reserves) continues the slow-macro vein the scan already showed empty.
 **Problems in the prompt found and fixed 2026-10-28:** (a) the health check told it to "remind the user to untick" VWAP Scalp (the user wants it resumed: removed, information only); (b) it did not monitor Crypto Flow's log (added: any skipped or data_unavailable day is a bug to reproduce and fix; the skipped BTC signal of 10-27 will be in its next run); (c) it would have built a second "practice trial" on 20 Nov although Crypto Flow already exists (now: ask the user); (d) its Telegram text pointed at the Settings page (now also the Status strip buttons); (e) it did not know the balance is 583.74 SGD (a sizing trap).
 **What changed:** new `RESEARCH_INDEX.md` (one-page list of every family tested with verdicts, lessons, data-access notes and the untested ideas); routine prompt updated to read it first, add every new family to it, read only the last ~300 log lines, avoid new slow-macro tests without a specific mechanism, and prefer feed/venue lags, cost structure and instruments not yet tested. Cron (weekdays 22:30 UTC = 06:30 SGT), model and permissions unchanged.
+
+## 2026-10-28 (venue lag on the non-crypto markets: OANDA index / metal / oil / FX CFDs vs the CME futures and spot feeds, hourly): ruled out; the index lag decayed during 2024-25
+
+The crypto cross-venue lag was the programme's only strong edge, so the same test on the other markets. `scripts/research_futures_venue_lag_2026_10_28.py`, pre-registered, K = 4: hourly gap between the Yahoo hourly close (ES/NQ/YM/RTY, GC/SI/HG, CL, 6E/6B and EURUSD/GBPUSD spot) and the OANDA H1 mid close, z over 336 hours, |z| >= 2, trade the CFD toward the outside price for 2 hours. Only 730 days of free hourly data exist (2024-06..2026-10), so there is no discovery period.
+| group | net holdout (to 2025-09) (n) | net fresh (2025-10..) | gross hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|
+| L1 indices vs CME futures | +0.027 (1505) p 0.40 | -0.101 (892) | +0.068 / -0.066 | 6.1 | RULED OUT |
+| L2 metals | -0.093 (1213) | -0.032 | +0.019 / +0.038 | 4.9 | RULED OUT |
+| L3 energy (WTI) | -0.009 (332) | -0.115 | +0.091 / -0.041 | 1.3 | RULED OUT |
+| L4 FX (futures and spot) | -0.136 (1622) | -0.182 | +0.020 / +0.019 | 6.5 | RULED OUT |
+The only pattern: index CFDs trailed the futures in 2024 and the lag faded (gross by quarter +0.19 in 2024Q2, +0.13, +0.08, +0.03 in 2025Q1, then about zero and -0.23 in 2026Q1), the same decay seen in crypto but with a shorter window and smaller size; metals, oil and FX never lagged. Not tradable now.
+Running total: about 179 variants in 82 families.
