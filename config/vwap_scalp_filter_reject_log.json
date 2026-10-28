@@ -7906,5 +7906,11 @@
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
     "value": 0.2857142857143244
+  },
+  {
+    "tick_time": "2026-10-28T17:46:05.147194+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 0.681818181818113
   }
 ]
