@@ -482,7 +482,7 @@ def _trading_status(state, phase_state, journal: list, open_count: int, reopen_d
         detail = "Autopilot is off (Advanced) -- nothing will trade."
     elif not state.vwap_scalp_enabled:
         tone, label = "paused", "PAUSED"
-        detail = "VWAP Scalp is switched off (Advanced)."
+        detail = "VWAP Scalp is switched off -- press Resume VWAP Scalp below to turn it back on."
     elif reopen_delta is not None:
         tone, label = "waiting", "WAITING"
         detail = f"Forex is closed -- reopens in {format_duration(reopen_delta)}."
@@ -721,6 +721,27 @@ def pause():
         flash("Paused -- no new trades will be placed. Open trades keep their stop and target.", "success")
     else:
         flash("Resumed -- trading is back on.", "success")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/vwap_scalp", methods=["POST"])
+def vwap_scalp_switch():
+    """One-click VWAP Scalp on/off from the Status strip (added 2026-10-28 because turning it back on meant finding Advanced, flipping the toggle and pressing
+    Save). Flips ONLY vwap_scalp_enabled -- like /pause, deliberately not part of /settings, whose handler treats every absent checkbox as off."""
+    state = load_state()
+    on = request.form.get("action") == "on"
+    if state.vwap_scalp_enabled != on:
+        state.vwap_scalp_enabled = on
+        save_state(state)
+    if on:
+        if phase_state_from_state(state).phase != "autopilot":
+            flash("VWAP Scalp is switched on, but Autopilot is off, so nothing will trade until you switch Autopilot on in Advanced.", "error")
+        elif phase_state_from_state(state).kill_switch_engaged:
+            flash("VWAP Scalp is switched on, but trading is paused -- press Resume trading as well.", "error")
+        else:
+            flash("VWAP Scalp resumed -- it scans every 5 minutes inside its watch window.", "success")
+    else:
+        flash("VWAP Scalp switched off. Open trades keep their stop and target.", "success")
     return redirect(url_for("dashboard"))
 
 

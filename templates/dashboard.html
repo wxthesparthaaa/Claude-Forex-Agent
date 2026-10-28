@@ -353,6 +353,17 @@
         <button class="cancel-btn" type="submit" data-loading-text="Pausing...">Pause trading</button>
       </form>
       {% endif %}
+      {% if vwap_scalp_enabled %}
+      <form method="post" action="/vwap_scalp">
+        <input type="hidden" name="action" value="off">
+        <button class="ghost-btn" type="submit" data-loading-text="Switching off...">Switch VWAP Scalp off</button>
+      </form>
+      {% else %}
+      <form method="post" action="/vwap_scalp">
+        <input type="hidden" name="action" value="on">
+        <button class="scan-btn" type="submit" data-loading-text="Resuming...">Resume VWAP Scalp</button>
+      </form>
+      {% endif %}
       <form method="post" action="/scan">
         <button class="ghost-btn" type="submit" data-loading-text="Reading..."
                 data-loading-status="Reading VWAP Scalp status.">Scan now</button>

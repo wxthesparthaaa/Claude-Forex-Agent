@@ -11143,3 +11143,17 @@ equity-vs-bond pension rebalancing flow (month's S&P minus 10-year bond CFD retu
 (4) Fed H.4.1 reserve balances (WRESBAL, weekly, real-time vintages) -> indices.
 
 Research result: 2026-10-28, 3 ideas tested, 0 credible
+
+## 2026-10-28 (user: "resume VWAP Scalp from the website page" and "Crypto Flow does not seem to be working"): two real causes found and fixed
+
+**VWAP Scalp could not be resumed from the page.** Reproduced with the live settings (state-sync copy) in a local copy of the dashboard: the Advanced toggle and Save do work (saved, "Scanning 17 pairs"), so no server bug. What the page showed was the problem: the status strip said
+PAUSED in red with "VWAP Scalp is switched off (Advanced)", and its only button was "Pause trading" (the kill switch, which was NOT engaged, so the real "Resume trading" button did not exist). Nothing on the status strip could turn VWAP back on; the only route was Advanced -> flip the toggle ->
+Save settings, which the page never pointed at clearly. VWAP had been switched off in the saved state since 2026-10-24 11:01 SGT. Fix: a one-click `POST /vwap_scalp` route (flips only `vwap_scalp_enabled`, like /pause) and a "Resume VWAP Scalp" / "Switch VWAP Scalp off" button on the Status strip; the status text now says
+what to press; it warns if Autopilot is off or trading is paused. Verified end to end in a local copy (click -> "VWAP Scalp resumed", status RUNNING); 3 new tests.
+NOTE for the user: the strategy balance is 583.74 SGD (-1,416.26, -70.8% since the last capital reset) with Half size mode on and risk 1.5%, so VWAP sizes at about 4.4 SGD risk per trade before its own loss-inflation divisor.
+
+**Crypto Flow was running but had traded nothing.** From `config/crypto_flow_log.json` on the state-sync branch: 2026-10-25 (the day it was enabled) every coin returned HTTP 451 from fapi.binance.com (Binance's geo-block of Render's US servers) -> alert and no trade (the cloud routine added a www.binance.com
+fallback on 10-26, commit 1761812f2); 2026-10-26 evaluated normally, all four coins "no_signal"; 2026-10-27 BTC reached a LONG signal (composite +1.22, funding z +1.65, taker share z +3.49, premium z -1.49) but was logged "skipped". Cause reproduced with the live settings and the order call stubbed: the strategy
+balance is 583.74 (not the 2,000 I had assumed when I sized it: VWAP's losses took 1,416 off it), so the target risk budget is 583.74 x 1.5% x 0.5 (half size) x 0.25 = 1.095 SGD; BTC's smallest tradeable size (0.001) risks about 5.0 SGD at the 3-daily-move stop and ETH's (0.01) about 2.1,
+both over the 1.5x overshoot rule (1.64), so `size_units` returned 0 and the trade was skipped (LTC and BCH fit and would have traded). Fix: a trade may now be rounded up to the smallest tradeable size as long as it never risks more than ONE normal trade (risk-per-trade before Half size mode = 8.76 SGD here), and the
+gates and journal now see the REAL amount at risk. With the live settings and the order stubbed: BTC 0.001 (5.02 SGD, 0.86% of balance), ETH 0.01 (2.10), LTC 0.19 (1.09), BCH 0.02 (1.09). Lesson: I sized Crypto Flow from a stale local config; always read the live state.

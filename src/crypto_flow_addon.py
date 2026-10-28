@@ -233,9 +233,10 @@ def alert_already_sent(entries: list, day: str) -> bool:
 # ------------------------------------------------------------------ sizing / orders
 
 def size_units(direction: str, precision: int, min_size: str, max_units: str, fill_price: float, stop_loss: float,
-               risk_amount: float, conversion_rate: Decimal) -> float:
+               risk_amount: float, conversion_rate: Decimal, risk_ceiling: float = None) -> float:
     """Signed fractional units (0 = do not trade): floored to the instrument's unit step, raised to the minimum tradeable size only if
-    that does not risk more than MAX_RISK_OVERSHOOT x the budget, capped at the instrument's maximum order size."""
+    that does not risk more than the ceiling (default MAX_RISK_OVERSHOOT x the budget; the caller passes the app's normal per-trade
+    risk so a small strategy balance can still trade the coins whose smallest size is large), capped at the instrument's maximum order size."""
     risk_per_unit = abs(Decimal(str(fill_price)) - Decimal(str(stop_loss))) * conversion_rate
     if risk_per_unit <= 0:
         return 0.0
@@ -245,7 +246,10 @@ def size_units(direction: str, precision: int, min_size: str, max_units: str, fi
     if size < minimum:
         size = minimum
     size = min(size, Decimal(str(max_units)))
-    if size * risk_per_unit > Decimal(str(risk_amount)) * Decimal(str(MAX_RISK_OVERSHOOT)):
+    ceiling = Decimal(str(risk_amount)) * Decimal(str(MAX_RISK_OVERSHOOT))
+    if risk_ceiling is not None:
+        ceiling = max(ceiling, Decimal(str(risk_ceiling)))
+    if size * risk_per_unit > ceiling:
         return 0.0
     return float(size) if direction == "LONG" else -float(size)
 
@@ -292,13 +296,21 @@ def _open_position(client, instrument: str, direction: str, diag: dict, risk_con
         return False
 
     risk_amount = risk_amount_for_trade(account.equity, risk_config) * RISK_FRACTION
+    # Found 2026-10-28: the strategy balance had shrunk to 583.74 (VWAP Scalp's losses), so the target budget was 1.10 and BTC's / ETH's smallest
+    # tradeable size (0.001 BTC risks about 4.9 at this stop) exceeded the 1.5x overshoot rule, so a real BTC long signal was skipped. A trade may now be
+    # rounded UP to the smallest tradeable size as long as it never risks more than one normal trade (the app's full risk-per-trade setting before Half
+    # size mode) -- so the real risk can exceed the quarter-size target for BTC and ETH, but never the app's own per-trade limit.
+    normal_risk_cap = account.equity * risk_config.risk_per_trade_pct / 100.0
     fill_price = ask if direction == "LONG" else bid
     units = size_units(direction, int(raw.get("tradeUnitsPrecision", 2)), raw.get("minimumTradeSize", "0.01"),
-                       raw.get("maximumOrderUnits", "1000"), fill_price, stop_loss, risk_amount, conversion_rate)
+                       raw.get("maximumOrderUnits", "1000"), fill_price, stop_loss, risk_amount, conversion_rate, risk_ceiling=normal_risk_cap)
     if units == 0:
         print(f"INFO: Crypto Flow skipped {instrument} {direction} -- smallest tradeable size exceeds the risk budget", flush=True)
         return False
 
+    # the REAL amount at risk at the stop (units x stop distance), which can exceed the target when the smallest size was used; the heat and exposure
+    # gates and the journal must see that, not the target
+    risk_amount = max(risk_amount, float(abs(Decimal(str(units))) * abs(Decimal(str(fill_price)) - Decimal(str(stop_loss))) * conversion_rate))
     proposed = ProposedTrade(instrument=instrument, direction=direction, risk_amount=risk_amount,
                               currency_deltas=currency_deltas_for_trade(instrument, direction))
     try:

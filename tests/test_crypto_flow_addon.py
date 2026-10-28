@@ -124,6 +124,14 @@ def test_size_units_respects_the_maximum_order_size():
     assert abs(cf.size_units("LONG", 2, "0.01", "5", 60.0, 55.0, 1000.0, Decimal("1"))) <= 5
 
 
+def test_minimum_size_is_allowed_up_to_the_ceiling_the_caller_passes():
+    # the live case on 2026-10-28: balance 583.74 -> budget 1.095; 0.001 BTC at a 3,800 stop risks 4.94
+    args = ("LONG", 3, "0.001", "1000", 81000.0, 77200.0, 1.095, Decimal("1.3"))
+    assert cf.size_units(*args) == 0.0  # the old rule (1.5x the budget) skips it
+    assert cf.size_units(*args, risk_ceiling=8.76) == 0.001  # up to one normal trade's risk it trades the minimum size
+    assert cf.size_units(*args, risk_ceiling=4.0) == 0.0  # but not above the ceiling
+
+
 def test_risk_fraction_is_a_quarter():
     assert cf.RISK_FRACTION == 0.25
 
