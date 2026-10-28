@@ -7876,5 +7876,11 @@
     "instrument": "USD_CHF",
     "filter": "spread_to_stop",
     "value": 2.599999999999556
+  },
+  {
+    "tick_time": "2026-10-28T16:41:08.046671+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 1.0833333333329478
   }
 ]
