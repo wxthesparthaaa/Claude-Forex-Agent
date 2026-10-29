@@ -8188,5 +8188,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.291970802919649
+  },
+  {
+    "tick_time": "2026-10-29T11:28:01.998199+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 0.4642857142858842
   }
 ]
