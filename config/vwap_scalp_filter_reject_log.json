@@ -8134,5 +8134,11 @@
     "instrument": "USD_CHF",
     "filter": "vol_ratio",
     "value": 0.00013372079242587005
+  },
+  {
+    "tick_time": "2026-10-29T10:38:01.041115+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.9090909090909091
   }
 ]
