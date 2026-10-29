@@ -8092,5 +8092,11 @@
     "instrument": "GBP_JPY",
     "filter": "vol_ratio",
     "value": 0.00018331265863743724
+  },
+  {
+    "tick_time": "2026-10-29T09:38:02.692397+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00020718122594479233
   }
 ]
