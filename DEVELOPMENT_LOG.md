@@ -11213,3 +11213,29 @@ CFDs at futures rolls: price jump vs financing credit; a mispriced adjustment wo
 RBNZ, Norges, Riksbank -> currency + local index; ~3-5/wk); (4) VT1 on risk FX crosses (low frequency, kept for completeness).
 
 Research result: 2026-10-29, 2 ideas tested, 0 credible
+
+## 2026-10-29 (user: "investigate the Malaysian support and resistance strategy and its credibility"): Malaysian SnR RULED OUT -- fresh levels show no reaction at all
+
+**What it is.** Malaysian SnR (MSnR) is a retail method that spread through Malaysian trading communities and social media. It has no academic or independently
+audited track record. Levels come from the LINE chart (closes), not wicks: an A-level (resistance) is a peak in closes, a V-level (support) a valley. A level is
+"fresh" until a wick touches it again, and the core trade fades the first touch of a fresh level (sell A, buy V), stop just beyond the turn's wick, using
+higher-timeframe levels and the higher-timeframe "storyline" (trend) as a filter. Claimed mechanism: orders left unfilled at the turn are still resting there.
+Never tested here before (closest: swing-pivot S/R zones in the user's triangle setup 2026-09-28, the floor-trader pivot fade, round numbers).
+
+**Test** (`scripts/research_malaysian_snr_2026_10_29.py`, pre-registered and committed before running; K = 3, alpha 0.0167; random-walk self-test passed):
+H4 levels from UTC H1 mid candles, confirmed only at the close of the next H4 bar; the level must first move 1 H4-ATR away before any wick touch (otherwise it never
+became fresh); resting limit at the level, filled on real H1 bid/ask; stop = wick + 0.1 ATR (minimum 0.25 ATR); stop-first on ambiguous bars; 48-hour timeout;
+financing 2%/yr; 120-H4-bar level life; the bot's 17 instruments; H1 2016-01..2026-10-23.
+| variant | discovery 2016-19 | holdout 2020-25/09 (n, win) | halves | fresh 25/10-26/10 | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| V1 first touch, RR 2 | -0.252 | -0.194 (22946, 27%) p 1.00 | -0.201 / -0.186 | -0.233 | -0.228 / -0.224 | 76.5 | RULED OUT |
+| V2 first touch, RR 1 | -0.257 | -0.201 (24919, 38%) | -0.214 / -0.187 | -0.240 | -0.237 / -0.222 | 83.1 | RULED OUT |
+| V3 RR 2 + daily storyline (20-day average) | -0.257 | -0.188 (12937, 27%) | -0.189 / -0.186 | -0.228 | -0.223 / -0.232 | 43.1 | RULED OUT |
+Negative in every year 2016-2026 and on all 17 instruments in every variant.
+POST-HOC diagnostics (labelled; `scripts/research_malaysian_snr_diagnostics_2026_10_29.py`): (a) with ZERO spread and no financing the rule makes -0.011 (RR 2) /
+-0.029 (RR 1), so there is no reaction at fresh levels for costs to eat: the whole -0.19 is the spread on tight stops; (b) at most +0.10 R would move if every
+ambiguous stop-and-target bar were counted as a win instead of a loss, so the stop-first convention does not explain it; (c) a wider 1-ATR minimum stop still
+loses -0.099 / -0.090; (d) in the 48 hours after a fresh touch price reverses a median 3.87x the risk and runs through the level a median 3.81x, i.e. symmetric,
+and 84% of touches run through by more than the stop distance. A fresh line-chart level behaves like any random price.
+Credibility verdict: the method's claims rest on hand-picked chart examples; mechanised faithfully it has no edge before costs and loses about 0.19 per trade after.
+Running total: about 191 variants in 85 families.
