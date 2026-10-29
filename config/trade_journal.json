@@ -21866,5 +21866,36 @@
     "session_drift_z": -3.8908362359537096,
     "vol_ratio": 0.0006421888907813994,
     "spread_to_stop": 0.11494252873562925
+  },
+  {
+    "trade_id": "7659",
+    "instrument": "GBP_USD",
+    "direction": "LONG",
+    "units": 2183,
+    "entry_price": 1.33191,
+    "stop_loss": 1.33035,
+    "take_profit": 1.33193,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-10-29T13:30:59.819264+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.253722499999997,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 1.3318,
+    "entry_z": -1.398020883658274,
+    "session_drift_z": -2.316955948269012,
+    "vol_ratio": 0.00039555056340327585,
+    "spread_to_stop": 0.10344827586212177
   }
 ]
