@@ -21,7 +21,9 @@ week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-o
 Malaysian SnR fresh-level first touch (with/without storyline); ICT fair value gap (M15, daily bias); ICT order block + break of structure (M15, daily bias); liquidity sweep of
 the Asian range (M15); candle range theory, CRT (H4); Quasimodo, QM (H4). Every one loses 0.16-0.36 R per trade after costs in every year and on all 17 instruments, and
 none has a before-cost edge beyond +0.05 R (after removing the test engine's own random-walk bias). They trade very often on tight stops, so the spread alone is about 0.2 R.
-Untested from this source (send the exact rules if wanted): SMC "CHoCH" entries, Silver Bullet time windows, MSnR RBS/SBR flips and engulfing confirmation, power of 3 / AMD.
+TikTok indicator recipes (2026-10-29, all RULED OUT, -0.09 to -0.34 R after costs, before-cost edge at most +0.07): MACD + 200 EMA; Supertrend flip + 200 EMA;
+RSI regular divergence; Heikin Ashi flip + EMA50; 3-EMA + Stochastic RSI scalp; ICT Silver Bullet (on M15, not M1-M5).
+Untested from this source (send the exact rules if wanted): SMC "CHoCH" entries, MSnR RBS/SBR flips and engulfing confirmation, power of 3 / AMD.
 
 ## B. Scheduled events and news (RULED OUT)
 US 8:30 ET news-shock continuation; pre-FOMC drift (46 events, underpowered); weekly EIA oil (Wed) and natural-gas (Thu) report reactions; Treasury auction cycle; jobless claims momentum.

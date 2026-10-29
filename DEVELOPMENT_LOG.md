@@ -11260,3 +11260,23 @@ fill bar can only stop out) cost QM -0.090 and the sweep -0.045 on pure noise (F
 correct for it. Even corrected, the best (F3, +0.05 before costs) is a quarter of its spread cost (~0.2 R: these rules use stops of a fraction of an hour's range).
 Lesson: the social-media methods are the same family as the price-pattern rules already ruled out, at faster timeframes with tighter stops, so costs are larger.
 Running total: about 196 variants in 90 families.
+
+## 2026-10-29 (user: "TikTok round"): the six viral indicator recipes, all RULED OUT
+
+Sourcing: a web search found no reliable ranking of TikTok strategies (a 2025 BrokerChooser survey found up to 80% of TikTok forex advice may be misleading);
+it did surface self-reported claims such as "61% win rate at 1.5R on 15-minute EURUSD" for MACD + 200 EMA / Supertrend scripts. Picked the indicator recipes
+that dominate that content and were never tested here (grepped: no MACD, Supertrend, Heikin Ashi, Stochastic RSI, divergence or Silver Bullet test).
+`scripts/research_tiktok_round_2026_10_29.py`, pre-registered and committed (d782e0e79) before running; K = 6, alpha 0.0083; the social-media round's engine with
+per-rule reward:risk; same instruments, data, periods and checks; the engine's random-walk bias measured for every rule (400,000-800,000 bars each).
+| recipe | holdout mean R (n, win) | halves | fresh | +20% / delayed | trades/wk | zero-spread | before-cost edge vs chance | verdict |
+|---|---|---|---|---|---|---|---|---|
+| T1 MACD + 200 EMA (M15, 1.5R) | -0.166 (25087, 36%) | -0.144 / -0.187 | -0.189 | -0.191 / -0.179 | 101 | -0.007 | +0.011 | RULED OUT |
+| T2 Supertrend(10,3) flip + 200 EMA (M15, 1.5R) | -0.108 (23965, 40%) | -0.101 / -0.115 | -0.119 | -0.122 / -0.109 | 97 | -0.025 | -0.013 | RULED OUT |
+| T3 RSI regular divergence (M15, 2R) | -0.225 (12876, 28%) | -0.218 / -0.232 | -0.311 | -0.257 / -0.250 | 52 | +0.021 | +0.071 | RULED OUT |
+| T4 Heikin Ashi flip + EMA50 (H1, 2R) | -0.088 (9397, 35%) | -0.075 / -0.101 | -0.044 | -0.100 / -0.095 | 31 | -0.000 | +0.012 | RULED OUT |
+| T5 3-EMA + Stochastic RSI scalp (M15, 1/2 ATR) | -0.336 (28371, 26%) | -0.302 / -0.369 | -0.330 | -0.376 / -0.373 | 115 | -0.032 | -0.021 | RULED OUT |
+| T6 ICT Silver Bullet (M15, 10-11 NY, 2R) | -0.119 (7503, 35%) | -0.144 / -0.096 | -0.160 | -0.149 / -0.143 | 30 | +0.036 | +0.032 | RULED OUT |
+Negative in every year for every recipe; only WTI and Brent are fractionally positive for the Silver Bullet. The win rates (26-45%) are far below the 55-65% claimed
+in the videos. The best before-cost edge (RSI divergence, +0.07 R) is under a third of its spread cost. Caveat: the Silver Bullet is taught on 1-5 minute charts;
+the 2026-08/09 scalp work showed costs are proportionally larger there, not smaller.
+Running total: about 202 variants in 96 families; 0 pass the strict bar.
