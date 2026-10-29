@@ -11239,3 +11239,24 @@ loses -0.099 / -0.090; (d) in the 48 hours after a fresh touch price reverses a 
 and 84% of touches run through by more than the stop distance. A fresh line-chart level behaves like any random price.
 Credibility verdict: the method's claims rest on hand-picked chart examples; mechanised faithfully it has no edge before costs and loses about 0.19 per trade after.
 Running total: about 191 variants in 85 families.
+
+## 2026-10-29 (user: "social media round" -- strategies taught on Instagram / TikTok / YouTube): five more RULED OUT
+
+Why this round: the user noticed social media had never been used as an idea source (sources so far: papers, three rounds of classic trader books, the user's own setups, one
+Reddit thread), and the research index's "every price-pattern rule ruled out" line would have kept the daily routine from ever picking these up.
+`scripts/research_social_media_round_2026_10_29.py`, pre-registered and committed (1770f50d2) before running; K = 5, alpha 0.01; one primary rule per family, the plainest
+common version made exact and causal; real bid/ask, stop-first, 48-bar timeout, financing 2%/yr; the bot's 17 instruments; M15 2019-01..2026-10-23 (F1-F3; holdout
+2021-01..2025-09), H1 2016-01..2026-10-23 (F4-F5; holdout 2020-01..2025-09); fresh 2025-10..2026-10.
+| family | holdout mean R (n, win) | halves | fresh | +20% / delayed | trades/wk | zero-spread | engine bias | before-cost edge | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| F1 ICT fair value gap (CE limit, daily bias) | -0.255 (56674, 26%) | -0.248 / -0.261 | -0.281 | -0.301 / -0.278 | 229 | +0.018 | +0.024 | -0.006 | RULED OUT |
+| F2 ICT order block after a displacement break of structure | -0.357 (28447, 22%) | -0.347 / -0.367 | -0.402 | -0.413 / -0.349 | 115 | -0.041 | +0.013 | -0.054 | RULED OUT |
+| F3 liquidity sweep of the Asian range (London/NY reversal) | -0.198 (21891, 29%) | -0.186 / -0.210 | -0.243 | -0.224 / -0.211 | 88 | +0.001 | -0.045 | +0.046 | RULED OUT |
+| F4 candle range theory (H4 sweep -> opposite end) | -0.157 (37963, 45%) | -0.155 / -0.159 | -0.183 | -0.177 / -0.207 | 127 | -0.017 | -0.014 | -0.003 | RULED OUT |
+| F5 Quasimodo (H4 line-chart HH/LL, sell the left shoulder) | -0.226 (9558, 28%) | -0.206 / -0.246 | -0.188 | -0.244 / -0.155 | 32 | -0.121 | -0.090 | -0.031 | RULED OUT |
+Negative in every year and on all 17 instruments for every family. POST-HOC engine check (`scripts/research_social_media_engine_bias_2026_10_29.py`, labelled): the
+pre-registered random-walk self-tests passed (within 3.5 se) but a 1.6-million-bar version shows the conservative conventions (stop first on bars that hit both; the
+fill bar can only stop out) cost QM -0.090 and the sweep -0.045 on pure noise (FVG +0.024, OB +0.013, CRT -0.014); the "engine bias" and "before-cost edge" columns
+correct for it. Even corrected, the best (F3, +0.05 before costs) is a quarter of its spread cost (~0.2 R: these rules use stops of a fraction of an hour's range).
+Lesson: the social-media methods are the same family as the price-pattern rules already ruled out, at faster timeframes with tighter stops, so costs are larger.
+Running total: about 196 variants in 90 families.

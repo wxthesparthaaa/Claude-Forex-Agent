@@ -17,6 +17,12 @@ H4 and daily time-series momentum (1-252 day lookbacks); daily 200-day trend (th
 relative-value pairs (FX, metals, oil; index pairs on daily AND hourly bars); London 4pm fix; Tokyo gotobi days; quarter-end dollar funding; weekend gap fade/follow (FX, crypto); intraday momentum, overnight drift; turn of month; dip buying; options-expiration week; pre-holiday; Halloween (right direction, 2 trades a year, not significant);
 week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-of-day scan on indices/metals/oil/crypto; trend on managed/EM currencies (SGD, CNH, THB, TRY, ZAR, MXN...); trend/reversal on the six bond CFDs; volume climax; round numbers; spread regimes; low-cost universe; index beta and vol-timing.
 
+## A2. Social-media strategies (Instagram / TikTok / YouTube; a source first used 2026-10-29) -- all RULED OUT
+Malaysian SnR fresh-level first touch (with/without storyline); ICT fair value gap (M15, daily bias); ICT order block + break of structure (M15, daily bias); liquidity sweep of
+the Asian range (M15); candle range theory, CRT (H4); Quasimodo, QM (H4). Every one loses 0.16-0.36 R per trade after costs in every year and on all 17 instruments, and
+none has a before-cost edge beyond +0.05 R (after removing the test engine's own random-walk bias). They trade very often on tight stops, so the spread alone is about 0.2 R.
+Untested from this source (send the exact rules if wanted): SMC "CHoCH" entries, Silver Bullet time windows, MSnR RBS/SBR flips and engulfing confirmation, power of 3 / AMD.
+
 ## B. Scheduled events and news (RULED OUT)
 US 8:30 ET news-shock continuation; pre-FOMC drift (46 events, underpowered); weekly EIA oil (Wed) and natural-gas (Thu) report reactions; Treasury auction cycle; jobless claims momentum.
 Month-end equity-vs-bond pension rebalancing on 16 index CFDs + 7 USD majors (2026-10-29, M1): WEAK -- holdout +0.028 (n 6404, p 0.16), fresh +0.149, meets the practice-trial bar on paper, but a one-day delay is ~0, two days negative, and a pre-registered 1990-2002 replication FAILED (gross +0.014 vs about 0.057 cost).
