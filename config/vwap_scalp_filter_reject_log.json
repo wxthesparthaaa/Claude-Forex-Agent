@@ -8212,5 +8212,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.00016759746327489768
+  },
+  {
+    "tick_time": "2026-10-29T11:58:24.112023+00:00",
+    "instrument": "USD_CHF",
+    "filter": "vol_ratio",
+    "value": 0.00020320511070268015
   }
 ]
