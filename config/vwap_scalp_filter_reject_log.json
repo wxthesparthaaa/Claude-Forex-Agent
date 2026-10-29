@@ -8344,5 +8344,11 @@
     "instrument": "AUD_USD",
     "filter": "vol_ratio",
     "value": 0.0001405767206605487
+  },
+  {
+    "tick_time": "2026-10-29T16:55:10.749821+00:00",
+    "instrument": "BCO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.28873239436615417
   }
 ]
