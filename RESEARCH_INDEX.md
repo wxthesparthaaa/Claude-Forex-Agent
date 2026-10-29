@@ -1,7 +1,7 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-10-29. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-10-30. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
@@ -16,6 +16,9 @@ VWAP Scalp and every refinement (filters, sizing, stops, trailing, partial TP); 
 H4 and daily time-series momentum (1-252 day lookbacks); daily 200-day trend (the old "edge" was a look-ahead artefact); G10 and EM carry with honest lagged rates; PPP value; rate momentum; cross-sectional momentum and reversal (FX, countries, commodities, 16-instrument ranking);
 relative-value pairs (FX, metals, oil; index pairs on daily AND hourly bars); London 4pm fix; Tokyo gotobi days; quarter-end dollar funding; weekend gap fade/follow (FX, crypto); intraday momentum, overnight drift; turn of month; dip buying; options-expiration week; pre-holiday; Halloween (right direction, 2 trades a year, not significant);
 week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-of-day scan on indices/metals/oil/crypto; trend on managed/EM currencies (SGD, CNH, THB, TRY, ZAR, MXN...); trend/reversal on the six bond CFDs; volume climax; round numbers; spread regimes; low-cost universe; index beta and vol-timing.
+Cash-session rules on the 13 non-US index CFDs (JP225, HK33, CHINAH, CN50, SG30, AU200, DE30, UK100, FR40, EU50, CH20, NL25, ESPIX; M15, 2026-10-30): intraday momentum
+(-0.17 R), overnight premium (-0.08), post-close reversal of the last half-hour (-0.19); before-cost effects +0.005 to +0.03 vs 0.09-0.22 R spread cost. RULED OUT.
+Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
 ## A2. Social-media strategies (Instagram / TikTok / YouTube; a source first used 2026-10-29) -- all RULED OUT
 Malaysian SnR fresh-level first touch (with/without storyline); ICT fair value gap (M15, daily bias); ICT order block + break of structure (M15, daily bias); liquidity sweep of
@@ -49,7 +52,7 @@ Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
 Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeven inflation (T5YIE); month-end pension rebalancing; central-bank meeting dates other than the Fed; weather vs natural gas; USDA/agriculture reports; Asian/European index CFDs
-(HK33, CN50, SG30, CH20, NL25, ESPIX) and platinum/palladium have now been used only in M1 and P1 (2026-10-29); VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid). (COT done 2026-10-29: the Socrata API publicreporting.cftc.gov works from the cloud; the cftc.gov zip files return a Cloudflare 403.)
+(HK33, CN50, SG30, CH20, NL25, ESPIX, CHINAH) now used in M1, P1 and the 2026-10-30 session rules; platinum/palladium only in M1 and P1; A-H premium (CHINAH vs CN50); non-Fed central-bank pre-meeting drift; VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid). (COT done 2026-10-29: the Socrata API publicreporting.cftc.gov works from the cloud; the cftc.gov zip files return a Cloudflare 403.)
 
 ## Data access notes
 - Reachable from the local Windows machine: Binance (data-api.binance.vision, www.binance.com funding), Coinbase, DeFiLlama, Deribit, alternative.me, blockchain.com, Wikimedia, CBOE CSVs (follow 307 redirects), Yahoo Finance chart API, Treasury FiscalData, NY Fed, World Bank, ECB data API.

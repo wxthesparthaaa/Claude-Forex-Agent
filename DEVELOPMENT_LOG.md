@@ -11280,3 +11280,40 @@ Negative in every year for every recipe; only WTI and Brent are fractionally pos
 in the videos. The best before-cost edge (RSI divergence, +0.07 R) is under a third of its spread cost. Caveat: the Silver Bullet is taught on 1-5 minute charts;
 the 2026-08/09 scalp work showed costs are proportionally larger there, not smaller.
 Running total: about 202 variants in 96 families; 0 pass the strict bar.
+
+## 2026-10-30 -- daily research (scheduled routine): three cash-session rules on the 13 non-US index CFDs, all RULED OUT
+
+**Health check** (state-sync read 2026-10-29 22:35 UTC): heartbeat 2026-10-29 22:34:57 UTC (app alive); OANDA (read-only) 0 open trades. VWAP Scalp is ON:
+19 trades since the last run (opened 10-29; 15 wins, 4 losses), net +17.49 SGD; strategy balance 576.42 SGD (2,000 - 1,423.58). Crypto Flow (enabled): day 2026-10-28
+evaluated normally at 01:03 UTC 10-29, all four coins `no_signal` (BTC composite +0.95, below the entry level); no skipped or data_unavailable day since the 10-27 fix;
+day 2026-10-29 is evaluated at 01:00 UTC 10-30, after this run. 0 live Crypto Flow trades so far. Test suite 519 passed. Nothing broken.
+
+**Tested** (new instruments: RESEARCH_INDEX section G listed HK33, CN50, SG30, CH20, NL25, ESPIX as never used in a session rule; CHINAH_HKD never used at all).
+OANDA M15 bid/ask 2016-01..2026-10-28 for JP225, HK33, CHINAH (from 2020-11), CN50, SG30, AU200, DE30, UK100, FR40, EU50, CH20, NL25, ESPIX; local cash sessions via
+zoneinfo (Tokyo close 15:30 from 2024-11-05); R = the rule's 60-observation sd; date-clustered one-sided tests; holdout 2020-01..2025-09, fresh 2025-10..2026-10;
+K = 3 (alpha 0.0167). Scripts pre-registered and committed before running: `scripts/research_intl_index_sessions_2026_10_30.py` (I1, I2; a3635d49c) and
+`scripts/research_close_reversal_2026_10_30.py` (I3; 63c330899, written after seeing I1/I2, as its docstring says). All random-walk and peeking self-tests passed.
+| idea | holdout mean R (n) | halves | fresh | +20% / delayed | trades/wk | zero-spread holdout | verdict |
+|---|---|---|---|---|---|---|---|
+| I1 intraday momentum (open move incl. overnight -> trade the last half-hour in its direction) | -0.173 (18114) | -0.166 / -0.180 | -0.210 | -0.212 / -0.163 | 60 | +0.019 (p 0.09) | RULED OUT |
+| I2 overnight premium (buy at the cash close, sell at the next cash open; 6.5%/yr financing) | -0.082 (18256) | -0.079 / -0.084 | -0.082 | -0.093 / -0.084 | 61 | +0.005 | RULED OUT |
+| I3 post-close reversal (fade the last half-hour for the hour after the close) | -0.190 (17115) | -0.141 / -0.233 | -0.169 | -0.234 / -0.257 | 57 | +0.029 (p 0.013) | RULED OUT |
+Negative in every year 2016-2026 and on all 13 indices for every rule (DE30 nearest zero: -0.012 / -0.034 / -0.006). Lesson: the before-cost effects are tiny (+0.005 to
++0.03 of a typical move; I3's small reversal is the only one near significance before costs), while the spread at the cash open/close and after the close costs 0.09-0.22
+of a typical 30-60 minute move; the Asian index CFDs (SG30, CN50, CHINAH) are the most expensive. Short-hold index-session rules need several times more gross edge.
+Not tested, reasoned out of the queue: (a) GSCI/BCOM roll pressure: the documented effect is in the calendar spread (front vs next contract), and OANDA offers one CFD
+per commodity, so the spread cannot be traded; the outright leg is about 3.7 trades a week (below the frequency requirement); (b) OANDA CFD roll-date gaps: OANDA most likely offsets
+futures-roll price gaps with a cash adjustment that does not appear in candles (not verified), so a candle backtest could show a fake edge; checkable only from account transactions.
+Variants this run: 3 (all pre-registered, no post-hoc).
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged; Crypto Flow composite, holdout +0.057 / fresh +0.059 at 1.6 trades/week, runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+Running total: about 205 variants in 99 families (plus ~9,500 scan cells); 0 pass the strict bar; 1 passes the practice-trial bar on paper (M1).
+
+**Queue** (ranked): (1) non-Fed central-bank pre-meeting drift (ECB, BoE, BoJ, RBA, BoC, SNB, RBNZ, Norges, Riksbank -> currency + local index, 1-2 day holds so costs are
+small relative to the move; ~4-5/wk; needs meeting-date lists from the banks' sites); (2) A-H premium (CHINAH_HKD vs CN50_USD, daily): Stock Connect flows should close
+an unusually wide gap between the same companies' H and A shares (a specific mechanism, unlike the generic index pairs already ruled out; ~5/wk with daily rebalancing);
+(3) VT1 on risk FX crosses AUD_JPY/NZD_JPY (low frequency, completeness).
+
+Research result: 2026-10-30, 3 ideas tested, 0 credible
