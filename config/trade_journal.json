@@ -22121,5 +22121,36 @@
     "session_drift_z": 0.26058902575887793,
     "vol_ratio": 0.002271516649925913,
     "spread_to_stop": 0.12166172106823862
+  },
+  {
+    "trade_id": "7709",
+    "instrument": "BTC_USD",
+    "direction": "SHORT",
+    "units": -0.001,
+    "entry_price": 76865.0,
+    "stop_loss": 81907.4,
+    "take_profit": 60124.3,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "Crypto Flow: composite buying-pressure z -1.08 (funding +1.05, taker share -0.40, Coinbase premium -3.90); 24h hold"
+    ],
+    "opened_at": "2026-10-30T01:03:10.634877+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 6.454530852,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "CRYPTO_FLOW",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 76880.5,
+    "entry_z": -1.0830641766141094,
+    "session_drift_z": null,
+    "vol_ratio": null,
+    "spread_to_stop": null
   }
 ]
