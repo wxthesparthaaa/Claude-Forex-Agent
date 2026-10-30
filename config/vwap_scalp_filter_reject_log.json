@@ -8506,5 +8506,11 @@
     "instrument": "CHF_JPY",
     "filter": "vol_ratio",
     "value": 0.00017307469342785328
+  },
+  {
+    "tick_time": "2026-10-30T10:03:10.988758+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00016538713765207205
   }
 ]
