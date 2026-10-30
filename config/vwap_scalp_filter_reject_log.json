@@ -8476,5 +8476,11 @@
     "instrument": "CHF_JPY",
     "filter": "vol_ratio",
     "value": 0.00019927242199884
+  },
+  {
+    "tick_time": "2026-10-30T09:48:13.619421+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.6999999999995263
   }
 ]
