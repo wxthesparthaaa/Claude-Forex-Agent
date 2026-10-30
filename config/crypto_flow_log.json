@@ -142,5 +142,15 @@
     "zp": -3.8992,
     "composite": -1.0831,
     "direction": "SHORT"
+  },
+  {
+    "day": "2026-10-29",
+    "instrument": "ETH_USD",
+    "result": "no_signal",
+    "at": "2026-10-30T01:03:18.060032+00:00",
+    "zf": 1.1774,
+    "zt": -0.5973,
+    "zp": -2.9072,
+    "composite": -0.7757
   }
 ]
