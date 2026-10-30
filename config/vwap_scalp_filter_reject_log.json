@@ -8788,5 +8788,11 @@
     "instrument": "CAD_JPY",
     "filter": "vol_ratio",
     "value": 0.00019915320439596717
+  },
+  {
+    "tick_time": "2026-10-30T19:03:05.797767+00:00",
+    "instrument": "GBP_USD",
+    "filter": "vol_ratio",
+    "value": 0.0001386686074590721
   }
 ]
