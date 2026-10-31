@@ -1,23 +1,24 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-10-30. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-10-31. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 175 hand-built variants in 80 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 211 hand-built variants in 104 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
 - Look-ahead bugs have bitten before (daily trend-following 2026-08). Every script needs a random-walk self-test and a peeking-rule self-test.
 
 ## A. Price-only rules on FX, indices, commodities (all RULED OUT)
-VWAP Scalp and every refinement (filters, sizing, stops, trailing, partial TP); ORB Fade; Range Confluence; opening-range breakout, Bollinger fade, Donchian, 1m/15m/60m scalps; the user's triangle + support/resistance + RSI setup; Malaysian SnR (fresh line-chart A/V levels, first-touch fade, with and without the daily storyline filter; 2026-10-29, about -0.19 R per trade, zero-spread -0.01);
+VWAP Scalp and every refinement (filters, sizing, stops, trailing, partial TP; a 2x target replayed on the live trades 2026-10-31: win rate 43.6 to 39.6%, about -0.23 to -0.16 per trade, still losing); ORB Fade; Range Confluence; opening-range breakout, Bollinger fade, Donchian, 1m/15m/60m scalps; the user's triangle + support/resistance + RSI setup; Malaysian SnR (fresh line-chart A/V levels, first-touch fade, with and without the daily storyline filter; 2026-10-29, about -0.19 R per trade, zero-spread -0.01);
 H4 and daily time-series momentum (1-252 day lookbacks); daily 200-day trend (the old "edge" was a look-ahead artefact); G10 and EM carry with honest lagged rates; PPP value; rate momentum; cross-sectional momentum and reversal (FX, countries, commodities, 16-instrument ranking);
 relative-value pairs (FX, metals, oil; index pairs on daily AND hourly bars); London 4pm fix; Tokyo gotobi days; quarter-end dollar funding; weekend gap fade/follow (FX, crypto); intraday momentum, overnight drift; turn of month; dip buying; options-expiration week; pre-holiday; Halloween (right direction, 2 trades a year, not significant);
 week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-of-day scan on indices/metals/oil/crypto; trend on managed/EM currencies (SGD, CNH, THB, TRY, ZAR, MXN...); trend/reversal on the six bond CFDs; volume climax; round numbers; spread regimes; low-cost universe; index beta and vol-timing.
 Cash-session rules on the 13 non-US index CFDs (JP225, HK33, CHINAH, CN50, SG30, AU200, DE30, UK100, FR40, EU50, CH20, NL25, ESPIX; M15, 2026-10-30): intraday momentum
 (-0.17 R), overnight premium (-0.08), post-close reversal of the last half-hour (-0.19); before-cost effects +0.005 to +0.03 vs 0.09-0.22 R spread cost. RULED OUT.
+Weekly run 2026-10-31 (M15/H1, scripts/research_flow_and_range_2026_10_31.py): leveraged-ETF rebalancing continuation (+0.016, fresh -0.105) and next-morning reversal (-0.108) on US indices; Internal Bar Strength long on 17 indices (-0.052); NR7 narrow-range breakout on 28 instruments (+0.008); A-H premium CHINAH vs CN50 (+0.017, gross +0.158, fresh -0.219). All effectively none. US-only IBS (post-hoc; holdout +0.093, 3.4 trades a week) FAILED its 2006-2015 replication (+0.079, p 0.11; needed p below 0.05): RULED OUT, no more IBS variants.
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
 ## A2. Social-media strategies (Instagram / TikTok / YouTube; a source first used 2026-10-29) -- all RULED OUT

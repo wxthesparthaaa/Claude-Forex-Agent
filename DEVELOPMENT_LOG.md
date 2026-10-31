@@ -11317,3 +11317,37 @@ an unusually wide gap between the same companies' H and A shares (a specific mec
 (3) VT1 on risk FX crosses AUD_JPY/NZD_JPY (low frequency, completeness).
 
 Research result: 2026-10-30, 3 ideas tested, 0 credible
+
+## 2026-10-31 -- weekly research (Saturday local task): leveraged-ETF flow, IBS, NR7, A-H premium, none credible; user question: VWAP Scalp with a 2x target
+
+**Health check** (state-sync read 2026-10-31 08:05 UTC): heartbeat 08:03 UTC (app alive); weekly summary ran (week_start_timestamp 10-30 21:03 UTC); OANDA (read-only) 0 open trades, 0 pending. Test suite 519 passed. VWAP Scalp is ON (the user resumed it 10-28; this task's prompt still
+says it should be off, which is stale, so no "untick" reminder was sent): 53 closed trades this week (29 wins), net -35.78 SGD; strategy balance about 539.32 SGD (2,000 - 1,460.68). Crypto Flow: first live trade, BTC SHORT 0.001 opened 10-30 01:03 UTC, closed by the Friday pre-close cancel at 20:53 UTC for +0.02 SGD, journal status
+CANCELLED (the designed behaviour; remember to count such trades when judging its ~100-trade stop rule). No skipped or data_unavailable day. Nothing broken, nothing fixed.
+Note: memory says this local task was disabled when the routine moved to the cloud on 10-24, but it fired today. Its prompt is older than the cloud routine's. The local venv has no scipy (installed to the scratchpad only for this run, venv untouched).
+
+**Tested** (`scripts/research_flow_and_range_2026_10_31.py`, pre-registered and committed before running, ccb945443, one instrument-name correction f3a70b147; K = 5, alpha 0.01; M15 and H1 OANDA bid/ask 2016-01..2026-10-30; holdout 2020-01..2025-09, fresh 2025-10..2026-10; all random-walk and peeking self-tests passed):
+| idea | holdout mean R (n) | halves | fresh | +20% / delayed | trades/wk | zero-spread holdout | verdict |
+|---|---|---|---|---|---|---|---|
+| E1 leveraged-ETF rebalancing: move by 15:00 ET at least 1 sd -> continue for the last cash hour (4 US indices) | +0.016 (1585) p 0.43 | +0.043 / -0.012 | -0.105 | +0.011 / -0.033 | 5.3 | +0.042 | WEAK, effectively none |
+| E2 same flow, next-morning reversal (16:00 ET -> 10:00 ET) | -0.108 (1631) | -0.096 / -0.121 | -0.011 | -0.111 / -0.131 | 5.4 | -0.074 | RULED OUT |
+| E3 Internal Bar Strength <= 0.2 -> long one day (17 indices) | -0.052 (4655) | -0.067 / -0.039 | +0.048 | -0.057 / -0.046 | 15.5 | -0.002 | RULED OUT |
+| E4 NR7 narrow-range breakout, stop at the other side (28 instruments) | +0.008 (5683) | +0.020 / -0.003 | -0.015 | +0.001 / -0.001 | 18.9 | +0.025 | WEAK, effectively none |
+| E5 A-H premium (CHINAH vs CN50), z 1 over 60 days, 5-day hold | +0.017 (428 pairs) | +0.065 / -0.032 | -0.219 | +0.004 / +0.015 | 2.9 legs | +0.158 | WEAK; costs take the gap-closing gain, loses since 2025 |
+E3 split post-hoc (labelled; `scripts/research_ibs_us_replication_2026_10_31.py`, 3f08f0ecf): by number of indices signalling that date (holdout), 1-2 indices +0.187, 3-5 +0.067, 6-9 -0.138, 10+ -0.339 (a global selloff keeps going); US indices only: discovery 2016-19 -0.053, holdout +0.093 (1025, p 0.059), fresh +0.315 (trade mean; date mean +0.138), +20% +0.092, delayed +0.106, buying every day instead +0.013, 3.4 trades/wk.
+PRE-REGISTERED REPLICATION of US-only IBS on untouched 2006-2015 (pass needed p < 0.05 and beating the buy-every-day control): +0.079 (1656), date mean +0.052, p 0.11, control -0.006, all 4 indices positive, 8 of 10 years positive -> FAILED by its stated rule. RULED OUT, no more IBS variants, as pre-registered. It is the closest thing seen in a while (right direction in the holdout, fresh and untouched periods) but 2016-19 was negative, the US choice is post-hoc, and it is below 5 trades a week.
+Queue items not run, with reasons: non-Fed central-bank drift (recount: 70 meetings a year = 1.4-2.7 trades a week, below the requirement, and needs ten years of hand-collected dates); VT1 on FX crosses (0.3-0.5 trades a week).
+Variants this run: 6 (5 pre-registered + 1 replication) plus post-hoc diagnostics.
+
+**User question mid-run: "can we experiment with a 2x TP on VWAP, how much win rate would I lose?"** Analysis only; VWAP rules NOT changed. Replayed all 679 live VWAP Scalp trades on OANDA M1 bid/ask (same entry and stop, 30-minute cap, stop-first; bars start at the minute after the fill; replay win rate runs 2-6 points under actual, so compare replay with replay). Replay script was scratch only, not committed. Trades since 2026-09-20 (n 417):
+| target | win rate | avg win / avg loss (R) | breakeven win rate | mean R |
+|---|---|---|---|---|
+| current (median TP/SL 0.83) | 43.6% | +0.76 / -1.00 | 56.8% | -0.231 |
+| x1.5 | 40.8% | +0.96 / -0.99 | 50.6% | -0.192 |
+| x2 | 39.6% | +1.08 / -0.98 | 47.5% | -0.164 |
+| x3 | 37.6% | +1.24 / -0.98 | 44.1% | -0.143 |
+All 679: win 38.9 -> 34.8%, mean R -0.268 -> -0.209. Last 53 (since the 10-28 resume, median TP/SL 0.64): win 49.1 -> 37.7%, mean R -0.193 -> -0.214 (too few to read). Paired 2x minus current: +0.067 R (se 0.025) since 09-20, +0.062 / +0.073 in its two halves. Exits at 2x: target 21.6% (from 34.5%), stop 43.6% (41.7%), time limit 34.8% (23.7%). Win rate falls less than expected because many extra timeouts still finish slightly ahead. Reading: the small improvement looks consistent but is post-hoc, comes after 17+ refinements, and the strategy still loses about 0.16 per trade; about -0.7 SGD a trade at the current 4.3 SGD risk.
+Running total: about 211 variants in 104 families (plus ~9,500 scan cells); 0 pass the strict bar; 1 passes the practice-trial bar on paper (M1, unchanged). Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) index rules conditioned on low cross-market breadth, only with a new stated mechanism (the IBS breadth split is a lead, but no more IBS variants); (2) OANDA account-transaction check of CFD roll adjustments (the one cost-structure unknown left; read-only); (3) A-share vs H-share only if a cheaper entry exists (gross +0.158 before costs, net zero); (4) intraday outside data feeds if the user will pay.
+
+Research result: 2026-10-31, 6 ideas tested, 0 credible
