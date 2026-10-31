@@ -439,6 +439,13 @@
              value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
       <div class="toggle-row">
+        <span>VWAP 2x target experiment{{ ' -- ON' if vwap_scalp_double_target_enabled else ' -- OFF (target is VWAP)' }}</span>
+        <label class="switch">
+          <input type="checkbox" name="vwap_scalp_double_target_enabled" {{ 'checked' if vwap_scalp_double_target_enabled else '' }}>
+          <span class="switch-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
         <span>Daily trade cap{{ ' -- ON, max ' ~ vwap_scalp_max_trades_per_day ~ ' per day' if vwap_scalp_daily_cap_enabled else ' -- OFF (unlimited)' }}</span>
         <label class="switch">
           <input type="checkbox" name="vwap_scalp_daily_cap_enabled" {{ 'checked' if vwap_scalp_daily_cap_enabled else '' }}>

@@ -669,6 +669,7 @@ def dashboard():
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         crypto_flow_enabled=state.crypto_flow_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
+        vwap_scalp_double_target_enabled=state.vwap_scalp_double_target_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
         vwap_scalp_max_trades_per_day_min=state.vwap_scalp_max_trades_per_day_min,
         vwap_scalp_max_trades_per_day_max=state.vwap_scalp_max_trades_per_day_max,
@@ -915,6 +916,7 @@ def settings():
         # scalp_daily_cap_enabled's own comment. The slider below still
         # applies whenever this stays on (the normal case).
         state.vwap_scalp_daily_cap_enabled = request.form.get("vwap_scalp_daily_cap_enabled") == "on"
+        state.vwap_scalp_double_target_enabled = request.form.get("vwap_scalp_double_target_enabled") == "on"
         state.vwap_scalp_max_trades_per_day = int(_clamp(
             float(request.form.get("vwap_scalp_max_trades_per_day", state.vwap_scalp_max_trades_per_day)),
             state.vwap_scalp_max_trades_per_day_min, state.vwap_scalp_max_trades_per_day_max))

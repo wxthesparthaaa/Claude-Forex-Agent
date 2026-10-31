@@ -142,6 +142,18 @@ def test_saving_settings_while_paused_keeps_it_paused(tmp_path, monkeypatch):
     assert ds.load_state().phase_state["kill_switch_engaged"] is True
 
 
+def test_settings_page_shows_and_saves_the_double_target_toggle(tmp_path, monkeypatch):
+    client = _client_with_state(tmp_path, monkeypatch, _state())
+    assert 'name="vwap_scalp_double_target_enabled" checked' in client.get("/").get_data(as_text=True)
+
+    client.post("/settings", data={"autopilot": "on", "vwap_scalp_enabled": "on"})
+    assert ds.load_state().vwap_scalp_double_target_enabled is False
+    assert 'VWAP 2x target experiment -- OFF' in client.get("/").get_data(as_text=True)
+
+    client.post("/settings", data={"autopilot": "on", "vwap_scalp_enabled": "on", "vwap_scalp_double_target_enabled": "on"})
+    assert ds.load_state().vwap_scalp_double_target_enabled is True
+
+
 def test_dashboard_has_section_nav_back_to_top_and_a_collapsed_gain_chart(tmp_path, monkeypatch):
     client = _client_with_state(tmp_path, monkeypatch, _state())
     page = client.get("/").get_data(as_text=True)

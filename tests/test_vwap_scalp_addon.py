@@ -1546,3 +1546,38 @@ def test_session_drift_cap_is_off_by_default_so_a_trending_session_still_signals
         client, "EUR_USD", FIXED_NOW - timedelta(minutes=31), FIXED_NOW)
     assert direction is not None
     assert abs(diagnostics["session_drift_z"]) >= 3.0  # drifted well past the old cap
+
+
+def _open_short_with_target_setting(tmp_path, monkeypatch, enabled):
+    _isolate(tmp_path, monkeypatch)
+    state = _autopilot_state()
+    state.vwap_scalp_double_target_enabled = enabled
+    ds.save_state(state)
+    monkeypatch.setattr(vs, "datetime", _FrozenDatetime)
+    candles = _extended_session_candles(extension_price=100.13, confirmation_price=100.12)
+    entry_price = _valid_entry_price(candles, "SHORT")
+    client = FakeClient(candles_by_instrument={"EUR_USD": candles}, price=entry_price)
+    assert vs.check_vwap_scalp_opportunities(client) == ["EUR_USD"]
+    times, vwap, dev_stdev, z = vs._compute_vwap_series(candles)
+    signal_index, _ = vs._find_confirmed_signal(times, z, times[-1])
+    return vs.load_journal()[-1], vwap[signal_index], dev_stdev[signal_index]
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_double_target_experiment_doubles_only_the_take_profit_distance(mock_send, tmp_path, monkeypatch):
+    entry, target, stdev = _open_short_with_target_setting(tmp_path, monkeypatch, True)
+    assert entry["target_multiple"] == vs.TARGET_EXPERIMENT_MULTIPLE
+    expected_tp = entry["entry_price"] + (target - entry["entry_price"]) * 2
+    assert entry["take_profit"] == pytest.approx(expected_tp, abs=2e-4)
+    assert entry["stop_loss"] == pytest.approx(target + (vs.Z_ENTRY + vs.STOP_Z_BUFFER) * stdev, abs=2e-4)
+
+
+@patch("vwap_scalp_addon.send_message")
+def test_double_target_experiment_off_keeps_the_vwap_target(mock_send, tmp_path, monkeypatch):
+    entry, target, _ = _open_short_with_target_setting(tmp_path, monkeypatch, False)
+    assert entry["target_multiple"] == 1.0
+    assert entry["take_profit"] == pytest.approx(target, abs=2e-4)
+
+
+def test_double_target_experiment_defaults_on():
+    assert ds.default_state().vwap_scalp_double_target_enabled is True
