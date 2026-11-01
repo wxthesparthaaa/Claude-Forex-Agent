@@ -11378,3 +11378,34 @@ FL1 negative in every year and on all 17 instruments; FL2 negative in every year
 flags do WORSE than the same rule on random prices: real breakouts out of a flag fall back more often than chance, the usual short-horizon mean reversion.
 Running total: about 207 variants in 100 families; 0 pass the strict bar.
 Best practice-trial candidate so far: unchanged (see the latest daily-research entry).
+
+## 2026-11-02 -- daily research (scheduled routine): Asian reopen under-reaction and exotic-cross quote staleness, both RULED OUT
+
+**Health check** (state-sync read 2026-11-01 22:31 UTC): heartbeat 22:31:37 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending. Test suite 523 passed.
+VWAP Scalp is ON (2x target experiment ON): 24 trades since the last daily run (all on 10-30, before the 2x build, so none carry target_multiple 2.0 yet; 9 wins), net -36.45 SGD;
+strategy balance 547.98 SGD (2,000 - 1,452.02). Crypto Flow (enabled): last evaluated day 2026-10-29 (BTC SHORT opened, closed by the Friday pre-close cancel, +0.02 SGD);
+days 10-30 and 10-31 fall on Saturday/Sunday 01:00 UTC when the market is shut (by design, no entry), day 11-01 is evaluated at 01:00 UTC 11-02, after this run. No skipped or
+data_unavailable day. Live Crypto Flow trades so far: 1 (cancelled at +0.02 SGD); far too few to compare with the +0.05 expectation. Nothing broken.
+
+**Tested** (`scripts/research_reopen_and_cross_lag_2026_11_02.py`, pre-registered and committed b6bdaa31e before running; one mechanical fix afterwards: the H1 file-name
+slice was one character short, so the cross universe loaded nothing and the script crashed; no rule changed). K = 3, alpha 0.0167. All four self-tests passed (X1 random walk
++0.001, se 0.019; X1 peek +1.20; X2 random walk -0.000; X2 peek +0.75).
+| idea | holdout mean R (n) | gross | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| X1a Asian reopen: follow the US (SPX500) move made while HK33 / CHINAH / CN50 were shut, enter reopen+30 min, exit 04:00 UTC | -0.068 (1771) p 0.97 | -0.005 | -0.078 / -0.057 | -0.116 | -0.080 / -0.064 | 5.9 | RULED OUT |
+| X1b same, exit at the Hong Kong cash close 08:00 UTC | -0.019 (1759) | +0.029 | -0.017 / -0.020 | -0.087 | -0.028 / -0.006 | 5.9 | RULED OUT |
+| X2 exotic-cross staleness: H1 close off the cross implied by its USD legs by >= one spread -> trade toward it for 1 hour (48 crosses) | -0.642 (14852) | +0.020 | -0.646 / -0.638 | -0.478 | -0.774 / -0.757 | 49.5 | RULED OUT |
+X1: the reopening price already contains the US move (gross about zero after the first 30 minutes); negative on all three instruments, 7 of 11 years negative (X1a).
+X2: deviations of one spread or more are mostly EUR_TRY, TRY_JPY, EUR_DKK and the JPY crosses; they do close by about +0.02 typical hours, a small fraction of the spread.
+Like the gold crosses (2026-10-25), OANDA prices its crosses from one engine; there is no stale quote to trade at hourly resolution.
+Variants this run: 3 (all pre-registered, no post-hoc). Running total: about 214 variants in 106 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged; Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA account-transaction check of CFD roll adjustments (read-only; the one cost-structure unknown left); (2) index rules conditioned on low
+cross-market breadth, only with a new stated mechanism; (3) venue-closure idea on other markets whose OANDA CFD stops quoting (e.g. bond CFDs, ags) only if a different
+mechanism than opening under-reaction is found; (4) intraday outside data feeds if the user will pay.
+
+Research result: 2026-11-02, 2 ideas tested, 0 credible

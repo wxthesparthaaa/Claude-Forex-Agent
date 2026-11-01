@@ -279,7 +279,7 @@ def main(m15_dir, h1_dir):
         print("  per instrument (holdout, fresh):", per_inst, flush=True)
         results[name] = r
     # ---------------- X2
-    h1 = {f[:-11]: load(os.path.join(h1_dir, f)) for f in os.listdir(h1_dir) if f.endswith("_H1_MBA.json")}
+    h1 = {f[:-len("_H1_MBA.json")]: load(os.path.join(h1_dir, f)) for f in os.listdir(h1_dir) if f.endswith("_H1_MBA.json")}
     crosses = []
     for name in sorted(h1):
         a, b = name.split("_")

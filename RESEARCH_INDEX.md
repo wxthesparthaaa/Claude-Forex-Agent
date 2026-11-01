@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-10-31. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-02. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 211 hand-built variants in 104 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 214 hand-built variants in 106 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -19,6 +19,7 @@ week-of-year seasonality (commodities, FX); FX time-of-day and a 432-cell hour-o
 Cash-session rules on the 13 non-US index CFDs (JP225, HK33, CHINAH, CN50, SG30, AU200, DE30, UK100, FR40, EU50, CH20, NL25, ESPIX; M15, 2026-10-30): intraday momentum
 (-0.17 R), overnight premium (-0.08), post-close reversal of the last half-hour (-0.19); before-cost effects +0.005 to +0.03 vs 0.09-0.22 R spread cost. RULED OUT.
 Weekly run 2026-10-31 (M15/H1, scripts/research_flow_and_range_2026_10_31.py): leveraged-ETF rebalancing continuation (+0.016, fresh -0.105) and next-morning reversal (-0.108) on US indices; Internal Bar Strength long on 17 indices (-0.052); NR7 narrow-range breakout on 28 instruments (+0.008); A-H premium CHINAH vs CN50 (+0.017, gross +0.158, fresh -0.219). All effectively none. US-only IBS (post-hoc; holdout +0.093, 3.4 trades a week) FAILED its 2006-2015 replication (+0.079, p 0.11; needed p below 0.05): RULED OUT, no more IBS variants.
+Daily run 2026-11-02 (scripts/research_reopen_and_cross_lag_2026_11_02.py): Asian reopen under-reaction (follow the US move made while HK33/CHINAH/CN50 were shut, from reopen+30 min to 04:00 or 08:00 UTC; -0.068 / -0.019, gross about 0: the reopen already prices it) RULED OUT.
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
 ## A2. Social-media strategies (Instagram / TikTok / YouTube; a source first used 2026-10-29) -- all RULED OUT
@@ -52,6 +53,7 @@ Cross-venue on gold (PAXG) and the euro (EURUSDT): nothing (OANDA leads).
 
 ## F. Pricing-consistency / arbitrage / venue-lag checks (RULED OUT: OANDA quotes are consistent and no longer lag)
 Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index hourly ratios; hourly OANDA index / metal / oil / FX CFDs vs the CME futures and spot feeds on Yahoo (2024-06..2026-10 only): the index CFDs lagged ES/NQ/YM/RTY in 2024 (gross +0.19 R in 2024Q2, fading to 0 by 2025Q1, negative since); metals, oil and FX never did.
+Exotic/minor FX cross staleness vs the cross implied by its USD legs (48 crosses, H1, 2026-11-02): gross +0.02 vs -0.64 net. RULED OUT.
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
 Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeven inflation (T5YIE); month-end pension rebalancing; central-bank meeting dates other than the Fed; weather vs natural gas; USDA/agriculture reports; Asian/European index CFDs
