@@ -11357,3 +11357,24 @@ Research result: 2026-10-31, 6 ideas tested, 0 credible
 Built after the replay above, at the user's direct request, against my recommendation to leave it (an explicit exception to "do not change VWAP rules"; the routines must not treat it as a bug or undo it). `TARGET_EXPERIMENT_MULTIPLE = 2.0` in `src/vwap_scalp_addon.py`: the take-profit is set twice as far from the entry as session VWAP is. Entry, stop (still anchored on VWAP), filters, sizing and the 30-minute cap are unchanged, and the broker-validity check still uses the VWAP target, so it takes the same trades.
 Toggle: `vwap_scalp_double_target_enabled`, Settings page, Advanced, "VWAP 2x target experiment". ON by default because the user asked for it to run and settings cannot be hand-edited; no setting change is needed. Unticking returns to the VWAP target. Each new trade journals `target_multiple` (2.0 or 1.0; older trades have none), so the experiment can be judged alone. The experiment_tag stays VWAP_SCALP.
 PRE-REGISTERED judgement, written before any live trade: expected from the replay, win rate about 40% and about -0.16 per trade (current target about 44%, -0.23). Judge at 150 trades with target_multiple 2.0 against the live trades before it, using the journal's realized_pnl / risk_amount. Tell the user early if after 40 trades mean R is more than 2 standard errors below -0.16. Limits: this can catch a clear failure but cannot confirm a +0.07 gain (that needs well over 1,000 trades), and at the expected rate it still loses about 0.7 SGD a trade at 4.3 SGD risk. It is not a route to the evidence bar.
+
+## 2026-11-01 (user: find the "day-trader-skill" Claude pack, assess it for forex, then "run the test now" on its flag setup): bull/bear flag RULED OUT
+
+**The pack** (github.com/Jakeschincariol/day-trader-skill, MIT, ~4k stars, 11 skills: chart scanner, news monitor, entry timer, exit planner, "time machine"
+replay, risk manager, budget manager, Alpaca order executor, price alerts, earnings analyst, Congress-trade tracker). US stocks only (Yahoo charts, Nasdaq symbol
+list, SEC EDGAR, House Clerk); no track record; its own worked example (TSLA opening-range rule, 59 sessions) says "close to a coin flip". Assessment: no edge to
+import; the stock-only skills do not apply to FX; the generic parts (max-loss sizing, PASS/BLOCK risk gate, stop/target, alerts, journal) already exist in this bot
+on OANDA; its scanner's ORB and oversold-bounce setups were already ruled out. The one untested idea was its flag setup.
+
+**Test** (`scripts/research_flag_pattern_2026_11_01.py`, pre-registered and committed 3f8c6e8eb before running; K = 2, alpha 0.025). Textbook flag made exact:
+8-bar pole >= 3 ATR, then a 3-10 bar flag no wider than half the pole, retracing at most half and making no new extreme; buy (sell) at the next open when a close
+breaks the flag; stop 0.1 ATR beyond the flag (at least 0.25 ATR); target the measured move (pole height). The social-media round's engine (real bid/ask, stop first,
+48-bar timeout, financing 2%/yr); the bot's 17 instruments; fresh 2025-10..2026-10-30. Random-walk self-test passed (engine bias +0.061 / +0.062, under 0.15).
+| variant | holdout mean R (n, win) | halves | fresh | +20% / delayed | trades/wk | zero-spread | before-cost edge vs chance | verdict |
+|---|---|---|---|---|---|---|---|---|
+| FL1 flag, M15 (holdout 2021-01..2025-09) | -0.199 (8061, 31%) | -0.168 / -0.233 | -0.190 | -0.223 / -0.222 | 32.5 | -0.030 | -0.091 | RULED OUT |
+| FL2 flag, H1 (holdout 2020-01..2025-09) | -0.123 (3343, 29%) | -0.103 / -0.143 | -0.060 | -0.135 / -0.123 | 11.1 | -0.002 | -0.064 | RULED OUT |
+FL1 negative in every year and on all 17 instruments; FL2 negative in every year but 2022 and on 15 of 17 (AUD_USD +0.014, XAU_USD +0.032). Before costs the
+flags do WORSE than the same rule on random prices: real breakouts out of a flag fall back more often than chance, the usual short-horizon mean reversion.
+Running total: about 207 variants in 100 families; 0 pass the strict bar.
+Best practice-trial candidate so far: unchanged (see the latest daily-research entry).
