@@ -8908,5 +8908,11 @@
     "instrument": "GBP_USD",
     "filter": "spread_to_stop",
     "value": 0.5357142857145123
+  },
+  {
+    "tick_time": "2026-11-02T10:50:58.932748+00:00",
+    "instrument": "USD_CAD",
+    "filter": "spread_to_stop",
+    "value": 0.5185185185186404
   }
 ]
