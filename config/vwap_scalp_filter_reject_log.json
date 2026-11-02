@@ -9070,5 +9070,11 @@
     "instrument": "AUD_USD",
     "filter": "spread_to_stop",
     "value": 0.41176470588242975
+  },
+  {
+    "tick_time": "2026-11-02T14:40:57.142404+00:00",
+    "instrument": "NZD_USD",
+    "filter": "spread_to_stop",
+    "value": 0.27499999999981267
   }
 ]
