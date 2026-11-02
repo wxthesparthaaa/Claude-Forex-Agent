@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-02. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-03. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 214 hand-built variants in 106 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 219 hand-built variants in 108 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -20,6 +20,9 @@ Cash-session rules on the 13 non-US index CFDs (JP225, HK33, CHINAH, CN50, SG30,
 (-0.17 R), overnight premium (-0.08), post-close reversal of the last half-hour (-0.19); before-cost effects +0.005 to +0.03 vs 0.09-0.22 R spread cost. RULED OUT.
 Weekly run 2026-10-31 (M15/H1, scripts/research_flow_and_range_2026_10_31.py): leveraged-ETF rebalancing continuation (+0.016, fresh -0.105) and next-morning reversal (-0.108) on US indices; Internal Bar Strength long on 17 indices (-0.052); NR7 narrow-range breakout on 28 instruments (+0.008); A-H premium CHINAH vs CN50 (+0.017, gross +0.158, fresh -0.219). All effectively none. US-only IBS (post-hoc; holdout +0.093, 3.4 trades a week) FAILED its 2006-2015 replication (+0.079, p 0.11; needed p below 0.05): RULED OUT, no more IBS variants.
 Daily run 2026-11-02 (scripts/research_reopen_and_cross_lag_2026_11_02.py): Asian reopen under-reaction (follow the US move made while HK33/CHINAH/CN50 were shut, from reopen+30 min to 04:00 or 08:00 UTC; -0.068 / -0.019, gross about 0: the reopen already prices it) RULED OUT.
+Daily run 2026-11-03: PBoC daily USD/CNY fixing surprise (fix vs CNH at 01:00 UTC, 60-day z; scripts/research_pboc_fix_surprise_2026_11_03.py) -> follow it in USD_CNH/AUD_USD/NZD_USD 01:30-08:30 UTC (-0.130 R, 9.3/wk), to next day (-0.124), CNH-only |z|>=1 (-0.206): RULED OUT; before costs slightly the WRONG way (a strong fix is followed by CNH weakness: the PBoC leans against the market, the market keeps going).
+Weekend Bitcoin move (Binance, Fri-Sun 21:00 UTC) -> same direction in 13 index CFDs and risk FX on Monday 01:00-12:00 / -20:00 UTC (scripts/research_weekend_crypto_lead_2026_11_03.py): holdout +0.107 / +0.094 (p 0.08 / 0.10, only 125 Mondays) but 2017-19 -0.29 and fresh -0.29 / -0.39: WEAK, not credible, no more variants.
+CFD roll adjustments (read-only account transactions 2026): no adjustment or dividend transaction exists because the bot never holds a CFD across a roll; question stays open (needs an OANDA-vs-futures-curve comparison).
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
 ## A2. Social-media strategies (Instagram / TikTok / YouTube; a source first used 2026-10-29) -- all RULED OUT
@@ -57,9 +60,10 @@ Exotic/minor FX cross staleness vs the cross implied by its USD legs (48 crosses
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
 Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeven inflation (T5YIE); month-end pension rebalancing; central-bank meeting dates other than the Fed; weather vs natural gas; USDA/agriculture reports; Asian/European index CFDs
-(HK33, CN50, SG30, CH20, NL25, ESPIX, CHINAH) now used in M1, P1 and the 2026-10-30 session rules; platinum/palladium only in M1 and P1; A-H premium (CHINAH vs CN50); non-Fed central-bank pre-meeting drift; VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid). (COT done 2026-10-29: the Socrata API publicreporting.cftc.gov works from the cloud; the cftc.gov zip files return a Cloudflare 403.)
+(HK33, CN50, SG30, CH20, NL25, ESPIX, CHINAH) now used in M1, P1 and the 2026-10-30 session rules; platinum/palladium only in M1 and P1; A-H premium (CHINAH vs CN50); non-Fed central-bank pre-meeting drift; Shanghai Gold Exchange premium (SGE benchmark vs XAU_USD x USD_CNH) as a Chinese-demand signal for gold/silver; VT1 applied to risk FX crosses (AUD_JPY, NZD_JPY); intraday outside data for non-crypto markets (needs paid feeds); options flow/gamma (paid). (COT done 2026-10-29: the Socrata API publicreporting.cftc.gov works from the cloud; the cftc.gov zip files return a Cloudflare 403.)
 
 ## Data access notes
 - Reachable from the local Windows machine: Binance (data-api.binance.vision, www.binance.com funding), Coinbase, DeFiLlama, Deribit, alternative.me, blockchain.com, Wikimedia, CBOE CSVs (follow 307 redirects), Yahoo Finance chart API, Treasury FiscalData, NY Fed, World Bank, ECB data API.
   NOT reachable locally: FRED, CFTC, GDELT/AAII/CNN endpoints. The cloud sandbox reaches FRED/ALFRED (real-time vintages) but its IP is refused by fapi.binance.com (HTTP 451).
+- PBoC USD/CNY fixing history: safe.gov.cn/AppStructured/hlw/RMBQuery.do (POST startDate/endDate/queryYN=true, quarterly chunks, CNY per 100 USD) works from the cloud; chinamoney.com.cn answers a few calls then returns 403. Binance spot klines (data-api.binance.vision) work from the cloud.
 - OANDA instruments: 68 FX pairs, 38 CFDs (indices, bonds, ags, energy, crypto), 21 metals. Practice-account financing per instrument is in the instruments endpoint.

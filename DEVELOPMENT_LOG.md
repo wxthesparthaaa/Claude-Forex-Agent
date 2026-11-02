@@ -11409,3 +11409,45 @@ cross-market breadth, only with a new stated mechanism; (3) venue-closure idea o
 mechanism than opening under-reaction is found; (4) intraday outside data feeds if the user will pay.
 
 Research result: 2026-11-02, 2 ideas tested, 0 credible
+
+## 2026-11-03 -- daily research (scheduled routine): PBoC fixing surprise and the weekend Bitcoin lead, neither credible
+
+**Health check** (state-sync read 2026-11-02 22:35 UTC): heartbeat 22:30:35 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending. Test suite 523 passed.
+VWAP Scalp is ON (2x target experiment ON): 13 trades since the last daily run (all on 11-02, all with target_multiple 2.0; 6 wins), net -13.13 SGD; the 13 2x-target
+trades so far average -0.25 per trade (pre-registered expectation -0.16; far too few to judge, the 40-trade early check is not due). Strategy balance 534.85 SGD
+(2,000 - 1,465.15). Crypto Flow (enabled): day 11-01 evaluated 01:00 UTC 11-02, all four coins no_signal; day 11-02 is evaluated at 01:00 UTC 11-03, after this run.
+No skipped or data_unavailable day. Live Crypto Flow trades so far: 1 (cancelled at +0.02 SGD). Account transactions 2026 (read-only): 289 MARKET_ORDER_REJECTs, almost all
+TRADE_DOESNT_EXIST (closing a trade the broker had already closed, a benign race; 235 of them in 2026-09, 5 in 2026-10) plus 47 price-precision rejects in 2026-03 (old,
+already fixed). Nothing broken, nothing fixed.
+
+**Tested** (both scripts pre-registered and committed before running; all self-tests passed):
+1. `scripts/research_pboc_fix_surprise_2026_11_03.py` (3858d53a4; K = 3, alpha 0.0167). New data: the PBoC USD/CNY central parity 2015-2026 from SAFE (2,874 days).
+Surprise = fix vs USD_CNH at 01:00 UTC, z over the previous 60 fixes; |z| >= 0.5 -> follow the fix's direction in USD_CNH, AUD_USD, NZD_USD (M15 bid/ask). Self-tests: RW -0.019 (se 0.015), peek +0.77.
+| variant | holdout mean R (n) | zero-spread | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| F1 enter 01:30, exit 08:30 UTC (onshore close) | -0.130 (2776) | -0.048 | -0.140 / -0.120 | -0.112 | -0.146 / -0.154 | 9.3 | RULED OUT |
+| F2 same, hold to next 01:00 UTC (financing) | -0.124 (2776) | -0.056 | -0.157 / -0.091 | -0.130 | -0.134 / -0.138 | 9.3 | RULED OUT |
+| F3 USD_CNH only, abs z >= 1 | -0.206 (574) | -0.103 | -0.276 / -0.136 | -0.191 | -0.227 / -0.258 | 1.9 | RULED OUT |
+Negative in 10 of 11 years and on all three instruments. Before costs the move goes slightly AGAINST the fix (CNH -0.10 R): when the PBoC sets an unusually strong fix it is
+leaning against selling pressure, and the market keeps going. Fading it (post-hoc thought, NOT tested) would earn about +0.10 before a spread of about 0.10: nothing left.
+2. `scripts/research_weekend_crypto_lead_2026_11_03.py` (94481f3c6; K = 2, alpha 0.025). Binance BTCUSDT Fri 21:00 -> Sun 21:00 UTC move, z over the previous 52
+weekends; |z| >= 0.5 -> same direction in 13 index CFDs and risk FX on Monday (H1 bid/ask). Self-tests: RW +0.020 (se 0.019), peek +0.78.
+| variant | holdout mean R (n, Mondays) | halves | discovery 2017-19 | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| W1 Monday 01:00 -> 12:00 UTC | +0.107 (1584, 125) p 0.08 | +0.176 / +0.040 | -0.287 | -0.288 (20 Mondays) | +0.099 / +0.076 | 5.3 | WEAK, not credible |
+| W2 Monday 01:00 -> 20:00 UTC | +0.094 (1260, 125) p 0.10 | +0.193 / -0.003 | -0.200 | -0.392 | +0.087 / +0.058 | 4.2 | WEAK, not credible |
+By year (W1): 2018 -0.22, 2019 -0.35, 2020 +0.41, 2021 +0.02, 2022 +0.25, 2023 -0.19, 2024 +0.18, 2025 +0.03, 2026 -0.40. All 13 instruments move together, so it is
+effectively one bet per Monday (125 independent dates); the positive holdout is 2020 and 2022 (crash years when crypto and stocks moved as one). No more variants.
+3. Queue item: CFD roll adjustments, checked read-only from 2026 account transactions: no adjustment or dividend transaction types exist, because the bot never holds a CFD
+across a roll. Inconclusive; needs an OANDA-candle vs futures-curve comparison. 0 variants.
+Variants this run: 5 (all pre-registered, no post-hoc). Running total: about 219 variants in 108 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged; W1 does not qualify: fresh negative. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) Shanghai Gold Exchange premium (SGE benchmark in CNY vs XAU_USD x USD_CNH) as a Chinese physical-demand signal for XAU/XAG, daily (~5-10/wk;
+check that sge.com.cn history is reachable); (2) OANDA commodity CFD vs futures curve at roll dates (cost-structure check, needs a contract-month source);
+(3) index rules conditioned on low cross-market breadth, only with a new stated mechanism; (4) intraday outside data feeds if the user will pay.
+
+Research result: 2026-11-03, 2 ideas tested, 0 credible
