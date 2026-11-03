@@ -11451,3 +11451,40 @@ check that sge.com.cn history is reachable); (2) OANDA commodity CFD vs futures 
 (3) index rules conditioned on low cross-market breadth, only with a new stated mechanism; (4) intraday outside data feeds if the user will pay.
 
 Research result: 2026-11-03, 2 ideas tested, 0 credible
+
+## 2026-11-04 -- daily research (scheduled routine): the Shanghai Gold Exchange premium, for gold/silver and for CNH/AUD/NZD, both RULED OUT
+
+**Health check** (state-sync read 2026-11-03 22:36 UTC): heartbeat 22:34:02 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending. Test suite 523 passed.
+VWAP Scalp is ON (2x target experiment ON): 19 trades since the last daily run (all 11-03, all target_multiple 2.0; 5 wins), net -46.99 SGD. The 32 2x-target trades so far
+average -0.47 per trade (se 0.13; pre-registered expectation -0.16); the pre-registered 40-trade early check is not yet due (information only). Strategy balance 494.86 SGD
+(2,000 - 1,505.14). Crypto Flow (enabled): day 11-02 evaluated 01:00 UTC 11-03, all four coins no_signal; day 11-03 is evaluated at 01:00 UTC 11-04, after this run.
+No skipped or data_unavailable day. Live Crypto Flow trades so far: 1 (cancelled at +0.02 SGD). Nothing broken, nothing fixed.
+
+**Tested** (both scripts pre-registered and committed before running; all self-tests passed). New data: the SGE Shanghai Gold Benchmark (AM/PM auctions, CNY/g,
+2016-04-19..2026-11-03) from www.sge.com.cn/graph/DayilyJzj (reachable from the cloud, one JSON call). Premium = SGE price in USD/oz (via USD_CNH) vs XAU_USD at the
+auction time, z over the previous 60 SGE days, |z| >= 0.5. M15 bid/ask 2016-2026.
+1. `scripts/research_sge_premium_2026_11_04.py` (63668bf05; K = 3, alpha 0.0167): high premium (Chinese physical demand) -> long XAU_USD and XAG_USD. Self-tests: RW +0.012 (se 0.018), peek +0.77.
+| variant | holdout mean R (n) | zero-spread | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| G1 AM premium, enter 02:45, exit 16:00 UTC | -0.057 (2067) | -0.016 | -0.040 / -0.073 | -0.083 | -0.065 / -0.053 | 6.9 | RULED OUT |
+| G2 same, hold to next 02:15 UTC (financing) | -0.083 (2067) | -0.041 | -0.075 / -0.090 | +0.024 | -0.090 / -0.079 | 6.9 | RULED OUT |
+| G3 PM premium, enter 06:45, exit 16:00 UTC | -0.021 (2022) | +0.023 | -0.008 / -0.033 | -0.106 | -0.029 / -0.023 | 6.7 | RULED OUT |
+2. `scripts/research_sge_premium_fx_2026_11_04.py` (199088ddc; K = 2, alpha 0.025): high premium as depreciation fear -> long USD_CNH, short AUD_USD and NZD_USD. Self-tests: RW -0.001 (se 0.015), peek +0.77.
+| variant | holdout mean R (n) | zero-spread | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|
+| C1 enter 02:45, exit 08:30 UTC (onshore close) | -0.098 (3100) | -0.003 | -0.166 | -0.117 / -0.094 | 10.3 | RULED OUT |
+| C2 same, hold to next 02:15 UTC | -0.104 (3100) | -0.038 | -0.138 | -0.114 / -0.103 | 10.3 | RULED OUT |
+Before costs both are zero: the Shanghai premium tells the world gold price and the yuan nothing about the next hours that is not already in the price (the premium mostly
+reflects onshore frictions: import quotas, VAT rules, holiday closures). Negative on every instrument and in 9-10 of 11 years. No further variants.
+Variants this run: 5 (all pre-registered, no post-hoc). Running total: about 224 variants in 110 families (plus ~9,500 scan cells); 0 pass the strict bar.
+Data note: spdrgoldshares.com (GLD holdings history) sits behind a Cloudflare redirect/bot check from the cloud; not usable.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) non-Fed central-bank decision days pooled across six banks and their crosses (only if it reaches ~5 trades a week); (3) index rules conditioned on low cross-market
+breadth, only with a new stated mechanism; (4) intraday outside data feeds if the user will pay.
+
+Research result: 2026-11-04, 2 ideas tested, 0 credible
