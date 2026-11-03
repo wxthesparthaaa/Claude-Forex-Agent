@@ -9628,5 +9628,11 @@
     "instrument": "XAG_USD",
     "filter": "spread_to_stop",
     "value": 0.43213828425097145
+  },
+  {
+    "tick_time": "2026-11-03T19:34:08.542458+00:00",
+    "instrument": "EUR_USD",
+    "filter": "vol_ratio",
+    "value": 9.963787703177012e-05
   }
 ]
