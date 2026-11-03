@@ -23378,5 +23378,37 @@
     "vol_ratio": 0.00022941022732575388,
     "spread_to_stop": 0.2391304347822939,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "7954",
+    "instrument": "USD_CHF",
+    "direction": "LONG",
+    "units": 3936,
+    "entry_price": 0.81674,
+    "stop_loss": 0.81609,
+    "take_profit": 0.81925,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-03T08:44:17.899831+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.011359249999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 0.81667,
+    "entry_z": -2.0471574012944416,
+    "session_drift_z": -2.94766028580226,
+    "vol_ratio": 0.0007643433170604243,
+    "spread_to_stop": 0.24137931034486718,
+    "target_multiple": 2.0
   }
 ]
