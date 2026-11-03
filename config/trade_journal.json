@@ -23803,5 +23803,37 @@
     "vol_ratio": 0.0036256806259025018,
     "spread_to_stop": 0.18018018018021306,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8041",
+    "instrument": "BCO_USD",
+    "direction": "LONG",
+    "units": 14,
+    "entry_price": 107.613,
+    "stop_loss": 107.393,
+    "take_profit": 108.248,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-03T15:19:17.783987+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 4.011359249999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 107.588,
+    "entry_z": -2.1267877337343792,
+    "session_drift_z": -4.7642957783717454,
+    "vol_ratio": 0.0016276951628393904,
+    "spread_to_stop": 0.15384615384616507,
+    "target_multiple": 2.0
   }
 ]
