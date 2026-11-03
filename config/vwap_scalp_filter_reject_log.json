@@ -9604,5 +9604,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.00011199384209248314
+  },
+  {
+    "tick_time": "2026-11-03T17:24:15.683156+00:00",
+    "instrument": "XAG_USD",
+    "filter": "spread_to_stop",
+    "value": 0.5528386136509388
   }
 ]
