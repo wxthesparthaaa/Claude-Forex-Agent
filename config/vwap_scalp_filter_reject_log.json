@@ -9502,5 +9502,17 @@
     "instrument": "NZD_USD",
     "filter": "spread_to_stop",
     "value": 0.5
+  },
+  {
+    "tick_time": "2026-11-03T12:49:16.097327+00:00",
+    "instrument": "NZD_USD",
+    "filter": "vol_ratio",
+    "value": 0.00016604444443635508
+  },
+  {
+    "tick_time": "2026-11-03T13:39:12.353017+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 8.577552041267935e-05
   }
 ]
