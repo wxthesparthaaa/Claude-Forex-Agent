@@ -9562,5 +9562,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.00010161400345496915
+  },
+  {
+    "tick_time": "2026-11-03T16:24:14.650654+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00012250502117114968
   }
 ]
