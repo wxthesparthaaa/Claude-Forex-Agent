@@ -9826,5 +9826,11 @@
     "instrument": "GBP_JPY",
     "filter": "spread_to_stop",
     "value": 0.4266666666668738
+  },
+  {
+    "tick_time": "2026-11-04T16:46:04.011580+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.32183908045960863
   }
 ]
