@@ -9688,5 +9688,11 @@
     "instrument": "EUR_USD",
     "filter": "spread_to_stop",
     "value": 0.41666666666751473
+  },
+  {
+    "tick_time": "2026-11-04T07:25:54.167281+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00020369493963010607
   }
 ]
