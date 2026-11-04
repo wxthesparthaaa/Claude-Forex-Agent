@@ -11488,3 +11488,44 @@ Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts
 breadth, only with a new stated mechanism; (4) intraday outside data feeds if the user will pay.
 
 Research result: 2026-11-04, 2 ideas tested, 0 credible
+
+## 2026-11-05 -- daily research (scheduled routine): Treasury auction result surprise and venue lag on 10 more OANDA CFDs, both RULED OUT
+
+**Health check** (state-sync read 2026-11-04 22:35 UTC): heartbeat 22:30:47 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending. Test suite 523 passed.
+VWAP Scalp is ON (2x target experiment ON): 13 trades since the last daily run (all 11-04; 8 wins), net +3.12 SGD. The 45 2x-target trades so far average -0.32 per
+trade (se 0.13; pre-registered expectation -0.16, i.e. 1.2 se below; information only). Strategy balance 490.93 SGD (2,000 - 1,509.07). Crypto Flow (enabled):
+day 11-03 evaluated 01:00 UTC 11-04, all four coins no_signal; day 11-04 is evaluated at 01:00 UTC 11-05, after this run. No skipped or data_unavailable day.
+Live Crypto Flow trades so far: 1 (cancelled at +0.02 SGD). Nothing broken, nothing fixed.
+
+**Tested** (both scripts pre-registered and committed before running; all self-tests passed):
+1. `scripts/research_auction_surprise_2026_11_05.py` (598485574; K = 3, alpha 0.0167). New data: auction RESULTS from fiscaldata auctions_query (primary-dealer
+take-up share and bid-to-cover, 1,071 nominal Note/Bond auction days 2012-2026; the 2026-10-28 test used only the calendar). Weak auction (dealer share z > 0 vs the
+previous 6 same-term auctions) -> short USB05Y/10Y/30Y, long USD_JPY, from close+15 min; every auction trades. M15 bid/ask 2014-2026. Self-tests: RW -0.016 (se 0.017), peek +0.72.
+| variant | holdout mean R (n) | zero-spread | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| D1 dealer share, exit 15:45 ET same day | -0.264 (2305) | -0.072 | -0.248 / -0.280 | -0.358 | -0.303 / -0.240 | 5.7 | RULED OUT |
+| D2 same, exit 11:45 ET next day (financing) | -0.135 (2350) | -0.046 | -0.150 / -0.121 | -0.010 | -0.149 / -0.131 | 5.8 | RULED OUT |
+| D3 bid-to-cover instead of dealer share, D1 timing | -0.197 (2303) | -0.005 | -0.135 / -0.258 | -0.265 | -0.236 / -0.185 | 5.7 | RULED OUT |
+Negative in every year (13 of 13) and on all four instruments. Before costs D1 is slightly the WRONG way (after a weak auction bonds recover a little: the
+concession is paid before the result, not after). The bond CFDs cost about 0.19 R for a 3-hour window, far above any after-auction move.
+2. `scripts/research_venue_lag_other_2026_11_05.py` (8256a81bd; K = 3, alpha 0.0167; engine of the 2026-10-28 venue-lag test reused unchanged). Yahoo hourly
+futures (730 days, 2024-06..2026-11) vs OANDA H1 mid: |z| >= 2 gap -> trade the CFD toward the futures for 2 hours. Self-test passed (random ~0, peek +0.79).
+| group | holdout to 2025-09 (n) | gross hold / fresh | fresh net | trades/wk | verdict |
+|---|---|---|---|---|---|
+| M1 agriculture: CORN~ZC, WHEAT~ZW, SOYBN~ZS, SUGAR~SB | -0.500 (752) | -0.002 / +0.012 | -0.509 | 3.0 | RULED OUT |
+| M2 NATGAS~NG, BCO~BZ, XPT~PL, XPD~PA | -0.328 (1608) | -0.003 / +0.042 | -0.168 | 6.5 | RULED OUT |
+| M3 JP225_USD~NKD, JP225Y_JPY~NIY | -0.088 (733) | -0.010 / +0.074 | +0.019 | 3.0 | RULED OUT |
+Gross about zero everywhere: OANDA prices these CFDs in step with the exchange futures at hourly resolution; no lag to catch. (Descriptive only: M3 gross
+2026Q2 +0.26, fresh +0.07; holdout negative, not a candidate, no variant run.)
+Variants this run: 6 (all pre-registered, no post-hoc). Running total: about 230 variants in 112 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12 (no tuning; descriptive gross +0.07 fresh); (3) index rules conditioned on low cross-market
+breadth, only with a new stated mechanism; (4) intraday outside data feeds if the user will pay. Dropped: gilt/Bund auction results (the US version failed and
+dmo.gov.uk / Finanzagentur serve HTML pages only).
+
+Research result: 2026-11-05, 2 ideas tested, 0 credible

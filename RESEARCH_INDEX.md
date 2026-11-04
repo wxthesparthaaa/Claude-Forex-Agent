@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-04. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-05. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 224 hand-built variants in 110 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 230 hand-built variants in 112 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -23,6 +23,7 @@ Daily run 2026-11-02 (scripts/research_reopen_and_cross_lag_2026_11_02.py): Asia
 Daily run 2026-11-03: PBoC daily USD/CNY fixing surprise (fix vs CNH at 01:00 UTC, 60-day z; scripts/research_pboc_fix_surprise_2026_11_03.py) -> follow it in USD_CNH/AUD_USD/NZD_USD 01:30-08:30 UTC (-0.130 R, 9.3/wk), to next day (-0.124), CNH-only |z|>=1 (-0.206): RULED OUT; before costs slightly the WRONG way (a strong fix is followed by CNH weakness: the PBoC leans against the market, the market keeps going).
 Weekend Bitcoin move (Binance, Fri-Sun 21:00 UTC) -> same direction in 13 index CFDs and risk FX on Monday 01:00-12:00 / -20:00 UTC (scripts/research_weekend_crypto_lead_2026_11_03.py): holdout +0.107 / +0.094 (p 0.08 / 0.10, only 125 Mondays) but 2017-19 -0.29 and fresh -0.29 / -0.39: WEAK, not credible, no more variants.
 Daily run 2026-11-04: Shanghai Gold Exchange premium (SGE AM/PM benchmark vs XAU_USD x USD_CNH, 60-day z; scripts/research_sge_premium_2026_11_04.py) -> follow it in XAU/XAG to 16:00 UTC (-0.057 R, 6.9/wk), to next day (-0.083), PM auction (-0.021); and as a capital-flight signal for USD_CNH/AUD/NZD (scripts/research_sge_premium_fx_2026_11_04.py; -0.098 / -0.104, 10.3/wk). Gross about zero everywhere: RULED OUT.
+Daily run 2026-11-05: US Treasury auction RESULT surprise (primary-dealer take-up share or bid-to-cover vs the previous 6 same-term auctions; fiscaldata; scripts/research_auction_surprise_2026_11_05.py) -> weak auction short USB05Y/10Y/30Y, long USD_JPY to 15:45 ET (-0.264 R, 5.7/wk), to next day (-0.135), bid-to-cover (-0.197); gross slightly the wrong way (the concession is paid before the result): RULED OUT.
 CFD roll adjustments (read-only account transactions 2026): no adjustment or dividend transaction exists because the bot never holds a CFD across a roll; question stays open (needs an OANDA-vs-futures-curve comparison).
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
@@ -57,6 +58,7 @@ Cross-venue on gold (PAXG) and the euro (EURUSDT): nothing (OANDA leads).
 
 ## F. Pricing-consistency / arbitrage / venue-lag checks (RULED OUT: OANDA quotes are consistent and no longer lag)
 Seven gold crosses vs XAU_USD x FX; Nikkei dollar vs yen identity; related-index hourly ratios; hourly OANDA index / metal / oil / FX CFDs vs the CME futures and spot feeds on Yahoo (2024-06..2026-10 only): the index CFDs lagged ES/NQ/YM/RTY in 2024 (gross +0.19 R in 2024Q2, fading to 0 by 2025Q1, negative since); metals, oil and FX never did.
+Venue lag on the CFDs the 2026-10-28 test missed (Yahoo hourly futures 2024-06..2026-11, scripts/research_venue_lag_other_2026_11_05.py): ags CORN/WHEAT/SOYBN/SUGAR (-0.50 R), NATGAS/BCO/XPT/XPD (-0.33), JP225_USD/JP225Y_JPY vs CME Nikkei (-0.09); gross about 0 everywhere: no lag. RULED OUT.
 Exotic/minor FX cross staleness vs the cross implied by its USD legs (48 crosses, H1, 2026-11-02): gross +0.02 vs -0.64 net. RULED OUT.
 
 ## G. Ideas NOT yet tried (candidates; check the log before starting)
