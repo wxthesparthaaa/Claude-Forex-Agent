@@ -24264,5 +24264,37 @@
     "vol_ratio": 0.00047261118803760833,
     "spread_to_stop": 0.2232142857143469,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8127",
+    "instrument": "EUR_JPY",
+    "direction": "LONG",
+    "units": 3307,
+    "entry_price": 177.775,
+    "stop_loss": 177.631,
+    "take_profit": 177.936,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-04T16:51:05.153146+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.711428999999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 177.756,
+    "entry_z": -2.1752722305638383,
+    "session_drift_z": 0.7252828490721619,
+    "vol_ratio": 0.0004034901605530284,
+    "spread_to_stop": 0.2319999999999709,
+    "target_multiple": 2.0
   }
 ]
