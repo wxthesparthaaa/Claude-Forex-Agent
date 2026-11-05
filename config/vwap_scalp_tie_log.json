@@ -1,15 +1,5 @@
 [
   {
-    "tick_time": "2026-09-24T16:18:04.860847+00:00",
-    "opened": "WTICO_USD",
-    "also_signaled": [
-      "BCO_USD",
-      "AUD_USD",
-      "NZD_USD",
-      "CAD_JPY"
-    ]
-  },
-  {
     "tick_time": "2026-09-24T17:08:04.757572+00:00",
     "opened": "WTICO_USD",
     "also_signaled": [
@@ -4148,6 +4138,14 @@
     "also_signaled": [
       "USD_CAD",
       "CHF_JPY"
+    ]
+  },
+  {
+    "tick_time": "2026-11-05T08:43:05.904022+00:00",
+    "opened": null,
+    "also_signaled": [
+      "XAU_USD",
+      "NZD_USD"
     ]
   }
 ]
