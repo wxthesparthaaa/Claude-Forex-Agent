@@ -10000,5 +10000,11 @@
     "instrument": "XAU_USD",
     "filter": "spread_to_stop",
     "value": 0.6312625250495559
+  },
+  {
+    "tick_time": "2026-11-05T08:43:04.026638+00:00",
+    "instrument": "NZD_USD",
+    "filter": "spread_to_stop",
+    "value": 0.3714285714288252
   }
 ]
