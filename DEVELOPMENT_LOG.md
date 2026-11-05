@@ -11529,3 +11529,37 @@ breadth, only with a new stated mechanism; (4) intraday outside data feeds if th
 dmo.gov.uk / Finanzagentur serve HTML pages only).
 
 Research result: 2026-11-05, 2 ideas tested, 0 credible
+
+## 2026-11-06 -- daily research (scheduled routine): non-US scheduled data-release shocks (follow and fade), both RULED OUT
+
+**Health check** (state-sync read 2026-11-05 22:32 UTC): heartbeat 22:32:53 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending.
+VWAP Scalp is ON (2x target experiment ON): 12 trades since the last daily run (all 11-05; 5 wins), net +1.82 SGD. The 57 2x-target trades so far average -0.24 per
+trade (se 0.13; pre-registered expectation -0.16; information only). Strategy balance 483.40 SGD (2,000 - 1,516.60). Crypto Flow (enabled): day 11-04 evaluated
+01:00 UTC 11-05, all four coins no_signal; day 11-05 is evaluated at 01:00 UTC 11-06, after this run. No skipped or data_unavailable day. Live Crypto Flow trades so
+far: 1 (cancelled at +0.02 SGD).
+**Fixed**: the full test suite showed 2 order-dependent failures in tests/test_oanda_client.py (the module-global OANDA circuit breaker, tripped by an earlier test's
+simulated failure, was still open). tests/conftest.py now resets it before and after every test (commit ca312aa2c); 523 passed, twice. Test-only change, no src/ change.
+Data note: OANDA returned a transient 401 Unauthorized on one M15 page during the fetch; the fetcher's 25 s retry recovered it (no instrument dropped).
+
+**Tested** (`scripts/research_nonus_news_shock_2026_11_06.py`, pre-registered and committed a7f04d23d before running; K = 2, alpha 0.025). Nine fixed local release
+slots: Sydney 11:30 AUD, Wellington 10:45 NZD, Tokyo 08:50 JPY, London 07:00 GBP, Frankfurt 10:00 and 11:00 EUR, Zurich 08:30 CHF, Stockholm/Oslo 08:00 SEK/NOK.
+Release-bar move >= 2x that slot's 60-day median -> trade from the next M15 bar for 4 hours. M15 bid/ask 2016-01..2026-11-04. Self-test: RW +0.042 (se 0.037), peek +0.40.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| N1 follow the release move, 4h | -0.084 (2321) p 1.00 | -0.006 / +0.014 / -0.116 | -0.087 / -0.082 | -0.242 | -0.103 / -0.073 | 9.4 | RULED OUT |
+| N2 fade the release move, 4h | -0.113 (2321) p 1.00 | +0.006 / -0.014 / +0.116 | -0.113 / -0.114 | -0.010 | -0.132 / -0.113 | 9.4 | RULED OUT |
+Every holdout year negative in both. Before costs the move after a local release neither continues nor reverses (about +-0.01), same as the US 8:30 slot (2026-10-24):
+local data surprises are fully priced within the first 15 minutes even in thin hours. NZ (10:45 Wellington = 21:45/22:45 UTC) and Tokyo slots enter near the rollover
+and pay the widest spreads (NZD -0.33 holdout). N2's fresh gross +0.12 is one year against a negative holdout; not a candidate, no variant run.
+Variants this run: 2 (both pre-registered, no post-hoc). Running total: about 232 variants in 113 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) DTCC public swap-data FX option expiries (strike/notional) as a pinning signal near the 10:00 ET cut, if pddata.dtcc.com history is reachable and deep enough;
+(3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (4) index rules conditioned on low cross-market breadth, only with a new stated mechanism.
+Dropped: any further scheduled-release timing rule (US and nine non-US slots now all gross about zero).
+
+Research result: 2026-11-06, 1 idea tested, 0 credible

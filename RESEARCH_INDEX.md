@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-05. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-06. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 230 hand-built variants in 112 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 232 hand-built variants in 113 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -24,6 +24,7 @@ Daily run 2026-11-03: PBoC daily USD/CNY fixing surprise (fix vs CNH at 01:00 UT
 Weekend Bitcoin move (Binance, Fri-Sun 21:00 UTC) -> same direction in 13 index CFDs and risk FX on Monday 01:00-12:00 / -20:00 UTC (scripts/research_weekend_crypto_lead_2026_11_03.py): holdout +0.107 / +0.094 (p 0.08 / 0.10, only 125 Mondays) but 2017-19 -0.29 and fresh -0.29 / -0.39: WEAK, not credible, no more variants.
 Daily run 2026-11-04: Shanghai Gold Exchange premium (SGE AM/PM benchmark vs XAU_USD x USD_CNH, 60-day z; scripts/research_sge_premium_2026_11_04.py) -> follow it in XAU/XAG to 16:00 UTC (-0.057 R, 6.9/wk), to next day (-0.083), PM auction (-0.021); and as a capital-flight signal for USD_CNH/AUD/NZD (scripts/research_sge_premium_fx_2026_11_04.py; -0.098 / -0.104, 10.3/wk). Gross about zero everywhere: RULED OUT.
 Daily run 2026-11-05: US Treasury auction RESULT surprise (primary-dealer take-up share or bid-to-cover vs the previous 6 same-term auctions; fiscaldata; scripts/research_auction_surprise_2026_11_05.py) -> weak auction short USB05Y/10Y/30Y, long USD_JPY to 15:45 ET (-0.264 R, 5.7/wk), to next day (-0.135), bid-to-cover (-0.197); gross slightly the wrong way (the concession is paid before the result): RULED OUT.
+Daily run 2026-11-06: NON-US scheduled-release shocks (9 fixed local slots: Sydney 11:30 AUD, Wellington 10:45 NZD, Tokyo 08:50 JPY, London 07:00 GBP, Frankfurt 10:00/11:00 EUR, Zurich 08:30 CHF, Stockholm/Oslo 08:00 SEK/NOK; release-bar move >= 2x usual; scripts/research_nonus_news_shock_2026_11_06.py): follow 4h (-0.084 R, 9.4/wk), fade 4h (-0.113); gross about +-0.01: RULED OUT. With the US 8:30 test, scheduled-release timing rules are exhausted.
 CFD roll adjustments (read-only account transactions 2026): no adjustment or dividend transaction exists because the bot never holds a CFD across a roll; question stays open (needs an OANDA-vs-futures-curve comparison).
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
