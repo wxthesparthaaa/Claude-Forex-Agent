@@ -10030,5 +10030,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.0001833954226520543
+  },
+  {
+    "tick_time": "2026-11-05T09:08:03.636593+00:00",
+    "instrument": "EUR_USD",
+    "filter": "spread_to_stop",
+    "value": 0.9090909090921937
   }
 ]
