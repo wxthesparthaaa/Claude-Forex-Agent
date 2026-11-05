@@ -76,3 +76,16 @@ def _block_real_github_pushes(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_REPO", raising=False)
     monkeypatch.delenv("GITHUB_BRANCH", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _reset_oanda_circuit_breaker():
+    # Test isolation (2026-11-06): oanda_client keeps its circuit breaker in a
+    # module-global. A test that simulates a genuine failure trips it for 20 s,
+    # and any later test that reaches OandaClient._request inside that window
+    # failed with "circuit breaker open until ..." (seen as 2 order-dependent
+    # failures in tests/test_oanda_client.py). Start every test with it closed.
+    import oanda_client
+    oanda_client._circuit_open_until = None
+    yield
+    oanda_client._circuit_open_until = None
