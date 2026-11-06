@@ -1,13 +1,5 @@
 [
   {
-    "tick_time": "2026-10-01T07:45:07.655193+00:00",
-    "opened": null,
-    "also_signaled": [
-      "GBP_USD",
-      "NZD_JPY"
-    ]
-  },
-  {
     "tick_time": "2026-10-01T07:50:05.751693+00:00",
     "opened": null,
     "also_signaled": [
@@ -4145,6 +4137,14 @@
     "opened": "AUD_JPY",
     "also_signaled": [
       "XAG_USD"
+    ]
+  },
+  {
+    "tick_time": "2026-11-06T16:51:46.043999+00:00",
+    "opened": null,
+    "also_signaled": [
+      "WTICO_USD",
+      "NZD_JPY"
     ]
   }
 ]
