@@ -342,5 +342,16 @@
     "zt": -1.7336,
     "zp": -1.617,
     "composite": -0.771
+  },
+  {
+    "day": "2026-11-05",
+    "instrument": "ETH_USD",
+    "result": "skipped",
+    "at": "2026-11-06T01:01:41.506331+00:00",
+    "zf": 0.4948,
+    "zt": -1.9002,
+    "zp": -1.6653,
+    "composite": -1.0236,
+    "direction": "SHORT"
   }
 ]
