@@ -10450,5 +10450,11 @@
     "instrument": "AUD_JPY",
     "filter": "vol_ratio",
     "value": 0.00020671050213893916
+  },
+  {
+    "tick_time": "2026-11-06T12:56:38.626361+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "vol_ratio",
+    "value": 0.0001889666795520946
   }
 ]
