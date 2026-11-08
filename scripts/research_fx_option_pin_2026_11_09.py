@@ -24,7 +24,10 @@ Rule on each weekday D, per pair (EUR_USD, USD_JPY, GBP_USD, AUD_USD, USD_CAD, N
   exit at the open of the 10:00 New York bar (closing side). No stop. R = net / (stdev of the previous 400 M15 mid log returns x
   sqrt(bars held) x entry); financing 2%/yr pro rata (negligible for 2-4 h).
   MASS_MIN is set from the FREQUENCY of qualifying days only (the --describe mode prints counts, no prices or outcomes), to give
-  about 6-10 trades a week across the seven pairs: fixed at USD 50M below after that count, before any outcome was computed.
+  about 6-10 trades a week across the seven pairs. The count (2025-01..2026-11, ~96 weeks, 08:00 entry) gave 19.8/wk at >= 200M,
+  11.9 at 500M, 6.8 at 1B, 4.3 at 1.5B; fixed at USD 1B (6.8 a week) before any outcome was computed. (A loader bug that read
+  no rows was fixed before the count; the self-test strikes were first centred on the same day's close, which leaked, and were
+  moved to the previous day's close: 20-seed random-walk mean +0.007 R, se 0.010.)
 Variants (K = 2, alpha 0.025):
   P1 enter 08:00 New York (signal from the bar ending 08:00), exit 10:00 New York (2 h).
   P2 enter 06:00 New York (London morning), exit 10:00 New York (4 h).
@@ -58,7 +61,7 @@ DISCOVERY_START = "2025-01-01"
 NY = ZoneInfo("America/New_York")
 PAIRS = {"EUR_USD": "EUR/USD", "USD_JPY": "USD/JPY", "GBP_USD": "GBP/USD", "AUD_USD": "AUD/USD",
          "USD_CAD": "USD/CAD", "NZD_USD": "NZD/USD", "USD_CHF": "USD/CHF"}
-MASS_MIN = 50e6
+MASS_MIN = 1e9
 BAND_LO, BAND_HI, CLUSTER = 0.05, 0.5, 0.001
 VOL_BARS = 400
 VARIANTS = {"P1 toward the biggest nearby expiring strike, 08:00-10:00 New York": 8,
@@ -87,9 +90,7 @@ def load_book(opt_dir):
         if d.empty:
             continue
         d = d[(d["Action type"] == "NEWT") & (d["Event type"] == "TRAD")]
-        for r in d.itertuples(index=False):
-            r = r._asdict() if hasattr(r, "_asdict") else r
-            row = dict(zip(d.columns, r))
+        for row in d.to_dict("records"):
             did = row["Dissemination Identifier"]
             lab = row["Strike price currency/currency pair"]
             if did in seen or lab not in names:
@@ -200,7 +201,7 @@ def main(m15_dir, opt_dir, describe=False):
     data = {p: [c for c in json.load(open(os.path.join(m15_dir, f"{p}_M15_MBA.json"))) if c.get("complete", True)] for p in PAIRS}
     if describe:  # frequency only: no prices beyond the entry-time spot, no outcomes
         for h in (8, 6):
-            for thr in (25e6, 50e6, 100e6, 200e6):
+            for thr in (200e6, 500e6, 1e9, 1.5e9, 2e9):
                 globals()["MASS_MIN"] = thr
                 n = sum(len(pair_trades(p, cs, book, h, describe=True)) for p, cs in data.items())
                 print(f"  entry {h:02d}:00 NY, mass >= {thr / 1e6:.0f}M: {n} qualifying pair-days ({n / 96:.1f} a week over ~96 weeks)")
