@@ -241,3 +241,55 @@ def test_funding_raises_when_every_host_refuses(monkeypatch):
     monkeypatch.setattr(cf, "_get_json", fake_get)
     with pytest.raises(OSError):
         cf.fetch_funding("BTCUSDT", TUESDAY_0130)
+
+
+# ---- 2026-11-09: a transient failure while opening must be retried, not logged as a final skip
+
+def test_transient_open_failure_is_retried_on_a_later_tick(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _state()
+    inputs = _synthetic_inputs(last_day_scale=6.0)
+    outcomes = iter([cf.TransientSkip("no live price")] * len(cf.INSTRUMENTS) + [True] * len(cf.INSTRUMENTS))
+
+    def fake_open(*a, **k):
+        o = next(outcomes)
+        if isinstance(o, Exception):
+            raise o
+        return o
+    with patch.object(cf, "_open_position", side_effect=fake_open):
+        first = cf.check_crypto_flow(client=object(), now=TUESDAY_0130, fetchers=_fetchers(inputs))
+        assert first == [] and not cf.day_already_evaluated(cf.load_log(), "2026-10-26")
+        second = cf.check_crypto_flow(client=object(), now=TUESDAY_0130 + timedelta(minutes=5), fetchers=_fetchers(inputs))
+    assert sorted(second) == sorted(cf.INSTRUMENTS)
+    results = [e["result"] for e in cf.load_log()]
+    assert results.count("retry") == len(cf.INSTRUMENTS) and results.count("opened") == len(cf.INSTRUMENTS)
+    assert all("no live price" in e["reason"] for e in cf.load_log() if e["result"] == "retry")
+
+
+def test_transient_failure_gives_up_after_max_attempts_with_a_reason(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _state()
+    inputs = _synthetic_inputs(last_day_scale=6.0)
+    with patch.object(cf, "_open_position", side_effect=OSError("HTTP 401")) as op:
+        for k in range(cf.MAX_OPEN_ATTEMPTS + 2):
+            cf.check_crypto_flow(client=object(), now=TUESDAY_0130 + timedelta(minutes=5 * k), fetchers=_fetchers(inputs))
+    assert op.call_count == cf.MAX_OPEN_ATTEMPTS * len(cf.INSTRUMENTS)
+    log = cf.load_log()
+    assert cf.day_already_evaluated(log, "2026-10-26")
+    finals = [e for e in log if e["result"] == "skipped"]
+    assert len(finals) == len(cf.INSTRUMENTS) and all("HTTP 401" in e["reason"] for e in finals)
+
+
+def test_deliberate_skip_is_final_and_records_its_reason(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    _state()
+    inputs = _synthetic_inputs(last_day_scale=6.0)
+
+    def refuse(client, instrument, direction, diag, rc, acct):
+        diag["skip_reason"] = "smallest tradeable size exceeds the risk budget"
+        return False
+    with patch.object(cf, "_open_position", side_effect=refuse) as op:
+        cf.check_crypto_flow(client=object(), now=TUESDAY_0130, fetchers=_fetchers(inputs))
+        cf.check_crypto_flow(client=object(), now=TUESDAY_0130 + timedelta(minutes=5), fetchers=_fetchers(inputs))
+    assert op.call_count == len(cf.INSTRUMENTS)
+    assert all(e["result"] == "skipped" and "risk budget" in e["reason"] for e in cf.load_log())

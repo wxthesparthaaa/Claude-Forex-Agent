@@ -82,6 +82,16 @@ MAX_RISK_OVERSHOOT = 1.5
 RISK_FRACTION = 0.25
 HISTORY_DAYS = 290  # >= Z_WINDOW + 1 completed days plus slack; Coinbase serves at most 300 daily candles per call
 HTTP_TIMEOUT = 20
+# Found 2026-11-09: on 2026-11-06 01:01 UTC a real ETH SHORT signal (day 11-05) was logged "skipped" with no reason and never retried; replaying it
+# with the live settings and the order call stubbed opens the trade normally, and OANDA shows no order attempt at that minute, so the cause was a
+# one-off failure inside _open_position (most likely an OANDA call erroring). Such transient failures are now logged as "retry" (not final) and
+# tried again on a later tick inside the same entry window, up to MAX_OPEN_ATTEMPTS in total; every final skip now records its reason.
+MAX_OPEN_ATTEMPTS = 3
+NON_FINAL_RESULTS = ("data_unavailable", "retry")
+
+
+class TransientSkip(Exception):
+    """A failure that says nothing about the signal (an API call failed or returned nothing): worth retrying on a later tick."""
 
 CRYPTO_FLOW_LOG_PATH = os.path.join(STATE_DIR, "crypto_flow_log.json")
 MAX_LOG_ENTRIES = 600
@@ -222,7 +232,7 @@ def record_log(day: str, instrument: str, result: str, detail: dict = None) -> N
 
 def day_already_evaluated(entries: list, day: str) -> bool:
     """True once every instrument has a final (non-error) result for `day`."""
-    done = {e["instrument"] for e in entries if e["day"] == day and e["result"] != "data_unavailable"}
+    done = {e["instrument"] for e in entries if e["day"] == day and e["result"] not in NON_FINAL_RESULTS}
     return all(i in done for i in INSTRUMENTS)
 
 
@@ -266,25 +276,28 @@ def daily_sigma(client, instrument: str, price: float):
 
 
 def _open_position(client, instrument: str, direction: str, diag: dict, risk_config: RiskConfig, account: AccountState) -> bool:
+    """True when the trade was placed. False for a deliberate, final skip (its reason is left in diag["skip_reason"]). Raises
+    (TransientSkip or any API exception) when a call failed or returned nothing, so the caller can retry on a later tick."""
     meta = fetch_instrument_metadata(client, [instrument]).get(instrument)
     raw = next((i for i in client.get_instruments([instrument]) if i["name"] == instrument), None)
     if meta is None or raw is None:
-        return False
+        raise TransientSkip("instrument details unavailable")
     quote = fetch_bid_ask(client, instrument)
     if quote is None:
-        return False
+        raise TransientSkip("no live price")
     bid, ask = quote
     price = (bid + ask) / 2
     sigma = daily_sigma(client, instrument, price)
     if sigma is None:
         print(f"WARNING: Crypto Flow could not compute a daily move for {instrument}", flush=True)
-        return False
+        raise TransientSkip("could not compute the daily move")
     sign = 1 if direction == "LONG" else -1
     stop_loss = float(round_price(meta, price - sign * STOP_SIGMA * sigma))
     take_profit = float(round_price(meta, price + sign * TARGET_SIGMA * sigma))
     entry_price = float(round_price(meta, price))
     if not ((stop_loss < entry_price < take_profit) if direction == "LONG" else (take_profit < entry_price < stop_loss)):
         print(f"INFO: Crypto Flow skipped {instrument} {direction} -- stop/target not on the right sides of {entry_price}", flush=True)
+        diag["skip_reason"] = "stop/target not on the right sides of the entry"
         return False
 
     summary = client.get_account_summary()
@@ -293,7 +306,7 @@ def _open_position(client, instrument: str, direction: str, diag: dict, risk_con
         conversion_rate = resolve_conversion_rate(meta.quote_currency, account_currency, lambda pair: fetch_mid_price(client, pair))
     except ValueError as e:
         print(f"WARNING: Crypto Flow conversion rate failed for {instrument}: {e}", flush=True)
-        return False
+        raise TransientSkip(f"conversion rate failed: {e}")
 
     risk_amount = risk_amount_for_trade(account.equity, risk_config) * RISK_FRACTION
     # Found 2026-10-28: the strategy balance had shrunk to 583.74 (VWAP Scalp's losses), so the target budget was 1.10 and BTC's / ETH's smallest
@@ -306,6 +319,7 @@ def _open_position(client, instrument: str, direction: str, diag: dict, risk_con
                        raw.get("maximumOrderUnits", "1000"), fill_price, stop_loss, risk_amount, conversion_rate, risk_ceiling=normal_risk_cap)
     if units == 0:
         print(f"INFO: Crypto Flow skipped {instrument} {direction} -- smallest tradeable size exceeds the risk budget", flush=True)
+        diag["skip_reason"] = "smallest tradeable size exceeds the risk budget"
         return False
 
     # the REAL amount at risk at the stop (units x stop distance), which can exceed the target when the smallest size was used; the heat and exposure
@@ -319,6 +333,7 @@ def _open_position(client, instrument: str, direction: str, diag: dict, risk_con
         from dashboard_state import record_risk_limit_skip
         record_risk_limit_skip("Crypto Flow", str(e))
         print(f"Crypto Flow skipped {instrument}: {e}", flush=True)
+        diag["skip_reason"] = f"risk limit: {e}"
         return False
 
     candidate = {
@@ -333,9 +348,12 @@ def _open_position(client, instrument: str, direction: str, diag: dict, risk_con
     try:
         result = place_and_record(client, candidate)
     except Exception as e:
+        # an exception here means the request failed; if OANDA did fill it, the retry is refused by place_and_record's own
+        # already-open check, so retrying can never double the position
         print(f"WARNING: Crypto Flow order failed for {instrument}: {e}", flush=True)
-        return False
+        raise TransientSkip(f"order request failed: {e}")
     if not result["success"]:
+        diag["skip_reason"] = f"order not filled: {result.get('reason')}"
         return False
     try:
         send_message(
@@ -421,7 +439,7 @@ def _check_unsafe(client, enabled, now, fetchers) -> list:
 
     signals, problems = {}, []
     for instrument, (symbol, product) in INSTRUMENTS.items():
-        if any(e["day"] == day and e["instrument"] == instrument and e["result"] != "data_unavailable" for e in log):
+        if any(e["day"] == day and e["instrument"] == instrument and e["result"] not in NON_FINAL_RESULTS for e in log):
             continue
         try:
             diag = composite_for_day(day, fetch["funding"](symbol, now), fetch["klines"](symbol, now), fetch["coinbase"](product, now))
@@ -458,8 +476,13 @@ def _check_unsafe(client, enabled, now, fetchers) -> list:
             ok = _open_position(client, instrument, direction, diag, risk_config, account)
         except Exception as e:
             print(f"WARNING: Crypto Flow tick failed for {instrument}: {e}", flush=True)
-            ok = False
-        record_log(day, instrument, "opened" if ok else "skipped", {**detail, "direction": direction})
+            attempts = 1 + sum(1 for x in log if x["day"] == day and x["instrument"] == instrument and x["result"] == "retry")
+            final = attempts >= MAX_OPEN_ATTEMPTS
+            record_log(day, instrument, "skipped" if final else "retry",
+                       {**detail, "direction": direction, "attempt": attempts, "reason": f"{type(e).__name__}: {e}"[:200]})
+            continue
+        record_log(day, instrument, "opened" if ok else "skipped",
+                   {**detail, "direction": direction, **({} if ok else {"reason": diag.get("skip_reason", "unknown")})})
         if ok:
             opened.append(instrument)
             try:
