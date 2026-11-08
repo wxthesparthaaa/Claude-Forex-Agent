@@ -11563,3 +11563,43 @@ Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts
 Dropped: any further scheduled-release timing rule (US and nine non-US slots now all gross about zero).
 
 Research result: 2026-11-06, 1 idea tested, 0 credible
+
+## 2026-11-09 -- daily research (scheduled routine): FX option-expiry pinning at the 10:00 New York cut (DTCC public option trades) RULED OUT; Crypto Flow retry fix
+
+**Health check** (state-sync read 2026-11-08 22:35 UTC; Monday run): heartbeat 22:31:28 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending.
+VWAP Scalp is ON (2x target experiment ON): 17 trades since the last daily run (all 11-06; 9 wins), net -1.15 SGD. The 74 closed 2x-target trades so far
+average -0.19 per trade (se 0.12; pre-registered expectation -0.16; information only). Strategy balance 491.65 SGD (2,000 - 1,508.35).
+Crypto Flow (enabled): days 11-03 and 11-04 all four coins no_signal. Day 11-05 (evaluated 2026-11-06 01:01 UTC): BTC/LTC/BCH no_signal, but **ETH SHORT
+(composite -1.02) was logged "skipped" with no reason**. Days 11-06 (Fri) and 11-07 (Sat) have no entry: their evaluation slot is 01:00 UTC Sat/Sun, when
+OANDA's crypto CFDs are shut (same as 10-30/10-31; by design, not a bug). Live Crypto Flow trades so far: still 1 (BTC short, cancelled at +0.02 SGD).
+**Fixed (commit 70f62b085)**: replaying the ETH signal with the live settings (state-sync copy, prices as at 01:01 UTC, order call stubbed) opens the trade
+normally (-0.01 ETH, risk 2.88 SGD, within the 7.37 cap), and OANDA's transaction list shows no order attempt in 00:55-01:10 UTC, so the skip came from a
+one-off failure inside _open_position (most likely an OANDA call erroring; the ETH step took 6.7 s vs about 1 s for the others) that was treated as final.
+Transient failures (API errors, missing price/instrument data/daily move, a failed order request) now log "retry" (non-final) and are tried again on later
+5-minute ticks inside the 01:00-04:00 UTC window, up to 3 attempts; every final skip now records its reason. A filled-but-errored order cannot be doubled
+(place_and_record refuses an instrument already open). Signal rules unchanged. 3 new tests; full suite 526 passed. The missed ETH trade itself is lost.
+
+**Tested** (`scripts/research_fx_option_pin_2026_11_09.py`, pre-registered fcefb58f3, threshold fixed from a frequency-only count 159fd72c6 before any
+outcome; K = 2, alpha 0.025). New data: DTCC public price dissemination cumulative FX files (pddata.dtcc.com/ppd/api/report/cumulative/cftc/
+CFTC_CUMULATIVE_FOREX_YYYY_MM_DD.zip; reachable from the cloud; history only from 2024-12; 730k vanilla option legs on the 7 USD majors with strike, expiry
+and notional). Mechanism: dealers long gamma near a big strike expiring today pin spot toward it before the 10:00 New York cut. Rule: largest expiring
+strike cluster (+-0.10%) within 0.05-0.5 daily moves of spot, mass >= USD 1B (6.8 a week from the count) -> trade toward it, exit at 10:00 NY.
+Periods: discovery 2025-01..06, holdout 2025-07..2026-06, fresh 2026-07..11. Self-test: 20-seed random walk +0.007 (se 0.010), peek +0.73.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| P1 08:00-10:00 New York | -0.018 (360) p 0.69 | -0.016 / +0.113 / -0.101 | -0.140 / +0.103 | -0.244 | -0.044 / -0.022 | 6.9 | RULED OUT |
+| P2 06:00-10:00 New York | -0.048 (365) p 0.78 | -0.021 / +0.049 / -0.076 | +0.003 / -0.098 | -0.182 | -0.066 / -0.071 | 7.0 | RULED OUT |
+No consistent pull toward the big strikes: P1's holdout gross +0.11 is flanked by negative discovery and fresh gross, and the sign flips by pair and by
+year. The US-reported share is only part of the true open interest, but even the biggest visible clusters (>= USD 1B) do not move spot. No further variants.
+Variants this run: 2 (both pre-registered; the threshold was set from frequency only). Running total: about 234 variants in 114 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) DTCC commodity/equity-index OTC data (CFTC_CUMULATIVE_COMMODITIES / EQUITIES files, same endpoint) as new flow data for XAU/oil/indices, only with a mechanism
+other than pinning (e.g. large swap/forward volume as a hedging-demand proxy); (3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12;
+(4) index rules conditioned on low cross-market breadth, only with a new stated mechanism. Dropped: option-expiry pinning in any market.
+
+Research result: 2026-11-09, 1 idea tested, 0 credible
