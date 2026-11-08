@@ -186,7 +186,7 @@ def selftest():
     ds = sorted(closes)
     for prev, d in zip(ds, ds[1:]):  # random strikes around the PREVIOUS day's close (centring on day d's own close would leak), executed long before
         for _ in range(6):
-            book[("EUR_USD", str(d))].append((t0 - timedelta(days=1), closes[prev] * math.exp(rnd.gauss(0, 0.004)), 2e8))
+            book[("EUR_USD", str(d))].append((t0 - timedelta(days=1), closes[prev] * math.exp(rnd.gauss(0, 0.004)), MASS_MIN))
     rs = [r["r"] for r in pair_trades("EUR_USD", cs, book, 8, fin=False)]
     se = statistics.stdev(rs) / math.sqrt(len(rs))
     assert len(rs) > 100 and abs(statistics.mean(rs)) < 3.5 * se, f"look-ahead suspected: {statistics.mean(rs):+.4f} (n {len(rs)})"
