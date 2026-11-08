@@ -43,7 +43,7 @@
   "last_review_date": "2026-11-07",
   "last_health_check_date": "2026-11-06",
   "last_reflection_sent_at": "2026-11-06T22:01:35.514352+00:00",
-  "last_market_status": "closed",
+  "last_market_status": "open",
   "last_market_status_sent_at": "2026-11-06T22:01:28.958056+00:00",
   "peak_tracked_equity": 2000.0,
   "friday_preclose_cancel_enabled": true,
