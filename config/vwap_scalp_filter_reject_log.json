@@ -10732,5 +10732,11 @@
     "instrument": "CAD_JPY",
     "filter": "spread_to_stop",
     "value": 0.6071428571434009
+  },
+  {
+    "tick_time": "2026-11-09T12:48:39.621152+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 0.00010223552673408907
   }
 ]
