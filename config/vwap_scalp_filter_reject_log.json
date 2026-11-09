@@ -10552,5 +10552,11 @@
     "instrument": "CAD_JPY",
     "filter": "vol_ratio",
     "value": 0.00012710265388986335
+  },
+  {
+    "tick_time": "2026-11-09T08:03:43.997875+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.39603960396032084
   }
 ]
