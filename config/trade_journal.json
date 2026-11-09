@@ -25541,5 +25541,37 @@
     "vol_ratio": 0.0009676357319391397,
     "spread_to_stop": 0.22905027932960673,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8384",
+    "instrument": "USD_CAD",
+    "direction": "LONG",
+    "units": 5273,
+    "entry_price": 1.40996,
+    "stop_loss": 1.40919,
+    "take_profit": 1.41031,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-09T12:13:45.848001+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.687366749999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": false,
+    "decision_entry_price": 1.40989,
+    "entry_z": -1.4856191037833553,
+    "session_drift_z": -6.787292994261636,
+    "vol_ratio": 0.0002163527663229243,
+    "spread_to_stop": 0.21428571428580492,
+    "target_multiple": 2.0
   }
 ]
