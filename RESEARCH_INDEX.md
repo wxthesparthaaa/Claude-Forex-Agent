@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-09. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-10. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 234 hand-built variants in 114 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 236 hand-built variants in 115 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -26,6 +26,7 @@ Daily run 2026-11-04: Shanghai Gold Exchange premium (SGE AM/PM benchmark vs XAU
 Daily run 2026-11-05: US Treasury auction RESULT surprise (primary-dealer take-up share or bid-to-cover vs the previous 6 same-term auctions; fiscaldata; scripts/research_auction_surprise_2026_11_05.py) -> weak auction short USB05Y/10Y/30Y, long USD_JPY to 15:45 ET (-0.264 R, 5.7/wk), to next day (-0.135), bid-to-cover (-0.197); gross slightly the wrong way (the concession is paid before the result): RULED OUT.
 Daily run 2026-11-06: NON-US scheduled-release shocks (9 fixed local slots: Sydney 11:30 AUD, Wellington 10:45 NZD, Tokyo 08:50 JPY, London 07:00 GBP, Frankfurt 10:00/11:00 EUR, Zurich 08:30 CHF, Stockholm/Oslo 08:00 SEK/NOK; release-bar move >= 2x usual; scripts/research_nonus_news_shock_2026_11_06.py): follow 4h (-0.084 R, 9.4/wk), fade 4h (-0.113); gross about +-0.01: RULED OUT. With the US 8:30 test, scheduled-release timing rules are exhausted.
 Daily run 2026-11-09: FX OPTION-EXPIRY PINNING at the 10:00 New York cut (DTCC public option trades, new data; biggest expiring strike cluster >= USD 1B within 0.05-0.5 daily moves of spot, trade toward it; scripts/research_fx_option_pin_2026_11_09.py): 08:00-10:00 NY (-0.018 R, 6.9/wk, fresh -0.24), 06:00-10:00 NY (-0.048); gross flips sign by period and pair: RULED OUT.
+Daily run 2026-11-10: FX OPTION ORDER FLOW (DTCC public option trades: previous day's base-currency call minus put USD notional imbalance, 60-day z >= 0.5, follow it in the 7 USD majors from 07:00 UTC; scripts/research_fx_option_flow_2026_11_10.py): to next day (-0.033 R, 21/wk, fresh -0.13), to 16:00 UTC (-0.021, fresh -0.18); gross flips sign by pair and period: RULED OUT.
 CFD roll adjustments (read-only account transactions 2026): no adjustment or dividend transaction exists because the bot never holds a CFD across a roll; question stays open (needs an OANDA-vs-futures-curve comparison).
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
@@ -72,5 +73,6 @@ Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeve
   NOT reachable locally: FRED, CFTC, GDELT/AAII/CNN endpoints. The cloud sandbox reaches FRED/ALFRED (real-time vintages) but its IP is refused by fapi.binance.com (HTTP 451).
 - SGE gold benchmark history (AM/PM, 2016-): www.sge.com.cn/graph/DayilyJzj works from the cloud. spdrgoldshares.com (GLD holdings) is behind a Cloudflare bot check.
 - DTCC public swap data (pddata.dtcc.com/ppd/api/report/cumulative/cftc/CFTC_CUMULATIVE_FOREX_YYYY_MM_DD.zip; also COMMODITIES/EQUITIES/RATES) works from the cloud; history only from about 2024-12.
+- Open-Meteo archive/previous-runs APIs hit a shared daily quota from the cloud (unreliable); farside.co.uk returns 403; data.snb.ch API works.
 - PBoC USD/CNY fixing history: safe.gov.cn/AppStructured/hlw/RMBQuery.do (POST startDate/endDate/queryYN=true, quarterly chunks, CNY per 100 USD) works from the cloud; chinamoney.com.cn answers a few calls then returns 403. Binance spot klines (data-api.binance.vision) work from the cloud.
 - OANDA instruments: 68 FX pairs, 38 CFDs (indices, bonds, ags, energy, crypto), 21 metals. Practice-account financing per instrument is in the instruments endpoint.

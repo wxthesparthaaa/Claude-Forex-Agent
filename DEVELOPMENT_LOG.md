@@ -11603,3 +11603,37 @@ other than pinning (e.g. large swap/forward volume as a hedging-demand proxy); (
 (4) index rules conditioned on low cross-market breadth, only with a new stated mechanism. Dropped: option-expiry pinning in any market.
 
 Research result: 2026-11-09, 1 idea tested, 0 credible
+
+## 2026-11-10 -- daily research (scheduled routine): FX option order flow (calls vs puts bought, DTCC) RULED OUT
+
+**Health check** (state-sync read 2026-11-09 22:40 UTC): heartbeat 22:38:35 UTC (app alive); OANDA (read-only) 0 open trades, 0 pending, 0 positions. Test suite 526 passed.
+VWAP Scalp is ON (2x target experiment ON): 14 trades since the last daily run (11-09; 7 wins), net -7.34 SGD. The 88 closed 2x-target trades so far average -0.18 per
+trade (se 0.11; pre-registered expectation -0.16; information only). Strategy balance 488.15 SGD (2,000 - 1,511.85). Crypto Flow (enabled): day 11-08 (evaluated
+01:03 UTC 11-09) all four coins no_signal; day 11-09 is evaluated at 01:00 UTC 11-10, after this run; no skipped or data_unavailable day since the 11-09 retry fix.
+Live Crypto Flow trades so far: 1 (BTC short, cancelled at +0.02 SGD). Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_fx_option_flow_2026_11_10.py`, pre-registered and committed 1ff99c0 before any outcome; K = 2, alpha 0.025). Data: the DTCC public FX files
+(709 daily files 2024-12-01..2026-11-09, downloaded and reduced to per-pair call/put USD notional; only 2025-01-01 and 2026-01-01 empty on weekdays). New use: the
+"Call currency"/"Put currency" of each new vanilla option. Mechanism: end users buy options from dealers; net base-currency call buying leaves dealers short delta, who buy
+spot to hedge. Signal: previous day's (call - put)/(call + put) imbalance, z over 60 days, |z| >= 0.5 (62% of days) -> follow it in the 7 USD majors from 07:00 UTC.
+Self-tests: RW -0.074 / -0.084 (se 0.059), peek +0.77 / +0.70.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| O1 07:00 -> 07:00 UTC next trading day | -0.033 (1113) p 0.91 | +0.047 / +0.023 / -0.067 | -0.063 / -0.004 | -0.131 | -0.041 / -0.037 | 21.3 | RULED OUT |
+| O2 07:00 -> 16:00 UTC same day | -0.021 (1120) p 0.85 | -0.015 / +0.049 / -0.102 | -0.053 / +0.012 | -0.181 | -0.033 / -0.025 | 21.5 | RULED OUT |
+Signs flip by pair and period (EUR, CAD, CHF slightly positive in holdout, all but EUR negative in fresh). The visible (US-reported) option flow without the buyer/seller
+side carries no usable direction. No further variants (gold/oil/index option flow from the same files would be the same mechanism; not pursued).
+Data note: Open-Meteo archive and previous-runs APIs returned "Daily API request limit exceeded" from the cloud IP (shared quota); weather data is not reliably usable here.
+farside.co.uk (bitcoin ETF flows) returns 403. SNB data portal (data.snb.ch/api/cube/...) works from the cloud.
+Variants this run: 2 (both pre-registered, no post-hoc). Running total: about 236 variants in 115 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) SNB weekly sight deposits (data.snb.ch, intervention proxy) for EUR_CHF/USD_CHF/CHF crosses, only if it reaches ~5 trades a week across CHF crosses;
+(3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (4) index rules conditioned on low cross-market breadth, only with a new stated mechanism.
+Dropped: DTCC option flow and option pinning in any market; weather (Open-Meteo quota).
+
+Research result: 2026-11-10, 1 idea tested, 0 credible
