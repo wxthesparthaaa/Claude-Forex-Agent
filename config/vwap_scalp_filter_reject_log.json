@@ -10678,5 +10678,11 @@
     "instrument": "CAD_JPY",
     "filter": "spread_to_stop",
     "value": 0.6551724137928838
+  },
+  {
+    "tick_time": "2026-11-09T11:38:44.439868+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.5757575757575366
   }
 ]
