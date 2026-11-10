@@ -11074,5 +11074,11 @@
     "instrument": "AUD_JPY",
     "filter": "spread_to_stop",
     "value": 0.38983050847452727
+  },
+  {
+    "tick_time": "2026-11-10T09:41:40.289790+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.45945945945927263
   }
 ]
