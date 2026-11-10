@@ -11368,5 +11368,11 @@
     "instrument": "CAD_JPY",
     "filter": "vol_ratio",
     "value": 7.205105113672924e-05
+  },
+  {
+    "tick_time": "2026-11-10T18:51:34.145584+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00020550968444486232
   }
 ]
