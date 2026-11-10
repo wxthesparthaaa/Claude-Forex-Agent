@@ -25805,5 +25805,37 @@
     "vol_ratio": 0.0023362229419437402,
     "spread_to_stop": 0.03784224975886499,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8433",
+    "instrument": "ETH_USD",
+    "direction": "SHORT",
+    "units": -0.01,
+    "entry_price": 2124.5,
+    "stop_loss": 2375.62,
+    "take_profit": 1293.73,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "Crypto Flow: composite buying-pressure z -1.57 (funding -1.37, taker share -1.86, Coinbase premium -1.49); 24h hold"
+    ],
+    "opened_at": "2026-11-10T01:06:26.444546+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.212551116,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "CRYPTO_FLOW",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 2125.95,
+    "entry_z": -1.5704226404611195,
+    "session_drift_z": null,
+    "vol_ratio": null,
+    "spread_to_stop": null,
+    "target_multiple": null
   }
 ]
