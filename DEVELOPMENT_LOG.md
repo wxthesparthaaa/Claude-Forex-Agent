@@ -11637,3 +11637,48 @@ Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts
 Dropped: DTCC option flow and option pinning in any market; weather (Open-Meteo quota).
 
 Research result: 2026-11-10, 1 idea tested, 0 credible
+
+## 2026-11-11 -- daily research (scheduled routine): SNB sight deposits and Norges Bank's announced FX flows, both RULED OUT
+
+**Health check** (state-sync read 2026-11-10 22:37 UTC): heartbeat 22:36:22 UTC (app alive). Test suite 526 passed. OANDA (read-only): 1 open trade, Crypto Flow's
+ETH_USD short (8433, -0.01 ETH, opened 01:06 UTC 11-10, unrealized +0.96 SGD) with its own stop-loss and take-profit orders; nothing unexpected.
+VWAP Scalp is ON (2x target experiment ON): 12 trades since the last daily run (all 11-10; 4 wins), net -6.93 SGD. The 100 closed 2x-target trades so far average
+-0.18 per trade (se 0.10; pre-registered expectation -0.16; information only). Strategy balance 479.12 SGD (2,000 - 1,520.88).
+Crypto Flow (enabled): day 11-09 (evaluated 01:01 UTC 11-10): BTC/LTC/BCH no_signal; ETH SHORT (composite -1.57) hit an OANDA 504 Gateway Timeout on its candle
+fetch, was logged "retry" (attempt 1) and OPENED on the next 5-minute tick (01:06 UTC): the 11-09 retry fix worked as designed. No skipped or data_unavailable day.
+Live Crypto Flow trades so far: 2 (BTC short cancelled at +0.02 SGD; ETH short open, 24-hour hold ends about 01:06 UTC 11-11). Nothing broken, nothing fixed.
+
+**Tested** (both scripts pre-registered and committed before running; all self-tests passed). H1 bid/ask 2010-01..2026-11-10 for 7 CHF crosses and EUR_NOK/USD_NOK.
+Periods: discovery 2010-2015, holdout 2016-01..2024-06, fresh 2024-07..2026-11.
+1. `scripts/research_snb_sight_deposits_2026_11_11.py` (336a933dc; K = 2, alpha 0.025). New data: SNB weekly sight deposits of domestic banks (data.snb.ch cube
+snbgwdchfsgw, series GI, Fridays since 2009, published Monday 10:00 Zurich). Mechanism: deposits rise when the SNB sells francs (intervention), campaigns persist and
+the size becomes public only on Monday. Week-on-week change z vs the previous 52 weeks; every week trades; rise -> long EUR/USD/GBP/AUD/CAD/NZD_CHF, short CHF_JPY.
+Self-tests: RW +0.002 / +0.087 (se 0.048 / 0.046), peek +0.81 / +0.67.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| S1 Monday 10:00 UTC -> next Monday 10:00 (financing) | -0.112 (3052) p 1.00 | -0.036 / -0.049 / -0.140 | -0.132 / -0.093 | -0.208 | -0.117 / -0.108 | 6.9 | RULED OUT |
+| S2 Monday 10:00 -> 16:00 UTC (release-day reaction) | -0.157 (3052) p 1.00 | -0.024 / -0.045 / -0.060 | -0.186 / -0.127 | -0.177 | -0.178 / -0.150 | 6.9 | RULED OUT |
+S1 Tuesday-entry robustness (pre-registered): -0.107 holdout. Negative on all seven crosses in every period and in 8 of 9 holdout years; before costs slightly the
+WRONG way (the franc does not keep moving with the disclosed intervention; if anything it partly reverses).
+2. `scripts/research_norges_fx_flow_2026_11_11.py` (79f84c3a7; K = 2, alpha 0.025). New data: Norges Bank ANN_FX_SPU (data.norges-bank.no SDMX), the monthly
+announcement of the daily NOK amount it will buy or sell for the government (oil-fund transfers), 2000-2026. Mechanism: pre-announced, price-insensitive flow executed
+evenly in Oslo hours should push the krone while it is executed. Rule: every trading day of a month with non-zero flow, follow it in EUR_NOK and USD_NOK 07:00-14:00 UTC.
+Self-tests: RW -0.049 / -0.075 (se 0.028 / 0.040), peek +0.68 / +0.69.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| N1 all non-zero months | -0.120 (4144) p 1.00 | -0.025 / +0.034 / +0.060 | -0.157 / -0.083 | -0.095 | -0.151 / -0.102 | 9.3 | RULED OUT |
+| N2 months with >= NOK 500m a day | -0.120 (3678) p 1.00 | -0.066 / +0.031 / +0.215 (3 months) | -0.148 / -0.091 | +0.062 (n 126) | -0.150 / -0.104 | 8.3 | RULED OUT |
+Month-clustered holdout -0.11 (98 / 87 months). The flow's push before costs is at most +0.03 R (discovery negative) against a NOK spread of about 0.15 R for a
+7-hour window; NOK 0.3-2bn a day is small next to EUR/NOK turnover and it is public a month ahead. N2's fresh gross +0.22 is 3 months; not a candidate, no variant run.
+Variants this run: 4 (all pre-registered, no post-hoc). Running total: about 240 variants in 117 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) Bank of Japan JGB purchase operation (Rinban) results (offer-to-cover as a selling-pressure signal for USD_JPY / JPY crosses / JP225, 2-4
+operations a week) if boj.or.jp result history is reachable from the cloud; (2) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a
+contract-month price source); (3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (4) index rules conditioned on low cross-market breadth, only with a
+new stated mechanism. Dropped: central-bank flow disclosures (SNB deposits, Norges Bank FX transactions), other small pegged/managed flows (DKK, SEK reserve hedging).
+
+Research result: 2026-11-11, 2 ideas tested, 0 credible
