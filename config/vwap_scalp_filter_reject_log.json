@@ -11698,5 +11698,11 @@
     "instrument": "NZD_JPY",
     "filter": "vol_ratio",
     "value": 0.00016837099831305987
+  },
+  {
+    "tick_time": "2026-11-11T19:04:21.926560+00:00",
+    "instrument": "BCO_USD",
+    "filter": "spread_to_stop",
+    "value": 1.111111111110848
   }
 ]
