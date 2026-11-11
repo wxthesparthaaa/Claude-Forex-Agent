@@ -11572,5 +11572,11 @@
     "instrument": "AUD_JPY",
     "filter": "spread_to_stop",
     "value": 0.5588235294120597
+  },
+  {
+    "tick_time": "2026-11-11T12:04:20.661154+00:00",
+    "instrument": "XAU_USD",
+    "filter": "spread_to_stop",
+    "value": 0.2501421262081017
   }
 ]
