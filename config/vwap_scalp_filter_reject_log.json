@@ -11512,5 +11512,11 @@
     "instrument": "XAU_USD",
     "filter": "spread_to_stop",
     "value": 0.30320699708459214
+  },
+  {
+    "tick_time": "2026-11-11T10:54:18.583696+00:00",
+    "instrument": "CAD_JPY",
+    "filter": "vol_ratio",
+    "value": 9.581514681896434e-05
   }
 ]
