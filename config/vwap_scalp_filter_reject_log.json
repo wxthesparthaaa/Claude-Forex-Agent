@@ -11536,5 +11536,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.3225806451612903
+  },
+  {
+    "tick_time": "2026-11-11T11:14:15.824004+00:00",
+    "instrument": "GBP_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00013353074254900764
   }
 ]
