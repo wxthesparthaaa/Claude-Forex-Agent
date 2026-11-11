@@ -26591,5 +26591,38 @@
     "vol_ratio": 0.0014559416513488504,
     "spread_to_stop": 0.10489510489510837,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8590",
+    "instrument": "CHF_JPY",
+    "direction": "LONG",
+    "units": 2629,
+    "entry_price": 192.082,
+    "stop_loss": 191.912,
+    "take_profit": 192.083,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L +0.04."
+    ],
+    "opened_at": "2026-11-11T15:39:32.124204+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.593399999999996,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "SUCCESSFUL",
+    "closed_at": "2026-11-11T15:47:10.602052+00:00",
+    "exit_price": 192.084,
+    "realized_pnl": 0.0418,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 192.065,
+    "entry_z": -2.1697145243047533,
+    "session_drift_z": -7.815727703177749,
+    "vol_ratio": 0.0002799470633692109,
+    "spread_to_stop": 0.22222222222218094,
+    "target_multiple": 2.0
   }
 ]
