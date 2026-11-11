@@ -11682,3 +11682,40 @@ contract-month price source); (3) re-check the Nikkei CFD vs CME gap on NEW data
 new stated mechanism. Dropped: central-bank flow disclosures (SNB deposits, Norges Bank FX transactions), other small pegged/managed flows (DKK, SEK reserve hedging).
 
 Research result: 2026-11-11, 2 ideas tested, 0 credible
+
+## 2026-11-12 -- daily research (scheduled routine): Japan MOF weekly cross-border securities flows as a yen signal, RULED OUT
+
+**Health check** (state-sync read 2026-11-11 22:34 UTC): heartbeat 22:34:09 UTC (app alive); OANDA (read-only) 0 open trades, 0 positions, 0 pending. Test suite 526 passed.
+VWAP Scalp is ON (2x target experiment ON): 17 trades since the last daily run (11-11; 5 wins), net -26.56 SGD. The 117 closed 2x-target trades so far average -0.22 per
+trade (se 0.09; pre-registered expectation -0.16; information only). Strategy balance 454.18 SGD (2,000 - 1,545.82).
+Crypto Flow (enabled): day 11-10 (evaluated 01:04 UTC 11-11) all four coins no_signal; day 11-11 is evaluated at 01:00 UTC 11-12, after this run. No skipped or
+data_unavailable day. The ETH short (8433) closed at its 24-hour exit 01:09 UTC 11-11 for +1.03 SGD (+0.32 of its risk). Live Crypto Flow trades so far: 2 (both small
+wins: BTC cancelled +0.02 SGD, ETH +1.03 SGD; net +1.05 SGD, average about +0.16 per trade vs the past-data +0.05; far too few to judge). Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_mof_weekly_flows_2026_11_12.py`, pre-registered and committed d731d1cfa before any outcome; K = 2, alpha 0.025). New data: Japan MOF
+"International Transactions in Securities (weekly)", week.csv, 1,122 weeks 2005-01..2026-10 (year-end two-week rows dropped by the parser before any outcome).
+Mechanism: Japanese institutions' foreign buying minus foreigners' Japan buying is converted out of yen, comes in multi-week programmes and becomes public Thursday
+08:50 Tokyo -> the yen keeps moving with it. Signal: (residents' net foreign equity + long-term debt) - (non-residents' net Japan equity + long-term debt), z vs the
+previous 52 weeks; every week trades; outflow -> long all 7 JPY crosses (USD/EUR/GBP/AUD/CAD/NZD/CHF_JPY), inflow -> short. H1 bid/ask 2005-01..2026-11-10.
+Periods: discovery 2006-2012, holdout 2013-2023, fresh 2024-01..2026-11. Self-tests: RW +0.035 / -0.022 (se 0.048 / 0.045), peek +0.81 / +0.64.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| W1 Thursday 01:00 UTC -> next Thursday 01:00 (financing) | -0.052 (3941) p 0.91 | +0.021 / -0.002 / +0.106 | -0.043 / -0.060 | +0.053 | -0.055 / -0.052 | 6.9 | RULED OUT |
+| W2 Thursday 01:00 -> 07:00 UTC (Tokyo session) | -0.043 (3934) p 0.88 | +0.022 / +0.039 / +0.013 | +0.028 / -0.115 | -0.071 | -0.059 / -0.050 | 6.9 | RULED OUT |
+W1 Friday-entry robustness (pre-registered): -0.071 holdout. W1 holdout negative on all seven crosses and in 9 of 11 years; its fresh +0.05 (gross +0.11, 2024-26) follows a
+flat holdout and is not a candidate. W2's before-cost push (+0.02 to +0.04) is below the 6-hour JPY-cross spread. Third weekly flow disclosure (after SNB deposits and
+Norges Bank) with no tradable push: the market prices weekly-reported flows before or at publication. No further variants.
+Data notes: Tokyo Financial Exchange (Click 365) daily CSVs keep only the last 5 days and have no long/short split (unusable); BoJ operation results are per-day HTML
+(www3.boj.or.jp/market/en/stat/), scrapable but slow; Rinban not tested today.
+Variants this run: 2 (both pre-registered, no post-hoc). Running total: about 242 variants in 118 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) Bank of Japan JGB purchase (Rinban) results from the per-day result pages (www3.boj.or.jp/market/en/stat/), offer-to-cover as JGB selling
+pressure -> yen/JP225, only if a few years of pages parse cleanly; (2) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month
+price source); (3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (4) index rules conditioned on low cross-market breadth, only with a new stated
+mechanism. Dropped: any further published weekly/monthly flow disclosure (SNB, Norges Bank, MOF all gross about zero); Japanese retail positioning (no history).
+
+Research result: 2026-11-12, 1 idea tested, 0 credible
