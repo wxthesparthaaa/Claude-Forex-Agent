@@ -467,5 +467,15 @@
     "zp": -1.4856,
     "composite": -1.5704,
     "direction": "SHORT"
+  },
+  {
+    "day": "2026-11-10",
+    "instrument": "BTC_USD",
+    "result": "no_signal",
+    "at": "2026-11-11T01:04:15.140515+00:00",
+    "zf": 1.2811,
+    "zt": 0.4833,
+    "zp": -1.1675,
+    "composite": 0.199
   }
 ]
