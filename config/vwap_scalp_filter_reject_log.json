@@ -11980,5 +11980,11 @@
     "instrument": "USD_JPY",
     "filter": "vol_ratio",
     "value": 0.0001629475031412863
+  },
+  {
+    "tick_time": "2026-11-12T11:15:49.176878+00:00",
+    "instrument": "BCO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.3007518796991983
   }
 ]
