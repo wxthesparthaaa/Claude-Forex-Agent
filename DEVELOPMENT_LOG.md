@@ -11719,3 +11719,46 @@ price source); (3) re-check the Nikkei CFD vs CME gap on NEW data only after 202
 mechanism. Dropped: any further published weekly/monthly flow disclosure (SNB, Norges Bank, MOF all gross about zero); Japanese retail positioning (no history).
 
 Research result: 2026-11-12, 1 idea tested, 0 credible
+
+## 2026-11-13 -- daily research (scheduled routine): venue lag on Treasury CFDs and five FX majors, and BoJ JGB-purchase results, both RULED OUT
+
+**Health check** (state-sync read 2026-11-12 22:36 UTC): heartbeat 22:35:33 UTC (app alive). Test suite 526 passed. OANDA (read-only): 1 open trade, Crypto Flow's
+LTC_USD short (8626, -0.09 LTC, opened 01:00 UTC 11-12, unrealized about -0.03) with its own stop-loss and take-profit (the 2 pending orders); nothing unexpected.
+VWAP Scalp is ON (2x target experiment ON): 12 trades since the last daily run (11-12; 5 wins), net -9.54 SGD. The 129 closed 2x-target trades so far average -0.22 per
+trade (se 0.09; pre-registered expectation -0.16; information only). Strategy balance 442.04 SGD (2,000 - 1,557.96).
+Crypto Flow (enabled): day 11-11 (evaluated 01:00 UTC 11-12): BTC/ETH/BCH no_signal, LTC SHORT (composite -1.23) opened 01:00 UTC. No skipped or data_unavailable day.
+Live Crypto Flow trades so far: 3 (2 closed small wins, net +1.05 SGD; LTC short open, 24-hour exit about 01:00 UTC 11-13). Nothing broken, nothing fixed.
+
+**Tested** (both scripts pre-registered and committed before running; all self-tests passed).
+1. `scripts/research_venue_lag_bonds_fx_2026_11_13.py` (ad428d415; K = 2, alpha 0.025). Venue lag on the last OANDA instruments with a liquid CME twin not yet
+covered: USB02Y/05Y/10Y/30Y vs ZT/ZF/ZN/ZB, and USD_JPY/AUD_USD/USD_CAD/USD_CHF/NZD_USD vs 6J/6A/6C/6S/6N (inverse futures stored as 1/close). Same engine as
+2026-10-28 (Yahoo hourly vs OANDA H1 gap z >= 2 over 336 hours, trade the CFD toward the futures for 2 hours). 2024-06..2026-11 only (Yahoo 730 days).
+| variant | holdout mean R (n) | gross hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| V1 Treasury CFDs vs CBOT futures | -0.350 (1289) p 1.00 | -0.026 / -0.032 | -0.341 / -0.359 | -0.409 | -0.415 / -0.290 | 5.2 | RULED OUT |
+| V2 FX majors vs CME FX futures | -0.146 (1929) p 1.00 | +0.017 / -0.048 | -0.182 / -0.111 | -0.245 | -0.179 / -0.156 | 7.8 | RULED OUT |
+No catch-up in any quarter (gross between -0.09 and +0.05, one quarter +0.13 for FX). OANDA's bond and FX quotes do not trail the futures. With 2026-10-28 and 11-05,
+every OANDA CFD with a free hourly futures twin has now been checked; UK10YB/DE10YB have no free futures feed (Yahoo FGBL=F empty).
+2. `scripts/research_boj_rinban_cover_2026_11_13.py` (e1d50d5f4; parser `scripts/research_boj_parse_2026_11_13.py`; K = 2, alpha 0.025). New data: BoJ monthly
+market-operation files 2013-06..2026-10 (boj.or.jp/en/statistics/boj/fm/ope/m_release/, xlsx; 2013-2016 as zip/xls), 3,784 fixed-rate JGB purchase rows, 1,228 offer
+days. Mechanism: a high bid-to-cover (vs the previous 40 operations) means private holders are eager to sell JGBs -> yield pressure -> stronger yen, result public
+12:00 Tokyo. Every offer day trades the 7 JPY crosses from 04:00 UTC. Periods: discovery 2013-06..2017, holdout 2018-2023, fresh 2024-2026-10.
+Self-tests: RW +0.006 / -0.021 (se 0.041), peek +0.49 / +0.76.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| J1 04:00 -> 07:00 UTC | -0.109 (3633) p 1.00 | +0.005 / +0.003 / +0.024 | -0.116 / -0.102 | -0.087 | -0.131 / -0.123 | 11.6 | RULED OUT |
+| J2 04:00 -> next day 04:00 | -0.132 (3633) p 1.00 | +0.042 / -0.038 / +0.076 | -0.165 / -0.098 | -0.006 | -0.147 / -0.132 | 11.6 | RULED OUT |
+Before costs about zero (J1 within +0.03 in every period; J2 flips sign); negative on all seven crosses in the holdout. The yen does not react to how eagerly banks sell
+JGBs to the BoJ. No further variants (the yield-spread column would be the same mechanism).
+Variants this run: 4 (all pre-registered, no post-hoc). Running total: about 246 variants in 120 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (3) index rules conditioned on low cross-market breadth, only with a new stated mechanism;
+(4) intraday data not yet used for non-crypto markets (any free source with history beyond 730 days). Dropped: venue lag on any remaining CFD with a free futures twin
+(all checked); BoJ operation results (purchase cover; ETF buying stopped in 2024).
+
+Research result: 2026-11-13, 2 ideas tested, 0 credible
