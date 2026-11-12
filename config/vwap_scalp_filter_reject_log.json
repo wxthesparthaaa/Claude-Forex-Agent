@@ -11884,5 +11884,11 @@
     "instrument": "NZD_JPY",
     "filter": "spread_to_stop",
     "value": 0.4067796610169818
+  },
+  {
+    "tick_time": "2026-11-12T10:05:36.286379+00:00",
+    "instrument": "GBP_USD",
+    "filter": "vol_ratio",
+    "value": 0.00012710578950588975
   }
 ]
