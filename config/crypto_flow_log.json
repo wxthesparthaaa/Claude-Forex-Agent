@@ -538,5 +538,15 @@
     "zp": -0.7082,
     "composite": -1.2316,
     "direction": "SHORT"
+  },
+  {
+    "day": "2026-11-11",
+    "instrument": "BCH_USD",
+    "result": "no_signal",
+    "at": "2026-11-12T01:00:51.566421+00:00",
+    "zf": 0.361,
+    "zt": -0.1249,
+    "zp": -0.3271,
+    "composite": -0.0303
   }
 ]
