@@ -12526,5 +12526,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.00015525092147288975
+  },
+  {
+    "tick_time": "2026-11-13T12:40:46.439896+00:00",
+    "instrument": "EUR_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00013965146744266397
   }
 ]
