@@ -12448,5 +12448,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.00017990795436405053
+  },
+  {
+    "tick_time": "2026-11-13T11:30:40.917620+00:00",
+    "instrument": "USD_JPY",
+    "filter": "vol_ratio",
+    "value": 7.804676751394668e-05
   }
 ]
