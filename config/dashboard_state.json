@@ -39,7 +39,7 @@
   "interval_scan_count_since_digest": 0,
   "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [],
-  "last_scan_digest_sent_at": "2026-11-12T23:35:33.834289+00:00",
+  "last_scan_digest_sent_at": "2026-11-13T02:40:33.835374+00:00",
   "last_review_date": "2026-11-13",
   "last_health_check_date": "2026-11-12",
   "last_reflection_sent_at": "2026-11-06T22:01:35.514352+00:00",
