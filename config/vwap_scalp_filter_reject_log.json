@@ -12580,5 +12580,11 @@
     "instrument": "GBP_USD",
     "filter": "vol_ratio",
     "value": 0.0001966496185212537
+  },
+  {
+    "tick_time": "2026-11-13T13:35:45.991250+00:00",
+    "instrument": "USD_CHF",
+    "filter": "spread_to_stop",
+    "value": 1.8571428571419508
   }
 ]
