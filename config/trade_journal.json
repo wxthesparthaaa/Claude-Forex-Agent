@@ -27606,5 +27606,37 @@
     "vol_ratio": 0.0007846672789249427,
     "spread_to_stop": 0.24242424242427113,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8796",
+    "instrument": "EUR_USD",
+    "direction": "SHORT",
+    "units": -3302,
+    "entry_price": 1.1063,
+    "stop_loss": 1.1071,
+    "take_profit": 1.10523,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-13T13:40:49.493339+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.3152992499999967,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": true,
+    "decision_entry_price": 1.10637,
+    "entry_z": 1.7123260609698798,
+    "session_drift_z": 3.7985494891641642,
+    "vol_ratio": 0.0003925536659979543,
+    "spread_to_stop": 0.15068493150694515,
+    "target_multiple": 2.0
   }
 ]
