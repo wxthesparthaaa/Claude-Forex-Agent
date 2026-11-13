@@ -1,14 +1,5 @@
 [
   {
-    "tick_time": "2026-10-08T15:25:53.266480+00:00",
-    "opened": null,
-    "also_signaled": [
-      "XAU_USD",
-      "EUR_USD",
-      "GBP_USD"
-    ]
-  },
-  {
     "tick_time": "2026-10-08T15:40:57.903832+00:00",
     "opened": null,
     "also_signaled": [
@@ -4115,6 +4106,13 @@
   {
     "tick_time": "2026-11-13T17:50:55.672416+00:00",
     "opened": "XAU_USD",
+    "also_signaled": [
+      "WTICO_USD"
+    ]
+  },
+  {
+    "tick_time": "2026-11-13T18:40:54.797186+00:00",
+    "opened": "USD_JPY",
     "also_signaled": [
       "WTICO_USD"
     ]
