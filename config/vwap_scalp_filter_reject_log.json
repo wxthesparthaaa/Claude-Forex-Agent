@@ -12316,5 +12316,11 @@
     "instrument": "NZD_USD",
     "filter": "vol_ratio",
     "value": 0.00016309145798868647
+  },
+  {
+    "tick_time": "2026-11-13T08:20:50.658636+00:00",
+    "instrument": "CHF_JPY",
+    "filter": "vol_ratio",
+    "value": 0.00016556045059677493
   }
 ]
