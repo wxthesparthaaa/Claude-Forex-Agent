@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-13. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-16. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 246 hand-built variants in 120 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 249 hand-built variants in 121 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -58,6 +58,7 @@ WEAK: **VT1** (VIX/VIX3M >= 1.0 -> long indices 5 days): positive in 2009-15 and
 
 ## E. Crypto CFDs (BTC/ETH/LTC/BCH): mostly RULED OUT
 Momentum/reversal; Binance funding rate; Fear & Greed; taker-buy flow; Coinbase premium; DeFi TVL; Wikipedia attention; on-chain addresses; hash ribbons; Deribit DVOL; hourly taker flow; BTC-leads-alts; an exhaustive crypto scan (1,550 cells, nothing selected).
+Binance futures POSITIONING (2026-11-16, new data: data.binance.vision futures/um/daily/metrics, 5-minute open interest and long/short ratios, BTC 2020-09-, alts 2021-12-; scripts/research_binance_positioning_2026_11_16.py; 1-day holds from 01:00 UTC): all-account long/short crowd FADE (-0.148 R, 4.4/wk), top traders minus crowd FOLLOW (-0.128, 5.8/wk), open-interest surge FADE (-0.120, 1.6/wk); gross about 0 in the holdout: RULED OUT.
 WEAK: the post-hoc composite (funding + taker share + Coinbase premium; now the live **Crypto Flow** experiment) and **SC1** (stablecoin-supply growth follow; +0.345 R holdout, p 0.025, weak since Oct 2025, about 0.8 trades a week).
 REAL-BUT-GONE: **cross-venue gap convergence** (Binance or Coinbase price above the OANDA crypto CFD -> CFD catches up within 2 hours): net +0.2 to +0.9 R in 2019-2022, gross zero from 2023.
 Cross-venue on gold (PAXG) and the euro (EURUSDT): nothing (OANDA leads).
@@ -82,4 +83,5 @@ Fed balance-sheet / reserves (WRESBAL) with vintages; GDPNow revisions; breakeve
 - Japan MOF weekly securities flows (mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/week.csv, Shift-JIS) works from the cloud. Tokyo Financial Exchange Click 365 CSVs (tfx.co.jp/kawase/document/) only keep the last 5 days and have no long/short split. BoJ market-operation pages (www3.boj.or.jp/market/en/) are reachable but per-day HTML only.
 - PBoC USD/CNY fixing history: safe.gov.cn/AppStructured/hlw/RMBQuery.do (POST startDate/endDate/queryYN=true, quarterly chunks, CNY per 100 USD) works from the cloud; chinamoney.com.cn answers a few calls then returns 403. Binance spot klines (data-api.binance.vision) work from the cloud.
 - BoJ monthly market-operation files (boj.or.jp/en/statistics/boj/fm/ope/m_release/YYYY/opeYYMM.xlsx, 2013-2016 as .zip with .xls; per-operation offered/bids/accepted) work from the cloud; www3.boj.or.jp daily pages stopped in 2025-10. Yahoo hourly futures (range=730d) reachable from the cloud.
+- Binance futures bulk archive (data.binance.vision/data/futures/um/daily/metrics/SYMBOL/SYMBOL-metrics-YYYY-MM-DD.zip) works from the cloud (unlike fapi.binance.com); BTC from 2020-09 with 2022 gaps, alts from 2021-12.
 - OANDA instruments: 68 FX pairs, 38 CFDs (indices, bonds, ags, energy, crypto), 21 metals. Practice-account financing per instrument is in the instruments endpoint.

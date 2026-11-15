@@ -11762,3 +11762,41 @@ Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts
 (all checked); BoJ operation results (purchase cover; ETF buying stopped in 2024).
 
 Research result: 2026-11-13, 2 ideas tested, 0 credible
+
+## 2026-11-16 -- daily research (scheduled routine): Binance futures positioning (crowd long/short, top traders, open interest) on the crypto CFDs, RULED OUT
+
+**Health check** (state-sync read 2026-11-15 22:34 UTC): heartbeat 22:30:33 UTC (app alive). Test suite 526 passed. OANDA (read-only, account -001): 0 open trades,
+0 positions, 0 pending (one transient 401 on the first call; repeated calls 200). VWAP Scalp is ON (2x target experiment ON): 22 trades since the last daily run (all
+11-13; 9 wins), net -13.78 SGD. The 151 closed 2x-target trades so far average -0.21 per trade (se 0.08; pre-registered expectation -0.16; information only). Strategy
+balance 428.49 SGD (2,000 - 1,571.51).
+Crypto Flow (enabled): day 11-12 (evaluated 01:00 UTC 11-13) all four coins no_signal. Days 11-13 and 11-14 have no entry because their 01:00 UTC evaluation falls on
+Saturday/Sunday when the market is shut, the same as every earlier weekend (10-30/31, 11-06/07); not a bug. Day 11-15 is evaluated at 01:00 UTC 11-16, after this run.
+The LTC short (8626) closed at its 24-hour exit 01:05 UTC 11-13 for -0.04 SGD. Live Crypto Flow trades so far: 3 closed (2 small wins, 1 tiny loss), net +1.00 SGD,
+average about +0.09 of risk per trade vs the past-data +0.05; far too few to judge. Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_binance_positioning_2026_11_16.py`, pre-registered and committed 4fed3cba8 before any outcome; fetcher
+`scripts/research_binance_metrics_fetch_2026_11_16.py`; K = 3, alpha 0.0167). New data: Binance USD-M futures "metrics" archive (data.binance.vision, reachable from the
+cloud although fapi.binance.com is not): 5-minute open interest, all-account long/short ratio, top-trader position long/short ratio. BTC 2020-09.. (2022 has ~300 empty
+days), ETH/LTC/BCH 2021-12... Last snapshot of day d, z vs previous 250 days; trade OANDA BTC/ETH/LTC/BCH_USD at the 01:00 UTC open of d+1 for 24 hours (the Crypto Flow
+engine; bid/ask, financing). Periods: discovery 2021-2022 (thin), holdout 2023-01..2025-09, fresh 2025-10..2026-11-13.
+Self-tests: RW +0.033 / +0.056 / -0.039 (se 0.028 / 0.025 / 0.046), peek +0.77.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| L1 crowd long/short FADE | -0.148 (637) p 0.97 | +0.093 / -0.032 / +0.134 | -0.218 / -0.078 | -0.021 | -0.167 / -0.161 | 4.4 | RULED OUT |
+| L2 top traders minus crowd FOLLOW | -0.128 (831) p 1.00 | +0.068 / -0.003 / -0.029 | -0.093 / -0.164 | -0.193 | -0.148 / -0.134 | 5.8 | RULED OUT |
+| L3 open-interest surge FADE | -0.120 (229) p 0.78 | -0.290 / -0.016 / -0.164 | -0.437 / +0.195 | -0.277 | -0.137 / -0.092 | 1.6 | RULED OUT |
+Negative in every holdout year for L1/L2; only BTC is near zero (L2 BTC holdout +0.03, fresh +0.08, too few and single-coin: not a candidate). The leveraged crowd's
+positioning on Binance carries no next-day signal for the OANDA CFDs beyond what funding/taker flow already showed (about zero before costs). Trade counts are lower
+than the ~6/wk pre-registered estimate because OANDA's crypto CFDs do not trade at weekends. No further variants.
+Variants this run: 3 (all pre-registered, no post-hoc). Running total: about 249 variants in 121 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (cost-structure check; needs a contract-month price source reachable from the cloud);
+(2) non-Fed central-bank pre-meeting drift across the G10 crosses (needs meeting calendars; ~1-2 meetings a week, several crosses each); (3) re-check the Nikkei CFD
+vs CME gap on NEW data only after 2026-12; (4) intraday data not yet used for non-crypto markets. Dropped: Binance positioning archive (open interest, long/short
+ratios); any further crypto-derivatives crowd gauge (funding, taker flow, positioning all about zero gross since 2023).
+
+Research result: 2026-11-16, 1 idea tested, 0 credible
