@@ -23,6 +23,8 @@ PERIODS: DISCOVERY = 2018-01..2022-12 (includes the 2019-2022 cross-venue lag er
 EXPECTED TRADES PER WEEK: |z| >= 1 on ~30% of days x 4 coins x 5 OANDA crypto trading days, no overlap -> about 5-7 a week.
 SELF-TESTS (run first; abort on failure): the real signals applied to random-walk prices score ~0 gross; a peeking rule scores > +0.3 R.
 DIAGNOSTIC (not a variant): the gross mean of the FOLLOW direction is minus the FADE gross; it is reported, not tested.
+AMENDMENT (2026-11-17, before any outcome was computed): Upbit has delisted KRW-LTC, so there is no LTC premium. K1 still trades all four
+coins on the BTC premium; K2 trades only BTC/ETH/BCH on their own premiums (LTC has no K2 signal).
 DECISION: strict bar = every bl.evaluate check; practice-trial flag = rp.practice_flag. A pass would be checked for overlap with Crypto Flow.
 """
 import json
@@ -97,6 +99,10 @@ def main(h1_dir, inp_path):
     data = {i: bl.load(h1_dir, i) for i in UNIVERSE}
     zs = {}
     for inst, coin in UNIVERSE.items():
+        if coin not in inp["upbit"]:
+            zs[inst] = {}
+            print(f"{inst}: no Korean premium (no Upbit KRW market)")
+            continue
         p = premium(inp, coin)
         zs[inst] = bp.zser(p)
         vals = [p[d] for d in sorted(p)]

@@ -68,7 +68,11 @@ def binance(symbol):
 
 def main(out_dir):
     data = {"upbit": {}, "binance": {}, "usdkrw": {}}
+    listed = {m["market"] for m in get("https://api.upbit.com/v1/market/all").json()}
     for c in COINS:
+        if f"KRW-{c}" not in listed:
+            print(c, "has no Upbit KRW market (delisted); skipped", flush=True)
+            continue
         data["upbit"][c] = upbit(c)
         b = binance(f"{c}USDT")
         if c == "BCH":
