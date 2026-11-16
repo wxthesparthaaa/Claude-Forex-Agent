@@ -12712,5 +12712,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.3488372093023448
+  },
+  {
+    "tick_time": "2026-11-16T07:04:32.260397+00:00",
+    "instrument": "NZD_USD",
+    "filter": "vol_ratio",
+    "value": 0.00012201312850247927
   }
 ]
