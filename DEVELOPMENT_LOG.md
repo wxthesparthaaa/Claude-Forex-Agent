@@ -11800,3 +11800,36 @@ vs CME gap on NEW data only after 2026-12; (4) intraday data not yet used for no
 ratios); any further crypto-derivatives crowd gauge (funding, taker flow, positioning all about zero gross since 2023).
 
 Research result: 2026-11-16, 1 idea tested, 0 credible
+
+## 2026-11-17 -- daily research (scheduled routine): Korean exchange ("kimchi") premium on the crypto CFDs, RULED OUT
+
+**Health check** (state-sync read 2026-11-16 22:34 UTC): heartbeat 22:34:25 UTC (app alive). Test suite 526 passed. OANDA (read-only): 0 open trades, 0 positions,
+0 pending; nothing unexpected. VWAP Scalp is ON (2x target experiment ON): 12 trades since the last daily run (all 11-16; 5 wins), net +10.63 SGD. The 163 closed
+2x-target trades so far average -0.18 per trade (se 0.08; pre-registered expectation -0.16; information only). Strategy balance 443.30 SGD (2,000 - 1,556.70).
+Crypto Flow (enabled): day 11-15 (evaluated 01:04 UTC 11-16) all four coins no_signal; 11-13/11-14 fall on the weekend (market shut, as always). No skipped or
+data_unavailable day. Live Crypto Flow trades so far: 3 closed (2 small wins, 1 tiny loss), net +1.00 SGD, average about +0.09 of risk vs the past-data +0.05; far too
+few to judge. Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_kimchi_premium_2026_11_17.py`, pre-registered and committed 32949388b, amended 9171ba0b4 before any outcome because Upbit has no KRW-LTC
+market; fetcher `scripts/research_kimchi_fetch_2026_11_17.py`; K = 2, alpha 0.025). New data: Upbit KRW-BTC/ETH/BCH daily closes (api.upbit.com, 2017-09-) vs Binance
+spot USDT closes x FRED DEXKOUS (dated <= d-1). Median premium about +1.1%. Mechanism: capital controls stop arbitrage, so an unusually high premium marks Korean retail
+froth (fade it), a discount marks local capitulation. Premium z vs the previous 250 days, |z| >= 1; Crypto Flow engine (01:00 UTC entry, 24-hour hold, bid/ask,
+financing). Periods: discovery 2018-2022, holdout 2023-01..2025-09, fresh 2025-10..2026-11-14. Self-tests: RW +0.040 / +0.030 (se 0.022 / 0.025), peek +0.80.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| K1 BTC premium FADE, all 4 coins | -0.091 (618) p 0.89 | +0.006 / +0.030 / +0.134 | -0.175 / -0.008 | -0.018 | -0.111 / -0.113 | 4.3 | RULED OUT |
+| K2 own-coin premium FADE (BTC/ETH/BCH) | -0.075 (461) p 0.95 | -0.059 / +0.011 / +0.155 | -0.213 / +0.062 | +0.069 | -0.088 / -0.074 | 3.2 | RULED OUT |
+Holdout years 2023 -0.18 / 2024 -0.12 / 2025 +0.15 (K1); only ETH near zero (+0.01). Before costs about zero until 2025, then positive in 2025-26 only (gross fresh
++0.13 / +0.16 on ~200 trades): a recent-only effect after a negative 2023-24, not a candidate. Too few trades a week anyway (OANDA crypto shut at weekends). No more variants.
+Variants this run: 2 (both pre-registered, no post-hoc). Running total: about 251 variants in 122 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) non-Fed central-bank pre-meeting drift across the G10 crosses (needs full meeting calendars incl. no-change meetings; not yet found as a
+machine-readable source); (2) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (3) re-check the Nikkei CFD vs CME gap on NEW
+data only after 2026-12; (4) re-check the kimchi premium on new data only after 2027-03 (2025-26 gross positive); (5) intraday data for non-crypto markets.
+Dropped: Korean/other national crypto premiums as a fade signal; HKD HIBOR (HKMA API reachable, but it is carry on a peg, already ruled out).
+
+Research result: 2026-11-17, 1 idea tested, 0 credible
