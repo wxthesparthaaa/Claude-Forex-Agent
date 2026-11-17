@@ -11833,3 +11833,41 @@ data only after 2026-12; (4) re-check the kimchi premium on new data only after 
 Dropped: Korean/other national crypto premiums as a fade signal; HKD HIBOR (HKMA API reachable, but it is carry on a peg, already ruled out).
 
 Research result: 2026-11-17, 1 idea tested, 0 credible
+
+## 2026-11-18 -- daily research (scheduled routine): NY Fed primary-dealer Treasury inventory as a bond / USD_JPY signal, RULED OUT
+
+**Health check** (state-sync read 2026-11-17 22:33 UTC): heartbeat 22:33:29 UTC (app alive). Test suite 526 passed. OANDA (read-only): 1 open trade, Crypto Flow's
+LTC_USD short (8947, -0.09 LTC, opened 01:03 UTC 11-17, unrealized about -0.13) with its own stop-loss and take-profit (the 2 pending orders); nothing unexpected.
+VWAP Scalp is ON (2x target experiment ON): 23 trades since the last daily run (all 11-17; 14 wins), net +21.24 SGD. The 186 closed 2x-target trades so far average
+-0.12 per trade (se 0.08; pre-registered expectation -0.16; information only). Strategy balance 454.39 SGD (2,000 - 1,545.61).
+Crypto Flow (enabled): day 11-16 (evaluated 01:03 UTC 11-17): BTC/ETH/BCH no_signal, LTC SHORT (composite -1.06) opened; 24-hour exit about 01:03 UTC 11-18, after this
+run. No skipped or data_unavailable day. Live Crypto Flow trades so far: 4 (3 closed: 2 small wins, 1 tiny loss, net +1.00 SGD, about +0.09 of risk per trade vs the
+past-data +0.05; LTC short open). Far too few to judge. Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_primary_dealer_positions_2026_11_18.py`, pre-registered and committed c23836d89 before any outcome; K = 2, alpha 0.025). New data: NY Fed
+primary dealer statistics, PDPOSGST-TOT (dealers' net Treasury position ex-TIPS, weekly as-of Wednesday, 2013-04..2026-11; markets.newyorkfed.org/api/pd, reachable
+from the cloud), released the following Thursday 16:15 ET. Mechanism: capital-constrained dealers need a price concession to carry a large inventory, so a big
+inventory marks temporarily cheap Treasuries that should rise as it is distributed. Every week trades: z > 0 -> long USB02Y/05Y/10Y/30Y and short USD_JPY from Friday
+14:00 UTC to the next Friday (financing 2%/yr). Periods: discovery 2013-04..2017, holdout 2018-2023, fresh 2024-2026-11. Self-tests: RW -0.004 / +0.066 (se 0.046),
+peek +0.72.
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| D1 inventory LEVEL z (52w), high -> long bonds | -0.134 (1493) p 0.99 | +0.064 / +0.043 / -0.013 | -0.210 / -0.058 | -0.129 | -0.145 / -0.134 | 4.8 | RULED OUT |
+| D2 inventory weekly CHANGE z, build-up -> long bonds | -0.242 (1493) p 1.00 | +0.029 / -0.065 / -0.025 | -0.298 / -0.185 | -0.141 | -0.253 / -0.249 | 4.8 | RULED OUT |
+Monday-entry robustness (pre-registered): D1 holdout -0.066, D2 -0.209. D1 has a small before-cost push (+0.04 to +0.06 in 2013-2023, gone in 2024-26) that bond-CFD
+spread and financing swamp (USB02Y -0.44 net; even USB30Y -0.07); USD_JPY near zero. Dealer inventory carries no tradable weekly signal for OANDA's Treasury CFDs.
+No further variants (the maturity-bucket and transaction-volume series are the same mechanism).
+Data notes for the queue: RBA decision pages (rba.gov.au/monetary-policy/int-rate-decisions/YYYY/) list every meeting incl. no-change and work from the cloud; Bank of
+Canada press-release listing (interest-rate-announcement topic) is reachable; the ECB govcdec include pages mix dates (need a parser); RBNZ returns 403.
+Variants this run: 2 (both pre-registered, no post-hoc). Running total: about 253 variants in 123 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged. Crypto Flow runs as the user's own experiment.) Deadline question for the 20 Nov run unchanged.
+
+**Queue** (ranked): (1) non-Fed central-bank pre-meeting drift (RBA + BoC + ECB + BoE calendars, scraped; ~0.8 meetings a week, home currency vs 5 crosses + local
+index -> about 4-5 trades a week, borderline); (2) OANDA commodity CFD vs futures curve at roll dates (Yahoo has no expired contract months; needs another source);
+(3) re-check the Nikkei CFD vs CME gap on NEW data only after 2026-12; (4) re-check the kimchi premium on new data after 2027-03; (5) intraday data for non-crypto
+markets. Dropped: NY Fed primary-dealer positions/transactions as a Treasury signal.
+
+Research result: 2026-11-18, 1 idea tested, 0 credible
