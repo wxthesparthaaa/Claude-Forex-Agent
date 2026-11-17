@@ -28323,5 +28323,37 @@
     "vol_ratio": 0.0006175842281677166,
     "spread_to_stop": 0.07582515611054017,
     "target_multiple": 2.0
+  },
+  {
+    "trade_id": "8947",
+    "instrument": "LTC_USD",
+    "direction": "SHORT",
+    "units": -0.09,
+    "entry_price": 44.02,
+    "stop_loss": 50.7,
+    "take_profit": 23.0,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "Crypto Flow: composite buying-pressure z -1.06 (funding -2.64, taker share +0.06, Coinbase premium -0.62); 24h hold"
+    ],
+    "opened_at": "2026-11-17T01:03:40.351759+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 0.8311944374999994,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "CRYPTO_FLOW",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 44.31,
+    "entry_z": -1.0640873347373352,
+    "session_drift_z": null,
+    "vol_ratio": null,
+    "spread_to_stop": null,
+    "target_multiple": null
   }
 ]
