@@ -13612,5 +13612,11 @@
     "instrument": "AUD_JPY",
     "filter": "vol_ratio",
     "value": 0.00010233678294906472
+  },
+  {
+    "tick_time": "2026-11-17T18:33:33.433478+00:00",
+    "instrument": "USD_JPY",
+    "filter": "vol_ratio",
+    "value": 5.127018894827135e-05
   }
 ]
