@@ -13942,5 +13942,11 @@
     "instrument": "EUR_USD",
     "filter": "vol_ratio",
     "value": 0.00014803521601596215
+  },
+  {
+    "tick_time": "2026-11-18T18:07:16.606237+00:00",
+    "instrument": "NZD_JPY",
+    "filter": "vol_ratio",
+    "value": 9.042650182445337e-05
   }
 ]
