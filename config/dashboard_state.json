@@ -64,8 +64,7 @@
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 10 min ago, needs 20",
     "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 15 min ago, needs 20",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20",
-    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 5 min ago, needs 20"
+    "VWAP Scalp: VWAP Scalp's global cooldown active: last entry 20 min ago, needs 20"
   ],
   "last_scan_digest_sent_at": "2026-11-18T11:12:00.769196+00:00",
   "last_review_date": "2026-11-18",
@@ -82,10 +81,10 @@
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
   "vwap_scalp_daily_cap_enabled": true,
-  "vwap_scalp_rr_target_enabled": true,
+  "vwap_scalp_target_multiple_enabled": true,
   "vwap_scalp_global_cooldown_minutes": 20,
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-11-18T12:47:00.769451+00:00"
+  "last_process_heartbeat_at": "2026-11-18T12:47:04.337630+00:00"
 }
