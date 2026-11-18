@@ -11897,3 +11897,41 @@ trades are journaled with `target_multiple` 3.0 (the 186 trades under 2x keep 2.
 Honest note recorded at the user's request: the replay of the 372 live trades on real one-minute bid/ask (matched real outcomes 93%) did NOT favour 3x over 2x. Mean R per trade in units of the stop distance: x1 -0.121, x2 -0.071, x3 -0.089 (pooled); by window x2 -0.043 / -0.099 vs x3 -0.016 / -0.162 (earlier / recent). x3 ends 17% of trades at the target and 37% at the 30-minute cap (x2: 28% / 28%).
 Pre-registered expectation for the live check (judge at about 100 trades on 3x): mean R about -0.09 per trade, win rate about 40%; clearly better than -0.07 (the 2x replay) would be news, near -0.16 (the recent-window replay) would say 2x was the better setting.
 Verified: 526 tests pass; a dry run of `_open_position` against live prices (order call stubbed) gave (TP - entry) / (VWAP target - entry) = 3.000 for XAU_USD, EUR_USD, USD_JPY and WTICO_USD, long and short, the stop unchanged, `target_multiple` 3.0 recorded, and with the toggle OFF the take-profit equals the VWAP target. Positions already open keep the take-profit they were placed with.
+
+## 2026-11-19 -- daily research (scheduled routine): non-Fed central-bank pre-meeting drift (RBA, ECB, BoJ), RULED OUT (index leg WEAK, too rare)
+
+**Health check** (state-sync read 2026-11-18 22:32 UTC): heartbeat 22:32:06 UTC (app alive). Test suite 526 passed. OANDA (read-only): 1 open trade, Crypto Flow's
+ETH_USD short (9104, -0.01 ETH, opened 01:02 UTC 11-18) with its own stop-loss and take-profit (the 2 pending orders); nothing unexpected.
+VWAP Scalp is ON (3x target experiment ON since 11-18): 12 trades since the last daily run (1 win), net -28.71 SGD; 6 closed under the 3x rule so far (information only).
+Strategy balance 431.95 SGD (2,000 - 1,568.05).
+Crypto Flow (enabled): day 11-17 (evaluated 01:02 UTC 11-18): BTC/LTC/BCH no_signal, ETH SHORT (composite -1.09) opened. The LTC short 8947 closed at its 24-hour exit
+01:07 UTC 11-18 for -0.11 SGD. No skipped or data_unavailable day. Live Crypto Flow trades so far: 5 (4 closed: 2 small wins, 2 tiny losses, net +0.89 SGD, about +0.03
+of risk per trade vs the past-data +0.05; ETH short open). Far too few to judge. Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_cb_premeeting_drift_2026_11_19.py`, pre-registered and committed 6b04dc3e9 before any outcome; K = 3, alpha 0.0167). New data: every
+scheduled RBA, ECB and BoJ policy meeting 2009-2026 scraped from the banks' own sites (536 meetings; RBA Tuesdays only, ECB Thursdays only, two brought-forward BoJ
+meetings dropped). Mechanism: a premium for holding assets exposed to the announcement (Lucca-Moench pre-FOMC drift), pooled over three banks. Window: the 24 hours
+before a safe cut-off (RBA 02:00, ECB 11:00, BoJ 00:00 UTC on decision day), H1 bid/ask, financing 2%/yr (6.5% index longs). Periods: discovery 2009-06..2016,
+holdout 2017..2023-06, fresh 2023-07..2026-11-18. Self-tests: RW -0.024 (se 0.015), peek +0.76. 25 instruments fetched to /tmp (H1 2009-06..2026-11-18).
+| variant | holdout mean R (n) | gross disc / hold / fresh | halves | fresh | +20% / delayed | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| C1 LONG home index CFDs | +0.020 (374) p 0.63 | +0.173 / +0.065 / +0.074 | +0.001 / +0.039 | +0.033 | +0.015 / +0.030 | 1.1 | WEAK (too rare, not significant) |
+| C2 LONG home currency vs 7 | +0.101 (1211) p 0.030 | +0.014 / +0.158 / +0.040 | +0.008 / +0.194 | -0.024 | +0.092 / +0.121 | 3.6 | RULED OUT (disc -0.043, fresh negative) |
+| C3 = C1 + C2 | +0.082 (1585) p 0.040 | +0.045 / +0.136 / +0.048 | +0.008 / +0.156 | -0.010 | +0.074 / +0.099 | 4.7 | RULED OUT (disc and fresh negative) |
+C2/C3 are a holdout-only effect: negative in 2009-16 and 2023-26, positive in 2017-23 (driven by RBA 2017-23, +0.21; RBA fresh -0.05); BoJ negative in disc/holdout;
+48h window C2 holdout -0.04. C1 is positive in every period only for the ECB's five euro indices (pre-registered per-bank split: disc +0.197 n 296, holdout +0.064
+n 254, fresh +0.083 n 134; 48h window C1 holdout +0.13), consistent with the published pre-FOMC equity drift, but RBA/BoJ indices are flat to negative and the
+ECB index leg trades about 0.8 times a week (8 meetings a year): fails the frequency requirement, not a candidate. Post-hoc note only (not a finding): ECB-index
+pre-meeting long, to re-check as a slow add-on if a frequent strategy ever ships.
+Variants this run: 3 (all pre-registered, no post-hoc). Running total: about 256 variants in 124 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.149 R (n 575),
++20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002 replication failed after costs).
+(Unchanged; C3 fails the bar on fresh data, C1 on frequency.) The deadline run is the next one (2026-11-20 SGT): it asks the user whether Crypto Flow counts as the
+practice trial or whether to build M1 as one, rather than building a second strategy unasked.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (2) intraday data for non-crypto markets;
+(3) re-check the Nikkei CFD vs CME gap on NEW data after 2026-12; (4) kimchi premium re-check after 2027-03; (5) ECB-index pre-meeting long as a slow add-on
+(post-hoc, ~0.8/wk). Dropped: home-currency pre-meeting drift (RBA/ECB/BoJ); adding BoE/BoC calendars to it (the FX leg failed in two of three periods).
+
+Research result: 2026-11-19, 1 idea tested, 0 credible
