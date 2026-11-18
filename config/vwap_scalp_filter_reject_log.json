@@ -13672,5 +13672,11 @@
     "instrument": "USD_CHF",
     "filter": "spread_to_stop",
     "value": 0.3783783783781756
+  },
+  {
+    "tick_time": "2026-11-18T08:27:16.132496+00:00",
+    "instrument": "AUD_USD",
+    "filter": "spread_to_stop",
+    "value": 1.0
   }
 ]
