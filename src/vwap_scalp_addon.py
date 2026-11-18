@@ -308,14 +308,11 @@ MIN_VOL_RATIO = 0.000211        # skip a new signal if the market's recent volat
 # of the holdout, with spreads +20%, a 3-minute entry delay, without the best pair, and within FX and
 # commodities separately. Still negative overall: this narrows the loss, it does not make a profit.
 MAX_SPREAD_TO_STOP = 0.25       # skip a new signal if the spread is more than this fraction of the stop distance
-# TAKE-PROFIT AT 2:1 OF THE STOP (2026-11-18, user request; replaces the 2026-10-31 "2x the VWAP distance" experiment): the take-profit
-# sits TARGET_RR times as far from the fill as the stop does, wherever session VWAP is. The stop, the entry and every filter
-# (including the validity check against the VWAP target) are unchanged, so exactly the same trades are taken. Dashboard toggle:
-# DashboardState.vwap_scalp_rr_target_enabled (ON by default; OFF puts the target back at VWAP). A replay of the 372 live trades
-# 2026-10-14..11-17 on real one-minute bid/ask (the replay matched the real outcomes 93% of the time) gave mean R per trade, in units of the
-# stop distance: TP at VWAP -0.121, 2x the VWAP distance -0.071, TP 2:1 of the stop -0.057 (earlier window +0.007, recent window -0.120).
-# Post-hoc: a smaller loss per trade, still a loss. See DEVELOPMENT_LOG.md 2026-11-18.
-TARGET_RR = 2.0
+# EXPERIMENT (2026-10-31, user request): the take-profit sits this many times as far from the entry as the
+# session VWAP does; the stop, the entry and every filter still use the VWAP target. Dashboard toggle:
+# DashboardState.vwap_scalp_double_target_enabled. A replay of the 417 live trades since 2026-09-20 on real
+# bid/ask gave win rate 43.6% -> 39.6% and mean R -0.231 -> -0.164: post-hoc and still a loss per trade.
+TARGET_EXPERIMENT_MULTIPLE = 2.0
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -915,7 +912,7 @@ def _force_close(client, entry: dict) -> None:
 
 def _open_position(client, instrument: str, direction: str, target: float, std_at_signal: float,
                     risk_config: RiskConfig, account: AccountState, diagnostics: dict | None = None,
-                    target_rr: float | None = None) -> bool:
+                    target_multiple: float = 1.0) -> bool:
     meta_map = fetch_instrument_metadata(client, [instrument])
     meta = meta_map.get(instrument)
     if meta is None:
@@ -959,12 +956,9 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
               f"a real broker would reject this order", flush=True)
         return False
 
-    # After the validity check above, so this takes exactly the trades the VWAP target would have allowed -- see TARGET_RR. Measured from the
-    # side the order actually fills on (ask for a LONG, bid for a SHORT), the same reference the position is sized from.
-    if target_rr is not None:
-        fill_ref = ask if direction == "LONG" else bid
-        sign = 1 if direction == "LONG" else -1
-        take_profit = float(round_price(meta, fill_ref + sign * target_rr * abs(fill_ref - stop_loss)))
+    # After the validity check above, so the experiment takes exactly the
+    # trades the VWAP target would have allowed -- see TARGET_EXPERIMENT_MULTIPLE.
+    take_profit = float(round_price(meta, entry_price + (take_profit - entry_price) * target_multiple))
 
     # EXPERIMENTAL REVERSION (2026-09-16): the reward:risk floor that
     # used to gate here is removed -- see this module's top-of-file note.
@@ -1014,7 +1008,7 @@ def _open_position(client, instrument: str, direction: str, target: float, std_a
                       f"back toward session VWAP"],
         "account_currency": account_currency, "risk_amount": risk_amount,
         "experiment_tag": VWAP_SCALP_TAG, "parent_trade_id": None,
-        "spread_to_stop": spread_to_stop, "target_rr": target_rr,
+        "spread_to_stop": spread_to_stop, "target_multiple": target_multiple,
     }
     if diagnostics:
         candidate["entry_z"] = diagnostics.get("entry_z")
@@ -1231,7 +1225,7 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             try:
                 if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
                                    risk_config, account, diagnostics,
-                                   target_rr=TARGET_RR if state.vwap_scalp_rr_target_enabled else None):
+                                   target_multiple=TARGET_EXPERIMENT_MULTIPLE if state.vwap_scalp_double_target_enabled else 1.0):
                     opened.append(instrument)
                     winner = instrument
                     break

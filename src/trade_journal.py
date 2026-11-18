@@ -175,12 +175,9 @@ class JournalEntry:
     # calibrate the two against each other.
     spread_to_stop: float | None = None
     # target_multiple (2026-10-31): VWAP Scalp's take-profit distance as a
-    # multiple of the distance to VWAP (the 2026-10-31 experiment, removed 2026-11-18; was vwap_scalp_addon.TARGET_EXPERIMENT_
+    # multiple of the distance to VWAP (see vwap_scalp_addon.TARGET_EXPERIMENT_
     # MULTIPLE), so the experiment's trades can be judged on their own.
     target_multiple: float | None = None
-    # target_rr (2026-11-18): VWAP Scalp's take-profit distance as a multiple of the STOP distance (the 2:1 rule that replaced the
-    # 2x-VWAP experiment; see vwap_scalp_addon.TARGET_RR). None on every trade placed with the target at VWAP or at 2x the VWAP distance.
-    target_rr: float | None = None
 
 
 # See JournalEntry.experiment_tag's own comment. All three of these are
@@ -308,7 +305,7 @@ def record_open_trade(trade_id: str, candidate: dict, real_entry_price: float | 
             decision_entry_price=candidate["entry_price"],
             entry_z=candidate.get("entry_z"), session_drift_z=candidate.get("session_drift_z"),
             vol_ratio=candidate.get("vol_ratio"), spread_to_stop=candidate.get("spread_to_stop"),
-            target_multiple=candidate.get("target_multiple"), target_rr=candidate.get("target_rr"),
+            target_multiple=candidate.get("target_multiple"),
         )
         entries.append(asdict(entry))
         save_journal(entries)
