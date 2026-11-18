@@ -13762,5 +13762,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.00013053384399975786
+  },
+  {
+    "tick_time": "2026-11-18T11:12:22.300852+00:00",
+    "instrument": "BCO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.47058823529422583
   }
 ]
