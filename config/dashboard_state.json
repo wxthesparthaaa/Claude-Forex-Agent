@@ -54,10 +54,10 @@
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
   "vwap_scalp_daily_cap_enabled": true,
-  "vwap_scalp_double_target_enabled": true,
+  "vwap_scalp_rr_target_enabled": true,
   "vwap_scalp_global_cooldown_minutes": 20,
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-11-18T01:49:29.955158+00:00"
+  "last_process_heartbeat_at": "2026-11-18T01:51:59.550050+00:00"
 }
