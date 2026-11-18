@@ -13768,5 +13768,11 @@
     "instrument": "BCO_USD",
     "filter": "spread_to_stop",
     "value": 0.47058823529422583
+  },
+  {
+    "tick_time": "2026-11-18T11:12:24.497387+00:00",
+    "instrument": "AUD_JPY",
+    "filter": "spread_to_stop",
+    "value": 1.5000000000005076
   }
 ]
