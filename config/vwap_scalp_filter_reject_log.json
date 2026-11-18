@@ -13690,5 +13690,11 @@
     "instrument": "AUD_USD",
     "filter": "spread_to_stop",
     "value": 0.4666666666668147
+  },
+  {
+    "tick_time": "2026-11-18T09:42:07.763664+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 0.00018510204549148737
   }
 ]
