@@ -690,5 +690,15 @@
     "zp": -1.5258,
     "composite": -1.094,
     "direction": "SHORT"
+  },
+  {
+    "day": "2026-11-17",
+    "instrument": "LTC_USD",
+    "result": "no_signal",
+    "at": "2026-11-18T01:02:43.813434+00:00",
+    "zf": -0.4578,
+    "zt": 0.0521,
+    "zp": -0.5462,
+    "composite": -0.3173
   }
 ]
