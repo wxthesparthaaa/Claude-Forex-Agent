@@ -439,9 +439,9 @@
              value="{{ risk_config.risk_per_trade_pct }}" oninput="riskVal.textContent = this.value">
 
       <div class="toggle-row">
-        <span>VWAP 2x target experiment{{ ' -- ON' if vwap_scalp_double_target_enabled else ' -- OFF (target is VWAP)' }}</span>
+        <span>VWAP 3x target experiment{{ ' -- ON' if vwap_scalp_target_multiple_enabled else ' -- OFF (target is VWAP)' }}</span>
         <label class="switch">
-          <input type="checkbox" name="vwap_scalp_double_target_enabled" {{ 'checked' if vwap_scalp_double_target_enabled else '' }}>
+          <input type="checkbox" name="vwap_scalp_target_multiple_enabled" {{ 'checked' if vwap_scalp_target_multiple_enabled else '' }}>
           <span class="switch-track"></span>
         </label>
       </div>

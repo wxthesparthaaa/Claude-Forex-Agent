@@ -308,11 +308,13 @@ MIN_VOL_RATIO = 0.000211        # skip a new signal if the market's recent volat
 # of the holdout, with spreads +20%, a 3-minute entry delay, without the best pair, and within FX and
 # commodities separately. Still negative overall: this narrows the loss, it does not make a profit.
 MAX_SPREAD_TO_STOP = 0.25       # skip a new signal if the spread is more than this fraction of the stop distance
-# EXPERIMENT (2026-10-31, user request): the take-profit sits this many times as far from the entry as the
-# session VWAP does; the stop, the entry and every filter still use the VWAP target. Dashboard toggle:
-# DashboardState.vwap_scalp_double_target_enabled. A replay of the 417 live trades since 2026-09-20 on real
-# bid/ask gave win rate 43.6% -> 39.6% and mean R -0.231 -> -0.164: post-hoc and still a loss per trade.
-TARGET_EXPERIMENT_MULTIPLE = 2.0
+# EXPERIMENT (user request): the take-profit sits this many times as far from the entry as the session VWAP does; the stop, the
+# entry and every filter still use the VWAP target. 2x ran 2026-10-31..2026-11-18 (186 trades); raised to 3x on 2026-11-18 at the user's
+# request. Dashboard toggle: DashboardState.vwap_scalp_target_multiple_enabled. Replay of the 372 live trades 2026-10-14..11-17 on real
+# one-minute bid/ask (matched the real outcomes 93% of the time), mean R per trade in units of the stop distance: TP at VWAP -0.121,
+# x2 -0.071 (earlier window -0.043, recent -0.099), x3 -0.089 (earlier -0.016, recent -0.162). So 3x was NOT better than 2x in the replay;
+# it was chosen by the user. Post-hoc, still a loss per trade. See DEVELOPMENT_LOG.md 2026-11-18.
+TARGET_EXPERIMENT_MULTIPLE = 3.0
 MAX_HOLD_MINUTES = 30           # real scalp-length cap, matching the backtest's MAX_HOLD_BARS
 COOLDOWN_MINUTES = 30           # matches the backtest's own signal-spacing convention
 CONFIRMATION_MAX_WAIT_MINUTES = 10  # give up on a raw extreme if it never reverses within this window
@@ -1225,7 +1227,7 @@ def _check_vwap_scalp_opportunities_unsafe(client, vwap_scalp_enabled) -> list:
             try:
                 if _open_position(client, instrument, direction, vwap[signal_index], dev_stdev[signal_index],
                                    risk_config, account, diagnostics,
-                                   target_multiple=TARGET_EXPERIMENT_MULTIPLE if state.vwap_scalp_double_target_enabled else 1.0):
+                                   target_multiple=TARGET_EXPERIMENT_MULTIPLE if state.vwap_scalp_target_multiple_enabled else 1.0):
                     opened.append(instrument)
                     winner = instrument
                     break

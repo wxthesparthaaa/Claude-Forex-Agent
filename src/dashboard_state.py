@@ -182,10 +182,10 @@ class DashboardState:
     # the other would be incoherent) -- the cooldown check always still
     # applies regardless of this toggle.
     vwap_scalp_daily_cap_enabled: bool = True
-    # EXPERIMENT (2026-10-31, user request): take-profit twice as far from the
-    # entry -- see vwap_scalp_addon.TARGET_EXPERIMENT_MULTIPLE. ON by default
-    # because the user asked for it to run; untick to go back to the VWAP target.
-    vwap_scalp_double_target_enabled: bool = True
+    # EXPERIMENT (user request): take-profit a multiple of the VWAP distance from the entry --
+    # see vwap_scalp_addon.TARGET_EXPERIMENT_MULTIPLE (2x from 2026-10-31, 3x from 2026-11-18).
+    # ON by default because the user asked for it to run; untick to go back to the VWAP target.
+    vwap_scalp_target_multiple_enabled: bool = True
     # Global cross-instrument cooldown (2026-09-04): real data showed 5 of
     # one day's trades firing within a single scan tick, all on their own
     # separate instrument cooldowns (COOLDOWN_MINUTES, per-pair) so none
