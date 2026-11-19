@@ -14218,5 +14218,11 @@
     "instrument": "EUR_USD",
     "filter": "vol_ratio",
     "value": 0.00015621650257533552
+  },
+  {
+    "tick_time": "2026-11-19T16:08:25.743407+00:00",
+    "instrument": "BCO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.6721311475412433
   }
 ]
