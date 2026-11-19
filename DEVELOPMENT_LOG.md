@@ -11935,3 +11935,43 @@ practice trial or whether to build M1 as one, rather than building a second stra
 (post-hoc, ~0.8/wk). Dropped: home-currency pre-meeting drift (RBA/ECB/BoJ); adding BoE/BoC calendars to it (the FX leg failed in two of three periods).
 
 Research result: 2026-11-19, 1 idea tested, 0 credible
+
+## 2026-11-20 -- daily research (scheduled routine; DEADLINE RUN): Singapore dollar NEER policy-band reversion RULED OUT; M1 refreshed; deadline question sent
+
+**Health check** (state-sync read 2026-11-19 22:33 UTC): heartbeat 22:33:17 UTC (app alive). Test suite 526 passed. OANDA (read-only): no open trades, no pending
+orders; nothing unexpected. VWAP Scalp is ON (3x target experiment ON): 23 trades since the last daily run (9 wins), net -17.76 SGD (information only).
+Strategy balance 419.23 SGD (2,000 - 1,580.77). Crypto Flow (enabled): day 11-18 (evaluated 01:03 UTC 11-19) all four coins no_signal; the ETH short 9104 closed at
+its 24-hour exit 01:03 UTC 11-19 for +0.38 SGD. No skipped or data_unavailable day. Live Crypto Flow trades so far: 5 closed (3 wins), net +1.27 SGD, about +0.05 of
+risk per trade, in line with the past-data +0.05; far too few to judge. Nothing broken, nothing fixed.
+
+**Tested** (`scripts/research_sgd_neer_band_2026_11_20.py`, pre-registered and committed e9b52e4bf before any outcome; K = 2, alpha 0.025). New structure: the MAS
+policy band. S$NEER proxy from fixed weights (USD .30, CNH .22, EUR .17, JPY .08, THB .06, AUD .06, GBP .05, CHF .03, CAD .03), z of today's log NEER vs a line fitted
+to the previous 250 days; z beyond the threshold -> trade the SGD back in 8 SGD crosses, hold 3 days, real bid/ask, financing 2%/yr. Self-tests: RW -0.001
+(se 0.013), peek +0.83. (Correction to the docstring, not a result: the daily candles are UTC-midnight aligned, not 17:00 New York; median open spread = close spread.)
+| variant | holdout mean R (n) | early / halves | fresh | +20% / delayed | gross holdout | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| N1 band reversion, abs z >= 1 | -0.119 (3328) p 1.00 | -0.070 / -0.136, -0.105 | -0.151 | -0.131 / -0.102 | -0.080 | 5.4 | RULED OUT |
+| N2 band edge, abs z >= 2 | -0.052 (1184) p 0.87 | -0.070 / -0.036, -0.063 | -0.099 | -0.064 / -0.093 | -0.015 | 1.9 | RULED OUT |
+Negative before costs in every period and on all 8 crosses (N1): over 3 days an SGD deviation from its crawl does not revert (if anything it persists a little);
+MAS smoothing works on a horizon the band rule cannot capture, and the stronger edge (N2) is no better. No more SGD band variants.
+Variants this run: 2 (pre-registered). Running total: about 258 variants in 125 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+**M1 refresh (re-check of the unchanged pre-registered rule on newly elapsed data, not a new variant):** daily data to 2026-11-18. Holdout unchanged +0.028 (n 6404,
+p 0.16); fresh (2025-10..2026-11-18) now +0.088 (n 621; was +0.149, n 575): the late-October/early-November 2026 month-end lost -0.67 R per trade on 46 trades (one
+event, all correlated). +20% spread +0.023, one-day delay +0.001, 10.4 trades/week. Still meets the practice-trial bar on paper; still the weakest possible pass.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.088 R (n 621,
+refreshed to 2026-11-18), +20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002
+replication failed after costs, latest month-end -0.67 R per trade).
+**Deadline (agreed 2026-10-24) reached today.** Nothing cleared the shipping bar. Per the routine's instruction, nothing was built: the Telegram update asks the user
+whether Crypto Flow (already live, about 1.6 trades/week, below the frequency requirement) counts as the practice trial, or whether to build M1 as a practice-trial
+EXPERIMENT (dashboard toggle default OFF). The user has no reply channel to this routine; the answer has to come through a Claude session and be recorded here.
+Next runs: until an answer is recorded in this log, keep researching and build nothing; if "build M1" is recorded, build it once (module, tests, OFF toggle,
+pre-registered live trial: expected about +0.03 R per trade at about 10 trades a week, judged at about 100 live trades, early stop after 40 if more than 2 standard
+errors below that).
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (2) intraday data for non-crypto markets;
+(3) re-check the Nikkei CFD vs CME gap on NEW data after 2026-12; (4) kimchi premium re-check after 2027-03; (5) ECB-index pre-meeting long as a slow add-on
+(post-hoc, ~0.8/wk). Dropped: SGD NEER band reversion (and by extension band rules on other managed baskets with one OANDA leg, e.g. CNH).
+
+Research result: 2026-11-20, 1 idea tested, 0 credible

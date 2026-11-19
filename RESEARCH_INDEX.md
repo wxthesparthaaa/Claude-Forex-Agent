@@ -1,11 +1,11 @@
 # Research index: everything already tested (read this BEFORE proposing an idea)
 
 Compact verdict list so neither the daily cloud routine nor an interactive session repeats work. Details, numbers and scripts are in `DEVELOPMENT_LOG.md`
-(search by the family name) and `scripts/research_*`. Updated 2026-11-19. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
+(search by the family name) and `scripts/research_*`. Updated 2026-11-20. Standard verdict language: RULED OUT = failed the pre-registered bar; WEAK = positive but not
 significant / too rare; REAL-BUT-GONE = a genuine edge that no longer exists. Nothing has passed the strict shipping bar (EVIDENCE_BAR.md) or the practice-trial bar.
 
 ## Read this first: what the programme has learned
-- About 256 hand-built variants in 124 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
+- About 258 hand-built variants in 125 families plus two exhaustive scans (about 9,500 cells) found no strategy that passes. Published effects that worked before about 2016 are gone since.
 - The only strong edges were pricing-feed artefacts, and they closed: OANDA's crypto CFDs lagged Binance/Coinbase by about two hours in 2019-2022 (net +0.2 to +0.9 R per trade, 5-12 trades a week) and the lag has been zero since 2023.
 - Costs decide most things: spreads at the 22:00-00:00 UTC rollover are huge; financing dominates low-volatility instruments (bond CFDs, managed currencies); crypto alt CFDs cost about 0.37 R per 2 hours.
 - Live forward tests cannot confirm edges of 0.05-0.1 R per trade (hundreds to thousands of trades needed); they only catch disasters.
@@ -32,6 +32,7 @@ Daily run 2026-11-12: Japan MOF WEEKLY CROSS-BORDER SECURITIES FLOWS (week.csv, 
 Daily run 2026-11-13: BoJ JGB PURCHASE (RINBAN) RESULTS (BoJ monthly operation files 2013-06..2026-10, day's bid-to-cover z vs previous 40 operations; high cover -> yen stronger in 7 JPY crosses from 04:00 UTC; scripts/research_boj_rinban_cover_2026_11_13.py): to 07:00 UTC (-0.109 R, 11.6/wk), to next day (-0.132); gross about 0 in every period: RULED OUT.
 Daily run 2026-11-18: NY Fed PRIMARY DEALER Treasury inventory (PDPOSGST-TOT weekly net position 2013-, markets.newyorkfed.org/api/pd; level or weekly-change z vs 52 weeks, high inventory -> long USB02Y/05Y/10Y/30Y, short USD_JPY, Friday to Friday; scripts/research_primary_dealer_positions_2026_11_18.py): level (-0.134 R, 4.8/wk), change (-0.242); gross +0.04 at best, swamped by bond-CFD costs: RULED OUT.
 Daily run 2026-11-19: NON-FED CENTRAL-BANK PRE-MEETING DRIFT (536 scheduled RBA/ECB/BoJ meetings 2009-2026 scraped from the banks' sites; 24h before a safe cut-off; scripts/research_cb_premeeting_drift_2026_11_19.py): long home index CFDs (+0.020 R, 1.1/wk; ECB euro indices positive in all periods, +0.06..+0.20, but ~0.8/wk: WEAK, too rare), long home currency vs 7 (+0.101 holdout but discovery -0.043, fresh -0.024: RULED OUT), combined (+0.082, fresh -0.010, 4.7/wk: RULED OUT).
+Daily run 2026-11-20: SINGAPORE DOLLAR NEER POLICY-BAND REVERSION (MAS band; S$NEER proxy from 9 OANDA legs, z vs a 250-day fitted crawl; trade the SGD back in 8 SGD crosses, hold 3 days; scripts/research_sgd_neer_band_2026_11_20.py): abs z >= 1 (-0.119 R, 5.4/wk, gross -0.08), band edge abs z >= 2 (-0.052, 1.9/wk); negative before costs in every period: RULED OUT. M1 refreshed to 2026-11-18: fresh +0.088 (n 621), the 2026-10/11 month-end lost -0.67 R per trade.
 CFD roll adjustments (read-only account transactions 2026): no adjustment or dividend transaction exists because the bot never holds a CFD across a roll; question stays open (needs an OANDA-vs-futures-curve comparison).
 Reasoned out without a test (2026-10-30): GSCI roll pressure (the effect is in the calendar spread, which one CFD per commodity cannot trade); OANDA CFD roll gaps (most likely offset by a cash adjustment invisible in candles; unverified).
 
