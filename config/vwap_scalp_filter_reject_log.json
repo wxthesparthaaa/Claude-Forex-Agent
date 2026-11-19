@@ -14236,5 +14236,11 @@
     "instrument": "EUR_USD",
     "filter": "vol_ratio",
     "value": 0.00016590154709353693
+  },
+  {
+    "tick_time": "2026-11-19T16:18:28.424864+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.2919708029197527
   }
 ]
