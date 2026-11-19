@@ -14122,5 +14122,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.43478260869557156
+  },
+  {
+    "tick_time": "2026-11-19T10:03:22.362547+00:00",
+    "instrument": "GBP_USD",
+    "filter": "vol_ratio",
+    "value": 9.659636640223307e-05
   }
 ]
