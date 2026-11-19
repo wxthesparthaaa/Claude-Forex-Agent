@@ -29581,17 +29581,18 @@
     "take_profit": 3731.128,
     "confidence_pct": 89.2,
     "rationale": [
-      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L -2.76."
     ],
     "opened_at": "2026-11-19T08:08:25.940647+00:00",
     "account_currency": "SGD",
     "risk_amount": 3.239590499999999,
     "confidence_components": {},
     "confidence_components_available": {},
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-11-19T08:12:42.827353+00:00",
+    "exit_price": 3740.215,
+    "realized_pnl": -2.7557,
     "pyramided": false,
     "experiment_tag": "VWAP_SCALP",
     "parent_trade_id": null,
