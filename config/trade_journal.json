@@ -30158,5 +30158,37 @@
     "vol_ratio": 0.004565761511468709,
     "spread_to_stop": 0.14426891726179938,
     "target_multiple": 3.0
+  },
+  {
+    "trade_id": "9324",
+    "instrument": "CAD_JPY",
+    "direction": "SHORT",
+    "units": -4685,
+    "entry_price": 111.5,
+    "stop_loss": 111.583,
+    "take_profit": 111.383,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a above-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-19T18:08:27.533690+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 3.144257249999999,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 111.506,
+    "entry_z": 1.4529695397597011,
+    "session_drift_z": 7.665985154455761,
+    "vol_ratio": 0.00035090756540912026,
+    "spread_to_stop": 0.15584415584416544,
+    "target_multiple": 3.0
   }
 ]
