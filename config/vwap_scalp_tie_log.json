@@ -1,13 +1,5 @@
 [
   {
-    "tick_time": "2026-10-19T11:37:27.611073+00:00",
-    "opened": null,
-    "also_signaled": [
-      "XAG_USD",
-      "EUR_USD"
-    ]
-  },
-  {
     "tick_time": "2026-10-19T11:42:30.273962+00:00",
     "opened": "XAU_USD",
     "also_signaled": [
@@ -4121,6 +4113,16 @@
     "also_signaled": [
       "WTICO_USD",
       "BCO_USD",
+      "CHF_JPY"
+    ]
+  },
+  {
+    "tick_time": "2026-11-20T14:03:59.279487+00:00",
+    "opened": "XAU_USD",
+    "also_signaled": [
+      "WTICO_USD",
+      "AUD_JPY",
+      "EUR_JPY",
       "CHF_JPY"
     ]
   }
