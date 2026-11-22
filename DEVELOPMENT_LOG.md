@@ -11975,3 +11975,39 @@ errors below that).
 (post-hoc, ~0.8/wk). Dropped: SGD NEER band reversion (and by extension band rules on other managed baskets with one OANDA leg, e.g. CNH).
 
 Research result: 2026-11-20, 1 idea tested, 0 credible
+
+## 2026-11-23 -- daily research (scheduled routine): HK southbound Stock Connect flow and China margin net buying RULED OUT
+
+**Health check** (state-sync read 2026-11-22 22:35 UTC): heartbeat 22:33:43 UTC (app alive). Test suite 526 passed. OANDA (read-only): no open trades, no pending
+orders; nothing unexpected. VWAP Scalp is ON (3x target experiment ON): 24 trades since the last daily run, all on Friday 11-20 (7 wins), net -29.16 SGD (information only).
+Strategy balance 380.81 SGD (2,000 - 1,619.19). Crypto Flow (enabled): day 11-19 (evaluated 01:03 UTC 11-20) all four coins no_signal. Days 11-20 (Fri) and 11-21
+(Sat) have no entries, as on every earlier weekend (their evaluation time falls while OANDA is closed; the module only evaluates on weekdays' following mornings),
+so this is the module's normal schedule, not a skipped day; day 11-22 is evaluated at 01:00 UTC 11-23. No skipped or data_unavailable day. Live Crypto Flow trades
+so far: 5 closed (3 wins), net +1.27 SGD, about +0.05 of risk per trade, in line with the past-data +0.05; far too few to judge. Nothing broken, nothing fixed.
+Deadline question (sent 2026-11-20): no answer recorded in this log yet, so nothing was built; the Telegram update repeats the question briefly.
+
+**Tested** (both pre-registered and committed before any outcome; new data source: Eastmoney's public data centre, reachable from the cloud).
+1. `scripts/research_southbound_flow_2026_11_23.py` (commit 1b5d07eec; K = 2, alpha 0.025): mainland investors' daily southbound Stock Connect net buying
+   (2014-11..2026-11-20), z vs the previous 60 days, |z| >= 0.5, follow in HK33_HKD and CHINAH_HKD. Self-tests: RW +0.022 / +0.019 (se 0.017 / 0.009), peek +0.73 / +0.34.
+   Same-day correlation of the flow z with the Hang Seng change is -0.03 (no dip-buying signature).
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| S1 10:00 UTC day t -> next HK close | -0.023 (983) p 0.63 | -0.030 / -0.058 | +0.021 / -0.066 | -0.028 / -0.024 | +0.002 / +0.014 / -0.020 | 4.2 | RULED OUT |
+| S2 next HK day session 02-08 UTC | -0.037 (992) p 0.87 | -0.015 / -0.042 | +0.015 / -0.088 | -0.042 / -0.023 | +0.006 / -0.011 / -0.015 | 4.2 | RULED OUT |
+   Net/turnover version no better (-0.02 to -0.04 in every period). Gross about zero: the flow carries no next-session push.
+2. `scripts/research_china_margin_flow_2026_11_23.py` (commit 4c992e6d5; K = 1, alpha 0.05): Shanghai + Shenzhen net margin-financing buying / float market value
+   (2010-04..2026-11-19), z vs 60 days, |z| >= 0.5, follow in CN50_USD and CHINAH_HKD the next day 02:00-08:00 UTC. Self-tests: RW -0.007 (se 0.008), peek +0.33.
+   L1: holdout -0.073 (n 929, p 0.99), discovery -0.059, fresh -0.122, halves -0.042 / -0.103, +20% -0.082, delayed -0.055, 4.0 trades/week; gross -0.018 / -0.023 /
+   -0.075 (slightly the wrong way); overnight hold and CN50-only no better. RULED OUT. Post-hoc note only (not a finding): fading margin buying would be gross
+   +0.02 holdout / +0.08 fresh, below the ~0.05 R cost; not pursued.
+Variants this run: 3 (all pre-registered, no post-hoc). Running total: about 261 variants in 127 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.088 R (n 621,
+refreshed to 2026-11-18), +20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week; weakest possible pass (p 0.16, delay about zero, 1990-2002
+replication failed after costs, latest month-end -0.67 R per trade). (Unchanged; awaiting the user's answer on Crypto Flow vs building M1 as the practice trial.)
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (2) intraday data for non-crypto markets;
+(3) re-check the Nikkei CFD vs CME gap on NEW data after 2026-12; (4) kimchi premium re-check after 2027-03; (5) ECB-index pre-meeting long as a slow add-on
+(post-hoc, ~0.8/wk). Dropped: mainland China flow disclosures (southbound Stock Connect, margin financing) as next-session signals.
+
+Research result: 2026-11-23, 2 ideas tested, 0 credible
