@@ -19,6 +19,9 @@ EXPECTED TRADES PER WEEK: about 50-60% of days x 5 CFDs x 5 days -> about 12 a w
 SELF-TESTS: the real signals on random-walk prices score ~0; a peeking rule scores > +0.3 R.
 DECISION: strict bar = every bl.evaluate check; practice-trial flag = rp.practice_flag. A clear failure here (holdout or fresh <= 0)
 counts against Q1 being a general effect.
+POST-RUN CORRECTION (2026-11-24, labelled; after the result): the EWJ leg was mis-specified -- EWJ is unhedged in dollars and JP225_USD is
+a quanto (Nikkei points), so the yen should have been converted (x 1/USD_JPY). Re-run of that leg alone with the conversion: holdout -0.061
+(n 740), fresh -0.018, gross +0.015; still negative, so the family verdict (RULED OUT) is unchanged.
 Usage: python3 research_country_etf_close_2026_11_24.py H1_DIR DATA_DIR
 """
 import json

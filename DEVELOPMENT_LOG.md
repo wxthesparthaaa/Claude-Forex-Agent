@@ -12011,3 +12011,46 @@ replication failed after costs, latest month-end -0.67 R per trade). (Unchanged;
 (post-hoc, ~0.8/wk). Dropped: mainland China flow disclosures (southbound Stock Connect, margin financing) as next-session signals.
 
 Research result: 2026-11-23, 2 ideas tested, 0 credible
+
+## 2026-11-24 -- daily research (scheduled routine): ETF closing-auction premium (Bitcoin ETFs, US index ETFs, country ETFs); US-index FOLLOW WEAK, rest RULED OUT
+
+**Health check** (state-sync read 2026-11-23 22:32 UTC): heartbeat 22:32:13 UTC (app alive). Test suite 526 passed. OANDA (read-only): no open trades, no pending
+orders; nothing unexpected. VWAP Scalp is ON (3x target experiment ON): 20 trades since the last daily run (8 wins), net -12.34 SGD (information only).
+Strategy balance 368.12 SGD (2,000 - 1,631.88). Crypto Flow (enabled): day 11-22 (evaluated 01:02 UTC 11-23) all four coins no_signal; day 11-23 is evaluated at
+01:00 UTC 11-24 (after this run). No skipped or data_unavailable day. Live Crypto Flow trades so far: 5 closed (3 wins), net +1.27 SGD, about +0.05 of risk per
+trade, in line with the past-data +0.05; far too few to judge. Nothing broken, nothing fixed.
+Deadline question (sent 2026-11-20, repeated 11-23): still no answer recorded in this log, so nothing was built.
+
+**Tested** (all pre-registered and committed before any outcome; new data: Yahoo daily ETF closes compared with the underlying at exactly 16:00 New York).
+1. `scripts/research_etf_premium_2026_11_24.py` (dc9d612b0; K = 2, alpha 0.025): spot Bitcoin ETF basket (IBIT/FBTC/ARKB/BITB) close vs Coinbase BTC-USD at 16:00
+   ET, deviation from its 20-day level, z vs 60 days, |z| >= 0.5, FOLLOW on BTC/ETH/LTC/BCH CFDs, 24-bar hold. Self-tests: RW -0.010 / -0.008 (se 0.037), peek +0.75.
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| E1 next 01:00 UTC | +0.078 (324) p 0.24 | -0.053 / -0.085 | +0.057 / +0.098 | +0.060 / +0.063 | +0.055 / +0.187 / +0.095 | 4.4 | RULED OUT |
+| E2 one hour after close | -0.051 (324) p 0.70 | -0.083 / -0.123 | -0.002 / -0.100 | -0.073 / +0.049 | +0.037 / +0.081 / +0.081 | 4.4 | RULED OUT |
+   Gross positive everywhere but small; LTC/BCH costs eat it; BTC-only would be about 1 trade a week (post-hoc, not tested further).
+2. `scripts/research_index_etf_close_2026_11_24.py` (bcb8b8887; K = 2, alpha 0.025): SPY/QQQ/DIA/IWM adjusted close vs OANDA SPX500/NAS100/US30/US2000 mid at
+   16:00 ET, deviation from 5-day level, z vs 60 days, |z| >= 0.5; enter at the 18:00 ET futures reopen, exit next 16:00 ET. Self-tests: RW +0.005 (se 0.0095), peek +0.79.
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| Q1 FOLLOW | +0.013 (2871) p 0.42 | +0.003 / +0.062 | +0.004 / +0.021 | +0.010 / +0.016 | +0.053 / +0.044 / +0.091 | 8.5 | WEAK (practice flag YES) |
+| Q2 FADE | -0.068 (2871) p 0.99 | -0.092 / -0.114 | -0.068 / -0.068 | -0.071 / -0.067 | mirror | 8.5 | RULED OUT |
+   Q1 fails the strict bar on p, without-best (-0.006 without SPX500) and years positive (57%). Break attempt (diagnostic, post-hoc): long signals are 3-4x more common
+   than short ones (futures basis decay makes the ratio drift up), so part of Q1 is just being long; but conditional on the signal the next session is better after
+   "rich" closes than after "cheap" closes in every period (gross long-minus-short difference +0.07 / +0.06 / +0.20), so there is some information beyond drift.
+3. `scripts/research_country_etf_close_2026_11_24.py` (038180929; replication of Q1, K = 1): EWJ/EWG/EWU/FEZ/EWA vs JP225/DE30/UK100/EU50/AU200 in dollars.
+   C1: holdout -0.074 (n 1198), fresh -0.020, gross about 0, 3.5/wk: RULED OUT. The European CFDs are mostly shut at 16:00 ET (few signal days). Post-run correction
+   (labelled): the EWJ leg had not converted the yen; corrected it is still -0.061 holdout / -0.018 fresh. So Q1 does not generalise beyond the US indices.
+Variants this run: 5 pre-registered + 1 labelled correction. Running total: about 266 variants in 130 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: M1 month-end pension rebalancing (`scripts/research_cot_monthend_2026_10_29.py`): holdout +0.028 R (n 6404), fresh +0.088 R (n 621,
+refreshed to 2026-11-18), +20% spread +0.023, one-day delay +0.001 (two-day -0.023), 10.4 trades/week (bunched around month-ends); weakest possible pass (p 0.16).
+Runner-up (also meets the practice-trial bar on paper): Q1 US index ETF closing premium FOLLOW (`scripts/research_index_etf_close_2026_11_24.py`): holdout +0.013
+(n 2871), fresh +0.062 (n 496), +20% +0.010, delay +0.016, 8.5 trades/week spread evenly over every weekday; failed its own replication on non-US indices.
+(Still awaiting the user's answer on Crypto Flow vs building M1 as the practice trial; Q1 offered as an alternative that trades more evenly.)
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (2) Q1 re-check on fresh data after 2027-02 (no
+new variants); (3) re-check the Nikkei CFD vs CME gap on NEW data after 2026-12; (4) kimchi premium re-check after 2027-03; (5) ECB-index pre-meeting long (post-hoc,
+~0.8/wk). Dropped: ETF closing premium on crypto and on non-US indices; ETF creation/redemption flow (no free data source).
+
+Research result: 2026-11-24, 3 ideas tested, 0 credible
