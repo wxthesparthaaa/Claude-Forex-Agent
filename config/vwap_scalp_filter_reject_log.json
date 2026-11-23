@@ -14770,5 +14770,11 @@
     "instrument": "WTICO_USD",
     "filter": "spread_to_stop",
     "value": 0.4225352112676338
+  },
+  {
+    "tick_time": "2026-11-23T08:47:25.353106+00:00",
+    "instrument": "EUR_USD",
+    "filter": "spread_to_stop",
+    "value": 0.28125000000056377
   }
 ]
