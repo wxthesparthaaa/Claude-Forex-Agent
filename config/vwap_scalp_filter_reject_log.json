@@ -14812,5 +14812,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 9.044403755844612e-05
+  },
+  {
+    "tick_time": "2026-11-23T10:22:19.826885+00:00",
+    "instrument": "USD_CAD",
+    "filter": "vol_ratio",
+    "value": 0.00019989573648346987
   }
 ]
