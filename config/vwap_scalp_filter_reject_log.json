@@ -14788,5 +14788,11 @@
     "instrument": "USD_CAD",
     "filter": "vol_ratio",
     "value": 0.00020493012299602258
+  },
+  {
+    "tick_time": "2026-11-23T09:17:24.152329+00:00",
+    "instrument": "WTICO_USD",
+    "filter": "spread_to_stop",
+    "value": 0.6666666666665614
   }
 ]
