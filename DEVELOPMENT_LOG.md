@@ -12067,3 +12067,46 @@ Pre-registered trial and stop rule are in the module docstring (judge at ~450 tr
 first and NOT adopted (no better than the plain rule per trade, half the trades): the plain rule is what runs.
 
 Telegram (same day): the periodic scan digest (src/scheduled_jobs.check_scan_digest -> notification_formats.format_scan_digest_message) now has an "RSI Breakout (forward test, US indices)" section while the toggle is on: closed trades (W/L, win %), P&L, mean R (realized P&L / risk at entry), open positions, trades opened today (UTC) and progress toward the pre-registered 100-trade check, with a STOP RULE line if the mean R after 100 trades is below -0.10 or over the last 30 below -0.30 (rsi_breakout_addon.rsi_breakout_stats). Opens and module-closes send their own messages, and stop-loss fills reach Telegram through trade_monitor's existing "Trade closed" message. TIME ZONE: unlike VWAP Scalp (07:00-20:00 UTC) the RSI rule is limited to the US cash session by design, because that is the only window it was tested in (09:30-16:00 New York, weekdays, handled with daylight saving); the all-hours version on the non-US indices was clearly worse (net -0.22 R). 546 tests pass.
+
+## 2026-11-25 -- daily research (scheduled routine): US index momentum spillover (yen crosses, non-US indices), US overnight session and non-US indices in US hours, all RULED OUT
+
+**Health check** (state-sync read 2026-11-24 22:35 UTC): heartbeat 22:33:46 UTC (app alive). Test suite 546 passed. OANDA (read-only): no open trades, no pending
+orders; nothing unexpected. VWAP Scalp is ON (3x target experiment ON): 15 trades on 11-24 (5 wins), net -11.27 SGD (information only). Strategy balance 356.33 SGD
+(2,000 - 1,643.67). Crypto Flow (enabled): day 11-23 (evaluated 01:02 UTC 11-24) all four coins no_signal; day 11-24 is evaluated at 01:00 UTC 11-25 (after this run).
+No skipped or data_unavailable day. Live Crypto Flow trades so far: 5 closed (3 wins), net +1.27 SGD, about +0.05 of risk per trade, in line with the past-data +0.05.
+RSI Breakout (US indices) forward test: built and pushed in an interactive session on 2026-11-24 (src/rsi_breakout_addon.py, 9edde72), toggle rsi_breakout_enabled is
+OFF in the live state, no rsi_breakout_log yet, no trades. Nothing broken, nothing fixed.
+Deadline rule: a practice-trial strategy now exists in src/ (RSI Breakout, user-requested), so per the routine nothing else is built; M1 is not built.
+
+**Tested** (all pre-registered and committed before any outcome; new data: M15 bid/ask 2016-01..2026-11-24 for 10 instruments, fetched in about a minute with
+scripts/research_spillover_fetch_2026_11_25.py).
+1. `scripts/research_index_momentum_spillover_2026_11_25.py` (92cdacb8f; K = 3, alpha 0.0167). S = SPX500 cash-session RSI(14) 70/30 cross traded in OTHER markets
+   (exit on SPX RSI back through 50 / 15:45 New York bar close / 1.5 ATR stop); N = own RSI breakout on the three US indices in the overnight session 18:30-09:15 NY.
+   Self-tests (random walk with bars built from a 120-step sub-path): S-FX +0.001 (se 0.015), S-IDX +0.005 (se 0.013), N-IDX +0.017 (se 0.018); peek +0.41 / +0.50 / +0.47.
+   (Labelled fix, not a result: the first self-test generator added random wicks beyond a bar-level walk and read -0.09; a 15-step sub-path read +0.06 from stop-fill
+   overshoot; 120 steps reads about 0. The real-data simulation was unchanged.)
+| cell | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| S-FX USD_JPY/AUD_JPY/EUR_JPY | -0.095 (2938) p 1.00 | -0.186 / -0.048 | -0.067 / -0.124 | -0.116 / -0.128 | -0.045 / +0.026 / +0.116 | 11.6 | RULED OUT |
+| S-IDX JP225/DE30/UK100/EU50 | -0.035 (3799) p 0.82 | -0.167 / +0.068 | +0.008 / -0.081 | -0.059 / -0.030 | +0.040 / +0.078 / +0.150 | 15.1 | RULED OUT |
+| N-IDX US overnight | -0.039 (3637) p 0.81 | -0.174 / -0.049 | -0.010 / -0.069 | -0.055 / -0.059 | +0.027 / +0.038 / +0.022 | 14.7 | RULED OUT |
+   Per target holdout net / gross: AUD_JPY -0.101 / +0.049, EUR_JPY -0.082 / +0.025, USD_JPY -0.101 / +0.005; JP225 +0.034 / +0.159, DE30 -0.016 / +0.050,
+   UK100 -0.046 / +0.056, EU50 -0.112 / +0.046; SPX500 overnight -0.021 / +0.085, NAS100 -0.018 / +0.045, US30 -0.080 / -0.018. JP225 alone is post-hoc, not pursued.
+2. `scripts/research_nonus_index_us_hours_2026_11_25.py` (K = 1; chosen after seeing item 1, disclosed as post-hoc-motivated): own RSI breakout on JP225/DE30/UK100/EU50
+   during the US cash session. Self-test RW -0.004 (se 0.018), peek +0.47. Holdout -0.060 (n 2345, p 0.94), discovery -0.201, fresh +0.077, halves -0.010 / -0.114,
+   +20% -0.085, delayed -0.034, gross -0.003 / +0.053 / +0.168, 9.0 trades/week: RULED OUT.
+Lesson: the US-index momentum gross edge leaks weakly into linked markets and other hours (gross +0.03 to +0.08 in the holdout) but is smaller than their costs; it is
+strongest where the forward test already trades (US indices, US cash session). Fresh 2025-10.. gross was positive in every cell (a momentum-friendly year).
+Variants this run: 4 (all pre-registered; 1 post-hoc-motivated, disclosed). Running total: about 270 routine variants in 133 families (plus ~9,500 scan cells and the
+2026-11-24 interactive RSI tests); 0 pass the strict bar in the routine's own tests.
+
+Best practice-trial candidate so far: RSI Breakout on the US indices (INDEX-M5, scripts/research_rsi_breakout_2026_11_24.py, from the 2026-11-24 interactive session):
+holdout net +0.131 R (2021-2025.09, p 0.0005), fresh +0.097, +20% spread +0.124, one-bar delay +0.113, about 22 trades/week; caveats: 2016-2020 net -0.045, dozens of
+surrounding tests. It is ALREADY BUILT as the forward test (src/rsi_breakout_addon.py, toggle OFF), so the deadline build is done; the user decides when to switch it on.
+Previous leader M1 month-end rebalancing (holdout +0.028, fresh +0.088, 10.4/wk) and Q1 US index ETF closing premium (+0.013 / +0.062, 8.5/wk) are runners-up.
+
+**Queue** (ranked): (1) OANDA commodity CFD vs futures curve at roll dates (needs a contract-month price source); (2) report the RSI Breakout forward test each run once
+it is switched on (fills vs signal close, mean R vs +0.05..+0.13); (3) Q1 re-check on fresh data after 2027-02; (4) Nikkei CFD vs CME gap on NEW data after 2026-12;
+(5) kimchi premium re-check after 2027-03. Dropped: spillover of US index momentum to yen crosses / non-US indices, the US overnight session, non-US indices in US hours.
+
+Research result: 2026-11-25, 3 ideas tested, 0 credible
