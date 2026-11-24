@@ -422,5 +422,37 @@
     "vol_ratio": 0.00024385483226098571,
     "spread_to_stop": 0.09734513274332499,
     "target_multiple": 3.0
+  },
+  {
+    "trade_id": "9729",
+    "instrument": "AUD_JPY",
+    "direction": "LONG",
+    "units": 3374,
+    "entry_price": 105.53,
+    "stop_loss": 105.431,
+    "take_profit": 105.648,
+    "confidence_pct": 89.2,
+    "rationale": [
+      "VWAP Scalp: faded a below-VWAP extension back toward session VWAP"
+    ],
+    "opened_at": "2026-11-24T16:43:58.015068+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 2.7609022499999987,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "VWAP_SCALP",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 105.522,
+    "entry_z": -1.6894289236906885,
+    "session_drift_z": 3.538461993836458,
+    "vol_ratio": 0.00042060839999759694,
+    "spread_to_stop": 0.21978021978015627,
+    "target_multiple": 3.0
   }
 ]
