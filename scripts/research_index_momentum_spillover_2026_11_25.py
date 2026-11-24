@@ -240,10 +240,13 @@ def selftest(D):
             x = D[tg]
             sd = np.nanstd(np.diff(np.log(x["mid"]["c"])))
             n = len(x["t"])
-            path = x["mid"]["c"][0] * np.exp(np.cumsum(rng.normal(0, sd, n)))
-            wig = np.abs(rng.normal(0, sd, (n, 2))) * path[:, None]
-            o = np.concatenate([[path[0]], path[:-1]])
-            h, lo = np.maximum(o, path) + wig[:, 0], np.minimum(o, path) - wig[:, 1]
+            # (post-run fix 2026-11-25, labelled: the first version added random wicks beyond a bar-level walk, which a martingale never trades,
+            # so stops fired on prices the path never reached and the self-test read about -0.09; bars are now built from a 15-step sub-path)
+            sub = int(os.environ.get("RW_SUB", "120"))
+            fine = x["mid"]["c"][0] * np.exp(np.cumsum(rng.normal(0, sd / math.sqrt(sub), n * sub))).reshape(n, sub)
+            path = fine[:, -1]
+            o = np.concatenate([[x["mid"]["c"][0]], path[:-1]])
+            h, lo = np.maximum(fine.max(axis=1), o), np.minimum(fine.min(axis=1), o)
             y = {"t": x["t"], "vol": x["vol"]}
             for k, v in (("o", o), ("h", h), ("l", lo), ("c", path)):
                 hs = (x["ask_" + k] - x["bid_" + k]) / 2
