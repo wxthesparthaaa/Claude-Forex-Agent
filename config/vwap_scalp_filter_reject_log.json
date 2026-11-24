@@ -14992,5 +14992,11 @@
     "instrument": "USD_CAD",
     "filter": "spread_to_stop",
     "value": 0.40625000000004335
+  },
+  {
+    "tick_time": "2026-11-24T09:11:58.335431+00:00",
+    "instrument": "AUD_JPY",
+    "filter": "spread_to_stop",
+    "value": 0.45454545454524903
   }
 ]
