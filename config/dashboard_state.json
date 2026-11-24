@@ -75,6 +75,7 @@
   "last_friday_preclose_cancel_at": "2026-11-20T17:00:00-05:00",
   "vwap_scalp_enabled": true,
   "crypto_flow_enabled": true,
+  "rsi_breakout_enabled": false,
   "vwap_scalp_max_trades_per_day": 50,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
@@ -84,5 +85,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-11-24T15:36:44.046358+00:00"
+  "last_process_heartbeat_at": "2026-11-24T15:38:00.797987+00:00"
 }
