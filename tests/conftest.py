@@ -45,7 +45,8 @@ def _block_real_telegram_sends():
          patch("trade_monitor.send_message"), \
          patch("dashboard_state.send_message"), \
          patch("vwap_scalp_addon.send_message"), \
-         patch("crypto_flow_addon.send_message"):
+         patch("crypto_flow_addon.send_message"), \
+         patch("rsi_breakout_addon.send_message"):
         yield
 
 

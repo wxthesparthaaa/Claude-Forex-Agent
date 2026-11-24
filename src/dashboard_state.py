@@ -161,6 +161,9 @@ class DashboardState:
     # Crypto Flow (2026-10-25): a small-size EXPERIMENT on BTC/ETH/LTC/BCH CFDs driven by public crypto-market buying-pressure
     # gauges. Off by default; see src/crypto_flow_addon.py for the pre-registered trial and why it is only an experiment.
     crypto_flow_enabled: bool = False
+    # RSI Breakout (2026-11-24): a small-size FORWARD TEST of the one rule that survived the day's research (RSI(14) momentum breakout on SPX500/NAS100/US30
+    # 5-minute bars). Off by default; see src/rsi_breakout_addon.py for the pre-registered trial and the stop rule.
+    rsi_breakout_enabled: bool = False
     # VWAP Scalp's OWN daily trade cap (2026-09-03) -- separate from and
     # tighter than the shared account-wide max_trades_per_day (real
     # incident: VWAP Scalp alone burned 18 of the account's 30-trade

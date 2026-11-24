@@ -29,7 +29,7 @@ def format_market_open_message(close_sgt) -> str:
 
 def format_scan_digest_message(scan_count: int, instruments: list, window_start_sgt=None,
                                 open_trades: list | None = None, risk_skips: list | None = None,
-                                vwap_buckets: list | None = None) -> str:
+                                vwap_buckets: list | None = None, rsi_stats: dict | None = None) -> str:
     """The interval scanner is deliberately silent otherwise -- only an
     actual executed trade notifies -- so this periodic digest is the only
     proof-of-life during a stretch where nothing qualified. window_start_sgt:
@@ -155,6 +155,21 @@ def format_scan_digest_message(scan_count: int, instruments: list, window_start_
             for b in vwap_buckets
         ]
         base += "\n\n📊 <b>VWAP Scalp trades today by session (SGT)</b>\n" + "\n".join(lines)
+
+    if rsi_stats:
+        # RSI Breakout forward test (2026-11-24): running stats so the experiment can be followed on Telegram without opening the dashboard.
+        n = rsi_stats["closed"]
+        decided = rsi_stats["wins"] + rsi_stats["losses"]
+        win = f", {100 * rsi_stats['wins'] / decided:.0f}% win" if decided else ""
+        mean_r = f", mean {rsi_stats['mean_r']:+.2f} R" if rsi_stats.get("mean_r") is not None else ""
+        lines = [
+            f"  Closed: {n} ({rsi_stats['wins']}W/{rsi_stats['losses']}L{win}), P&L {rsi_stats['pnl']:+.2f} {rsi_stats.get('currency', '')}{mean_r}",
+            f"  Open now: {rsi_stats['open']}, opened today (UTC): {rsi_stats['opened_today']}",
+            f"  Trial: {min(n, 100)}/100 trades to the first check (stop if mean R is below -0.10); judged at about 450",
+        ]
+        if rsi_stats.get("stop_rule"):
+            lines.append(f"  ⛔ {rsi_stats['stop_rule']}: switch it off and review")
+        base += "\n\n🧪 <b>RSI Breakout (forward test, US indices)</b>\n" + "\n".join(lines)
 
     return base
 

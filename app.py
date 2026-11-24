@@ -53,6 +53,7 @@ from trade_monitor import check_open_trades, live_trades_view, cancel_all_open_t
 from autopilot import PhaseState
 from journal_export import build_journal_workbook
 from crypto_flow_addon import check_crypto_flow, CRYPTO_FLOW_TAG
+from rsi_breakout_addon import check_rsi_breakout, RSI_BREAKOUT_TAG
 from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
                               VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
 
@@ -520,6 +521,7 @@ def _win_rate_breakdown(journal: list) -> list:
         ("Base Strategy", [e for e in journal if e.get("experiment_tag") is None]),
         ("VWAP Scalp", [e for e in journal if e.get("experiment_tag") == VWAP_SCALP_TAG]),
         ("Crypto Flow", [e for e in journal if e.get("experiment_tag") == CRYPTO_FLOW_TAG]),
+        ("RSI Breakout", [e for e in journal if e.get("experiment_tag") == RSI_BREAKOUT_TAG]),
     ]
     breakdown = []
     for label, subset in groups:
@@ -668,6 +670,7 @@ def dashboard():
         friday_preclose_cancel_enabled=state.friday_preclose_cancel_enabled,
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         crypto_flow_enabled=state.crypto_flow_enabled,
+        rsi_breakout_enabled=state.rsi_breakout_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_target_multiple_enabled=state.vwap_scalp_target_multiple_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -911,6 +914,8 @@ def settings():
         state.vwap_scalp_enabled = request.form.get("vwap_scalp_enabled") == "on"
         # Crypto Flow: an off-by-default small-size EXPERIMENT -- see src/crypto_flow_addon.py.
         state.crypto_flow_enabled = request.form.get("crypto_flow_enabled") == "on"
+        # RSI Breakout: an off-by-default small-size FORWARD TEST on the US indices -- see src/rsi_breakout_addon.py.
+        state.rsi_breakout_enabled = request.form.get("rsi_breakout_enabled") == "on"
         # 2026-09-17: toggle to disable the daily+bucket caps entirely,
         # rather than raising the number -- see DashboardState.vwap_
         # scalp_daily_cap_enabled's own comment. The slider below still
@@ -1058,6 +1063,9 @@ def start_scheduler():
     # Crypto Flow (off by default): the same 5-minute cadence; it only does work inside its 01:00-04:00 UTC daily entry window
     # (one evaluation per day) and to close a position held 24 hours, and returns immediately otherwise.
     scheduler.add_job(check_crypto_flow, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # RSI Breakout (off by default): the same 5-minute cadence; each tick closes positions whose RSI crossed back through 50 (or at 15:55 New York) and
+    # looks for a fresh RSI cross on the latest completed 5-minute bar of SPX500/NAS100/US30, returning immediately when the toggle is off.
+    scheduler.add_job(check_rsi_breakout, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     scheduler.start()
     return scheduler
 

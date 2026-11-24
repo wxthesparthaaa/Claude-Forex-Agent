@@ -235,10 +235,18 @@ def check_scan_digest(now: datetime = None, client: OandaClient = None) -> None:
                 vwap_buckets = vwap_scalp_bucket_summary(now_utc)
         except Exception as e:
             print(f"WARNING: could not compute VWAP Scalp bucket summary for the scan digest: {e}", flush=True)
+        # RSI Breakout forward-test stats (only while its toggle is on), best-effort like the VWAP section above.
+        rsi_stats = None
+        try:
+            if load_state().rsi_breakout_enabled:
+                from rsi_breakout_addon import rsi_breakout_stats
+                rsi_stats = rsi_breakout_stats(now=now_utc)
+        except Exception as e:
+            print(f"WARNING: could not compute RSI Breakout stats for the scan digest: {e}", flush=True)
         scan_count, instruments, window_start_sgt, risk_skips = send_args
         send_message(format_scan_digest_message(scan_count, instruments, window_start_sgt,
                                                   open_trades=open_trades, risk_skips=risk_skips,
-                                                  vwap_buckets=vwap_buckets))
+                                                  vwap_buckets=vwap_buckets, rsi_stats=rsi_stats))
 
 
 def run_nightly_review(client: OandaClient = None) -> list:

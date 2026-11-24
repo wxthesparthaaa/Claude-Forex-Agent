@@ -74,19 +74,31 @@ def test_crypto_flow_group_only_sees_its_own_tagged_entries():
     assert by_label["VWAP Scalp"]["wins"] == 1
 
 
+def test_rsi_breakout_group_only_sees_its_own_tagged_entries():
+    journal = [
+        _entry(experiment_tag="RSI_BREAKOUT", realized_pnl=2.0),
+        _entry(experiment_tag="RSI_BREAKOUT", realized_pnl=-1.0),
+        _entry(experiment_tag="RSI_BREAKOUT", realized_pnl=-1.5),
+        _entry(experiment_tag="VWAP_SCALP", realized_pnl=10.0),
+    ]
+    by_label = {g["label"]: g for g in flask_app._win_rate_breakdown(journal)}
+    assert by_label["RSI Breakout"]["wins"] == 1 and by_label["RSI Breakout"]["losses"] == 2
+    assert by_label["VWAP Scalp"]["wins"] == 1
+
+
 def test_retired_experiment_tags_get_no_dedicated_group():
     journal = [_entry(experiment_tag="CARRY_TRADE", realized_pnl=10.0)]
     breakdown = flask_app._win_rate_breakdown(journal)
     labels = [g["label"] for g in breakdown]
-    assert labels == ["Overall", "Base Strategy", "VWAP Scalp", "Crypto Flow"]
-    for label in ("Base Strategy", "VWAP Scalp", "Crypto Flow"):
+    assert labels == ["Overall", "Base Strategy", "VWAP Scalp", "Crypto Flow", "RSI Breakout"]
+    for label in ("Base Strategy", "VWAP Scalp", "Crypto Flow", "RSI Breakout"):
         group = next(g for g in breakdown if g["label"] == label)
         assert group["closed_trades"] == 0
 
 
-def test_empty_journal_returns_four_zeroed_groups():
+def test_empty_journal_returns_five_zeroed_groups():
     breakdown = flask_app._win_rate_breakdown([])
-    assert len(breakdown) == 4
+    assert len(breakdown) == 5
     for group in breakdown:
         assert group["wins"] == 0
         assert group["losses"] == 0

@@ -12054,3 +12054,16 @@ new variants); (3) re-check the Nikkei CFD vs CME gap on NEW data after 2026-12;
 ~0.8/wk). Dropped: ETF closing premium on crypto and on non-US indices; ETF creation/redemption flow (no free data source).
 
 Research result: 2026-11-24, 3 ideas tested, 0 credible
+
+## 2026-11-24 -- RSI Breakout (US indices): a small-size forward test, OFF by default
+
+What: new src/rsi_breakout_addon.py (+ tests/test_rsi_breakout_addon.py, 17 tests), wired exactly like Crypto Flow: DashboardState.rsi_breakout_enabled (False), a Settings toggle
+(templates/dashboard.html, app.py), a 5-minute scheduler job (check_rsi_breakout), a win-rate group "RSI Breakout", config/rsi_breakout_log.json in state_paths, and a send_message patch in
+tests/conftest.py. 543 tests pass (526 before). NOTHING IS COMMITTED OR PUSHED, so nothing is deployed and the toggle cannot be turned on until it is.
+Rule (research: scripts/research_rsi_breakout_2026_11_24.py and follow-ups; RESEARCH_INDEX.md): on 5-minute bars of SPX500_USD / NAS100_USD / US30_USD, enter the next bar after RSI(14) of the
+mid close crosses above 70 (long) or below 30 (short) inside 09:30-15:50 New York; stop 1.5 x ATR14 (take-profit 10 ATR only because the app requires one); exit when RSI crosses back through 50 or at
+15:55 New York; 25% of normal risk per trade, one position per index. Parity check: on 6 days of real bars the module's signals equal the research-style signals 18 of 18.
+Pre-registered trial and stop rule are in the module docstring (judge at ~450 trades; stop early if the mean R after 100 trades is below -0.10). Combined 3-bar confirmation + 2 ATR stop was tested
+first and NOT adopted (no better than the plain rule per trade, half the trades): the plain rule is what runs.
+
+Telegram (same day): the periodic scan digest (src/scheduled_jobs.check_scan_digest -> notification_formats.format_scan_digest_message) now has an "RSI Breakout (forward test, US indices)" section while the toggle is on: closed trades (W/L, win %), P&L, mean R (realized P&L / risk at entry), open positions, trades opened today (UTC) and progress toward the pre-registered 100-trade check, with a STOP RULE line if the mean R after 100 trades is below -0.10 or over the last 30 below -0.30 (rsi_breakout_addon.rsi_breakout_stats). Opens and module-closes send their own messages, and stop-loss fills reach Telegram through trade_monitor's existing "Trade closed" message. TIME ZONE: unlike VWAP Scalp (07:00-20:00 UTC) the RSI rule is limited to the US cash session by design, because that is the only window it was tested in (09:30-16:00 New York, weekdays, handled with daylight saving); the all-hours version on the non-US indices was clearly worse (net -0.22 R). 546 tests pass.
