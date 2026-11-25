@@ -34,5 +34,14 @@
     "direction": "LONG",
     "rsi": 72.0,
     "atr": 126.1143
+  },
+  {
+    "instrument": "SPX500_USD",
+    "bar": "2026-11-25T17:15",
+    "result": "opened",
+    "at": "2026-11-25T17:20:18.697290+00:00",
+    "direction": "LONG",
+    "rsi": 72.92,
+    "atr": 22.0643
   }
 ]
