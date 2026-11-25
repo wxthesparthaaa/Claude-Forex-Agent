@@ -565,17 +565,18 @@
     "take_profit": 48468.9,
     "confidence_pct": 0.0,
     "rationale": [
-      "RSI Breakout (forward test): RSI(14) crossed below 30 on the 2026-11-25T14:30 UTC 5-minute bar (RSI 25.9); stop 1.5 x ATR14 (69.75); exits when RSI crosses back through 50 or at 15:55 New York"
+      "RSI Breakout (forward test): RSI(14) crossed below 30 on the 2026-11-25T14:30 UTC 5-minute bar (RSI 25.9); stop 1.5 x ATR14 (69.75); exits when RSI crosses back through 50 or at 15:55 New York",
+      "Closed on OANDA -- its own stop-loss or take-profit fired (not closed by any feature module). P&L -1.45."
     ],
     "opened_at": "2026-11-25T14:35:28.169962+00:00",
     "account_currency": "SGD",
     "risk_amount": 1.35129079,
     "confidence_components": {},
     "confidence_components_available": {},
-    "status": "OPEN",
-    "closed_at": null,
-    "exit_price": null,
-    "realized_pnl": null,
+    "status": "FAILED",
+    "closed_at": "2026-11-25T14:57:57.759679+00:00",
+    "exit_price": 49272.9,
+    "realized_pnl": -1.4548,
     "pyramided": false,
     "experiment_tag": "RSI_BREAKOUT",
     "parent_trade_id": null,
