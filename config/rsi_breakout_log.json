@@ -25,5 +25,14 @@
     "direction": "SHORT",
     "rsi": 25.88,
     "atr": 69.75
+  },
+  {
+    "instrument": "US30_USD",
+    "bar": "2026-11-25T17:05",
+    "result": "opened",
+    "at": "2026-11-25T17:10:18.629115+00:00",
+    "direction": "LONG",
+    "rsi": 72.0,
+    "atr": 126.1143
   }
 ]
