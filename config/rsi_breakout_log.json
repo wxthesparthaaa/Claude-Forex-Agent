@@ -7,5 +7,14 @@
     "direction": "SHORT",
     "rsi": 23.72,
     "atr": 12.05
+  },
+  {
+    "instrument": "NAS100_USD",
+    "bar": "2026-11-25T14:30",
+    "result": "opened",
+    "at": "2026-11-25T14:35:24.984425+00:00",
+    "direction": "SHORT",
+    "rsi": 24.3,
+    "atr": 68.1571
   }
 ]
