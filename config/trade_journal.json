@@ -552,5 +552,37 @@
     "vol_ratio": null,
     "spread_to_stop": null,
     "target_multiple": null
+  },
+  {
+    "trade_id": "9749",
+    "instrument": "US30_USD",
+    "direction": "SHORT",
+    "units": -0.01,
+    "entry_price": 49161.4,
+    "stop_loss": 49271.0,
+    "take_profit": 48468.9,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "RSI Breakout (forward test): RSI(14) crossed below 30 on the 2026-11-25T14:30 UTC 5-minute bar (RSI 25.9); stop 1.5 x ATR14 (69.75); exits when RSI crosses back through 50 or at 15:55 New York"
+    ],
+    "opened_at": "2026-11-25T14:35:28.169962+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 1.35129079,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "RSI_BREAKOUT",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 49166.4,
+    "entry_z": 25.88301259619992,
+    "session_drift_z": null,
+    "vol_ratio": null,
+    "spread_to_stop": null,
+    "target_multiple": null
   }
 ]
