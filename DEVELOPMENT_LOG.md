@@ -12110,3 +12110,46 @@ it is switched on (fills vs signal close, mean R vs +0.05..+0.13); (3) Q1 re-che
 (5) kimchi premium re-check after 2027-03. Dropped: spillover of US index momentum to yen crosses / non-US indices, the US overnight session, non-US indices in US hours.
 
 Research result: 2026-11-25, 3 ideas tested, 0 credible
+
+## 2026-11-26 -- daily research (scheduled routine): RSI Breakout holiday-session fix; energy settlement window and intraday VIX divergence RULED OUT
+
+**Health check** (state-sync read 2026-11-25 22:35 UTC): heartbeat 22:35:11 UTC (app alive). OANDA (read-only): no open trades; nothing unexpected.
+The user changed the dashboard at about 23:30 UTC 2026-11-24: VWAP Scalp OFF (no VWAP trades since the last run), Crypto Flow OFF, RSI Breakout ON. Crypto Flow:
+last evaluated day 11-23 (all no_signal); no entry for day 11-24 because the experiment is switched off (expected, not a bug). Its live record stays 5 closed (3 wins),
+net +1.27 SGD, about +0.05 per trade vs the past-data +0.05. RSI Breakout forward test, first day 2026-11-25: 7 trades (3 shorts at the open stopped out, 4 longs in the
+afternoon, 3 of them winners exited on RSI back through 50), 3 wins, net +1.97 SGD, mean -0.01 of risk per trade (expectation +0.05..+0.13; 7 trades says nothing yet).
+Fills vs the signal bar close: 1.5-7 index points, normal. Strategy balance 353.61 SGD (2,000 - 1,646.39); sizes 0.01-0.02 units still trade.
+**Bug fixed (src/rsi_breakout_addon.py, commit 0677f4ad6):** the module ended every weekday session at 15:55 New York, but on US market holidays and early-close days the
+CME equity futures that the index CFDs follow halt at 13:00-13:15 New York. A position opened on Thanksgiving (26 Nov) or the day after (27 Nov) would have been held
+through the halt and, on 27 Nov, through the whole weekend, whereas the research ended such days at the last bar before the halt. Now NYSE holidays (rule-based, incl.
+Good Friday and observed dates) and the 13:00 early closes (day after Thanksgiving, 3 Jul and 24 Dec Mon-Thu) stop new signals after the 12:40 bar and close at 12:55.
+1 new test; 547 tests pass.
+
+**Tested** (both pre-registered and committed before any outcome).
+1. `scripts/research_settlement_window_2026_11_26.py` (eb1eaabec; K = 3, alpha 0.0167): the 30-minute move into the daily futures settlement (WTI and natural gas
+   14:00-14:30 NY, Brent 19:00-19:30 London), 60-day z, |z| >= 0.5, M15 bid/ask 2016-2026. Self-tests: RW +0.015 / +0.007 / +0.010 (se 0.014), peek +0.35.
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| F1 fade, settlement -> +1h | -0.160 (1904) p 1.00 | -0.267 / -0.158 | -0.140 / -0.180 | -0.191 / -0.196 | -0.012 / -0.002 / +0.021 | 8.1 | RULED OUT |
+| F2 follow, +1h | -0.155 (1904) | -0.243 / -0.200 | -0.119 / -0.192 | -0.187 / -0.172 | mirror | 8.1 | RULED OUT |
+| F3 fade, to 16:45 NY | -0.125 (1906) | -0.251 / -0.117 | -0.111 / -0.140 | -0.151 / -0.140 | -0.027 / +0.005 / +0.033 | 8.1 | RULED OUT |
+   No price pressure around settlement worth trading: gross about zero; natural gas alone costs 0.25-0.47 R a trade.
+2. `scripts/research_vix_divergence_2026_11_26.py` (43590a316; K = 3, alpha 0.0167; new data: Yahoo hourly ^VIX, 2024-02..2026-11): residual of each hour's VIX change
+   on the SPX500 move (rolling 500-hour fit), |z| >= 1, trade SPX500/NAS100/US30 from the end of the hour. Self-tests: RW -0.018 / -0.020 / -0.008 (se 0.021-0.030), peek +1.04.
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| V1 follow, 1h | +0.058 (1119) p 0.22 | +0.155 / -0.080 | +0.144 / -0.028 | +0.053 / +0.087 | +0.189 / +0.087 / -0.053 | 17.3 | RULED OUT (decaying) |
+| V2 fade, 1h | -0.115 (1119) | -0.224 / +0.025 | -0.203 / -0.027 | -0.121 / -0.152 | mirror | 17.3 | RULED OUT |
+| V3 follow, to 16:00 ET | -0.092 (615) | +0.208 / -0.094 | -0.068 / -0.116 | -0.095 / -0.051 | +0.228 / -0.076 / -0.079 | 9.5 | RULED OUT |
+   V1 was strong in 2024 and has faded steadily (negative since about 2025-09); only 2.8 years of hourly VIX exist on Yahoo, so this is at most a re-check after 2027-06.
+Variants this run: 6 (all pre-registered, no post-hoc). Running total: about 276 routine variants in 135 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: RSI Breakout on the US indices (INDEX-M5, scripts/research_rsi_breakout_2026_11_24.py): holdout net +0.131 R (2021-2025.09, p 0.0005),
+fresh +0.097, +20% spread +0.124, one-bar delay +0.113, about 22 trades/week; caveats: 2016-2020 net -0.045, dozens of surrounding tests. ALREADY BUILT and now ON
+(src/rsi_breakout_addon.py; first live day 7 trades, net +1.97 SGD). Runners-up: M1 month-end rebalancing (+0.028 / +0.088, 10.4/wk), Q1 ETF closing premium (+0.013 / +0.062, 8.5/wk).
+
+**Queue** (ranked): (1) report the RSI Breakout forward test each run (fills vs signal close, mean R vs +0.05..+0.13, the 100-trade check); (2) OANDA commodity CFD vs futures
+curve at roll dates (needs a contract-month price source); (3) Q1 re-check on fresh data after 2027-02; (4) Nikkei CFD vs CME gap on NEW data after 2026-12; (5) kimchi premium
+re-check after 2027-03; (6) intraday VIX divergence re-check after 2027-06. Dropped: settlement-window pressure in energy (and by extension metals' COMEX settlement).
+
+Research result: 2026-11-26, 2 ideas tested, 0 credible
