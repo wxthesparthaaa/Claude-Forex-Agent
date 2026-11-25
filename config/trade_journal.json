@@ -651,5 +651,37 @@
     "vol_ratio": null,
     "spread_to_stop": null,
     "target_multiple": null
+  },
+  {
+    "trade_id": "9768",
+    "instrument": "NAS100_USD",
+    "direction": "LONG",
+    "units": 0.01,
+    "entry_price": 25607.4,
+    "stop_loss": 25447.8,
+    "take_profit": 26635.3,
+    "confidence_pct": 0.0,
+    "rationale": [
+      "RSI Breakout (forward test): RSI(14) crossed above 70 on the 2026-11-25T17:15 UTC 5-minute bar (RSI 71.2); stop 1.5 x ATR14 (103.26); exits when RSI crosses back through 50 or at 15:55 New York"
+    ],
+    "opened_at": "2026-11-25T17:20:22.392566+00:00",
+    "account_currency": "SGD",
+    "risk_amount": 1.99799314,
+    "confidence_components": {},
+    "confidence_components_available": {},
+    "status": "OPEN",
+    "closed_at": null,
+    "exit_price": null,
+    "realized_pnl": null,
+    "pyramided": false,
+    "experiment_tag": "RSI_BREAKOUT",
+    "parent_trade_id": null,
+    "in_liquidity_window": null,
+    "decision_entry_price": 25602.7,
+    "entry_z": 71.24947956199185,
+    "session_drift_z": null,
+    "vol_ratio": null,
+    "spread_to_stop": null,
+    "target_multiple": null
   }
 ]
