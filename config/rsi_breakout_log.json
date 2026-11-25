@@ -1,0 +1,11 @@
+[
+  {
+    "instrument": "SPX500_USD",
+    "bar": "2026-11-25T14:30",
+    "result": "opened",
+    "at": "2026-11-25T14:35:18.263099+00:00",
+    "direction": "SHORT",
+    "rsi": 23.72,
+    "atr": 12.05
+  }
+]
