@@ -43,5 +43,14 @@
     "direction": "LONG",
     "rsi": 72.92,
     "atr": 22.0643
+  },
+  {
+    "instrument": "NAS100_USD",
+    "bar": "2026-11-25T17:15",
+    "result": "opened",
+    "at": "2026-11-25T17:20:26.161027+00:00",
+    "direction": "LONG",
+    "rsi": 71.25,
+    "atr": 103.2571
   }
 ]
