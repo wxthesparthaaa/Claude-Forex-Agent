@@ -288,3 +288,21 @@ def test_digest_message_shows_the_rsi_section_only_when_given_stats():
     assert "RSI Breakout (forward test, US indices)" in msg and "Closed: 2 (1W/1L, 50% win)" in msg and "mean +0.50 R" in msg and "2/100" in msg
     stopped = rb.rsi_breakout_stats([_closed(-0.3) for _ in range(100)])
     assert "STOP RULE HIT" in format_scan_digest_message(2, ["EUR_USD"], rsi_stats=stopped)
+
+
+def test_us_holidays_and_early_closes_end_the_session_at_12_55_new_york():
+    from datetime import date
+    d26 = rb.us_short_session_days(2026)
+    assert {date(2026, 11, 26), date(2026, 11, 27), date(2026, 12, 24), date(2026, 12, 25), date(2026, 7, 3), date(2026, 4, 3),
+            date(2026, 1, 19), date(2026, 5, 25), date(2026, 9, 7), date(2026, 6, 19)} <= d26
+    assert date(2026, 11, 25) not in d26 and date(2026, 7, 2) not in d26
+    assert date(2027, 3, 26) in rb.us_short_session_days(2027)          # Good Friday 2027
+    assert date(2027, 12, 24) in rb.us_short_session_days(2027)         # Christmas Sat -> observed Fri 24th
+    # Day after Thanksgiving 2026 (New York is UTC-5): exit from 12:55 = 17:55 UTC, last signal bar 12:40 = 17:40 UTC
+    assert not rb.after_exit_time(datetime(2026, 11, 27, 17, 50, tzinfo=timezone.utc))
+    assert rb.after_exit_time(datetime(2026, 11, 27, 17, 55, tzinfo=timezone.utc))
+    assert rb.signal_window_ok(datetime(2026, 11, 27, 17, 40, tzinfo=timezone.utc))
+    assert not rb.signal_window_ok(datetime(2026, 11, 27, 17, 45, tzinfo=timezone.utc))
+    # an ordinary day keeps 15:50 / 15:55
+    assert rb.signal_window_ok(datetime(2026, 11, 25, 20, 50, tzinfo=timezone.utc))
+    assert not rb.after_exit_time(datetime(2026, 11, 25, 20, 50, tzinfo=timezone.utc))

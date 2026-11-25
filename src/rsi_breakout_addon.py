@@ -37,7 +37,8 @@ MECHANICS (fixed here, not tuned):
 
 KNOWN DIFFERENCES FROM THE RESEARCH: RSI here is seeded from the last ~300 bars instead of the full history (the Wilder smoothing forgets the seed within
 about 100 bars; the difference is far below a point of RSI); the entry happens at the first tick after the bar closes (up to ~5 minutes later; the
-research's one-extra-bar delay still gave net +0.113 R in the holdout); the exit at the session end is the first tick at or after 15:55 New York.
+research's one-extra-bar delay still gave net +0.113 R in the holdout); the exit at the session end is the first tick at or after 15:55 New York (12:55 on US holidays and early-close days, when the futures halt at
+13:00-13:15; signals there stop at the 12:40 bar; the research ended those days' trades at the last bar before the halt).
 """
 from __future__ import annotations
 
@@ -138,14 +139,73 @@ def _hm(dt_ny: datetime) -> tuple:
     return (dt_ny.hour, dt_ny.minute)
 
 
+# US market holidays and early closes. On these days CME equity-index futures (which OANDA's index CFDs follow) halt at 13:00 New York (holidays) or
+# 13:15 (early closes such as the day after Thanksgiving), and the research's trades ended at the last bar before that halt. Without this the module
+# would hold a position through the halt (on the day after Thanksgiving: through the whole weekend) and only try to close it at 15:55.
+SHORT_DAY_LAST_SIGNAL_START = (12, 40)
+SHORT_DAY_EXIT_FROM = (12, 55)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int):
+    from datetime import date
+    d = date(year, month, 1)
+    d += timedelta(days=(weekday - d.weekday()) % 7)
+    return d + timedelta(weeks=n - 1)
+
+
+def _last_weekday(year: int, month: int, weekday: int):
+    from datetime import date
+    d = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else date(year, 12, 31)
+    return d - timedelta(days=(d.weekday() - weekday) % 7)
+
+
+def _observed(d):
+    return d + timedelta(days=1) if d.weekday() == 6 else (d - timedelta(days=1) if d.weekday() == 5 else d)
+
+
+def _easter(year: int):
+    from datetime import date
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    return date(year, month, (h + l - 7 * m + 114) % 31 + 1)
+
+
+def us_short_session_days(year: int) -> set:
+    """NYSE holidays (observed) plus its 13:00 early-close days, for one year."""
+    from datetime import date
+    days = {
+        _observed(date(year, 1, 1)), _nth_weekday(year, 1, 0, 3), _nth_weekday(year, 2, 0, 3), _easter(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0), _observed(date(year, 6, 19)), _observed(date(year, 7, 4)), _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4), _observed(date(year, 12, 25)),
+    }
+    days.add(_nth_weekday(year, 11, 3, 4) + timedelta(days=1))           # day after Thanksgiving
+    for early in (date(year, 7, 3), date(year, 12, 24)):
+        if early.weekday() < 4 and early not in days:                    # Mon-Thu only (a Friday one is the observed holiday itself)
+            days.add(early)
+    return days
+
+
+def is_short_session(ny_dt: datetime) -> bool:
+    return ny_dt.date() in us_short_session_days(ny_dt.year)
+
+
 def signal_window_ok(bar_start_utc: datetime) -> bool:
     ny = bar_start_utc.astimezone(NEW_YORK)
-    return ny.weekday() < 5 and SESSION_OPEN <= _hm(ny) <= LAST_SIGNAL_START
+    last = SHORT_DAY_LAST_SIGNAL_START if is_short_session(ny) else LAST_SIGNAL_START
+    return ny.weekday() < 5 and SESSION_OPEN <= _hm(ny) <= last
 
 
 def after_exit_time(now: datetime) -> bool:
     ny = now.astimezone(NEW_YORK)
-    return ny.weekday() >= 5 or _hm(ny) >= EXIT_FROM
+    exit_from = SHORT_DAY_EXIT_FROM if is_short_session(ny) else EXIT_FROM
+    return ny.weekday() >= 5 or _hm(ny) >= exit_from
 
 
 def detect_signal(bars: list, now: datetime):
