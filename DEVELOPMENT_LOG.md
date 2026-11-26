@@ -12206,3 +12206,50 @@ nothing is pruned before its day landed). Items keep the source's own publicatio
 Why: the 2026-11-26 headline-tone backtest was underpowered (71 called days) because free headline history is thin; a daily archive grows an honest sample for a later, better test. Needs FINNHUB_API_KEY on Render for the Finnhub sources (render.yaml already declares it); without it only the RSS feeds are archived.
 Live dry run (no push): 188 headlines in the first pass; Finnhub's company-news endpoint timed out for 'yesterday' (it is flaky for dates; the next hourly pass retries), every other source answered. Expected size: roughly 300-400 headlines a day, about 40-60 KB a day.
 Also in this commit: the research scripts and results of 2026-11-25/26 (FX filters, triggers, structure stops, the fade test, the headline-tone test and its fetcher). NOTE: the scheduled research routine had already added a US-holiday / early-close guard to the RSI Breakout module on 2026-11-25 (commit 0677f4ad6: session ends 12:55 New York, last signal 12:40); this archive work does not touch it.
+
+## 2026-11-27 -- daily research (scheduled routine): liquidity-shock fade / information-shock follow and the RSI breakout on the yen Nikkei CFD, all RULED OUT
+
+**Health check** (state-sync read 2026-11-26 22:31 UTC): heartbeat 22:31:19 UTC (app alive). Test suite 557 passed. OANDA (read-only): no open trades, no open
+positions, no pending orders; nothing unexpected. Dashboard: VWAP Scalp OFF (no VWAP trades since the last run), Crypto Flow OFF (no log entries expected; its live
+record stays 5 closed, 3 wins, net +1.27 SGD, about +0.05 per trade vs the past-data +0.05), RSI Breakout ON. RSI Breakout forward test: no new trades since the
+first day (26 Nov was Thanksgiving, no US cash session, correctly skipped; 27 Nov is a 13:00 early close, handled by the 0677f4ad6 guard); live record 7 closed
+(3 wins), net +1.97 SGD, mean about -0.01 of risk per trade (expectation +0.05..+0.13; far too few to judge). Strategy balance 358.82 SGD (2,000 - 1,641.18): the
+nightly review of 26 Nov 17:01 UTC folded in the 25 Nov afternoon trades (+5.21 SGD), which closed after the previous day's 17:00 review (not a bug).
+Nothing broken, nothing fixed.
+
+**Tested** (both pre-registered and committed before any outcome).
+1. `scripts/research_liquidity_shock_2026_11_27.py` (10e8341a4; K = 4, alpha 0.0125). New use of data: the quoted spread and tick volume of each M15 bar as the
+   SIGNAL (only used before as a VWAP-Scalp entry filter and as slow "spread regimes"). |z| >= 3 move with spread >= 2x its same-slot 20-day median -> FADE (L);
+   |z| >= 3 with tick volume >= 3x and spread <= 1.25x -> FOLLOW (I). 18 instruments (11 FX, gold, 5 indices, WTI), M15 bid/ask 2016-2026, no stop, vol-scaled R.
+   Self-tests: RW +0.054 / -0.018 / -0.036 / -0.028 (se 0.04-0.08), peek +1.57.
+| variant | holdout mean R (n) | disc / fresh | halves | +20% / delayed | gross disc / hold / fresh | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|
+| L1 spread-shock fade, 1h | +0.052 (1632) p 0.94 | -0.144 / -0.381 | +0.193 / -0.090 | +0.021 / +0.064 | +0.063 / +0.205 / -0.240 | 6.6 | RULED OUT |
+| L2 spread-shock fade, 4h | +0.015 (1501) p 0.66 | -0.033 / -0.278 | +0.083 / -0.053 | -0.001 / +0.027 | +0.073 / +0.094 / -0.206 | 6.1 | RULED OUT |
+| I1 volume-shock follow, 1h | -0.050 (3212) p 1.00 | -0.031 / -0.275 | -0.092 / -0.008 | -0.074 / -0.057 | +0.141 / +0.072 / -0.133 | 13.0 | RULED OUT |
+| I2 volume-shock follow, 4h | -0.008 (2466) p 1.00 | -0.040 / -0.063 | +0.029 / -0.045 | -0.022 / -0.008 | +0.050 / +0.060 / +0.018 | 10.0 | RULED OUT |
+   Lesson: moves made while the spread is wide do revert a little before costs (L1 gross +0.06 / +0.21) but entering while the spread is still wide costs most of
+   it, the effect flips between years (2021 -0.30, 2022 +0.45, 2023 -0.24) and the fresh year is clearly negative; heavy-volume moves with normal spreads continue a
+   little before costs (+0.05..+0.14) but not after. No post-hoc variant (e.g. waiting for the spread to normalise) is pursued: the fresh year is negative gross.
+2. `scripts/research_jp225y_rsi_breakout_2026_11_27.py` (79b4f1074; K = 2, alpha 0.025; new instrument JP225Y_JPY, the yen Nikkei CFD, never in an RSI test;
+   new generic fetcher scripts/research_bidask_fetch_2026_11_27.py; M5 2016-2026 fetched in about 4 minutes). The unchanged live RSI(14) 70/30 breakout rule in the
+   Tokyo cash session. Self-tests: RW +0.010 (se 0.030) M5, -0.041 (se 0.037) M15; peek +0.85 / +0.66.
+| cell | holdout net (n) | disc / fresh net | +20% / delayed | gross pooled (p) | gross disc / hold / fresh | long / short gross | trades/wk | verdict |
+|---|---|---|---|---|---|---|---|---|
+| Y1 M5 | -0.092 (1595) p 0.98 | -0.371 / +0.093 | -0.128 / -0.106 | +0.110 (0.0004) | +0.096 / +0.097 / +0.220 | +0.117 / +0.102 | 6.7 | GROSS REPLICATES, NOT PROFITABLE |
+| Y2 M15 | -0.065 (787) p 0.88 | -0.126 / +0.084 | -0.086 / -0.117 | +0.095 (0.009) | +0.149 / +0.029 / +0.154 | +0.179 / +0.015 | 3.1 | GROSS REPLICATES, NOT PROFITABLE |
+   The short-term index momentum gross edge appears again (third never-seen market). But the premise was wrong: inside the Tokyo session JP225Y's spread is
+   0.15-0.18 of the 1.5 ATR M5 stop in 2021-2025 (US indices 0.03-0.05); the weekend cost scan of 2026-10-25 ranked it cheap on a daily-volatility basis only.
+   The spread has fallen to 0.09 of the stop in 2026 and 2026 net is +0.09 (n 313): a re-check on new data after 2027-06 is queued (no new variants).
+Variants this run: 6 (all pre-registered, none post-hoc). Running total: about 282 routine variants in 137 families (plus ~9,500 scan cells); 0 pass the strict bar.
+
+Best practice-trial candidate so far: RSI Breakout on the US indices (INDEX-M5, scripts/research_rsi_breakout_2026_11_24.py): holdout net +0.131 R (2021-2025.09, p 0.0005),
+fresh +0.097, +20% spread +0.124, one-bar delay +0.113, about 22 trades/week; caveats: 2016-2020 net -0.045, dozens of surrounding tests. ALREADY BUILT and ON
+(src/rsi_breakout_addon.py; live so far 7 trades, net +1.97 SGD). Runners-up: M1 month-end rebalancing (+0.028 / +0.088, 10.4/wk), Q1 ETF closing premium (+0.013 / +0.062, 8.5/wk).
+
+**Queue** (ranked): (1) report the RSI Breakout forward test each run (fills vs signal close, mean R vs +0.05..+0.13, the 100-trade check); (2) OANDA commodity CFD vs futures
+curve at roll dates (needs a contract-month price source); (3) JP225Y RSI breakout re-check on data after 2027-06 if its session spread stays near 0.09 of the stop;
+(4) Q1 re-check on fresh data after 2027-02; (5) Nikkei CFD vs CME gap on NEW data after 2026-12; (6) kimchi premium re-check after 2027-03; (7) intraday VIX divergence
+re-check after 2027-06. Dropped: spread- and volume-shock event rules (fade or follow) on FX, gold, indices and oil.
+
+Research result: 2026-11-27, 2 ideas tested, 0 credible
