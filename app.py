@@ -54,6 +54,7 @@ from autopilot import PhaseState
 from journal_export import build_journal_workbook
 from crypto_flow_addon import check_crypto_flow, CRYPTO_FLOW_TAG
 from rsi_breakout_addon import check_rsi_breakout, RSI_BREAKOUT_TAG
+from headline_archive import archive_headlines
 from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
                               VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
 
@@ -1066,6 +1067,9 @@ def start_scheduler():
     # RSI Breakout (off by default): the same 5-minute cadence; each tick closes positions whose RSI crossed back through 50 (or at 15:55 New York) and
     # looks for a fresh RSI cross on the latest completed 5-minute bar of SPX500/NAS100/US30, returning immediately when the toggle is off.
     scheduler.add_job(check_rsi_breakout, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # Headline archive (read-only research data, no trading effect): hourly, collects market headlines from Finnhub and public RSS feeds into config/headline_archive.json
+    # plus one write-once file per completed UTC day -- see src/headline_archive.py. It never raises, and max_instances=1 stops a slow run from overlapping the next.
+    scheduler.add_job(archive_headlines, IntervalTrigger(minutes=60, start_date=now + timedelta(minutes=3)), max_instances=1, coalesce=True)
     scheduler.start()
     return scheduler
 

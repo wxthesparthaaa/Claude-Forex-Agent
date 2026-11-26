@@ -30,6 +30,7 @@ STATE_FILES = {
     "config/vwap_scalp_filter_reject_log.json": os.path.join(STATE_DIR, "vwap_scalp_filter_reject_log.json"),
     "config/crypto_flow_log.json": os.path.join(STATE_DIR, "crypto_flow_log.json"),
     "config/rsi_breakout_log.json": os.path.join(STATE_DIR, "rsi_breakout_log.json"),
+    "config/headline_archive.json": os.path.join(STATE_DIR, "headline_archive.json"),
 }
 
 

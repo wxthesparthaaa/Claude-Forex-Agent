@@ -12153,3 +12153,56 @@ curve at roll dates (needs a contract-month price source); (3) Q1 re-check on fr
 re-check after 2027-03; (6) intraday VIX divergence re-check after 2027-06. Dropped: settlement-window pressure in energy (and by extension metals' COMEX settlement).
 
 Research result: 2026-11-26, 2 ideas tested, 0 credible
+## 2026-11-25 -- Four filters and two earlier triggers for the RSI breakout on the six FX majors: ALL RULED OUT
+
+Why: after the failed EUR_USD example (RSI cross below 30 at 05:30 UTC, three closes beyond the line, short filled 06:00, stopped 07:30, -1 R) the user asked what the trade could teach and how the move could be detected earlier.
+Test: scripts/research_fx_filters_triggers_2026_11_25.py, rules and verdicts written before any result (K = 6, alpha 0.0083). Data: real OANDA bid/ask M15 2016-2026, EUR_USD GBP_USD USD_JPY AUD_USD USD_CAD USD_CHF.
+Baseline reproduced exactly (12,804 trades, 22.6 a week, gross +0.004, net -0.139). Results (gross | net | trades a week): F1 exhaustion -0.007 | -0.150 | 17.9; F2 quiet market -0.006 | -0.122 | 15.3;
+F3 time stop +0.006 | -0.131 | 23.0 (paired net gain +0.010 R, t 1.85 / 1.81, below the pre-registered t >= 2.0); F4 too late -0.014 | -0.154 | 12.0; T1 squeeze breakout -0.028 | -0.212 | 135;
+T2 London-open breakout of the Asian range +0.027 | -0.121 | 23.3 (discovery +0.008, holdout +0.032, fresh +0.098 gross; 73% of trades stopped out; p 0.12 so not a gross edge).
+Placebo for the selection filters: F1 beats only 1% of random same-size subsets, F2 15%, F4 48%. Lesson: a single failed trade suggested filters that do not generalise; forex RSI / range-breakout moves have no gross edge
+at 15 minutes, so no entry or exit tweak can make them profitable after a 1-2 pip spread. Nothing in the live bot changed.
+
+## 2026-11-25 -- Do London-open breakouts of the Asian range hold? Four entry-time predictors: ALL RULED OUT
+
+Why: two USD_CHF examples (a right-direction short stopped by a retest on 25 Nov, a genuine reversal long on 24 Nov). About two thirds of stopped-out T2 trades never finish the day in profit; can anything known at entry separate holds from failures?
+Test: scripts/research_fx_breakout_holds_2026_11_25.py (rules and verdicts fixed first, K = 4, alpha 0.0125, same data and engine as the filters-and-triggers test; base reproduced exactly: 13,252 trades, gross +0.027, net -0.121; self-tests passed).
+Results (kept trades: gross | net | share of base trades): H1 prior-day agreement +0.033 | -0.113 | 49%; H2 strong close +0.028 | -0.124 | 63%; H3 narrow range +0.034 | -0.126 | 56%; H4 first-Friday payrolls proxy +0.092 | -0.063 | 4%
+(discovery -0.114 gross, holdout +0.287: unstable). Hold rate (no-stop 16:00 result > 0): base 48.3%; every predictor within 1.5 points of the dropped trades. Placebo percentiles 37%, 88%, 45%, 99% (H4 on 261 holdout trades only).
+Lesson: breakouts that hold look the same at entry as those that fail, on these features. Combined with the filters-and-triggers result, the forex London-open breakout has no gross edge to protect from the spread. Nothing in the live bot changed.
+
+## 2026-11-25 -- Stop placement for the London-open breakout (structure stop, London-hours ATR stop): BOTH RULED OUT
+
+Why: the user asked why the stop was not at the Asian low, whether the window opening is volatile, and whether a fixed take-profit would help. Findings before the test (descriptive): no profit target was used (time exit 16:00 UTC); targets of 1-5 R are no better;
+M15 bars at 07-08 UTC run about 1.26x the daily average vs 0.61-0.70 at 03-05 UTC, so an ATR14 measured over the quiet hours is too tight at the London open (77% stopped out for 07:00-07:45 signals vs 65-70% later).
+Test: scripts/research_fx_structure_stop_2026_11_25.py (rules and verdicts fixed first, K = 2, alpha 0.025; same signals, data and exit as T2). S1 opposite-edge stop: 9,900 trades, gross +0.013 (p 0.21), net -0.054, stopped out 43%.
+S2 stop of 2 x the mean London-hours true range of the previous 20 days: 13,202 trades, gross +0.025 (p 0.10), net -0.079, stopped out 65%. Holdout net -0.054 and -0.064; fresh net -0.044 and -0.050.
+Lesson: the stop was the weakest design choice but fixing it only lowers the cost (spread/stop 0.15 -> 0.06-0.10); the gross edge stays near zero, so the strategy stays unprofitable. Nothing in the live bot changed.
+
+## 2026-11-25 -- Fading the London-open breakout: F2 (structure-stop fade) has a GROSS edge but is NOT PROFITABLE
+
+Why: the user noticed every drawn example reversed and asked whether trading the opposite direction is crazy. Descriptive first: the day ends against the breakout in 51.5% of trades (48.3% with it); moves of more than 6 ATR against 14.8% vs with 13.1%.
+Test: scripts/research_fx_fade_2026_11_25.py (rules and verdicts fixed first, K = 3, alpha 0.0167; same signals, data and engine as T2; self-tests passed).
+F1 fade, 2 ATR stop: gross +0.040 (p 0.04), net -0.112, NO. F2 fade, stop 0.5 ATR beyond the breakout extreme (skip if < 1 or > 6 ATR): 3,306 trades, gross +0.237 (se 0.059), disc +0.250, hold +0.269, fresh +0.016 (n 467),
+net -0.134 (hold -0.138, fresh -0.078), stopped out 84%, win 20%, mean win +5.1 R, mean loss -1.0 R, spread/stop 0.244: GROSS EDGE YES, PROFITABLE NO. F3 (F2 plus target at the range midpoint): gross +0.058, net -0.211, NO.
+Checks after the result: random walks do not average exactly zero in this simulator for stopped strategies (F1 +0.034 R over 36 series; shrinks with more intrabar sub-steps: +0.048 / +0.036 / +0.021 at 15 / 60 / 240), so the self-test tolerance was too loose for large n;
+no earlier NO verdict changes (the bias only inflates gross). F2 is concentrated (best 1% of trades = 80% of R), positive in all 11 years and 6 pairs but weak in 2022 (+0.03), 2025 (+0.03), 2026 (+0.05).
+Open items (not started): F2 variants with wider minimum stops (lower spread/stop), limit-order entries, a longer fresh sample. Nothing in the live bot changed; nothing has been marked closed.
+
+## 2026-11-26 -- Headline-tone backtest for the RSI Breakout: NOT SUPPORTED (underpowered)
+
+Why: after the user asked whether reading the news before the open could improve the RSI Breakout (and the forex majors version), a pre-registered backtest was built (rules written before any tone was scored; DIA dropped from the ticker list before scoring because Finnhub was too slow).
+Data: Finnhub company-news for SPY and QQQ, one request per calendar day 2025-11-21..2026-11-20; 684 of 730 requests returned (46 days missing), 24,010 headlines. Tone = (npos - nneg)/(npos + nneg) over headlines between the previous 16:00 New York and 08:30 New York, call only if at least 10 scored headlines and |tone| >= 0.15.
+Results: 260 weekdays, 49 BULL / 22 BEAR / 189 no call; the call matched the US30 cash-session direction on 51% of 71 called days. N1 open hour: agree +0.215 R (n 83) vs disagree +1.104 R (n 65), diff -0.889, p 0.95; N2 first bar INSUFFICIENT (23 vs 10); N3 all session diff -0.225, p 0.85;
+N4 FX majors diff -0.083, p 0.64. Self-tests passed (peeking calls +1.035 R, p 0.0003). Verdict: NOT SUPPORTED, but with 71 called days every 95% interval includes zero (N1 [-2.27, +0.46]); the wrong sign for the US indices in both halves hints that pre-open sell-off headlines are already priced or are followed by a bounce, which this sample cannot confirm.
+Nothing in the live bot changed. Open follow-ups (not started): a daily headline archive so the sample grows, a better (non-keyword) tone measure, the 46 missing days.
+
+## 2026-11-26 -- Daily headline archive (read-only research data, no trading effect)
+
+What: new src/headline_archive.py (+ tests/test_headline_archive.py, 10 tests; 557 pass), wired as an hourly scheduler job in app.py (max_instances=1, start 3 minutes after boot) and registered in state_paths.STATE_FILES as config/headline_archive.json.
+Sources (each isolated; one failing never stops the others): Finnhub general market news, Finnhub company news for SPY and QQQ (today and yesterday UTC), and the public RSS feeds of Yahoo Finance (^DJI, ^GSPC, ^IXIC), MarketWatch (Dow Jones top stories) and Investing.com news.
+Storage: a rolling 7-day window in config/headline_archive.json (compact JSON, synced like every state file) plus one write-once file per COMPLETED UTC day, config/headlines/YYYY-MM-DD.json, pushed with push_binary_file (re-pushed only when late items change that day's count; a failed push is retried next hour and
+nothing is pruned before its day landed). Items keep the source's own publication timestamp (point-in-time, no hindsight), headlines are cut to 160 characters and de-duplicated on the first 60 lowercase characters. All of it lives under config/ so a push never triggers a Render deploy.
+Why: the 2026-11-26 headline-tone backtest was underpowered (71 called days) because free headline history is thin; a daily archive grows an honest sample for a later, better test. Needs FINNHUB_API_KEY on Render for the Finnhub sources (render.yaml already declares it); without it only the RSS feeds are archived.
+Live dry run (no push): 188 headlines in the first pass; Finnhub's company-news endpoint timed out for 'yesterday' (it is flaky for dates; the next hourly pass retries), every other source answered. Expected size: roughly 300-400 headlines a day, about 40-60 KB a day.
+Also in this commit: the research scripts and results of 2026-11-25/26 (FX filters, triggers, structure stops, the fade test, the headline-tone test and its fetcher). NOTE: the scheduled research routine had already added a US-holiday / early-close guard to the RSI Breakout module on 2026-11-25 (commit 0677f4ad6: session ends 12:55 New York, last signal 12:40); this archive work does not touch it.
