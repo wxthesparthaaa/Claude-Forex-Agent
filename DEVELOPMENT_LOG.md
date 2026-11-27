@@ -12286,3 +12286,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: simulator bug fixed in all two-phase channel scripts (time exits without TP1 were credited the TP1 profit on the first half; always upward). Forex conclusions unchanged (no gross edge); the apparent index double-touch edge (net +0.03..+0.05, afternoon long-only +0.196) was the bug. Long-only first-hours index test: no cell passes. Details in RESEARCH_INDEX.md.
 
 2026-11-27: all affected channel scripts rerun after the TP1-credit fix; no edge anywhere; only the index double-touch 'edge' disappeared. See RESEARCH_INDEX.md.
+
+2026-11-27 research: breakout with Fibonacci targets (50% / 38.2%) is unusable (TP1 beyond the entry in only 6% of signals); 12-17 UTC window with S/R targets: discovery net +0.130, holdout -0.132. Details in RESEARCH_INDEX.md.
