@@ -40,7 +40,7 @@
   "interval_scanned_instruments_since_digest": [],
   "risk_limit_skips_since_digest": [],
   "last_scan_digest_sent_at": "2026-11-27T16:03:17.837047+00:00",
-  "last_review_date": "2026-11-27",
+  "last_review_date": "2026-11-28",
   "last_health_check_date": "2026-11-27",
   "last_reflection_sent_at": "2026-11-20T22:03:50.805335+00:00",
   "last_market_status": "open",
