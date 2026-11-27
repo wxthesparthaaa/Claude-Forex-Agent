@@ -12256,3 +12256,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): RSI Breakout line sensitivity on forex (no edge at any lines on M15 or H1) and finer US-index hours (the first 30 minutes carry the net edge, the rest of the day is about break-even net with a small gross edge). Details in RESEARCH_INDEX.md. The forward test's rule is unchanged; any 'open-only' variant would need its own pre-registration and the user's go-ahead.
 
 2026-11-27 research (no code change): parallel-channel strategy (breakout-retest and bounce, H4 channel / M15 entries, EMA and RSI checks) on nine FX pairs: no gross edge, none profitable; details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): channel bounce on four more timeframe pairs and with Fibonacci stop/target recipes: no gross edge, none profitable; a missing time-sort in the new timeframe script was caught by its reference check and fixed before any number was used. Details in RESEARCH_INDEX.md.
