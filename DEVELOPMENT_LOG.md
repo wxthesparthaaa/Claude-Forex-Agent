@@ -12320,3 +12320,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: the user's two RSI + parallel-line set-ups (inside / outside the lines, 30-minute): no profitable version; set-up 2 gross about 0 (6 trades/wk, net -0.015..-0.019 R), set-up 1 small positive gross (+0.05) on only 0.5 trades a week that disappears when loosened. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: eight alternative entry confirmations (ADX, minor swing break, correlated pair, pivot, round number, MACD x2, Ultimate Oscillator x2) on the user's two parallel-line set-ups: no gross edge in any cell (gross -0.02..+0.04 R), none better than the unconfirmed entry. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research: bounce reading of the user's RSI + parallel-line set-up 1 (enter before RSI crosses, exit when RSI returns): gross about zero in all 12 cells (-0.02..+0.015 R), net -0.06..-0.13 R; holdout net about 0 only in the 50-line zone. Details in RESEARCH_INDEX.md.
