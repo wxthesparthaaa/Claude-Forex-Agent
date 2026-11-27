@@ -241,6 +241,6 @@ def plan_and_sim(S, raw_mode, ev, delay=0, i1=1, i2=1, mode="two", min_risk_atr=
     elif how2 == "stop":
         R1 = R2 = -1.0
     else:
-        R1 = (tp1 - fill) * d / risk
+        R1 = (tp1 - fill) * d / risk if x1 is not None else (close_px - fill) * d / risk  # FIX 2026-11-27: no TP1 credit when TP1 was never reached (time exit)
         R2 = {"target": (tp2 - fill) * d / risk, "breakeven": 0.0}.get(how2, (close_px - fill) * d / risk)
     return dict(e=e, fill=fill, sl=sl, tp1=tp1, tp2=tp2, risk=risk, rr=abs(tp2 - fill) / risk, x1=x1, x2=x2, how=how2, R=0.5 * R1 + 0.5 * R2, R1=R1, R2=R2, struct_risk=struct_risk, max_risk=max_risk)

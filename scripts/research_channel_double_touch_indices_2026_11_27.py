@@ -129,7 +129,7 @@ def plan(S, rawm, ev, stop_atr, f1, f2, cash, delay=0):
     if how == "stop":
         R1 = R2 = -1.0
     else:
-        R1 = (tp1 - fill) * d / risk
+        R1 = (tp1 - fill) * d / risk if x1 is not None else (close_px - fill) * d / risk  # FIX 2026-11-27: no TP1 credit when TP1 was never reached (time exit)
         R2 = {"target": (tp2 - fill) * d / risk, "breakeven": 0.0}.get(how, (close_px - fill) * d / risk)
     return dict(e=e, fill=fill, sl=sl, tp1=tp1, tp2=tp2, risk=risk, rr=abs(tp2 - fill) / risk, rr1=abs(tp1 - fill) / risk, x1=x1, x2=x2, how=how, R=0.5 * R1 + 0.5 * R2,
                 spread=float(r["ask_o"][e] - r["bid_o"][e]))
