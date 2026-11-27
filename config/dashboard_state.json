@@ -51,7 +51,7 @@
   "vwap_scalp_enabled": false,
   "crypto_flow_enabled": false,
   "rsi_breakout_enabled": true,
-  "rsi_open_enabled": false,
+  "rsi_open_enabled": true,
   "vwap_scalp_max_trades_per_day": 50,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
