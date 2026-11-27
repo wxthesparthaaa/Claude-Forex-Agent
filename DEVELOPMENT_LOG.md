@@ -12264,3 +12264,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): exploratory diagnostics (discovery period only) and a pre-registered out-of-sample test of two candidate filters (time of day, confirmation delay) for the channel breakout: neither held out of sample; the rule's post-2020 gross edge is about zero. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): channel breakout on a swing-point (3-touch) channel: 10.5 trades a week but gross +0.013 and net -0.148, no edge in any of the four runs. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): channel breakout on 15-minute channel / 5-minute entries (worse: gross -0.06, net -0.31) and Fibonacci retracement trades inside the swing-point channel (three recipes; one passes the gross-edge rule by +0.024 R, same size as the simulator's null bias, net -0.068). Details in RESEARCH_INDEX.md.
