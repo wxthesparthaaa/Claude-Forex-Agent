@@ -12260,3 +12260,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): channel bounce on four more timeframe pairs and with Fibonacci stop/target recipes: no gross edge, none profitable; a missing time-sort in the new timeframe script was caught by its reference check and fixed before any number was used. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): the user-confirmed channel breakout strategy backtested in four variants (rule alone, + RSI, + volume, + both) plus a stronger-RSI addendum on nine pairs: no gross edge, none profitable; the RSI-50 variant was identical to the plain rule. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): exploratory diagnostics (discovery period only) and a pre-registered out-of-sample test of two candidate filters (time of day, confirmation delay) for the channel breakout: neither held out of sample; the rule's post-2020 gross edge is about zero. Details in RESEARCH_INDEX.md.

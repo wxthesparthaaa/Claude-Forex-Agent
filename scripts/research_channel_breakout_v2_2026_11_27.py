@@ -25,7 +25,7 @@ N_WIN, TOL, WAIT_HOURS, MIN_TP_ATR, PIV_BARS, PIV_SIDE = PC.N_WIN, PC.TOL, 48, 1
 REBOUND, CONF_MARGIN, SMALL_PIV_SIDE, SMALL_LOOK = 0.5, 0.25, 3, 1000
 
 
-def sr_levels(m4, t4, jm):
+def sr_levels(m4, t4, jm, hs=14400):
     """support / resistance candidates known after H4 bar jm completed: fractal swing highs / lows of the last PIV_BARS bars, plus the previous UTC day's high / low."""
     lo_i = max(jm - PIV_BARS, PIV_SIDE)
     hi, lo = m4["h"], m4["l"]
@@ -35,8 +35,8 @@ def sr_levels(m4, t4, jm):
             highs.append(float(hi[i]))
         if lo[i] < lo[i - PIV_SIDE:i].min() and lo[i] <= lo[i + 1:i + 1 + PIV_SIDE].min():
             lows.append(float(lo[i]))
-    day = (int(t4[jm]) + 14400) // 86400            # the UTC day in which bar jm completed
-    sel = [i for i in range(max(jm - 12, 0), jm + 1) if int(t4[i]) // 86400 == day - 1]
+    day = (int(t4[jm]) + hs) // 86400               # the UTC day in which bar jm completed
+    sel = [i for i in range(max(jm - int(2 * 86400 / hs), 0), jm + 1) if int(t4[i]) // 86400 == day - 1]
     if sel:
         highs.append(float(hi[sel].max()))
         lows.append(float(lo[sel].min()))
@@ -71,9 +71,9 @@ def pick_two(cands, entry, a, d, taken):
     return out
 
 
-def levels_two_tf(S, m4, t4, jm, m, d, entry, a):
+def levels_two_tf(S, m4, t4, jm, m, d, entry, a, hs=14400):
     sh, sl_ = small_levels(S, m)
-    bh, bl = sr_levels(m4, t4, jm)
+    bh, bl = sr_levels(m4, t4, jm, hs)
     small = pick_two(sl_ if d == -1 else sh, entry, a, d, [])
     big = pick_two(bl if d == -1 else bh, entry, a, d, small)
     if len(small) < 2 or len(big) < 2:
@@ -81,7 +81,7 @@ def levels_two_tf(S, m4, t4, jm, m, d, entry, a):
     return dict(small=[float(v) for v in small], big=[float(v) for v in big])
 
 
-def find_events(raw15, hs, ls):
+def find_events(raw15, hs, ls, wait_bars=None, retest_mode="rebound", close_tol=0.1):
     S = __import__("research_parallel_channel_tf_2026_11_27").build(raw15, hs, ls)       # channel arrays, LTF arrays (events of the bounce rule are ignored)
     t, mid, atr, last, n = S["t"], S["mid"], S["atr"], S["last"], S["n"]
     ch, t4, jj_all = S["ch"], S["t4"], None
@@ -99,7 +99,7 @@ def find_events(raw15, hs, ls):
         prev_lo = lo - ch["S"][jj] * ls / float(hs)
         bru = valid & (c > up) & (cp <= prev_up)
         brd = valid & (c < lo) & (cp >= prev_lo)
-    WAIT = int(WAIT_HOURS * 3600 / ls)                                              # the retracement and the confirmation must come within 48 hours of the break
+    WAIT = int(wait_bars) if wait_bars else int(WAIT_HOURS * 3600 / ls)                                              # the retracement and the confirmation must come within 48 hours of the break
     cl_, hl_, ll_, atl, tl = c.tolist(), h.tolist(), l.tolist(), atr.tolist(), t.tolist()
     events, used = [], set()
     for d, mask in ((1, bru), (-1, brd)):
@@ -124,10 +124,15 @@ def find_events(raw15, hs, ls):
                 else:
                     ext_low = max(ext_low, hl_[m])
                 if retest is None:
-                    leg = abs(ln - ext_low)
-                    reb = (d == -1 and hl_[m] >= ext_low + REBOUND * leg) or (d == 1 and ll_[m] <= ext_low - REBOUND * leg)
-                    if leg >= a and reb:
-                        retest = m                                                # the retracement: price climbs back toward the broken line (>= 50% of the way) without a close inside
+                    if retest_mode == "close_on_line":
+                        # strict reading: a CANDLE CLOSES ON the broken line (within close_tol x ATR of it, still on the outside); coming near is not enough
+                        if (d == -1 and cl_[m] >= ln - close_tol * a) or (d == 1 and cl_[m] <= ln + close_tol * a):
+                            retest = m
+                    else:
+                        leg = abs(ln - ext_low)
+                        reb = (d == -1 and hl_[m] >= ext_low + REBOUND * leg) or (d == 1 and ll_[m] <= ext_low - REBOUND * leg)
+                        if leg >= a and reb:
+                            retest = m                                                # the retracement: price climbs back toward the broken line (>= 50% of the way) without a close inside
                 else:
                     margin = CONF_MARGIN * a
                     if (d == 1 and cl_[m] > ext_close + margin) or (d == -1 and cl_[m] < ext_close - margin):
@@ -135,7 +140,7 @@ def find_events(raw15, hs, ls):
                             break
                         used.add((m, d))
                         entry_ref = cl_[m]
-                        lv = levels_two_tf(S, m4, t4, int(jj[m]), m, d, entry_ref, a)
+                        lv = levels_two_tf(S, m4, t4, int(jj[m]), m, d, entry_ref, a, hs)
                         if lv is not None:
                             events.append(dict(strat="A3", k=int(k), retest=int(retest), m=int(m), dir=d, levels=lv, line0=float(line0), slope=float(sj), t0=int(t0), jm=jm, ema=True, rsi=True, counter=False))
                         break
@@ -166,21 +171,27 @@ if __name__ == "__main__":
 STOP_BUF_ATR, MIN_RISK_ATR, MAXHOLD = 0.25, 1.0, 96
 
 
-def plan_and_sim(S, raw_mode, ev, delay=0):
-    """Two-phase exit. TP1 = the 2nd smaller-timeframe level, TP2 = the 2nd bigger-timeframe level (half the position each).
-    STOP: just beyond the retracement extreme (+0.25 ATR), but never wider than half the distance to TP2 (reward:risk at least 2:1 on the final target) and never tighter than 1 ATR.
-    After TP1 the stop moves to the entry. Time stop after 96 bars. Returns None if the plan is not valid (TP2 not beyond TP1, or fill on the wrong side)."""
+def plan_and_sim(S, raw_mode, ev, delay=0, i1=1, i2=1, mode="two", min_risk_atr=None):
+    """Two-phase exit. TP1 = the (i1+1)-th nearest smaller-timeframe level (default the 2nd), TP2 = the (i2+1)-th nearest bigger-timeframe level (default the 2nd), half the position each.
+    STOP: just beyond the retracement extreme (+0.25 ATR), but never wider than half the distance to the final target (reward:risk at least 2:1) and never tighter than min_risk_atr x ATR (default 1).
+    After TP1 the stop moves to the entry. Time stop after 96 bars. Returns None if the plan is not valid (target not beyond TP1, or fill on the wrong side).
+    mode 'tp1_only': the whole position exits at TP1; mode 'big_only': the whole position exits at TP2 (the bigger-timeframe level)."""
     d, m, rt = ev["dir"], ev["m"], ev["retest"]
     n, t = S["n"], S["t"]
     e = m + 1 + delay
     if e >= n - 1 or S["last"][m] < 0 or e > S["last"][m] or t[e] - t[m] > 3 * S["ls"] * (1 + delay):
         return None
-    tp1, tp2 = ev["levels"]["small"][1], ev["levels"]["big"][1]
+    tp1, tp2 = ev["levels"]["small"][i1], ev["levels"]["big"][i2]
+    single = mode in ("tp1_only", "big_only")
+    if mode == "tp1_only":
+        tp2 = tp1
+    elif mode == "big_only":
+        tp1 = tp2
     a = S["atr"][m]
     h, l = S["mid"]["h"], S["mid"]["l"]
     r = raw_mode
     fill = r["ask_o"][e] if d == 1 else r["bid_o"][e]
-    if (tp1 - fill) * d <= 0 or (tp2 - tp1) * d <= 0:
+    if (tp1 - fill) * d <= 0 or (not single and (tp2 - tp1) * d <= 0):
         return None
     max_risk = abs(tp2 - fill) / 2
     if d == 1:
@@ -189,7 +200,7 @@ def plan_and_sim(S, raw_mode, ev, delay=0):
     else:
         stop_struct = float(h[rt:m + 1].max()) + STOP_BUF_ATR * a
         struct_risk = stop_struct - fill
-    risk = min(max_risk, max(struct_risk, MIN_RISK_ATR * a))
+    risk = min(max_risk, max(struct_risk, (MIN_RISK_ATR if min_risk_atr is None else min_risk_atr) * a))
     sl = fill - d * risk
     end = min(e + MAXHOLD - 1, S["last"][m], n - 1)
     x1, x2, how2, stop_now = None, None, "time", sl
@@ -198,6 +209,11 @@ def plan_and_sim(S, raw_mode, ev, delay=0):
             if r["bid_l"][q] <= stop_now:
                 x2, how2 = q, ("stop" if x1 is None else "breakeven")
                 break
+            if single:
+                if r["bid_h"][q] >= tp2:
+                    x1, x2, how2 = q, q, "target"
+                    break
+                continue
             if x1 is None and r["bid_h"][q] >= tp1:
                 x1, stop_now = q, fill
             if x1 is not None and r["bid_h"][q] >= tp2:
@@ -207,6 +223,11 @@ def plan_and_sim(S, raw_mode, ev, delay=0):
             if r["ask_h"][q] >= stop_now:
                 x2, how2 = q, ("stop" if x1 is None else "breakeven")
                 break
+            if single:
+                if r["ask_l"][q] <= tp2:
+                    x1, x2, how2 = q, q, "target"
+                    break
+                continue
             if x1 is None and r["ask_l"][q] <= tp1:
                 x1, stop_now = q, fill
             if x1 is not None and r["ask_l"][q] <= tp2:
@@ -215,7 +236,9 @@ def plan_and_sim(S, raw_mode, ev, delay=0):
     if x2 is None:
         x2 = end
     close_px = r["bid_c"][x2] if d == 1 else r["ask_c"][x2]
-    if how2 == "stop":
+    if single:
+        R1 = R2 = {"stop": -1.0, "target": (tp2 - fill) * d / risk}.get(how2, (close_px - fill) * d / risk)
+    elif how2 == "stop":
         R1 = R2 = -1.0
     else:
         R1 = (tp1 - fill) * d / risk
