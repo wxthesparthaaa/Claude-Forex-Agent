@@ -12300,3 +12300,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: RSI first-30-minute breakout on 13 non-US index opens: gross +0.10 to +0.14 R (Europe, Asia) but net -0.02 to -0.12 after the CFD spreads; the US open stays the only profitable one (M15 net +0.19, holdout +0.32). Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: long-only RSI first-30-minute breakout at the Asian opens: gross +0.26 R (5 of 5 indices), net -0.01 (costs 0.27 R); fading in the newest data; JP225 and HK33 net positive on their own (post-hoc). Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (untested batch): the RSI first-hour/first-15-minute and stricter-line (75/25, 80/20) variants of the US open all show a gross edge and net +0.09 to +0.37 R but miss the pre-registered holdout significance bar narrowly; Europe minutes 30-60 long-only is the best non-US cell; double touch and breakout on other timeframe pairs: no edge. Details in RESEARCH_INDEX.md.
