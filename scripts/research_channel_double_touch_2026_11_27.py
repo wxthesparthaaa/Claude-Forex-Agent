@@ -38,13 +38,19 @@ RESPECT = 1.0                      # the older part of the line may be pierced b
 RECIPES = ("D-A", "D-B", "D-C")
 
 
-def find_events(raw15, candle="any"):
+def find_events(raw15, candle="any", filters=None):
     """candle: 'any' (the original rule), 'bullish' (the second-touch candle closes above its open for longs / below for shorts) or 'hammer' (bullish plus a lower wick of at least half the bar's range; shorts: shooting star)."""
     P = E.prep(raw15, "fx", LS)
     mid, t, atr, n = P["mid"], P["t"], P["atr"], len(P["t"])
     S = dict(raw=raw15, t=t, atr=atr, last=P["last"], mid=mid, n=n)
     h, l, c = mid["h"], mid["l"], mid["c"]
     op = mid["o"]
+
+    ctx = None
+    if filters:
+        import research_rsi_breakout_2026_11_24 as _RB
+        ctx = dict(l=l, h=h, c=c, o=op, vol=raw15["vol"].astype(float), rsi=_RB.rsi_arr(c, 14))
+    events_by = {name: [] for name in (filters or {})}
 
     def cand_ok(j, d):
         if candle == "any":
@@ -122,6 +128,7 @@ def find_events(raw15, candle="any"):
                 continue
             s_, j0 = line
             extreme = h[a] if d == 1 else l[a]
+            satisfied = set()
             for j in range(a + 1, min(a + 1 + MAX_GAP, n - 2)):
                 if t[j] - t[j - 1] > 3 * LS or not np.isfinite(atr[j]):
                     break
@@ -133,16 +140,32 @@ def find_events(raw15, candle="any"):
                 bounced = (extreme - A) >= BOUNCE * leg if d == 1 else (A - extreme) >= BOUNCE * leg
                 if not bounced or j - a < MIN_GAP:
                     continue
-                if abs(c[j] - lj) <= TOL * aj and cand_ok(j, d) and (j, d) not in used:
-                    used.add((j, d))
+                if abs(c[j] - lj) <= TOL * aj and cand_ok(j, d):
                     span = np.arange(j0, j + 1)
                     lnn = A + s_ * (t[span] - t[a])
                     off = float(np.max(h[span] - lnn)) if d == 1 else float(np.min(l[span] - lnn))
                     tex = float(l[a:j + 1].min()) if d == 1 else float(h[a:j + 1].max())
-                    events.append(dict(m=int(j), dir=d, t1=int(a), H=float(Hh), L1=float(A), leg=float(leg), touch_extreme=tex, line_a=float(A), line_s=float(s_), line_t=int(t[a]), wall_off=off, old=int(j0)))
-                    break
+                    rec = dict(m=int(j), dir=d, t1=int(a), H=float(Hh), L1=float(A), leg=float(leg), touch_extreme=tex, line_a=float(A), line_s=float(s_), line_t=int(t[a]), wall_off=off, old=int(j0))
+                    if not filters:
+                        if (j, d) not in used:
+                            used.add((j, d))
+                            events.append(rec)
+                            break
+                    else:
+                        for name, fn in filters.items():
+                            if name in satisfied or (j, d, name) in used:
+                                continue
+                            if fn(j, d, a, A, ctx):
+                                used.add((j, d, name))
+                                satisfied.add(name)
+                                events_by[name].append(dict(rec))
+                        if len(satisfied) == len(filters):
+                            break
     events.sort(key=lambda e_: e_["m"])
     S["dt_events"] = events
+    for name in events_by:
+        events_by[name].sort(key=lambda e_: e_["m"])
+    S["dt_events_by"] = events_by
     return S
 
 
