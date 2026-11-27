@@ -12262,3 +12262,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): the user-confirmed channel breakout strategy backtested in four variants (rule alone, + RSI, + volume, + both) plus a stronger-RSI addendum on nine pairs: no gross edge, none profitable; the RSI-50 variant was identical to the plain rule. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): exploratory diagnostics (discovery period only) and a pre-registered out-of-sample test of two candidate filters (time of day, confirmation delay) for the channel breakout: neither held out of sample; the rule's post-2020 gross edge is about zero. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): channel breakout on a swing-point (3-touch) channel: 10.5 trades a week but gross +0.013 and net -0.148, no edge in any of the four runs. Details in RESEARCH_INDEX.md.
