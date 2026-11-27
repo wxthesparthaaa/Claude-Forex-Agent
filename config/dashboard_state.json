@@ -51,6 +51,7 @@
   "vwap_scalp_enabled": false,
   "crypto_flow_enabled": false,
   "rsi_breakout_enabled": true,
+  "rsi_open_enabled": false,
   "vwap_scalp_max_trades_per_day": 50,
   "vwap_scalp_max_trades_per_day_min": 5,
   "vwap_scalp_max_trades_per_day_max": 50,
@@ -60,5 +61,5 @@
   "vwap_scalp_global_cooldown_minutes_min": 20,
   "vwap_scalp_global_cooldown_minutes_max": 120,
   "vwap_scalp_global_cooldown_minutes_step": 20,
-  "last_process_heartbeat_at": "2026-11-27T14:43:09.513955+00:00"
+  "last_process_heartbeat_at": "2026-11-27T14:44:56.537601+00:00"
 }
