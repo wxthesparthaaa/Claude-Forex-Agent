@@ -12284,3 +12284,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (script option added): double-touch set-up on SPX500 / NAS100 / US30 (15-minute, cash session): costs are 0.05-0.12 R per trade (vs 0.17-0.33 on forex); the best cell (targets 50% / 38.2%, 1.0 ATR stop) is net +0.03 to +0.05 R per trade but not significant; a pessimistic same-candle fix of the simulator lowers it. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: simulator bug fixed in all two-phase channel scripts (time exits without TP1 were credited the TP1 profit on the first half; always upward). Forex conclusions unchanged (no gross edge); the apparent index double-touch edge (net +0.03..+0.05, afternoon long-only +0.196) was the bug. Long-only first-hours index test: no cell passes. Details in RESEARCH_INDEX.md.
+
+2026-11-27: all affected channel scripts rerun after the TP1-credit fix; no edge anywhere; only the index double-touch 'edge' disappeared. See RESEARCH_INDEX.md.
