@@ -38,11 +38,24 @@ RESPECT = 1.0                      # the older part of the line may be pierced b
 RECIPES = ("D-A", "D-B", "D-C")
 
 
-def find_events(raw15):
+def find_events(raw15, candle="any"):
+    """candle: 'any' (the original rule), 'bullish' (the second-touch candle closes above its open for longs / below for shorts) or 'hammer' (bullish plus a lower wick of at least half the bar's range; shorts: shooting star)."""
     P = E.prep(raw15, "fx", LS)
     mid, t, atr, n = P["mid"], P["t"], P["atr"], len(P["t"])
     S = dict(raw=raw15, t=t, atr=atr, last=P["last"], mid=mid, n=n)
     h, l, c = mid["h"], mid["l"], mid["c"]
+    op = mid["o"]
+
+    def cand_ok(j, d):
+        if candle == "any":
+            return True
+        if (c[j] - op[j]) * d <= 0:
+            return False                                   # not a bullish (long) / bearish (short) candle
+        if candle == "bullish":
+            return True
+        rng = h[j] - l[j]
+        wick = (min(op[j], c[j]) - l[j]) if d == 1 else (h[j] - max(op[j], c[j]))
+        return rng > 0 and wick >= 0.5 * rng                # hammer / shooting star
     rh = PC.RF.resample_period(raw15, HS)
     m4 = {k: (rh["bid_" + k] + rh["ask_" + k]) / 2 for k in "ohlc"}
     t4 = rh["t"]
@@ -120,7 +133,7 @@ def find_events(raw15):
                 bounced = (extreme - A) >= BOUNCE * leg if d == 1 else (A - extreme) >= BOUNCE * leg
                 if not bounced or j - a < MIN_GAP:
                     continue
-                if abs(c[j] - lj) <= TOL * aj and (j, d) not in used:
+                if abs(c[j] - lj) <= TOL * aj and cand_ok(j, d) and (j, d) not in used:
                     used.add((j, d))
                     span = np.arange(j0, j + 1)
                     lnn = A + s_ * (t[span] - t[a])
