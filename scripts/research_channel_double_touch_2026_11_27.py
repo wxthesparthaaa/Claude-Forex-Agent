@@ -100,9 +100,9 @@ def find_events(raw15, candle="any", filters=None, bounce=None):
             for q in range(k_hi - 1, -1, -1):
                 i0 = piv4[q]
                 age = t[a] - t4[i0]
-                if age > 10 * 86400:
+                if age > 60 * HS:   # 10 days for H4 (60 bigger-timeframe bars); expressed in bars so other timeframe pairs scale
                     break
-                if age < 12 * 3600:
+                if age < 3 * HS:    # 12 hours for H4 (3 bigger-timeframe bars)
                     continue
                 tried += 1
                 if tried > 3:
