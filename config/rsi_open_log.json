@@ -1,0 +1,13 @@
+[
+  {
+    "instrument": "NAS100_USD",
+    "bar": "2026-11-27T14:55",
+    "result": "opened",
+    "at": "2026-11-27T15:04:38.602701+00:00",
+    "direction": "SHORT",
+    "rsi": 23.42,
+    "atr": 76.4857,
+    "gap": 355.0,
+    "gap_aligned": false
+  }
+]
