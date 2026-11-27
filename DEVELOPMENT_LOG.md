@@ -12268,3 +12268,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): channel breakout on 15-minute channel / 5-minute entries (worse: gross -0.06, net -0.31) and Fibonacci retracement trades inside the swing-point channel (three recipes; one passes the gross-edge rule by +0.024 R, same size as the simulator's null bias, net -0.068). Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): Fibonacci retracement inside the swing channel with support/resistance stops and a 2:1 minimum: no gross edge in six tests (best F-B rank 1 +0.016), net worse than the swing-origin stop because the stops are smaller. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): double touch of the support/resistance line with Fibonacci targets (the user's envisioned set-up): 44 trades a week, one recipe passes the gross-edge rule at +0.072 R but that is below the simulator's random-walk bias (+0.089), net -0.245; the user's own example would have been stopped out 4.8 pips short of TP1. Details in RESEARCH_INDEX.md.
