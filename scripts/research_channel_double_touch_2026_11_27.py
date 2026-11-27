@@ -38,7 +38,7 @@ RESPECT = 1.0                      # the older part of the line may be pierced b
 RECIPES = ("D-A", "D-B", "D-C")
 
 
-def find_events(raw15, candle="any", filters=None):
+def find_events(raw15, candle="any", filters=None, bounce=None):
     """candle: 'any' (the original rule), 'bullish' (the second-touch candle closes above its open for longs / below for shorts) or 'hammer' (bullish plus a lower wick of at least half the bar's range; shorts: shooting star)."""
     P = E.prep(raw15, "fx", LS)
     mid, t, atr, n = P["mid"], P["t"], P["atr"], len(P["t"])
@@ -46,6 +46,7 @@ def find_events(raw15, candle="any", filters=None):
     h, l, c = mid["h"], mid["l"], mid["c"]
     op = mid["o"]
 
+    bnc = BOUNCE if bounce is None else bounce          # fraction of the leg price must recover between the two touches
     ctx = None
     if filters:
         import research_rsi_breakout_2026_11_24 as _RB
@@ -137,7 +138,7 @@ def find_events(raw15, candle="any", filters=None):
                 if (d == 1 and (c[j] < lj - TOL * aj or h[j] > Hh)) or (d == -1 and (c[j] > lj + TOL * aj or l[j] < Hh)):
                     break
                 extreme = max(extreme, h[j]) if d == 1 else min(extreme, l[j])
-                bounced = (extreme - A) >= BOUNCE * leg if d == 1 else (A - extreme) >= BOUNCE * leg
+                bounced = (extreme - A) >= bnc * leg if d == 1 else (A - extreme) >= bnc * leg
                 if not bounced or j - a < MIN_GAP:
                     continue
                 if abs(c[j] - lj) <= TOL * aj and cand_ok(j, d):
