@@ -12292,3 +12292,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: channel breakout with the strict retracement, Fibonacci extension targets and fixed 1.5:1: no cell has an edge (best: 12-17 UTC gross +0.09 over the full sample, holdout gross -0.05..-0.10). Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: untried breakout variants (Fibonacci fractions of the S/R distance, wider stops with fixed ratios, strict retracement on M5) and the double touch on 13 non-US index CFDs: no edge; wider stops cut the cost per R but all holdout nets stay negative. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research: breakout with 4-5 ATR stop floors and fixed 1.5:1 / 2:1: holdout net -0.06 to -0.09 (all hours), -0.01 to -0.05 (12-17 UTC); no edge. Details in RESEARCH_INDEX.md.
