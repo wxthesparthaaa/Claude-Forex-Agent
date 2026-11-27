@@ -12288,3 +12288,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27: all affected channel scripts rerun after the TP1-credit fix; no edge anywhere; only the index double-touch 'edge' disappeared. See RESEARCH_INDEX.md.
 
 2026-11-27 research: breakout with Fibonacci targets (50% / 38.2%) is unusable (TP1 beyond the entry in only 6% of signals); 12-17 UTC window with S/R targets: discovery net +0.130, holdout -0.132. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research: channel breakout with the strict retracement, Fibonacci extension targets and fixed 1.5:1: no cell has an edge (best: 12-17 UTC gross +0.09 over the full sample, holdout gross -0.05..-0.10). Details in RESEARCH_INDEX.md.
