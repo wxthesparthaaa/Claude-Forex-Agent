@@ -12276,3 +12276,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): double-touch set-up with wider stops (0.25 / 1.0 / 2.0 ATR) and time windows (all / 07-17 / 12-17 UTC): no gross edge in any of the nine cells, none profitable; wider stops cut costs from 0.35 R to 0.13-0.19 R per trade. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): double-touch set-up with a bullish / hammer second-touch candle and TP1 at 61.8%, TP2 at 50%, 1:1 minimum: no gross edge in any of six cells (hammer gross is below the random-walk benchmark), none profitable. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (finder extended, behaviour unchanged): double-touch set-up with a higher-low, volume and RSI filter at the second touch: no gross edge in any of the eight cells (two pass the raw p-value test but not the random-walk benchmark), none profitable. Details in RESEARCH_INDEX.md.
