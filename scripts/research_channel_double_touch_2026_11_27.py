@@ -64,7 +64,7 @@ def find_events(raw15):
         piv4, conf4 = (sl4, conf_sl) if d == 1 else (sh4, conf_sh)
         series = l if d == 1 else h
         for a in np.flatnonzero(pl if d == 1 else ph):
-            if a < LEG_LOOK or a + MIN_GAP + k3 + 2 >= n or not np.isfinite(atr[a]):
+            if a < LEG_LOOK or a + k3 + 2 >= n or not np.isfinite(atr[a]):             # the swing needs its 3 confirming bars; nothing else about the future
                 continue
             aa = atr[a]
             A = series[a]
