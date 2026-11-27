@@ -12296,3 +12296,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: breakout with 4-5 ATR stop floors and fixed 1.5:1 / 2:1: holdout net -0.06 to -0.09 (all hours), -0.01 to -0.05 (12-17 UTC); no edge. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: breakout with wide stops and longer time stops (48 h, 96 h): holdout net -0.06 to -0.13 R, worse than 24 h; no edge. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research: RSI first-30-minute breakout on 13 non-US index opens: gross +0.10 to +0.14 R (Europe, Asia) but net -0.02 to -0.12 after the CFD spreads; the US open stays the only profitable one (M15 net +0.19, holdout +0.32). Details in RESEARCH_INDEX.md.
