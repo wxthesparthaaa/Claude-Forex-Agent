@@ -12316,3 +12316,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research: replication of the US-open RSI rule on US2000 and 7 European indices (5-minute): US2000 gross +0.15..+0.19 but net about 0 and negative in 2021+; Europe gross +0.06..+0.09, net -0.07..-0.10; the 2021+ strength of SPX/NAS/US30 did not replicate. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research: Bollinger-band pullback trades in the H4 direction (EMA or Ichimoku), look-back stops, fixed 2:1: gross about zero (-0.008..+0.005 R) in all 8 cells, net -0.04..-0.12 R; no edge. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research: the user's two RSI + parallel-line set-ups (inside / outside the lines, 30-minute): no profitable version; set-up 2 gross about 0 (6 trades/wk, net -0.015..-0.019 R), set-up 1 small positive gross (+0.05) on only 0.5 trades a week that disappears when loosened. Details in RESEARCH_INDEX.md.
