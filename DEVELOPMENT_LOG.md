@@ -12272,3 +12272,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (no code change): double touch of the support/resistance line with Fibonacci targets (the user's envisioned set-up): 44 trades a week, one recipe passes the gross-edge rule at +0.072 R but that is below the simulator's random-walk bias (+0.089), net -0.245; the user's own example would have been stopped out 4.8 pips short of TP1. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (no code change): double-touch set-up with TP1 at the 50% level, TP2 at the 38.2% level and every target capped at the parallel line: no gross edge (all three recipes below the random-walk benchmark), net -0.33 R per trade. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (no code change): double-touch set-up with wider stops (0.25 / 1.0 / 2.0 ATR) and time windows (all / 07-17 / 12-17 UTC): no gross edge in any of the nine cells, none profitable; wider stops cut costs from 0.35 R to 0.13-0.19 R per trade. Details in RESEARCH_INDEX.md.
