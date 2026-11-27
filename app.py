@@ -674,6 +674,7 @@ def dashboard():
         crypto_flow_enabled=state.crypto_flow_enabled,
         rsi_breakout_enabled=state.rsi_breakout_enabled,
         rsi_open_enabled=state.rsi_open_enabled,
+        rsi_open_gap_filter_enabled=state.rsi_open_gap_filter_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_target_multiple_enabled=state.vwap_scalp_target_multiple_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -921,6 +922,7 @@ def settings():
         state.rsi_breakout_enabled = request.form.get("rsi_breakout_enabled") == "on"
         # RSI Open: an off-by-default small-size LIVE PRACTICE forward test of the opening-range version -- see src/rsi_open_addon.py.
         state.rsi_open_enabled = request.form.get("rsi_open_enabled") == "on"
+        state.rsi_open_gap_filter_enabled = request.form.get("rsi_open_gap_filter_enabled") == "on"
         # 2026-09-17: toggle to disable the daily+bucket caps entirely,
         # rather than raising the number -- see DashboardState.vwap_
         # scalp_daily_cap_enabled's own comment. The slider below still

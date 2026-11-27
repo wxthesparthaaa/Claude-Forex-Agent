@@ -552,6 +552,15 @@
         </div>
         <p class="hint">Demo only, small size (a quarter of normal risk). The opening-range version of the RSI rule: only in the first 30 minutes of the US cash session, with stricter lines (buys when RSI crosses above 75, sells when it crosses below 25) on SPX500, NAS100 and US30; exits when RSI crosses back through 50 or at 15:55 New York. About 4 trades a week. Backtested net +0.2 R per trade, chosen after seeing the data, so a forward test, not a proven strategy.</p>
 
+        <div class="toggle-row">
+          <span>RSI Open: skip trades against the overnight gap</span>
+          <label class="switch">
+            <input type="checkbox" name="rsi_open_gap_filter_enabled" {{ 'checked' if rsi_open_gap_filter_enabled else '' }}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <p class="hint">Leave OFF to collect evidence: every RSI Open signal is tagged with whether it agreed with the overnight gap and still traded, so aligned and non-aligned trades can be compared. Turning it ON skips the non-aligned ones. The research evidence for this filter is weak.</p>
+
         <label>Account-wide trades per day: <span id="tradesVal">{{ risk_config.max_trades_per_day }}</span></label>
         <input type="range" name="max_trades_per_day"
                min="{{ risk_config.max_trades_per_day_min }}" max="{{ risk_config.max_trades_per_day_max }}" step="1"

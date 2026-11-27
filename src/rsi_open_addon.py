@@ -23,6 +23,12 @@ NOTE: these 75/25 entries usually happen AFTER the RSI Breakout test (70/30) has
 tests are often in the same direction at once; this test therefore NEVER opens against an open position of ANY test on the same index (a netting account would
 close the other position instead of hedging it).
 
+GAP-ALIGNED FILTER (forward test added 2026-11-27): every signal is TAGGED with the overnight gap (today's 09:30 New York open minus the previous cash session's last close, mid prices) and whether it is ALIGNED
+with the trade (long: gap >= 0, short: gap <= 0). With the second toggle OFF (the default) every signal is still traded and the tag is only recorded, so aligned and non-aligned trades can be compared on the same live data; with it ON a non-aligned signal
+(or one whose gap cannot be read) is logged as skipped and not traded. Research (scripts/research_rsi_open_improve_2026_11_27.py): at 75/25 aligned trades 1521 of 2391 (2.7 a week), net +0.235 vs +0.211 for all; holdout aligned +0.312 vs all +0.279 (implied non-aligned about +0.22);
+discovery aligned +0.029 vs all +0.034 (implied non-aligned +0.04). It was NOT chosen by the walk-forward rule (no discovery improvement), so the evidence for it is weak. DECISION RULE (fixed before the first live trade): do not turn the filter on unless, with at least 200 aligned and 100 non-aligned
+CLOSED trades, aligned mean R minus non-aligned mean R is at least 2 standard errors above 0; at about 2.7 + 1.5 trades a week that is roughly 75 weeks, so this is a slow test; rsi_open_gap_stats() computes it.
+
 MECHANICS: runs on the existing 5-minute scheduler tick, and does nothing (no API calls) outside 09:30-10:10 New York unless one of its positions is open. Sized at 25% of
 the app's normal risk per trade (RISK_FRACTION; Half size mode applies on top), a take-profit 10 ATR away (the app requires one on every order), the usual risk gates apply.
 Needs the toggle ON and autopilot active. Journal tag RSI_OPEN, own log config/rsi_open_log.json, own Telegram messages.
@@ -115,6 +121,36 @@ def opposite_open(entries: list, instrument: str, direction: str) -> bool:
     return any(e.get("instrument") == instrument and e.get("direction") != direction for e in open_entries(entries))
 
 
+def compute_gap(candles: list, now: datetime):
+    """Overnight gap: the 09:30 New York open of today's session minus the close of the previous cash session's last bar (mid prices), from M5 candles; None when either is missing."""
+    today = now.astimezone(rb.NEW_YORK).date()
+    today_open, prev_close = None, None
+    for c in candles:
+        ny = rb._parse(c["time"]).astimezone(rb.NEW_YORK)
+        if ny.weekday() >= 5 or not (rb.SESSION_OPEN <= rb._hm(ny) < (16, 0)):
+            continue
+        if ny.date() == today:
+            if today_open is None:
+                today_open = float(c["mid"]["o"])
+        elif ny.date() < today and c.get("complete", True):
+            prev_close = float(c["mid"]["c"])                 # candles ascend, so the last one seen is the latest earlier session's last bar
+    if today_open is None or prev_close is None:
+        return None
+    return today_open - prev_close
+
+
+def fetch_gap(client, instrument: str, now: datetime):
+    start = (now - timedelta(days=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return compute_gap(client.get_candles(instrument, "M5", from_time=start, to_time=end), now)
+
+
+def gap_aligned(direction: str, gap):
+    if gap is None:
+        return None
+    return gap >= 0 if direction == "LONG" else gap <= 0
+
+
 # ------------------------------------------------------------------ log
 
 def load_log() -> list:
@@ -199,7 +235,7 @@ def _open_position(client, instrument: str, signal: dict, risk_config, account, 
         "experiment_tag": RSI_OPEN_TAG, "parent_trade_id": None, "entry_z": signal["rsi"],
     }
     try:
-        result = place_and_record(client, candidate)
+        result = place_and_record(client, candidate, allow_duplicate=True)      # same-direction positions of other tests on the index are expected (see the module docstring)
     except Exception as e:
         raise TransientSkip(f"order request failed: {e}")
     if not result["success"]:
@@ -311,6 +347,17 @@ def _check_unsafe(client, enabled, now) -> list:
             record_log(instrument, signal["bar"], "skipped", {**detail, "reason": "an open position in the opposite direction exists on this instrument"})
             log = load_log()
             continue
+        try:
+            gap = fetch_gap(client, instrument, now)
+        except Exception as e:
+            print(f"WARNING: RSI Open could not read the overnight gap for {instrument}: {e}", flush=True)
+            gap = None
+        aligned = gap_aligned(signal["direction"], gap)
+        detail = {**detail, "gap": None if gap is None else round(gap, 4), "gap_aligned": aligned}
+        if state.rsi_open_gap_filter_enabled and aligned is not True:
+            record_log(instrument, signal["bar"], "skipped", {**detail, "reason": "gap filter: " + ("gap unavailable" if aligned is None else "the overnight gap is against the trade")})
+            log = load_log()
+            continue
         diag = {}
         try:
             ok = _open_position(client, instrument, signal, risk_config, account, diag)
@@ -333,6 +380,49 @@ def _check_unsafe(client, enabled, now) -> list:
 
 
 # ------------------------------------------------------------------ stats
+
+def rsi_open_gap_stats(entries: list = None, log: list = None) -> dict:
+    """Forward test of the gap-aligned filter: closed RSI Open trades split by the gap tag recorded in the log when the trade was opened (matched on the instrument and the opening time, within 3 minutes).
+    Returns n and mean R per group and the difference (aligned minus non-aligned) with its z; None where a group is empty."""
+    import math
+    entries = load_journal() if entries is None else entries
+    log = load_log() if log is None else log
+    opened = [l for l in log if l.get("result") == "opened" and l.get("gap_aligned") is not None]
+    groups = {True: [], False: []}
+    for e in entries:
+        if e.get("experiment_tag") != RSI_OPEN_TAG or e.get("status") not in (SUCCESSFUL, FAILED) or e.get("realized_pnl") is None or not e.get("risk_amount"):
+            continue
+        try:
+            t_open = datetime.fromisoformat(e["opened_at"])
+        except Exception:
+            continue
+        best = None
+        for l in opened:
+            if l["instrument"] != e["instrument"]:
+                continue
+            try:
+                dt = abs((datetime.fromisoformat(l["at"]) - t_open).total_seconds())
+            except Exception:
+                continue
+            if dt <= 180 and (best is None or dt < best[0]):
+                best = (dt, l)
+        if best:
+            groups[bool(best[1]["gap_aligned"])].append(e["realized_pnl"] / e["risk_amount"])
+
+    def summ(xs):
+        if not xs:
+            return {"n": 0, "mean_r": None, "se": None}
+        m = sum(xs) / len(xs)
+        se = (sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5 / math.sqrt(len(xs)) if len(xs) > 1 else None
+        return {"n": len(xs), "mean_r": m, "se": se}
+    a, b = summ(groups[True]), summ(groups[False])
+    diff = z = None
+    if a["mean_r"] is not None and b["mean_r"] is not None and a["se"] and b["se"]:
+        diff = a["mean_r"] - b["mean_r"]
+        z = diff / math.sqrt(a["se"] ** 2 + b["se"] ** 2)
+    ready = a["n"] >= 200 and b["n"] >= 100
+    return {"aligned": a, "not_aligned": b, "difference": diff, "z": z, "ready_to_decide": ready, "turn_filter_on": bool(ready and z is not None and z >= 2.0)}
+
 
 def rsi_open_stats(entries: list = None, now: datetime = None) -> dict:
     """Closed trades, wins / losses, P&L, mean R (realized P&L / the risk at entry), open positions, and where it stands against the pre-registered stop rule."""
