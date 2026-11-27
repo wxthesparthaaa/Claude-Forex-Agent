@@ -9,6 +9,9 @@ THE GRID: STOP 0.25 ATR / 1.0 ATR beyond the two touch extremes x TARGETS A (TP1
 VERDICT per cash cell (fixed now, with the random-walk safeguard): GROSS EDGE only if pooled gross > 0 with p < 0.0125, > 0 in discovery (2016-2020) and in holdout (2021-01..2025-09), > 0 for longs and shorts separately, AND the real gross exceeds the zero-spread random-walk benchmark of the same cell (3 series built on SPX500's own bar times and volatility) by at least
 2 combined standard errors. PROFITABLE only if, in addition, holdout NET mean R > 0 with p < 0.0125, > 0 with spreads +20%, > 0 with entry delayed one bar, and the fresh period (2025-10..) net > 0. Fewer than 150 holdout trades = INSUFFICIENT.
 Also printed (no verdict): set-ups per index, trades per week, cost per trade (gross - net), median stop in index points and as a share of the spread, TP reach, net R per week, long / short, gross by index.
+ROBUSTNESS RUN ADDED BEFORE ITS RESULT WAS SEEN (command line option 'pess'): the first run exposed an optimistic same-candle convention of the simulator: in the candle where TP1 is first reached the stop that has just moved to the entry was NOT tested inside that candle, so a candle that
+touched TP1 and then fell back to the entry still left the second half alive (a positive bias that also shows in the random-walk benchmark, +0.12 to +0.19 R on these indices). With 'pess' the stop at the entry IS applied in that very candle (if its low reaches the entry for a long / its high for a short, the second half is closed at breakeven there).
+The same four cash cells, the same K = 4 and alpha 0.0125, the same verdict rules; the benchmark is recomputed under the same convention. The first run's numbers stay in RESEARCH_INDEX.md.
 SELF-TESTS: (a) no look-ahead (events re-found identically from truncated data); (b) random walks at zero spread within tolerance.
 DISCLOSURE: nothing about this set-up on indices has been seen. The set-up parameters were fixed on forex (and its example chart); the cash-session rule is new and was fixed in advance from the earlier index work.
 Run: venv/Scripts/python.exe scripts/research_channel_double_touch_indices_2026_11_27.py <dir with SPX500_USD_M5.npz, NAS100_USD_M5.npz, US30_USD_M5.npz>
@@ -28,6 +31,7 @@ import research_channel_double_touch_2026_11_27 as DT  # noqa: E402
 PC, E, V = DT.PC, DT.E, DT.V
 LS, MAXHOLD = DT.LS, DT.MAXHOLD
 MIN_RR = 1.0
+PESS = False                        # True: after TP1 the stop at the entry is tested inside the TP1 candle itself (pessimistic)
 ALPHA = 0.05 / 4
 INDICES = ("SPX500_USD", "NAS100_USD", "US30_USD")
 STOPS = (("0.25 ATR", 0.25), ("1.0 ATR", 1.0))
@@ -101,6 +105,9 @@ def plan(S, rawm, ev, stop_atr, f1, f2, cash, delay=0):
                 break
             if x1 is None and r["bid_h"][q] >= tp1:
                 x1, stop_now = q, fill
+                if PESS and r["bid_l"][q] <= fill:
+                    x2, how = q, "breakeven"
+                    break
             if x1 is not None and r["bid_h"][q] >= tp2:
                 x2, how = q, "target"
                 break
@@ -110,6 +117,9 @@ def plan(S, rawm, ev, stop_atr, f1, f2, cash, delay=0):
                 break
             if x1 is None and r["ask_l"][q] <= tp1:
                 x1, stop_now = q, fill
+                if PESS and r["ask_h"][q] >= fill:
+                    x2, how = q, "breakeven"
+                    break
             if x1 is not None and r["ask_l"][q] <= tp2:
                 x2, how = q, "target"
                 break
@@ -243,4 +253,7 @@ def main(dirpath):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[2] == "pess":
+        PESS = True
+        print("PESSIMISTIC same-candle rule ON", flush=True)
     main(sys.argv[1])
