@@ -164,6 +164,9 @@ class DashboardState:
     # RSI Breakout (2026-11-24): a small-size FORWARD TEST of the one rule that survived the day's research (RSI(14) momentum breakout on SPX500/NAS100/US30
     # 5-minute bars). Off by default; see src/rsi_breakout_addon.py for the pre-registered trial and the stop rule.
     rsi_breakout_enabled: bool = False
+    # RSI Open (2026-11-27): a small-size LIVE PRACTICE forward test of the opening-range version of the same rule (lines 75/25, first 30 minutes of the US
+    # cash session). Off by default; see src/rsi_open_addon.py for the pre-registered trial and the stop rule.
+    rsi_open_enabled: bool = False
     # VWAP Scalp's OWN daily trade cap (2026-09-03) -- separate from and
     # tighter than the shared account-wide max_trades_per_day (real
     # incident: VWAP Scalp alone burned 18 of the account's 30-trade

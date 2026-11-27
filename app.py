@@ -54,6 +54,7 @@ from autopilot import PhaseState
 from journal_export import build_journal_workbook
 from crypto_flow_addon import check_crypto_flow, CRYPTO_FLOW_TAG
 from rsi_breakout_addon import check_rsi_breakout, RSI_BREAKOUT_TAG
+from rsi_open_addon import check_rsi_open
 from headline_archive import archive_headlines
 from vwap_scalp_addon import (check_vwap_scalp_opportunities, vwap_scalp_pacing_snapshot, VWAP_SCALP_TAG,
                               VWAP_SCALP_PAIRS, WATCH_START_HOUR, WATCH_END_HOUR)
@@ -672,6 +673,7 @@ def dashboard():
         vwap_scalp_enabled=state.vwap_scalp_enabled,
         crypto_flow_enabled=state.crypto_flow_enabled,
         rsi_breakout_enabled=state.rsi_breakout_enabled,
+        rsi_open_enabled=state.rsi_open_enabled,
         vwap_scalp_daily_cap_enabled=state.vwap_scalp_daily_cap_enabled,
         vwap_scalp_target_multiple_enabled=state.vwap_scalp_target_multiple_enabled,
         vwap_scalp_max_trades_per_day=state.vwap_scalp_max_trades_per_day,
@@ -917,6 +919,8 @@ def settings():
         state.crypto_flow_enabled = request.form.get("crypto_flow_enabled") == "on"
         # RSI Breakout: an off-by-default small-size FORWARD TEST on the US indices -- see src/rsi_breakout_addon.py.
         state.rsi_breakout_enabled = request.form.get("rsi_breakout_enabled") == "on"
+        # RSI Open: an off-by-default small-size LIVE PRACTICE forward test of the opening-range version -- see src/rsi_open_addon.py.
+        state.rsi_open_enabled = request.form.get("rsi_open_enabled") == "on"
         # 2026-09-17: toggle to disable the daily+bucket caps entirely,
         # rather than raising the number -- see DashboardState.vwap_
         # scalp_daily_cap_enabled's own comment. The slider below still
@@ -1067,6 +1071,8 @@ def start_scheduler():
     # RSI Breakout (off by default): the same 5-minute cadence; each tick closes positions whose RSI crossed back through 50 (or at 15:55 New York) and
     # looks for a fresh RSI cross on the latest completed 5-minute bar of SPX500/NAS100/US30, returning immediately when the toggle is off.
     scheduler.add_job(check_rsi_breakout, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
+    # RSI Open (off by default): the same cadence; does nothing (no API calls) outside 09:30-10:10 New York unless one of its positions is open, and returns at once when the toggle is off.
+    scheduler.add_job(check_rsi_open, IntervalTrigger(minutes=5, start_date=now + timedelta(minutes=5)))
     # Headline archive (read-only research data, no trading effect): hourly, collects market headlines from Finnhub and public RSS feeds into config/headline_archive.json
     # plus one write-once file per completed UTC day -- see src/headline_archive.py. It never raises, and max_instances=1 stops a slow run from overlapping the next.
     scheduler.add_job(archive_headlines, IntervalTrigger(minutes=60, start_date=now + timedelta(minutes=3)), max_instances=1, coalesce=True)
