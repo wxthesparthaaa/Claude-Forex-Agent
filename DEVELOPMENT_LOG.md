@@ -12280,3 +12280,5 @@ Research result: 2026-11-27, 2 ideas tested, 0 credible
 2026-11-27 research (finder extended, behaviour unchanged): double-touch set-up with a higher-low, volume and RSI filter at the second touch: no gross edge in any of the eight cells (two pass the raw p-value test but not the random-walk benchmark), none profitable. Details in RESEARCH_INDEX.md.
 
 2026-11-27 research (finder setting added, default unchanged): double-touch set-up with a deeper bounce (50% / 61.8%) before the second touch: no gross edge, holdout gross negative in most cells, none profitable. Details in RESEARCH_INDEX.md.
+
+2026-11-27 research (script option added): double-touch set-up on SPX500 / NAS100 / US30 (15-minute, cash session): costs are 0.05-0.12 R per trade (vs 0.17-0.33 on forex); the best cell (targets 50% / 38.2%, 1.0 ATR stop) is net +0.03 to +0.05 R per trade but not significant; a pessimistic same-candle fix of the simulator lowers it. Details in RESEARCH_INDEX.md.
