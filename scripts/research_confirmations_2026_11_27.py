@@ -142,12 +142,14 @@ def add_indicators(S, name, partner=None, sign=1):
     h, l, c = mid["h"], mid["l"], mid["c"]
     n = S["n"]
     adx, pdi, mdi = adx_arrays(h, l, c)
+    S["adx"], S["pdi"], S["mdi"] = adx, pdi, mdi          # kept for the example charts only
     with np.errstate(invalid="ignore"):
         S["C_ADX"] = ((adx > 25) & (pdi > mdi), (adx > 25) & (mdi > pdi))
     # swing break
     sh_lvl = last_swing_level(fractals(h, 3, "high"), h, n)
     sl_lvl = last_swing_level(fractals(l, 3, "low"), l, n)
     cp = np.concatenate([[np.nan], c[:-1]])
+    S["sh_lvl"], S["sl_lvl"] = sh_lvl, sl_lvl
     with np.errstate(invalid="ignore"):
         S["C_SWING"] = ((c > sh_lvl) & (cp <= sh_lvl), (c < sl_lvl) & (cp >= sl_lvl))
     # correlated pair
@@ -160,6 +162,7 @@ def add_indicators(S, name, partner=None, sign=1):
         with np.errstate(invalid="ignore", divide="ignore"):
             ret = sign * (pc_ / prev - 1.0)
         S["C_CORR"] = (ret > 0, ret < 0)
+        S["corr_ret"] = ret
     else:
         S["C_CORR"] = (np.zeros(n, bool), np.zeros(n, bool))
     # pivots and round numbers on the channel lines
@@ -174,6 +177,7 @@ def add_indicators(S, name, partner=None, sign=1):
     prev_lv = np.full((5, n), np.nan)
     ok = day_of >= 1
     prev_lv[:, ok] = lv[:, day_of[ok] - 1]
+    S["prev_lv"] = prev_lv
     up, lo = S["up"], S["lo"]
     with np.errstate(invalid="ignore"):
         near_up = np.any(np.abs(prev_lv - up) <= 0.5 * atr, axis=0)
@@ -186,12 +190,14 @@ def add_indicators(S, name, partner=None, sign=1):
     e12, e26 = E.ema(c, 12), E.ema(c, 26)
     macd = e12 - e26
     sig = E.ema(macd, 9)
+    S["macd"], S["msig"] = macd, sig
     upx = (macd > sig) & shift(macd <= sig)
     dnx = (macd < sig) & shift(macd >= sig)
     S["C_MACDX"] = (R.any_last(upx, 3) & (macd > sig), R.any_last(dnx, 3) & (macd < sig))
     S["C_MACDZ"] = (S["C_MACDX"][0] & (macd > 0), S["C_MACDX"][1] & (macd < 0))
     # ultimate oscillator
     uo = uo_array(h, l, c)
+    S["uo"] = uo
     bull, bear = williams_events(uo, l, h)
     S["C_UOW"] = (R.any_last(bull, 3), R.any_last(bear, 3))
     up50 = (uo > 50) & shift(uo <= 50)
