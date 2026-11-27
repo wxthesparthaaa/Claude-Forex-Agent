@@ -12253,3 +12253,4 @@ curve at roll dates (needs a contract-month price source); (3) JP225Y RSI breako
 re-check after 2027-06. Dropped: spread- and volume-shock event rules (fade or follow) on FX, gold, indices and oil.
 
 Research result: 2026-11-27, 2 ideas tested, 0 credible
+2026-11-27 research (no code change): RSI Breakout line sensitivity on forex (no edge at any lines on M15 or H1) and finer US-index hours (the first 30 minutes carry the net edge, the rest of the day is about break-even net with a small gross edge). Details in RESEARCH_INDEX.md. The forward test's rule is unchanged; any 'open-only' variant would need its own pre-registration and the user's go-ahead.
